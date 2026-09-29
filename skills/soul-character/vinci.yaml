@@ -1,0 +1,23 @@
+id: "@tryvinci/soul-character"
+version: "1.0.0"
+tags: [image, cinema, soul, character, workflow, canvas]
+inputs:
+  prompt: { type: string, required: true }
+  aspect_ratio: { type: string, required: false }
+  camera: { type: string, required: false }
+  lens: { type: string, required: false }
+  look: { type: string, required: false }
+  aperture: { type: string, required: false }
+  genre: { type: string, required: false }
+  lighting: { type: string, required: false }
+  palette: { type: string, required: false }
+  media: { type: string, required: false }
+  image: { type: string, required: false }
+  image_urls: { type: string, required: false }
+outputs:
+  image: { kind: image }
+capabilities: [t2i, i2i]
+secret_names: []
+permissions: []
+est_cost: { min: 0.0, max: 0.12, currency: USD }
+safety_tags: []

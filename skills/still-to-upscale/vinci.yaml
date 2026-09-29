@@ -1,0 +1,19 @@
+id: "@tryvinci/still-to-upscale"
+version: "1.0.0"
+tags: [image, upscale, workflow, canvas]
+inputs:
+  prompt: { type: string, required: true }
+  scale: { type: string, required: false, default: "4x" }
+  creativity: { type: number, required: false }
+  resemblance: { type: number, required: false }
+  hdr: { type: number, required: false }
+  fractality: { type: number, required: false }
+  optimized_for: { type: string, required: false }
+  engine: { type: string, required: false }
+outputs:
+  image: { kind: image }
+capabilities: [t2i, i2i]
+secret_names: []
+permissions: []
+est_cost: { min: 0.0, max: 0.32, currency: USD }
+safety_tags: []

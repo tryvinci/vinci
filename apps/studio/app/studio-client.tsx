@@ -190,6 +190,7 @@ type Doctor = {
 type PageId =
   | "explore"
   | "image"
+  | "adapts"
   | "video"
   | "speak"
   | "upscale"
@@ -202,6 +203,34 @@ type PageId =
   | "find"
   | "cost"
   | "keys";
+
+type AdaptPresetRow = {
+  id: string;
+  label: string;
+  platform?: string;
+  partner?: string;
+  spec_kind?: string;
+  width: number;
+  height: number;
+  safe_area?: { top: number; bottom: number; left: number; right: number };
+  safe_rect?: { left: number; right: number; top: number; bottom: number };
+  human_review_advisories?: string[];
+};
+
+type AdaptTarget = { preset_id?: string; width?: number; height?: number };
+
+type AdaptEstimateBody = {
+  total: number;
+  note?: string;
+  targets?: { safe_area?: Record<string, unknown> }[];
+  pricing_unknown?: boolean;
+};
+
+type AdaptRunBody = {
+  digests: string[];
+  estimate: AdaptEstimateBody;
+  outputs?: { validation?: Record<string, unknown> }[];
+};
 
 type Template = {
   id: string;
@@ -445,6 +474,20 @@ export function StudioClient() {
   const linkFromRef = useRef<string | null>(null);
   const castFileRef = useRef<HTMLInputElement>(null);
   const composeStillRef = useRef<HTMLInputElement>(null);
+  const adaptFileRef = useRef<HTMLInputElement>(null);
+  const [adaptPresets, setAdaptPresets] = useState<AdaptPresetRow[]>([]);
+  const [adaptSourceId, setAdaptSourceId] = useState<string | null>(null);
+  const [adaptTargets, setAdaptTargets] = useState<AdaptTarget[]>([
+    { preset_id: "amazon_828x300" },
+    { preset_id: "inuxu_1200x720" },
+  ]);
+  const [adaptLayout, setAdaptLayout] = useState<"fit_pad_crop" | "ai_extend">("fit_pad_crop");
+  const [adaptFit, setAdaptFit] = useState<"fit" | "pad" | "crop">("pad");
+  const [adaptPartnerOnly, setAdaptPartnerOnly] = useState(true);
+  const [adaptEstimateUsd, setAdaptEstimateUsd] = useState<number | null>(null);
+  const [adaptNote, setAdaptNote] = useState("");
+  const [adaptOutputs, setAdaptOutputs] = useState<string[]>([]);
+  const [adaptValidations, setAdaptValidations] = useState<Record<string, unknown>[]>([]);
 
   const composeModels = useMemo(() => {
     const list = models.filter((m) => {
@@ -507,6 +550,78 @@ export function StudioClient() {
     setAssets(assetBody.assets || []);
   }, []);
 
+  const adaptPresetChoices = useMemo(() => {
+    const rows = adaptPresets.slice();
+    if (adaptPartnerOnly) {
+      return rows.filter((p) => p.spec_kind === "client_partner");
+    }
+    return rows;
+  }, [adaptPresets, adaptPartnerOnly]);
+
+  const uploadAdaptSource = useCallback(
+    async (file: File) => {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch(`${API}/assets`, { method: "POST", body });
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+      const asset = (await res.json()) as { id: string };
+      setAdaptSourceId(asset.id);
+      await loadMedia();
+      setLog(`Source uploaded · vinci://assets/${asset.id}`);
+    },
+    [loadMedia],
+  );
+
+  const estimateAdapt = useCallback(async () => {
+    if (!adaptSourceId) {
+      setLog("Upload a source creative first.");
+      return;
+    }
+    const body = await api<AdaptEstimateBody>("/adapt/estimate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        source_asset: adaptSourceId,
+        targets: adaptTargets,
+        layout: adaptLayout,
+      }),
+    });
+    setAdaptEstimateUsd(body.total);
+    setAdaptNote(body.note || "");
+    setLog(`Adapt estimate: ${money(body.total)} for ${adaptTargets.length} target(s).`);
+  }, [adaptLayout, adaptSourceId, adaptTargets]);
+
+  const runAdapt = useCallback(async () => {
+    if (!adaptSourceId) {
+      setLog("Upload a source creative first.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await estimateAdapt();
+      const body = await api<AdaptRunBody>("/adapt/run", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          source_asset: adaptSourceId,
+          targets: adaptTargets,
+          layout: adaptLayout,
+          fit_mode: adaptFit,
+        }),
+      });
+      setAdaptOutputs(body.digests || []);
+      setAdaptValidations((body.outputs || []).map((row) => row.validation || {}));
+      await loadMedia();
+      setLog(`Adapts complete: ${(body.digests || []).length} outputs (mock/ffmpeg $0 when fit/pad/crop).`);
+    } catch (err) {
+      setLog(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [adaptFit, adaptLayout, adaptSourceId, adaptTargets, estimateAdapt, loadMedia]);
+
   const boot = useCallback(async () => {
     try {
       await api("/init", {
@@ -514,11 +629,12 @@ export function StudioClient() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ demo: true }),
       });
-      const [doc, modelBody, skillBody, tplBody] = await Promise.all([
+      const [doc, modelBody, skillBody, tplBody, presetBody] = await Promise.all([
         api<Doctor>("/doctor"),
         api<{ models: Model[] }>("/models"),
         api<{ skills: Skill[] }>("/skills"),
         api<{ templates: Template[] }>("/templates"),
+        api<{ presets: AdaptPresetRow[] }>("/adapt/presets"),
       ]);
       setDoctor(doc);
       setPref(doc.preference || "cheapest");
@@ -526,6 +642,7 @@ export function StudioClient() {
       setModels(modelBody.models || []);
       setSkills(skillBody.skills || []);
       setTemplates(tplBody.templates || []);
+      setAdaptPresets(presetBody.presets || []);
       const mock = (modelBody.models || []).find((m) => m.provider === "mock");
       setModelId((prev) => prev || mock?.id || modelBody.models?.[0]?.id || "");
       await loadMedia();
@@ -1150,6 +1267,7 @@ export function StudioClient() {
   const titles: Record<PageId, string> = {
     explore: "Explore",
     image: "Image",
+    adapts: "Image › Adapts",
     video: "Video",
     speak: "Speak",
     upscale: "Upscale still",
@@ -1169,6 +1287,7 @@ export function StudioClient() {
   const rail: { id: PageId; title: string; d: string }[] = [
     { id: "explore", title: "Explore", d: "M9 2a7 7 0 1 1 0 14A7 7 0 0 1 9 2zm0 2v5l3 2" },
     { id: "image", title: "Image", d: "M3 4h12v10H3zM3 12l3-3 2 2 2-2 4 4" },
+    { id: "adapts", title: "Adapts", d: "M3 3h5v5H3zM10 3h5v5h-5zM5.5 10h5v5h-5z" },
     { id: "video", title: "Video", d: "M2.5 5h9v8h-9zM11.5 8l4-2v6l-4-2z" },
     { id: "speak", title: "Speak", d: "M4 8v2c0 2.8 2.2 5 5 5s5-2.2 5-5V8M7 3h4v8H7z" },
     { id: "upscale", title: "Upscale still", d: "M3 7h6v6H3zM8 3h7v7H8z" },
@@ -1361,6 +1480,153 @@ export function StudioClient() {
         </details>
       </div>
     );
+  } else if (page === "adapts") {
+    const graphTargets = adaptTargets
+      .map((t, i) => {
+        const preset = adaptPresetChoices.find((p) => p.id === t.preset_id);
+        const label = preset?.label || (t.width && t.height ? `${t.width}×${t.height}` : "Custom");
+        return `→ Target ${i + 1}: ${label}`;
+      })
+      .join(" · ");
+    main = (
+      <div className="lib-page" id="adapt-panel">
+        <p className="eyebrow">Image › Adapts</p>
+        <h2>One creative, many targets</h2>
+        <p className="muted">
+          Canvas entry for export adapts. Fit/pad/crop is deterministic local ffmpeg ($0), not intelligent re-layout. AI
+          extend is a separate OpenAI path when live spend is on.
+        </p>
+        <p className="muted">
+          <strong>Axis Max Life partner presets</strong> (client-partner spec sheet). Human-review advisories are shown
+          for guidance only — not automatic compliance.
+        </p>
+        <label>Preset scope</label>
+        <select
+          value={adaptPartnerOnly ? "axis_partner" : "all"}
+          onChange={(ev) => setAdaptPartnerOnly(ev.target.value === "axis_partner")}
+        >
+          <option value="axis_partner">Axis partner (Amazon · Inuxu · Jio · BPN)</option>
+          <option value="all">All presets (generic + partner)</option>
+        </select>
+        <label>Source creative</label>
+        <div className="file-row">
+          <input
+            ref={adaptFileRef}
+            type="file"
+            accept="image/*"
+            onChange={(ev) => {
+              const file = ev.target.files?.[0];
+              if (file) void uploadAdaptSource(file);
+            }}
+          />
+          {lastStill ? (
+            <button className="ghost" type="button" onClick={() => setAdaptSourceId(lastStill)}>
+              Use last still
+            </button>
+          ) : null}
+        </div>
+        {adaptSourceId ? (
+          <img alt="" src={`${API}/assets/${adaptSourceId}/file`} style={{ maxWidth: 280, borderRadius: 8 }} />
+        ) : null}
+        <div className="log" id="adapt-graph" style={{ minHeight: "4rem" }}>
+          <strong>Graph</strong>
+          <br />
+          [Source] {adaptSourceId ? `vinci://assets/${adaptSourceId}` : "(upload source)"}
+          <br />
+          [Adapts node]
+          <br />
+          {graphTargets || "—"}
+        </div>
+        <label>Layout mode</label>
+        <select value={adaptLayout} onChange={(ev) => setAdaptLayout(ev.target.value as "fit_pad_crop" | "ai_extend")}>
+          <option value="fit_pad_crop">Fit / pad / crop (local ffmpeg, $0)</option>
+          <option value="ai_extend">AI extend / re-layout (OpenAI image edit)</option>
+        </select>
+        <label>Fit style (fit/pad/crop only)</label>
+        <select value={adaptFit} onChange={(ev) => setAdaptFit(ev.target.value as "fit" | "pad" | "crop")}>
+          <option value="fit">Fit</option>
+          <option value="pad">Pad</option>
+          <option value="crop">Crop</option>
+        </select>
+        <label>Targets</label>
+        <div id="adapt-targets">
+          {adaptTargets.map((row, i) => (
+            <div key={i} style={{ margin: "0.5rem 0", padding: "0.5rem", border: "1px solid var(--line)" }}>
+              <label>Preset {i + 1}</label>
+              <select
+                value={row.preset_id || ""}
+                onChange={(ev) => {
+                  const val = ev.target.value;
+                  setAdaptTargets((rows) => {
+                    const next = rows.slice();
+                    next[i] = val ? { preset_id: val } : { width: 1080, height: 1080 };
+                    return next;
+                  });
+                }}
+              >
+                <option value="">Custom…</option>
+                {adaptPresetChoices.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                    {p.spec_kind === "client_partner" ? ` · partner:${p.partner}` : ""}
+                  </option>
+                ))}
+              </select>
+              {(() => {
+                const preset = adaptPresetChoices.find((p) => p.id === row.preset_id);
+                if (!preset) return null;
+                const advisories = preset.human_review_advisories || [];
+                return (
+                  <p className="muted" data-safe={i}>
+                    {preset.width}×{preset.height}
+                    {preset.safe_rect
+                      ? ` · safe rect margins ${preset.safe_rect.left}/${preset.safe_rect.right}px`
+                      : ""}
+                    {advisories.length ? ` · ${advisories[0]}` : ""}
+                  </p>
+                );
+              })()}
+            </div>
+          ))}
+        </div>
+        <button
+          className="ghost"
+          id="adapt-add-target"
+          type="button"
+          onClick={() => setAdaptTargets((rows) => [...rows, { preset_id: adaptPresetChoices[0]?.id || "instagram_feed" }])}
+        >
+          + Add target
+        </button>
+        <p className="muted" id="adapt-safe">{adaptNote || "Safe-area overlay and export byte caps validate on run (partner presets)."}</p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="ghost" id="adapt-estimate" type="button" onClick={() => void estimateAdapt()}>
+            Estimate cost
+          </button>
+          <button className="run" id="adapt-run" type="button" disabled={busy} onClick={() => void runAdapt()}>
+            <span>Run Adapts</span>
+            <span id="adapt-est-btn">{adaptEstimateUsd == null ? "$—" : money(adaptEstimateUsd)}</span>
+          </button>
+          <button className="ghost" type="button" onClick={() => setPage("canvas")}>
+            Back to Canvas
+          </button>
+        </div>
+        {adaptOutputs.length ? (
+          <div className="lib">
+            {adaptOutputs.map((id, i) => (
+              <div key={id} className="lib-card">
+                <span className="muted">Adapt {i + 1}</span>
+                <img alt="" src={`${API}/assets/${id}/file`} />
+                {adaptValidations[i] ? (
+                  <pre className="log" style={{ fontSize: 11 }}>
+                    {JSON.stringify(adaptValidations[i], null, 2)}
+                  </pre>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
   } else if (page === "canvas") {
     const selectedRow = graph.nodes.find((n) => n.id === selectedNode);
     main = (
@@ -1371,6 +1637,9 @@ export function StudioClient() {
               <div>
                 <h2>Empty canvas.</h2>
                 <p>Open a template, or add image / video / upscale nodes.</p>
+                <button className="ghost" type="button" onClick={() => setPage("adapts")}>
+                  Image › Adapts (Axis partner presets)
+                </button>
               </div>
             </div>
           ) : null}
@@ -1490,6 +1759,9 @@ export function StudioClient() {
             </>
           )}
           <div className="canvas-tools">
+            <button className="ghost" type="button" onClick={() => setPage("adapts")}>
+              Image › Adapts
+            </button>
             <button className="ghost" type="button" onClick={() => void generate({ graph: true })}>
               Generate graph
             </button>
