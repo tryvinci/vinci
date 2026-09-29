@@ -1,0 +1,12 @@
+id: "@tryvinci/emote-animate"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: emote
+    type: generate
+    capability: i2v
+    params:
+      prompt: "{{inputs.prompt}}"
+      image: "{{inputs.image}}"
+
+edges: []

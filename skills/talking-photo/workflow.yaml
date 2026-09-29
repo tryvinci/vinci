@@ -1,0 +1,12 @@
+id: "@tryvinci/talking-photo"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: talk
+    type: generate
+    capability: i2v
+    params:
+      prompt: "{{inputs.prompt}}"
+      image: "{{inputs.image}}"
+
+edges: []

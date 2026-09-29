@@ -1,0 +1,57 @@
+{
+  "snapshot_id": "mock-2026-08-27",
+  "models": [
+    {
+      "id": "mock:png:v1",
+      "display_name": "Mock PNG",
+      "provider": "mock",
+      "capabilities": ["t2i", "i2i", "edit_multi"],
+      "constraints": { "aspect_ratios": ["1:1", "16:9", "9:16", "21:9"], "resolutions": ["1x1"] },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.0,
+        "currency": "USD",
+        "snapshot_at": "2026-08-27T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["MOCK_API_KEY"]
+    },
+    {
+      "id": "mock:mp4:v1",
+      "display_name": "Mock MP4",
+      "provider": "mock",
+      "capabilities": ["t2v", "i2v", "lipsync", "upscale", "reframe", "caption"],
+      "constraints": {
+        "aspect_ratios": ["16:9", "9:16", "21:9"],
+        "max_duration": 8,
+        "resolutions": ["1280x720"]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.0,
+        "currency": "USD",
+        "snapshot_at": "2026-08-27T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["MOCK_API_KEY"]
+    },
+    {
+      "id": "mock:txt:v1",
+      "display_name": "Mock transcript / TTS",
+      "provider": "mock",
+      "capabilities": ["transcribe", "tts", "sts", "voice_clone"],
+      "constraints": {},
+      "pricing": {
+        "unit": "second",
+        "amount": 0.0,
+        "currency": "USD",
+        "snapshot_at": "2026-08-27T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["MOCK_API_KEY"]
+    }
+  ]
+}

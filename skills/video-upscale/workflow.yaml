@@ -1,0 +1,12 @@
+id: "@tryvinci/video-upscale"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: upscale
+    type: generate
+    capability: upscale
+    params:
+      prompt: "{{inputs.prompt}}"
+      media: "{{inputs.media}}"
+
+edges: []

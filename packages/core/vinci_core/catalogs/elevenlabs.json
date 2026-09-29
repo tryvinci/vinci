@@ -1,0 +1,75 @@
+{
+  "snapshot_id": "elevenlabs-2026-08-27",
+  "endpoints": {
+    "elevenlabs:flash-v2.5:2026-08": "eleven_flash_v2_5",
+    "elevenlabs:multilingual-v2:2026-08": "eleven_multilingual_v2",
+    "elevenlabs:speech-to-speech:2026-08": "eleven_multilingual_sts_v2",
+    "elevenlabs:voice-clone:2026-08": "voice_clone"
+  },
+  "models": [
+    {
+      "id": "elevenlabs:flash-v2.5:2026-08",
+      "display_name": "Eleven Flash v2.5",
+      "provider": "elevenlabs",
+      "capabilities": ["tts"],
+      "constraints": {},
+      "pricing": {
+        "unit": "1k_chars",
+        "amount": 0.06,
+        "currency": "USD",
+        "snapshot_at": "2026-08-27T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["ELEVENLABS_API_KEY"]
+    },
+    {
+      "id": "elevenlabs:multilingual-v2:2026-08",
+      "display_name": "Eleven Multilingual v2",
+      "provider": "elevenlabs",
+      "capabilities": ["tts"],
+      "constraints": {},
+      "pricing": {
+        "unit": "1k_chars",
+        "amount": 0.12,
+        "currency": "USD",
+        "snapshot_at": "2026-08-27T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": ["ELEVENLABS_API_KEY"]
+    },
+    {
+      "id": "elevenlabs:speech-to-speech:2026-08",
+      "display_name": "Eleven Speech to Speech",
+      "provider": "elevenlabs",
+      "capabilities": ["sts"],
+      "constraints": {},
+      "pricing": {
+        "unit": "1k_chars",
+        "amount": 0.12,
+        "currency": "USD",
+        "snapshot_at": "2026-08-27T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["ELEVENLABS_API_KEY"]
+    },
+    {
+      "id": "elevenlabs:voice-clone:2026-08",
+      "display_name": "Eleven Instant Voice Clone",
+      "provider": "elevenlabs",
+      "capabilities": ["voice_clone"],
+      "constraints": {},
+      "pricing": {
+        "unit": "clone",
+        "amount": 0.0,
+        "currency": "USD",
+        "snapshot_at": "2026-08-27T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["ELEVENLABS_API_KEY"]
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+id: "@tryvinci/product-reveal-5s"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: still
+    type: generate
+    capability: t2i
+    params:
+      prompt: "{{inputs.prompt}}"
+      aspect_ratio: "{{inputs.aspect_ratio}}"
+      camera: "{{inputs.camera}}"
+      lens: "{{inputs.lens}}"
+      look: "{{inputs.look}}"
+      aperture: "{{inputs.aperture}}"
+      genre: "{{inputs.genre}}"
+  - id: reveal
+    type: generate
+    capability: i2v
+    params:
+      prompt: "{{inputs.prompt}}"
+      image: "{{nodes.still.output}}"
+      duration: "{{inputs.duration}}"
+      aspect_ratio: "{{inputs.aspect_ratio}}"
+      camera: "{{inputs.camera}}"
+      lens: "{{inputs.lens}}"
+      look: "{{inputs.look}}"
+      motion: "{{inputs.motion}}"
+      aperture: "{{inputs.aperture}}"
+      genre: "{{inputs.genre}}"
+edges:
+  - src: still
+    dst: reveal
+    input_key: image

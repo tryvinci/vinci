@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tryvinci.com/schema/job.json",
+  "title": "Job",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "model_id", "state"],
+  "properties": {
+    "id": { "type": "string" },
+    "workflow_run_id": { "type": ["string", "null"] },
+    "node_id": { "type": ["string", "null"] },
+    "model_id": { "type": "string" },
+    "provider_job_ref": { "type": ["string", "null"] },
+    "state": {
+      "enum": ["created", "awaiting_approval", "queued", "running", "completed", "failed", "cancelled"]
+    },
+    "inputs": { "type": "object" },
+    "outputs": { "type": "array", "items": { "type": "string" } },
+    "estimate": { "type": ["object", "null"] },
+    "receipt": { "type": ["object", "null"] },
+    "error": { "type": ["object", "null"] },
+    "timings": { "type": "object" },
+    "retries": { "type": "integer", "minimum": 0 },
+    "idempotency_key": { "type": ["string", "null"] },
+    "protocol_version": { "type": "string" }
+  }
+}

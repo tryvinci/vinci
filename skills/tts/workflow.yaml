@@ -1,0 +1,11 @@
+id: "@tryvinci/tts"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: speak
+    type: generate
+    capability: tts
+    params:
+      prompt: "{{inputs.prompt}}"
+
+edges: []

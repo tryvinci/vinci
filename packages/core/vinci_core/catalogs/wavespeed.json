@@ -1,0 +1,290 @@
+{
+  "snapshot_id": "wavespeed-2026-09-07",
+  "endpoints": {
+    "wavespeed:kling-2.6-pro:2026-08": "kwaivgi/kling-v2.6-pro/text-to-video",
+    "wavespeed:kling-3.0-std:2026-08": "kwaivgi/kling-v3.0-std/text-to-video",
+    "wavespeed:kling-3-turbo-pro-i2v:2026-09": "kwaivgi/kling-v3-turbo-pro/image-to-video",
+    "wavespeed:seedance-2.0-turbo:2026-08": "bytedance/seedance-v2.0-turbo/text-to-video",
+    "wavespeed:seedance-2.0-i2v:2026-09": "bytedance/seedance-2.0/image-to-video",
+    "wavespeed:wan-2.6:2026-08": "wan-ai/wan-2.6/text-to-video",
+    "wavespeed:seedream-4.5:2026-08": "bytedance/seedream-v4.5/text-to-image",
+    "wavespeed:nano-banana:2026-09": "google/nano-banana/text-to-image",
+    "wavespeed:nano-banana-pro:2026-09": "google/nano-banana-pro/text-to-image",
+    "wavespeed:nano-banana-pro-edit:2026-09": "google/nano-banana-pro/edit",
+    "wavespeed:hailuo-2.3-t2v:2026-09": "minimax/hailuo-2.3/t2v-standard",
+    "wavespeed:hailuo-2.3-fast-pro:2026-09": "minimax/hailuo-2.3/fast-pro",
+    "wavespeed:infinitetalk:2026-08": "wavespeed-ai/infinitetalk",
+    "wavespeed:seedvr2:2026-08": "wavespeed-ai/seedvr2/upscale"
+  },
+  "models": [
+    {
+      "id": "wavespeed:kling-2.6-pro:2026-08",
+      "display_name": "Kling 2.6 Pro",
+      "provider": "wavespeed",
+      "capabilities": ["t2v", "i2v"],
+      "constraints": {
+        "aspect_ratios": ["16:9", "9:16", "1:1"],
+        "max_duration": 10,
+        "resolutions": ["1920x1080"]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.35,
+        "currency": "USD",
+        "snapshot_at": "2026-08-27T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": ["WAVESPEED_API_KEY"]
+    },
+    {
+      "id": "wavespeed:kling-3.0-std:2026-08",
+      "display_name": "Kling 3.0 Standard",
+      "provider": "wavespeed",
+      "capabilities": ["t2v", "i2v"],
+      "constraints": {
+        "aspect_ratios": ["16:9", "9:16", "1:1"],
+        "max_duration": 15,
+        "resolutions": ["1280x720"]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.42,
+        "currency": "USD",
+        "snapshot_at": "2026-09-07T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["WAVESPEED_API_KEY"]
+    },
+    {
+      "id": "wavespeed:kling-3-turbo-pro-i2v:2026-09",
+      "display_name": "Kling 3 Turbo Pro i2v",
+      "provider": "wavespeed",
+      "capabilities": ["i2v"],
+      "constraints": {
+        "aspect_ratios": ["16:9", "9:16"],
+        "max_duration": 15,
+        "resolutions": ["1920x1080"]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.70,
+        "currency": "USD",
+        "snapshot_at": "2026-09-07T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": ["WAVESPEED_API_KEY"]
+    },
+    {
+      "id": "wavespeed:seedance-2.0-turbo:2026-08",
+      "display_name": "Seedance 2.0 Turbo",
+      "provider": "wavespeed",
+      "capabilities": ["t2v", "i2v"],
+      "constraints": {
+        "aspect_ratios": ["16:9", "9:16"],
+        "max_duration": 10,
+        "resolutions": ["1920x1080"]
+      },
+      "pricing": {
+        "unit": "video_5s_audio",
+        "amount": 0.75,
+        "currency": "USD",
+        "snapshot_at": "2026-08-27T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["WAVESPEED_API_KEY"]
+    },
+    {
+      "id": "wavespeed:seedance-2.0-i2v:2026-09",
+      "display_name": "Seedance 2.0 i2v",
+      "provider": "wavespeed",
+      "capabilities": ["i2v"],
+      "constraints": {
+        "aspect_ratios": ["16:9", "9:16"],
+        "max_duration": 10,
+        "resolutions": ["1920x1080"]
+      },
+      "pricing": {
+        "unit": "video_5s_audio",
+        "amount": 0.75,
+        "currency": "USD",
+        "snapshot_at": "2026-09-07T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": ["WAVESPEED_API_KEY"]
+    },
+    {
+      "id": "wavespeed:wan-2.6:2026-08",
+      "display_name": "Wan 2.6",
+      "provider": "wavespeed",
+      "capabilities": ["t2v", "i2v"],
+      "constraints": {
+        "aspect_ratios": ["16:9", "9:16"],
+        "max_duration": 10,
+        "resolutions": ["1920x1080"]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.75,
+        "currency": "USD",
+        "snapshot_at": "2026-08-27T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": ["WAVESPEED_API_KEY"]
+    },
+    {
+      "id": "wavespeed:seedream-4.5:2026-08",
+      "display_name": "Seedream 4.5",
+      "provider": "wavespeed",
+      "capabilities": ["t2i", "i2i", "edit_multi"],
+      "constraints": {
+        "aspect_ratios": ["1:1", "16:9", "9:16"],
+        "resolutions": ["1024x1024"]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.04,
+        "currency": "USD",
+        "snapshot_at": "2026-08-27T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": ["WAVESPEED_API_KEY"]
+    },
+    {
+      "id": "wavespeed:nano-banana:2026-09",
+      "display_name": "Nano Banana",
+      "provider": "wavespeed",
+      "capabilities": ["t2i"],
+      "constraints": {
+        "aspect_ratios": ["1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"],
+        "resolutions": ["1k"]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.04,
+        "currency": "USD",
+        "snapshot_at": "2026-09-07T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["WAVESPEED_API_KEY"]
+    },
+    {
+      "id": "wavespeed:nano-banana-pro:2026-09",
+      "display_name": "Nano Banana Pro",
+      "provider": "wavespeed",
+      "capabilities": ["t2i"],
+      "constraints": {
+        "aspect_ratios": ["1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"],
+        "resolutions": ["1k", "2k", "4k"]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.05,
+        "currency": "USD",
+        "snapshot_at": "2026-09-07T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": ["WAVESPEED_API_KEY"]
+    },
+    {
+      "id": "wavespeed:nano-banana-pro-edit:2026-09",
+      "display_name": "Nano Banana Pro Edit",
+      "provider": "wavespeed",
+      "capabilities": ["i2i", "edit_multi"],
+      "constraints": {
+        "aspect_ratios": ["1:1", "16:9", "9:16"],
+        "resolutions": ["1k", "2k", "4k"],
+        "max_input_images": 4
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.05,
+        "currency": "USD",
+        "snapshot_at": "2026-09-07T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": ["WAVESPEED_API_KEY"]
+    },
+    {
+      "id": "wavespeed:hailuo-2.3-t2v:2026-09",
+      "display_name": "Hailuo 2.3 Standard",
+      "provider": "wavespeed",
+      "capabilities": ["t2v"],
+      "constraints": {
+        "aspect_ratios": ["16:9", "9:16"],
+        "max_duration": 10,
+        "resolutions": ["1280x768"]
+      },
+      "pricing": {
+        "unit": "video_6s",
+        "amount": 0.30,
+        "currency": "USD",
+        "snapshot_at": "2026-09-07T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["WAVESPEED_API_KEY"]
+    },
+    {
+      "id": "wavespeed:hailuo-2.3-fast-pro:2026-09",
+      "display_name": "Hailuo 2.3 Fast Pro",
+      "provider": "wavespeed",
+      "capabilities": ["i2v"],
+      "constraints": {
+        "aspect_ratios": ["16:9", "9:16"],
+        "max_duration": 6,
+        "resolutions": ["1920x1080"]
+      },
+      "pricing": {
+        "unit": "video_6s",
+        "amount": 0.27,
+        "currency": "USD",
+        "snapshot_at": "2026-09-07T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["WAVESPEED_API_KEY"]
+    },
+    {
+      "id": "wavespeed:infinitetalk:2026-08",
+      "display_name": "InfiniteTalk",
+      "provider": "wavespeed",
+      "capabilities": ["lipsync"],
+      "constraints": { "max_duration": 30, "resolutions": ["1280x720"] },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.20,
+        "currency": "USD",
+        "snapshot_at": "2026-08-27T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["WAVESPEED_API_KEY"]
+    },
+    {
+      "id": "wavespeed:seedvr2:2026-08",
+      "display_name": "SeedVR2",
+      "provider": "wavespeed",
+      "capabilities": ["upscale"],
+      "constraints": { "resolutions": ["4k"] },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.15,
+        "currency": "USD",
+        "snapshot_at": "2026-08-27T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": ["WAVESPEED_API_KEY"]
+    }
+  ]
+}

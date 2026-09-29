@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tryvinci.com/schema/event.json",
+  "title": "Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "created_at"],
+  "properties": {
+    "type": { "type": "string" },
+    "job_id": { "type": ["string", "null"] },
+    "run_id": { "type": ["string", "null"] },
+    "created_at": { "type": "string", "format": "date-time" },
+    "payload": { "type": "object" }
+  }
+}

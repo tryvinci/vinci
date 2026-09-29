@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tryvinci.com/schema/asset.json",
+  "title": "Asset",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "kind", "mime", "bytes", "source", "parent_ids", "created_at"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "kind": { "enum": ["image", "video", "audio", "text", "timeline"] },
+    "mime": { "type": "string" },
+    "bytes": { "type": "integer", "minimum": 0 },
+    "width": { "type": ["integer", "null"] },
+    "height": { "type": ["integer", "null"] },
+    "duration": { "type": ["number", "null"] },
+    "source": { "enum": ["generated", "uploaded", "derived"] },
+    "parent_ids": { "type": "array", "items": { "type": "string" } },
+    "created_by": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "skill": { "type": ["string", "null"] },
+        "model_id": { "type": ["string", "null"] }
+      }
+    },
+    "metadata": { "type": "object" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "uri": { "type": ["string", "null"], "pattern": "^vinci://assets/" }
+  }
+}

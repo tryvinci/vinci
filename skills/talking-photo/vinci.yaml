@@ -1,0 +1,13 @@
+id: "@tryvinci/talking-photo"
+version: "1.0.0"
+tags: [video, i2v, talking]
+inputs:
+  prompt: { type: string, required: true }
+  image: { type: string, required: false }
+outputs:
+  video: { kind: video }
+capabilities: [i2v]
+secret_names: []
+permissions: []
+est_cost: { min: 0.0, max: 0.8, currency: USD }
+safety_tags: []

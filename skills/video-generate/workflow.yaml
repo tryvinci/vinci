@@ -1,0 +1,20 @@
+id: "@tryvinci/video-generate"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: generate
+    type: generate
+    capability: t2v
+    params:
+      prompt: "{{inputs.prompt}}"
+      aspect_ratio: "{{inputs.aspect_ratio}}"
+      duration: "{{inputs.duration}}"
+      camera: "{{inputs.camera}}"
+      lens: "{{inputs.lens}}"
+      look: "{{inputs.look}}"
+      lighting: "{{inputs.lighting}}"
+      palette: "{{inputs.palette}}"
+      motion: "{{inputs.motion}}"
+      aperture: "{{inputs.aperture}}"
+      genre: "{{inputs.genre}}"
+edges: []

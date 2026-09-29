@@ -1,0 +1,10 @@
+id: "@example/stamp-text"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: generate
+    type: generate
+    capability: t2i
+    params:
+      prompt: "{{inputs.prompt}}"
+edges: []

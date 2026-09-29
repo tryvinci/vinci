@@ -1,0 +1,13 @@
+id: "@tryvinci/voice-clone"
+version: "1.0.0"
+tags: [audio, voice_clone]
+inputs:
+  prompt: { type: string, required: true }
+  reference: { type: string, required: false }
+outputs:
+  audio: { kind: audio }
+capabilities: [voice_clone]
+secret_names: []
+permissions: []
+est_cost: { min: 0.0, max: 0.12, currency: USD }
+safety_tags: []

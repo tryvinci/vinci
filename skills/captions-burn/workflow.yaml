@@ -1,0 +1,11 @@
+id: "@tryvinci/captions-burn"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: captions
+    type: media
+    params:
+      op: burn_captions
+      media: "{{inputs.media}}"
+      text: "{{inputs.text}}"
+edges: []

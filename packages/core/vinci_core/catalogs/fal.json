@@ -1,0 +1,438 @@
+{
+  "snapshot_id": "fal-2026-09-06",
+  "endpoints": {
+    "fal:flux-schnell:2026-08": "fal-ai/flux/schnell",
+    "fal:flux-dev:2026-09": "fal-ai/flux/dev",
+    "fal:flux-pro:2026-09": "fal-ai/flux-pro",
+    "fal:nano-banana-pro:2026-09": "fal-ai/nano-banana-pro",
+    "fal:nano-banana-pro-edit:2026-09": "fal-ai/nano-banana-pro/edit",
+    "fal:ideogram-v3:2026-09": "fal-ai/ideogram/v3",
+    "fal:recraft-v3:2026-09": "fal-ai/recraft-v3",
+    "fal:kling-2.6-pro:2026-09": "fal-ai/kling-video/v2.6/pro/text-to-video",
+    "fal:kling-2.6-pro-i2v:2026-09": "fal-ai/kling-video/v2.6/pro/image-to-video",
+    "fal:seedance-1.5-pro-i2v:2026-09": "fal-ai/bytedance/seedance/v1.5/pro/image-to-video",
+    "fal:veo-3.1-fast-i2v:2026-09": "fal-ai/veo3.1/fast/image-to-video",
+    "fal:kling-o1-i2v:2026-09": "fal-ai/kling-video/o1/image-to-video",
+    "fal:seedvr-upscale:2026-09": "fal-ai/seedvr/upscale/image",
+    "fal:elevenlabs-tts-v3:2026-09": "fal-ai/elevenlabs/tts/eleven-v3",
+    "fal:minimax-speech-2.6-hd:2026-09": "fal-ai/minimax/speech-2.6-hd"
+  },
+  "models": [
+    {
+      "id": "fal:flux-schnell:2026-08",
+      "display_name": "FLUX Schnell",
+      "provider": "fal",
+      "capabilities": [
+        "t2i"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "1024x1024"
+        ]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.003,
+        "currency": "USD",
+        "snapshot_at": "2026-08-27T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "FAL_KEY"
+      ]
+    },
+    {
+      "id": "fal:flux-dev:2026-09",
+      "display_name": "fal FLUX.1 Dev",
+      "provider": "fal",
+      "capabilities": [
+        "t2i"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "1024x1024"
+        ]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.025,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "FAL_KEY"
+      ]
+    },
+    {
+      "id": "fal:flux-pro:2026-09",
+      "display_name": "fal FLUX.1 Pro",
+      "provider": "fal",
+      "capabilities": [
+        "t2i"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "1024x1024"
+        ]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.05,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "FAL_KEY"
+      ]
+    },
+    {
+      "id": "fal:nano-banana-pro:2026-09",
+      "display_name": "fal Nano Banana Pro",
+      "provider": "fal",
+      "capabilities": [
+        "t2i"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "1024x1024",
+          "4K"
+        ]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.05,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "FAL_KEY"
+      ]
+    },
+    {
+      "id": "fal:nano-banana-pro-edit:2026-09",
+      "display_name": "fal Nano Banana Pro Edit",
+      "provider": "fal",
+      "capabilities": [
+        "i2i",
+        "edit_multi"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "4K"
+        ],
+        "max_input_images": 4
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.05,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "FAL_KEY"
+      ]
+    },
+    {
+      "id": "fal:ideogram-v3:2026-09",
+      "display_name": "fal Ideogram v3",
+      "provider": "fal",
+      "capabilities": [
+        "t2i"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "1024x1024"
+        ]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.06,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "FAL_KEY"
+      ]
+    },
+    {
+      "id": "fal:recraft-v3:2026-09",
+      "display_name": "fal Recraft v3",
+      "provider": "fal",
+      "capabilities": [
+        "t2i"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "1024x1024"
+        ]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.04,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "FAL_KEY"
+      ]
+    },
+    {
+      "id": "fal:kling-2.6-pro:2026-09",
+      "display_name": "fal Kling 2.6 Pro",
+      "provider": "fal",
+      "capabilities": [
+        "t2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 10,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.35,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "FAL_KEY"
+      ]
+    },
+    {
+      "id": "fal:kling-2.6-pro-i2v:2026-09",
+      "display_name": "fal Kling 2.6 Pro i2v",
+      "provider": "fal",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 10,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.35,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "FAL_KEY"
+      ]
+    },
+    {
+      "id": "fal:seedance-1.5-pro-i2v:2026-09",
+      "display_name": "fal Seedance 1.5 Pro i2v",
+      "provider": "fal",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 10,
+        "resolutions": [
+          "1280x720"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.28,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "FAL_KEY"
+      ]
+    },
+    {
+      "id": "fal:veo-3.1-fast-i2v:2026-09",
+      "display_name": "fal Veo 3.1 Fast i2v",
+      "provider": "fal",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 8,
+        "resolutions": [
+          "1280x720"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.4,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "FAL_KEY"
+      ]
+    },
+    {
+      "id": "fal:kling-o1-i2v:2026-09",
+      "display_name": "fal Kling O1 i2v",
+      "provider": "fal",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 10,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.35,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "FAL_KEY"
+      ]
+    },
+    {
+      "id": "fal:seedvr-upscale:2026-09",
+      "display_name": "fal SeedVR Upscale",
+      "provider": "fal",
+      "capabilities": [
+        "upscale",
+        "i2i"
+      ],
+      "constraints": {
+        "resolutions": [
+          "4k"
+        ]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.08,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "FAL_KEY"
+      ]
+    },
+    {
+      "id": "fal:elevenlabs-tts-v3:2026-09",
+      "display_name": "fal ElevenLabs TTS v3",
+      "provider": "fal",
+      "capabilities": [
+        "tts"
+      ],
+      "constraints": {},
+      "pricing": {
+        "unit": "1k_chars",
+        "amount": 0.12,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "FAL_KEY"
+      ]
+    },
+    {
+      "id": "fal:minimax-speech-2.6-hd:2026-09",
+      "display_name": "fal MiniMax Speech 2.6 HD",
+      "provider": "fal",
+      "capabilities": [
+        "tts"
+      ],
+      "constraints": {},
+      "pricing": {
+        "unit": "1k_chars",
+        "amount": 0.08,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "FAL_KEY"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+id: "@tryvinci/image-generate"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: generate
+    type: generate
+    capability: t2i
+    params:
+      prompt: "{{inputs.prompt}}"
+      aspect_ratio: "{{inputs.aspect_ratio}}"
+      camera: "{{inputs.camera}}"
+      lens: "{{inputs.lens}}"
+      look: "{{inputs.look}}"
+      lighting: "{{inputs.lighting}}"
+      palette: "{{inputs.palette}}"
+      aperture: "{{inputs.aperture}}"
+      genre: "{{inputs.genre}}"
+edges: []

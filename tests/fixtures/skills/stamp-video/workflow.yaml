@@ -1,0 +1,10 @@
+id: "@example/stamp-video"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: generate
+    type: generate
+    capability: t2v
+    params:
+      prompt: "{{inputs.prompt}}"
+edges: []

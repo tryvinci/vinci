@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vinci-daemon"
+version = "0.1.0"
+description = "Vinci daemon — FastAPI HTTP + worker + MCP at /mcp."
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "vinci-runtime==0.1.0",
+    "vinci-mcp==0.1.0",
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+    "python-multipart>=0.0.9",
+    "PyYAML>=6.0",
+]
+
+[project.scripts]
+vinci-daemon = "vinci_daemon.app:main"
+
+[tool.setuptools.packages.find]
+include = ["vinci_daemon*"]
+
+[tool.setuptools.package-data]
+vinci_daemon = ["studio.html", "studio-icon.svg"]

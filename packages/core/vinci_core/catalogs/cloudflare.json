@@ -1,0 +1,27 @@
+{
+  "snapshot_id": "cloudflare-2026-08-31",
+  "endpoints": {
+    "cloudflare:flux-schnell:2026-08": "@cf/black-forest-labs/flux-1-schnell"
+  },
+  "models": [
+    {
+      "id": "cloudflare:flux-schnell:2026-08",
+      "display_name": "FLUX.1 Schnell (Workers AI)",
+      "provider": "cloudflare",
+      "capabilities": ["t2i"],
+      "constraints": {
+        "aspect_ratios": ["1:1"],
+        "resolutions": ["1024x1024"]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.00027,
+        "currency": "USD",
+        "snapshot_at": "2026-08-31T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["CLOUDFLARE_API_TOKEN"]
+    }
+  ]
+}

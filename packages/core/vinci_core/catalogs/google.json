@@ -1,0 +1,70 @@
+{
+  "snapshot_id": "google-2026-08-27",
+  "endpoints": {
+    "google:gemini-flash-image:2026-08": "gemini-2.5-flash-image",
+    "google:veo-3.1-lite:2026-08": "veo-3.1-lite",
+    "google:veo-3.1-std:2026-08": "veo-3.1"
+  },
+  "models": [
+    {
+      "id": "google:gemini-flash-image:2026-08",
+      "display_name": "Gemini Flash Image",
+      "provider": "google",
+      "capabilities": ["t2i", "i2i", "edit_multi"],
+      "constraints": {
+        "aspect_ratios": ["1:1", "16:9", "9:16"],
+        "resolutions": ["1024x1024"],
+        "max_input_images": 14
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.067,
+        "currency": "USD",
+        "snapshot_at": "2026-08-27T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["GEMINI_API_KEY"]
+    },
+    {
+      "id": "google:veo-3.1-lite:2026-08",
+      "display_name": "Veo 3.1 Lite",
+      "provider": "google",
+      "capabilities": ["t2v", "i2v"],
+      "constraints": {
+        "aspect_ratios": ["16:9", "9:16"],
+        "max_duration": 8,
+        "resolutions": ["1280x720"]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.40,
+        "currency": "USD",
+        "snapshot_at": "2026-08-27T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["GEMINI_API_KEY"]
+    },
+    {
+      "id": "google:veo-3.1-std:2026-08",
+      "display_name": "Veo 3.1 Standard",
+      "provider": "google",
+      "capabilities": ["t2v", "i2v"],
+      "constraints": {
+        "aspect_ratios": ["16:9", "9:16"],
+        "max_duration": 8,
+        "resolutions": ["1920x1080"]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 1.00,
+        "currency": "USD",
+        "snapshot_at": "2026-08-27T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": ["GEMINI_API_KEY"]
+    }
+  ]
+}

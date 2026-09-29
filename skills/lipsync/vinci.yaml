@@ -1,0 +1,14 @@
+id: "@tryvinci/lipsync"
+version: "1.0.0"
+tags: [video, lipsync]
+inputs:
+  prompt: { type: string, required: true }
+  audio: { type: string, required: false }
+  video: { type: string, required: false }
+outputs:
+  video: { kind: video }
+capabilities: [lipsync]
+secret_names: []
+permissions: []
+est_cost: { min: 0.0, max: 0.5, currency: USD }
+safety_tags: []

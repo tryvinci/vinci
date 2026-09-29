@@ -1,0 +1,31 @@
+[project]
+name = "vinci-workspace"
+version = "0.1.0"
+description = "Dev tooling for the Vinci OSS monorepo (install packages via make install)."
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "MIT" }
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["packages", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = false
+pretty = true
+show_error_codes = true
+mypy_path = "packages/protocol:packages/core:packages/storage:packages/provider-sdk:packages/skills:packages/runtime:packages/mcp:packages/provider-wavespeed:packages/provider-google:packages/provider-openai:packages/provider-fal:packages/provider-elevenlabs:packages/provider-cloudflare:packages/provider-higgsfield:packages/provider-magnific:packages/media:packages/index:packages/harness"
+
+[[tool.mypy.overrides]]
+module = ["keyring", "yaml", "uvicorn"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["packages", "tests"]
+addopts = "-q"

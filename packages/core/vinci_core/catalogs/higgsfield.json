@@ -1,0 +1,888 @@
+{
+  "snapshot_id": "higgsfield-2026-09-06",
+  "endpoints": {
+    "higgsfield:soul-standard:2026-09": "/higgsfield-ai/soul/standard",
+    "higgsfield:soul-reference:2026-09": "/higgsfield-ai/soul/reference",
+    "higgsfield:soul-character:2026-09": "/higgsfield-ai/soul/character",
+    "higgsfield:popcorn-auto:2026-09": "/higgsfield-ai/popcorn/auto",
+    "higgsfield:seedance-lite:2026-09": "/bytedance/seedance/v1/lite/text-to-video",
+    "higgsfield:nano-banana:2026-09": "/nano-banana",
+    "higgsfield:dop-turbo:2026-09": "/higgsfield-ai/dop/turbo",
+    "higgsfield:dop-lite:2026-09": "/higgsfield-ai/dop/lite",
+    "higgsfield:dop-standard:2026-09": "/higgsfield-ai/dop/standard",
+    "higgsfield:kling-2.5-turbo-pro:2026-09": "/kling-video/v2.5-turbo/pro/text-to-video",
+    "higgsfield:kling-2.5-turbo-pro-i2v:2026-09": "/kling-video/v2.5-turbo/pro/image-to-video",
+    "higgsfield:veo-3.1-fast:2026-09": "/veo3.1/fast",
+    "higgsfield:veo-3.1-fast-i2v:2026-09": "/veo3.1/fast/image-to-video",
+    "higgsfield:flux-kontext-max:2026-09": "/flux-pro/kontext/max/text-to-image",
+    "higgsfield:wan-25:2026-09": "/wan-25-preview/text-to-video",
+    "higgsfield:wan-25-i2v:2026-09": "/wan-25-preview/image-to-video",
+    "higgsfield:seedance-lite-i2v:2026-09": "/bytedance/seedance/v1/lite/image-to-video",
+    "higgsfield:seedance-pro-fast:2026-09": "/bytedance/seedance/v1/pro/fast/text-to-video",
+    "higgsfield:seedance-pro-fast-i2v:2026-09": "/bytedance/seedance/v1/pro/fast/image-to-video",
+    "higgsfield:veo-3.1:2026-09": "/veo3.1",
+    "higgsfield:veo-3.1-i2v:2026-09": "/veo3.1/image-to-video",
+    "higgsfield:veo-3.1-flf:2026-09": "/veo3.1/first-last-frame-to-video",
+    "higgsfield:veo-3.1-fast-flf:2026-09": "/veo3.1/fast/first-last-frame-to-video",
+    "higgsfield:veo-3.1-r2v:2026-09": "/veo3.1/reference-to-video",
+    "higgsfield:hailuo-02-pro:2026-09": "/minimax/hailuo-02/pro/text-to-video",
+    "higgsfield:hailuo-02-pro-i2v:2026-09": "/minimax/hailuo-02/pro/image-to-video",
+    "higgsfield:kling-2.5-turbo-std-i2v:2026-09": "/kling-video/v2.5-turbo/standard/image-to-video",
+    "higgsfield:reve-t2i:2026-09": "/reve/text-to-image"
+  },
+  "models": [
+    {
+      "id": "higgsfield:soul-standard:2026-09",
+      "display_name": "Higgsfield Soul Standard",
+      "provider": "higgsfield",
+      "capabilities": [
+        "t2i"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "4:3",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "2K",
+          "4K"
+        ]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.04,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:soul-reference:2026-09",
+      "display_name": "Higgsfield Soul Reference",
+      "provider": "higgsfield",
+      "capabilities": [
+        "i2i"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "4:3",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "2K"
+        ]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.05,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:soul-character:2026-09",
+      "display_name": "Higgsfield Soul Character",
+      "provider": "higgsfield",
+      "capabilities": [
+        "i2i"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "4:3",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "2K"
+        ]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.06,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:popcorn-auto:2026-09",
+      "display_name": "Higgsfield Popcorn Auto",
+      "provider": "higgsfield",
+      "capabilities": [
+        "t2i",
+        "i2i"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "4:3",
+          "3:4",
+          "3:2",
+          "2:3",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "720p",
+          "1600p"
+        ]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.22,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:seedance-lite:2026-09",
+      "display_name": "Higgsfield Seedance Lite",
+      "provider": "higgsfield",
+      "capabilities": [
+        "t2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 10,
+        "resolutions": [
+          "1280x720"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.18,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:nano-banana:2026-09",
+      "display_name": "Higgsfield Nano Banana",
+      "provider": "higgsfield",
+      "capabilities": [
+        "t2i",
+        "i2i",
+        "edit_multi"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "1024x1024"
+        ]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.04,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:dop-turbo:2026-09",
+      "display_name": "Higgsfield DoP Turbo",
+      "provider": "higgsfield",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 5,
+        "resolutions": [
+          "1280x720"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.15,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:dop-lite:2026-09",
+      "display_name": "Higgsfield DoP Lite",
+      "provider": "higgsfield",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 5,
+        "resolutions": [
+          "1280x720"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.1,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:dop-standard:2026-09",
+      "display_name": "Higgsfield DoP Standard",
+      "provider": "higgsfield",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 8,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.28,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:kling-2.5-turbo-pro:2026-09",
+      "display_name": "Higgsfield Kling 2.5 Turbo Pro",
+      "provider": "higgsfield",
+      "capabilities": [
+        "t2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 10,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.35,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:kling-2.5-turbo-pro-i2v:2026-09",
+      "display_name": "Higgsfield Kling 2.5 Turbo Pro i2v",
+      "provider": "higgsfield",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 10,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.35,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:veo-3.1-fast:2026-09",
+      "display_name": "Higgsfield Veo 3.1 Fast",
+      "provider": "higgsfield",
+      "capabilities": [
+        "t2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 8,
+        "resolutions": [
+          "1280x720"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.4,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:veo-3.1-fast-i2v:2026-09",
+      "display_name": "Higgsfield Veo 3.1 Fast i2v",
+      "provider": "higgsfield",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 8,
+        "resolutions": [
+          "1280x720"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.4,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:flux-kontext-max:2026-09",
+      "display_name": "Higgsfield FLUX Kontext Max",
+      "provider": "higgsfield",
+      "capabilities": [
+        "t2i",
+        "i2i"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "1024x1024"
+        ]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.08,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:wan-25:2026-09",
+      "display_name": "Higgsfield Wan 2.5",
+      "provider": "higgsfield",
+      "capabilities": [
+        "t2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 10,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.3,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:wan-25-i2v:2026-09",
+      "display_name": "Higgsfield Wan 2.5 i2v",
+      "provider": "higgsfield",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 10,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.3,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:seedance-lite-i2v:2026-09",
+      "display_name": "Higgsfield Seedance Lite i2v",
+      "provider": "higgsfield",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 10,
+        "resolutions": [
+          "1280x720"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.18,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:seedance-pro-fast:2026-09",
+      "display_name": "Higgsfield Seedance Pro Fast",
+      "provider": "higgsfield",
+      "capabilities": [
+        "t2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 10,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.32,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:seedance-pro-fast-i2v:2026-09",
+      "display_name": "Higgsfield Seedance Pro Fast i2v",
+      "provider": "higgsfield",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 10,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.32,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:veo-3.1:2026-09",
+      "display_name": "Higgsfield Veo 3.1",
+      "provider": "higgsfield",
+      "capabilities": [
+        "t2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 8,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.8,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:veo-3.1-i2v:2026-09",
+      "display_name": "Higgsfield Veo 3.1 i2v",
+      "provider": "higgsfield",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 8,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.8,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:veo-3.1-flf:2026-09",
+      "display_name": "Higgsfield Veo 3.1 First-Last Frame",
+      "provider": "higgsfield",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 8,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.8,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:veo-3.1-fast-flf:2026-09",
+      "display_name": "Higgsfield Veo 3.1 Fast First-Last Frame",
+      "provider": "higgsfield",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 8,
+        "resolutions": [
+          "1280x720"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.4,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:veo-3.1-r2v:2026-09",
+      "display_name": "Higgsfield Veo 3.1 Reference-to-Video",
+      "provider": "higgsfield",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 8,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.8,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:hailuo-02-pro:2026-09",
+      "display_name": "Higgsfield Hailuo 02 Pro",
+      "provider": "higgsfield",
+      "capabilities": [
+        "t2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 10,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.28,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:hailuo-02-pro-i2v:2026-09",
+      "display_name": "Higgsfield Hailuo 02 Pro i2v",
+      "provider": "higgsfield",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 10,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.28,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:kling-2.5-turbo-std-i2v:2026-09",
+      "display_name": "Higgsfield Kling 2.5 Turbo Standard i2v",
+      "provider": "higgsfield",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 10,
+        "resolutions": [
+          "1280x720"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.22,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    },
+    {
+      "id": "higgsfield:reve-t2i:2026-09",
+      "display_name": "Higgsfield Reve",
+      "provider": "higgsfield",
+      "capabilities": [
+        "t2i"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "1024x1024"
+        ]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.04,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "HIGGSFIELD_API_KEY",
+        "HIGGSFIELD_API_SECRET"
+      ]
+    }
+  ]
+}

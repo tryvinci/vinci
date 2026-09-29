@@ -1,0 +1,12 @@
+id: "@tryvinci/voice-clone"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: clone
+    type: generate
+    capability: voice_clone
+    params:
+      prompt: "{{inputs.prompt}}"
+      reference: "{{inputs.reference}}"
+
+edges: []

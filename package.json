@@ -1,0 +1,19 @@
+{
+  "name": "vinci",
+  "private": true,
+  "description": "Vinci — open-source generative media runtime (workspace root). JS packages live under @tryvinci/*.",
+  "bin": {
+    "vinci": "apps/cli/dist/index.js"
+  },
+  "workspaces": [
+    "packages/protocol",
+    "apps/cli",
+    "apps/studio"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
