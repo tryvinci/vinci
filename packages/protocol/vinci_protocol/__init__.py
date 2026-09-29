@@ -1,0 +1,62 @@
+"""vinci-protocol: JSON Schemas and typed models shared by daemon, CLI, and plugins."""
+
+from vinci_protocol.constants import PROTOCOL_VERSION
+from vinci_protocol.enums import (
+    AssetKind,
+    AssetSource,
+    Capability,
+    ErrorCode,
+    JobState,
+    ModelStatus,
+    NodeType,
+    RoutePreference,
+)
+from vinci_protocol.models import (
+    Asset,
+    Estimate,
+    Event,
+    Handshake,
+    Job,
+    JobRequest,
+    JobStatus,
+    ModelSpec,
+    Pricing,
+    ProviderJobRef,
+    ProviderManifest,
+    Receipt,
+    Timeline,
+    TimelineClip,
+    VinciError,
+    WorkflowSpec,
+)
+from vinci_protocol.schemas import load_schema, schema_dir
+
+__all__ = [
+    "PROTOCOL_VERSION",
+    "Asset",
+    "AssetKind",
+    "AssetSource",
+    "Capability",
+    "ErrorCode",
+    "Estimate",
+    "Event",
+    "Handshake",
+    "Job",
+    "JobRequest",
+    "JobState",
+    "JobStatus",
+    "ModelSpec",
+    "ModelStatus",
+    "NodeType",
+    "Pricing",
+    "ProviderJobRef",
+    "ProviderManifest",
+    "Receipt",
+    "RoutePreference",
+    "Timeline",
+    "TimelineClip",
+    "VinciError",
+    "WorkflowSpec",
+    "load_schema",
+    "schema_dir",
+]

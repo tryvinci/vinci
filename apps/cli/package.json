@@ -1,0 +1,19 @@
+{
+  "name": "@tryvinci/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Vinci CLI (bin: vinci). Talks to vinci-daemon over HTTP.",
+  "license": "MIT",
+  "bin": {
+    "vinci": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.0"
+  }
+}

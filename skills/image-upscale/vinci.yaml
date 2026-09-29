@@ -1,0 +1,21 @@
+id: "@tryvinci/image-upscale"
+version: "1.0.0"
+tags: [image, upscale, i2i]
+inputs:
+  prompt: { type: string, required: false, default: upscale }
+  media: { type: string, required: false }
+  scale: { type: string, required: false, default: "4x" }
+  aspect_ratio: { type: string, required: false }
+  creativity: { type: number, required: false }
+  resemblance: { type: number, required: false }
+  hdr: { type: number, required: false }
+  fractality: { type: number, required: false }
+  optimized_for: { type: string, required: false }
+  engine: { type: string, required: false }
+outputs:
+  image: { kind: image }
+capabilities: [i2i]
+secret_names: []
+permissions: []
+est_cost: { min: 0.0, max: 0.16, currency: USD }
+safety_tags: []

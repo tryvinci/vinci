@@ -1,0 +1,749 @@
+{
+  "snapshot_id": "magnific-2026-09-06",
+  "endpoints": {
+    "magnific:mystic:2026-09": "/v1/ai/mystic",
+    "magnific:flux-2-pro:2026-09": "/v1/ai/text-to-image/flux-2-pro",
+    "magnific:flux-2-turbo:2026-09": "/v1/ai/text-to-image/flux-2-turbo",
+    "magnific:seedream-4.5:2026-09": "/v1/ai/text-to-image/seedream-v4-5",
+    "magnific:upscaler-creative:2026-09": "/v1/ai/image-upscaler",
+    "magnific:upscaler-precision:2026-09": "/v1/ai/image-upscaler-precision",
+    "magnific:kling-2.6-pro:2026-09": "/v1/ai/image-to-video/kling-v2-6-pro",
+    "magnific:wan-2.5-t2v:2026-09": "/v1/ai/text-to-video/wan-2-5-t2v-1080p",
+    "magnific:wan-2.5-i2v:2026-09": "/v1/ai/image-to-video/wan-2-5-i2v-1080p",
+    "magnific:seedream-5-pro:2026-09": "/v1/ai/text-to-image/seedream-v5-pro",
+    "magnific:seedream-5-pro-edit:2026-09": "/v1/ai/text-to-image/seedream-v5-pro-edit",
+    "magnific:flux-2-flex:2026-09": "/v1/ai/text-to-image/flux-2-flex",
+    "magnific:flux-kontext-max:2026-09": "/v1/ai/text-to-image/flux-kontext-max",
+    "magnific:nano-banana-pro:2026-09": "/v1/ai/text-to-image/nano-banana-pro",
+    "magnific:kling-3-pro:2026-09": "/v1/ai/video/kling-v3-pro",
+    "magnific:kling-3-turbo-1080p:2026-09": "/v1/ai/text-to-video/kling-v3-turbo-1080p",
+    "magnific:kling-3-turbo-i2v-1080p:2026-09": "/v1/ai/image-to-video/kling-v3-turbo-1080p",
+    "magnific:wan-2.6-i2v:2026-09": "/v1/ai/image-to-video/wan-v2-6-1080p",
+    "magnific:wan-2.7-t2v:2026-09": "/v1/ai/text-to-video/wan-2-7",
+    "magnific:wan-2.7-i2v:2026-09": "/v1/ai/image-to-video/wan-2-7",
+    "magnific:hailuo-02:2026-09": "/v1/ai/image-to-video/minimax-hailuo-02-1080p",
+    "magnific:seedance-2-pro-1080p:2026-09": "/v1/ai/video/seedance-2-pro-1080p",
+    "magnific:veo-3.1-lite:2026-09": "/v1/ai/text-to-video/veo-3-1-lite",
+    "magnific:video-upscaler-precision:2026-09": "/v1/ai/video-upscaler-precision"
+  },
+  "models": [
+    {
+      "id": "magnific:mystic:2026-09",
+      "display_name": "Magnific Mystic",
+      "provider": "magnific",
+      "capabilities": [
+        "t2i"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "1024x1024",
+          "2048x2048",
+          "4096x4096"
+        ]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.1,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:flux-2-pro:2026-09",
+      "display_name": "Magnific FLUX.2 Pro",
+      "provider": "magnific",
+      "capabilities": [
+        "t2i",
+        "i2i",
+        "edit_multi"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "1024x1024"
+        ],
+        "max_input_images": 4
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.05,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:flux-2-turbo:2026-09",
+      "display_name": "Magnific FLUX.2 Turbo",
+      "provider": "magnific",
+      "capabilities": [
+        "t2i"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "1024x1024"
+        ]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.02,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:seedream-4.5:2026-09",
+      "display_name": "Magnific Seedream 4.5",
+      "provider": "magnific",
+      "capabilities": [
+        "t2i"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "1024x1024",
+          "2048x2048"
+        ]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.04,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:upscaler-creative:2026-09",
+      "display_name": "Magnific Upscaler Creative",
+      "provider": "magnific",
+      "capabilities": [
+        "i2i",
+        "upscale"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "2x",
+          "4x",
+          "8x",
+          "16x"
+        ]
+      },
+      "pricing": {
+        "unit": "image_4x_hd",
+        "amount": 0.2,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:upscaler-precision:2026-09",
+      "display_name": "Magnific Upscaler Precision",
+      "provider": "magnific",
+      "capabilities": [
+        "i2i",
+        "upscale"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "2x",
+          "4x"
+        ]
+      },
+      "pricing": {
+        "unit": "image_4x_hd",
+        "amount": 0.2,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:kling-2.6-pro:2026-09",
+      "display_name": "Magnific Kling 2.6 Pro",
+      "provider": "magnific",
+      "capabilities": [
+        "t2v",
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16",
+          "1:1"
+        ],
+        "max_duration": 10,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.35,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:wan-2.5-t2v:2026-09",
+      "display_name": "Magnific Wan 2.5 1080p",
+      "provider": "magnific",
+      "capabilities": [
+        "t2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 10,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.3,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:wan-2.5-i2v:2026-09",
+      "display_name": "Magnific Wan 2.5 i2v 1080p",
+      "provider": "magnific",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 10,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.3,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:seedream-5-pro:2026-09",
+      "display_name": "Magnific Seedream 5.0 Pro",
+      "provider": "magnific",
+      "capabilities": [
+        "t2i"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "1536x1536",
+          "2048x2048"
+        ]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.06,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:seedream-5-pro-edit:2026-09",
+      "display_name": "Magnific Seedream 5.0 Pro Edit",
+      "provider": "magnific",
+      "capabilities": [
+        "i2i",
+        "edit_multi"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "2048x2048"
+        ],
+        "max_input_images": 10
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.06,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:flux-2-flex:2026-09",
+      "display_name": "Magnific FLUX.2 Flex",
+      "provider": "magnific",
+      "capabilities": [
+        "t2i"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "1024x1024"
+        ]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.03,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:flux-kontext-max:2026-09",
+      "display_name": "Magnific FLUX Kontext Max",
+      "provider": "magnific",
+      "capabilities": [
+        "t2i",
+        "i2i"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "1024x1024"
+        ]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.08,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:nano-banana-pro:2026-09",
+      "display_name": "Magnific Nano Banana Pro",
+      "provider": "magnific",
+      "capabilities": [
+        "t2i",
+        "i2i",
+        "edit_multi"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "resolutions": [
+          "1024x1024"
+        ],
+        "max_input_images": 4
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.05,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:kling-3-pro:2026-09",
+      "display_name": "Magnific Kling 3 Pro",
+      "provider": "magnific",
+      "capabilities": [
+        "t2v",
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16",
+          "1:1"
+        ],
+        "max_duration": 15,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.45,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:kling-3-turbo-1080p:2026-09",
+      "display_name": "Magnific Kling 3.0 Turbo 1080p",
+      "provider": "magnific",
+      "capabilities": [
+        "t2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 15,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.28,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:kling-3-turbo-i2v-1080p:2026-09",
+      "display_name": "Magnific Kling 3.0 Turbo i2v 1080p",
+      "provider": "magnific",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 15,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.28,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:wan-2.6-i2v:2026-09",
+      "display_name": "Magnific Wan 2.6 i2v 1080p",
+      "provider": "magnific",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16",
+          "1:1",
+          "4:3",
+          "3:4"
+        ],
+        "max_duration": 15,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.35,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:wan-2.7-t2v:2026-09",
+      "display_name": "Magnific Wan 2.7",
+      "provider": "magnific",
+      "capabilities": [
+        "t2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 15,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.35,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:wan-2.7-i2v:2026-09",
+      "display_name": "Magnific Wan 2.7 i2v",
+      "provider": "magnific",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 15,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.35,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:hailuo-02:2026-09",
+      "display_name": "Magnific Hailuo 02 1080p",
+      "provider": "magnific",
+      "capabilities": [
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 10,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.3,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:seedance-2-pro-1080p:2026-09",
+      "display_name": "Magnific Seedance 2 Pro 1080p",
+      "provider": "magnific",
+      "capabilities": [
+        "t2v",
+        "i2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 15,
+        "resolutions": [
+          "1920x1080"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.4,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:veo-3.1-lite:2026-09",
+      "display_name": "Magnific Veo 3.1 Lite",
+      "provider": "magnific",
+      "capabilities": [
+        "t2v"
+      ],
+      "constraints": {
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "max_duration": 8,
+        "resolutions": [
+          "1280x720"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.4,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    },
+    {
+      "id": "magnific:video-upscaler-precision:2026-09",
+      "display_name": "Magnific Video Upscaler Precision",
+      "provider": "magnific",
+      "capabilities": [
+        "upscale"
+      ],
+      "constraints": {
+        "resolutions": [
+          "4x"
+        ]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 0.25,
+        "currency": "USD",
+        "snapshot_at": "2026-09-06T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": [
+        "MAGNIFIC_API_KEY"
+      ]
+    }
+  ]
+}

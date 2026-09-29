@@ -1,0 +1,12 @@
+id: "@tryvinci/tts"
+version: "1.0.0"
+tags: [audio, tts]
+inputs:
+  prompt: { type: string, required: true }
+outputs:
+  audio: { kind: audio }
+capabilities: [tts]
+secret_names: []
+permissions: []
+est_cost: { min: 0.0, max: 0.12, currency: USD }
+safety_tags: []

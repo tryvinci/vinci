@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vinci-storage"
+version = "0.1.0"
+description = "Vinci local CAS and SQLite job/receipt store."
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = ["vinci-protocol==0.1.0", "vinci-core==0.1.0"]
+
+[tool.setuptools.packages.find]
+include = ["vinci_storage*"]
+
+[tool.setuptools.package-data]
+vinci_storage = ["py.typed"]

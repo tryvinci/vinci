@@ -1,0 +1,13 @@
+id: "@tryvinci/video-upscale"
+version: "1.0.0"
+tags: [video, upscale]
+inputs:
+  prompt: { type: string, required: false, default: upscale }
+  media: { type: string, required: false }
+outputs:
+  video: { kind: video }
+capabilities: [upscale]
+secret_names: []
+permissions: []
+est_cost: { min: 0.0, max: 0.4, currency: USD }
+safety_tags: []

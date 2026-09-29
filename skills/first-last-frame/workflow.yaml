@@ -1,0 +1,60 @@
+id: "@tryvinci/first-last-frame"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: first
+    type: generate
+    capability: t2i
+    params:
+      prompt: "{{inputs.prompt}}, opening frame"
+      aspect_ratio: "{{inputs.aspect_ratio}}"
+      camera: "{{inputs.camera}}"
+      lens: "{{inputs.lens}}"
+      look: "{{inputs.look}}"
+      aperture: "{{inputs.aperture}}"
+      genre: "{{inputs.genre}}"
+      lighting: "{{inputs.lighting}}"
+      palette: "{{inputs.palette}}"
+      image: "{{inputs.image}}"
+      image_urls: "{{inputs.image_urls}}"
+  - id: last
+    type: generate
+    capability: t2i
+    params:
+      prompt: "{{inputs.prompt}}, closing frame"
+      aspect_ratio: "{{inputs.aspect_ratio}}"
+      camera: "{{inputs.camera}}"
+      lens: "{{inputs.lens}}"
+      look: "{{inputs.look}}"
+      aperture: "{{inputs.aperture}}"
+      genre: "{{inputs.genre}}"
+      lighting: "{{inputs.lighting}}"
+      palette: "{{inputs.palette}}"
+      image: "{{inputs.image}}"
+      image_urls: "{{inputs.image_urls}}"
+  - id: motion
+    type: generate
+    capability: i2v
+    params:
+      prompt: "{{inputs.prompt}}"
+      image: "{{nodes.first.output}}"
+      first_frame_url: "{{nodes.first.output}}"
+      last_frame_url: "{{nodes.last.output}}"
+      duration: "{{inputs.duration}}"
+      aspect_ratio: "{{inputs.aspect_ratio}}"
+      camera: "{{inputs.camera}}"
+      lens: "{{inputs.lens}}"
+      look: "{{inputs.look}}"
+      motion: "{{inputs.motion}}"
+      aperture: "{{inputs.aperture}}"
+      genre: "{{inputs.genre}}"
+      lighting: "{{inputs.lighting}}"
+      palette: "{{inputs.palette}}"
+      image_urls: "{{inputs.image_urls}}"
+edges:
+  - src: first
+    dst: motion
+    input_key: image
+  - src: last
+    dst: motion
+    input_key: last_frame_url

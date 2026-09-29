@@ -1,0 +1,23 @@
+id: "@tryvinci/cinema-still"
+version: "1.0.0"
+tags: [video, cinema, workflow, canvas]
+inputs:
+  prompt: { type: string, required: true }
+  aspect_ratio: { type: string, required: false }
+  duration: { type: number, required: false, default: 5 }
+  scale: { type: string, required: false, default: "4x" }
+  camera: { type: string, required: false }
+  lens: { type: string, required: false }
+  look: { type: string, required: false }
+  motion: { type: string, required: false }
+  aperture: { type: string, required: false }
+  genre: { type: string, required: false }
+  lighting: { type: string, required: false }
+  palette: { type: string, required: false }
+outputs:
+  video: { kind: video }
+capabilities: [t2i, i2i, i2v]
+secret_names: []
+permissions: []
+est_cost: { min: 0.0, max: 1.2, currency: USD }
+safety_tags: []

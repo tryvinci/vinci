@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vinci-protocol"
+version = "0.1.0"
+description = "Vinci protocol JSON Schemas and Pydantic types."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Vinci contributors" }]
+dependencies = ["pydantic>=2.6"]
+
+[tool.setuptools.packages.find]
+include = ["vinci_protocol*"]
+
+[tool.setuptools.package-data]
+vinci_protocol = ["py.typed", "jsonschema/*.json"]

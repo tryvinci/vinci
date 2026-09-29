@@ -1,0 +1,38 @@
+id: "@tryvinci/soul-character"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: sheet
+    type: generate
+    capability: t2i
+    params:
+      prompt: "{{inputs.prompt}}, character sheet"
+      aspect_ratio: "{{inputs.aspect_ratio}}"
+      camera: "{{inputs.camera}}"
+      lens: "{{inputs.lens}}"
+      look: "{{inputs.look}}"
+      aperture: "{{inputs.aperture}}"
+      genre: "{{inputs.genre}}"
+      lighting: "{{inputs.lighting}}"
+      palette: "{{inputs.palette}}"
+      image: "{{inputs.image}}"
+      image_urls: "{{inputs.image_urls}}"
+      media: "{{inputs.media}}"
+  - id: lock
+    type: generate
+    capability: i2i
+    params:
+      prompt: "{{inputs.prompt}}, same character, new pose"
+      media: "{{nodes.sheet.output}}"
+      aspect_ratio: "{{inputs.aspect_ratio}}"
+      camera: "{{inputs.camera}}"
+      lens: "{{inputs.lens}}"
+      look: "{{inputs.look}}"
+      aperture: "{{inputs.aperture}}"
+      genre: "{{inputs.genre}}"
+      lighting: "{{inputs.lighting}}"
+      palette: "{{inputs.palette}}"
+edges:
+  - src: sheet
+    dst: lock
+    input_key: media

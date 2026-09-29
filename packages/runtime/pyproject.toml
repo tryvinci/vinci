@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vinci-runtime"
+version = "0.1.0"
+description = "Scheduler and agent loop (Phase 1)."
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "vinci-protocol==0.1.0",
+    "vinci-core==0.1.0",
+    "vinci-storage==0.1.0",
+    "vinci-provider-sdk==0.1.0",
+    "vinci-skills==0.1.0",
+    "vinci-provider-wavespeed==0.1.0",
+    "vinci-provider-google==0.1.0",
+    "vinci-provider-openai==0.1.0",
+    "vinci-provider-fal==0.1.0",
+    "vinci-provider-elevenlabs==0.1.0",
+    "vinci-provider-cloudflare==0.1.0",
+    "vinci-provider-higgsfield==0.1.0",
+    "vinci-provider-magnific==0.1.0",
+    "vinci-media==0.1.0",
+    "vinci-index==0.1.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["vinci_runtime*"]
+
+[tool.setuptools.package-data]
+vinci_runtime = ["py.typed"]

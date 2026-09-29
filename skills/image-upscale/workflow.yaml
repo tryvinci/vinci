@@ -1,0 +1,20 @@
+id: "@tryvinci/image-upscale"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: upscale
+    type: generate
+    capability: i2i
+    params:
+      prompt: "{{inputs.prompt}}"
+      media: "{{inputs.media}}"
+      scale: "{{inputs.scale}}"
+      aspect_ratio: "{{inputs.aspect_ratio}}"
+      creativity: "{{inputs.creativity}}"
+      resemblance: "{{inputs.resemblance}}"
+      hdr: "{{inputs.hdr}}"
+      fractality: "{{inputs.fractality}}"
+      optimized_for: "{{inputs.optimized_for}}"
+      engine: "{{inputs.engine}}"
+
+edges: []

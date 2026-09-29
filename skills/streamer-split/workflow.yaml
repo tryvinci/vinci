@@ -1,0 +1,11 @@
+id: "@tryvinci/streamer-split"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: split
+    type: media
+    params:
+      op: split
+      media: "{{inputs.media}}"
+      count: "{{inputs.count}}"
+edges: []

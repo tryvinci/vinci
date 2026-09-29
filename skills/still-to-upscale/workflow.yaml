@@ -1,0 +1,26 @@
+id: "@tryvinci/still-to-upscale"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: still
+    type: generate
+    capability: t2i
+    params:
+      prompt: "{{inputs.prompt}}"
+  - id: upscale
+    type: generate
+    capability: i2i
+    params:
+      prompt: "{{inputs.prompt}}"
+      media: "{{nodes.still.output}}"
+      scale: "{{inputs.scale}}"
+      creativity: "{{inputs.creativity}}"
+      resemblance: "{{inputs.resemblance}}"
+      hdr: "{{inputs.hdr}}"
+      fractality: "{{inputs.fractality}}"
+      optimized_for: "{{inputs.optimized_for}}"
+      engine: "{{inputs.engine}}"
+edges:
+  - src: still
+    dst: upscale
+    input_key: media

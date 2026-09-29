@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tryvinci.com/schema/workflow.json",
+  "title": "WorkflowSpec",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "version", "nodes"],
+  "properties": {
+    "id": { "type": "string" },
+    "version": { "type": "string" },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type"],
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "enum": ["generate", "transform", "media", "indexquery", "gate"] },
+          "capability": { "type": ["string", "null"] },
+          "model_id": { "type": ["string", "null"] },
+          "params": { "type": "object" },
+          "budget_hint": { "type": ["number", "null"] }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["src", "dst"],
+        "properties": {
+          "src": { "type": "string" },
+          "dst": { "type": "string" },
+          "input_key": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "preference": { "enum": ["cheapest", "fastest", "quality"] },
+    "max_cost": { "type": ["number", "null"] }
+  }
+}

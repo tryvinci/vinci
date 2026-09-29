@@ -1,0 +1,13 @@
+id: "@tryvinci/clip-select"
+version: "1.0.0"
+tags: [video, clips]
+inputs:
+  media: { type: path, required: true }
+  query: { type: string, required: false, default: pricing }
+outputs:
+  video: { kind: video }
+capabilities: [transcribe]
+secret_names: []
+permissions: []
+est_cost: { min: 0.0, max: 0.0, currency: USD }
+safety_tags: []

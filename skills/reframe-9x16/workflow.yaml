@@ -1,0 +1,10 @@
+id: "@tryvinci/reframe-9x16"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: reframe
+    type: media
+    params:
+      op: reframe_9x16
+      media: "{{inputs.media}}"
+edges: []

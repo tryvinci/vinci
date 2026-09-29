@@ -1,0 +1,76 @@
+id: "@tryvinci/cinema-sequence"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: establish
+    type: generate
+    capability: t2i
+    params:
+      prompt: "{{inputs.prompt}}, wide establishing shot"
+      aspect_ratio: "{{inputs.aspect_ratio}}"
+      camera: "{{inputs.camera}}"
+      lens: "{{inputs.lens}}"
+      look: "{{inputs.look}}"
+      aperture: "{{inputs.aperture}}"
+      genre: "{{inputs.genre}}"
+      lighting: "{{inputs.lighting}}"
+      palette: "{{inputs.palette}}"
+      image: "{{inputs.image}}"
+      image_urls: "{{inputs.image_urls}}"
+      resolution: "{{inputs.resolution}}"
+      num_images: "{{inputs.num_images}}"
+  - id: coverage
+    type: generate
+    capability: i2i
+    params:
+      prompt: "{{inputs.prompt}}, medium coverage"
+      media: "{{nodes.establish.output}}"
+      aspect_ratio: "{{inputs.aspect_ratio}}"
+      camera: "{{inputs.camera}}"
+      lens: "{{inputs.lens}}"
+      look: "{{inputs.look}}"
+      aperture: "{{inputs.aperture}}"
+      genre: "{{inputs.genre}}"
+      lighting: "{{inputs.lighting}}"
+      palette: "{{inputs.palette}}"
+      image_urls: "{{inputs.image_urls}}"
+  - id: close
+    type: generate
+    capability: i2i
+    params:
+      prompt: "{{inputs.prompt}}, close-up"
+      media: "{{nodes.coverage.output}}"
+      aspect_ratio: "{{inputs.aspect_ratio}}"
+      camera: "{{inputs.camera}}"
+      lens: "{{inputs.lens}}"
+      look: "{{inputs.look}}"
+      aperture: "{{inputs.aperture}}"
+      genre: "{{inputs.genre}}"
+      lighting: "{{inputs.lighting}}"
+      palette: "{{inputs.palette}}"
+      image_urls: "{{inputs.image_urls}}"
+  - id: reverse
+    type: generate
+    capability: i2i
+    params:
+      prompt: "{{inputs.prompt}}, reverse angle"
+      media: "{{nodes.close.output}}"
+      aspect_ratio: "{{inputs.aspect_ratio}}"
+      camera: "{{inputs.camera}}"
+      lens: "{{inputs.lens}}"
+      look: "{{inputs.look}}"
+      aperture: "{{inputs.aperture}}"
+      genre: "{{inputs.genre}}"
+      lighting: "{{inputs.lighting}}"
+      palette: "{{inputs.palette}}"
+      image_urls: "{{inputs.image_urls}}"
+edges:
+  - src: establish
+    dst: coverage
+    input_key: media
+  - src: coverage
+    dst: close
+    input_key: media
+  - src: close
+    dst: reverse
+    input_key: media

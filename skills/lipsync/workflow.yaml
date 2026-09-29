@@ -1,0 +1,13 @@
+id: "@tryvinci/lipsync"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: sync
+    type: generate
+    capability: lipsync
+    params:
+      prompt: "{{inputs.prompt}}"
+      audio: "{{inputs.audio}}"
+      video: "{{inputs.video}}"
+
+edges: []

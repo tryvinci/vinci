@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tryvinci.com/schema/error.json",
+  "title": "VinciError",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code", "message"],
+  "properties": {
+    "code": {
+      "enum": ["auth", "quota", "rate_limit", "invalid_input", "content_policy", "provider_down", "timeout", "cancelled", "unknown"]
+    },
+    "message": { "type": "string" },
+    "provider": { "type": ["string", "null"] },
+    "retryable": { "type": "boolean" },
+    "details": { "type": "object" }
+  }
+}

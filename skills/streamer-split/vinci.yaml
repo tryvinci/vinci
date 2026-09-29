@@ -1,0 +1,13 @@
+id: "@tryvinci/streamer-split"
+version: "1.0.0"
+tags: [video, split]
+inputs:
+  media: { type: path, required: true }
+  count: { type: number, required: false, default: 3 }
+outputs:
+  video: { kind: video }
+capabilities: []
+secret_names: []
+permissions: []
+est_cost: { min: 0.0, max: 0.0, currency: USD }
+safety_tags: []

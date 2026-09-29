@@ -1,0 +1,256 @@
+{
+  "templates": [
+    {
+      "id": "still-image",
+      "title": "Still image",
+      "blurb": "Prompt in. A frame on the board.",
+      "category": "image",
+      "skill": "@tryvinci/image-generate",
+      "inputs": ["prompt"]
+    },
+    {
+      "id": "still-to-4k",
+      "title": "Still to 4K",
+      "blurb": "Generate, then upscale. Magnific-style still pipeline.",
+      "category": "upscale",
+      "skill": "@tryvinci/still-to-upscale",
+      "inputs": ["prompt"]
+    },
+    {
+      "id": "upscale-still",
+      "title": "Upscale still",
+      "blurb": "Drop a frame. Creative or precision on live Magnific.",
+      "category": "upscale",
+      "skill": "@tryvinci/image-upscale",
+      "inputs": ["prompt", "media"]
+    },
+    {
+      "id": "motion",
+      "title": "Motion",
+      "blurb": "Text to a clip. Same canvas, timeline when you have a cut.",
+      "category": "motion",
+      "skill": "@tryvinci/video-generate",
+      "inputs": ["prompt"]
+    },
+    {
+      "id": "cinema-still",
+      "title": "Cinema still",
+      "blurb": "Still, 4K pass, then motion. Canvas graph, not a single generate.",
+      "category": "cinema",
+      "skill": "@tryvinci/cinema-still",
+      "inputs": ["prompt"]
+    },
+    {
+      "id": "cinema-sequence",
+      "title": "Popcorn Sequence",
+      "blurb": "Four-beat storyboard, then coverage on the canvas.",
+      "category": "cinema",
+      "skill": "@tryvinci/cinema-sequence",
+      "preview_kind": "storyboard",
+      "inputs": ["prompt"],
+      "defaults": {
+        "prompt": "A cinematic four-beat sequence with matching lighting and wardrobe",
+        "aspect_ratio": "16:9",
+        "resolution": "720p",
+        "camera": "locked-off",
+        "lens": "35mm",
+        "aperture": "f/2.8",
+        "look": "commercial",
+        "genre": "drama"
+      }
+    },
+    {
+      "id": "first-last-frame",
+      "title": "First Last Frame",
+      "blurb": "Generate both stills, then interpolate motion.",
+      "category": "cinema",
+      "skill": "@tryvinci/first-last-frame",
+      "inputs": ["prompt"],
+      "defaults": {
+        "prompt": "A cinematic shot that begins on the first frame and ends on the last",
+        "aspect_ratio": "16:9",
+        "duration": 5,
+        "camera": "locked-off",
+        "lens": "35mm",
+        "aperture": "f/2.8",
+        "look": "commercial",
+        "genre": "drama"
+      }
+    },
+    {
+      "id": "soul-character",
+      "title": "Soul Character",
+      "blurb": "Character sheet, then a locked second pose. Local Elements, not hosted Soul IDs.",
+      "category": "cinema",
+      "skill": "@tryvinci/soul-character",
+      "inputs": ["prompt"],
+      "defaults": {
+        "prompt": "A consistent character on a clean studio sweep, identity locked across poses",
+        "aspect_ratio": "1:1",
+        "camera": "locked-off",
+        "lens": "85mm",
+        "aperture": "f/1.4",
+        "look": "fashion",
+        "genre": "drama",
+        "lighting": "studio",
+        "palette": "filmic"
+      }
+    },
+    {
+      "id": "product-reveal",
+      "title": "Product reveal",
+      "blurb": "Hero still into a five-second reveal.",
+      "category": "ads",
+      "skill": "@tryvinci/product-reveal-5s",
+      "inputs": ["prompt"]
+    },
+    {
+      "id": "still-to-talk",
+      "title": "Still to talk",
+      "blurb": "Prompt a face, then let it speak. Speak rail default.",
+      "category": "cinema",
+      "skill": "@tryvinci/still-to-talk",
+      "page": "speak",
+      "inputs": ["prompt"]
+    },
+    {
+      "id": "speak-selfie",
+      "title": "Selfie",
+      "blurb": "Handheld talking scene.",
+      "category": "cinema",
+      "skill": "@tryvinci/still-to-talk",
+      "page": "speak",
+      "inputs": ["prompt"],
+      "defaults": {
+        "prompt": "A person talking to camera in a selfie hold, natural daylight",
+        "scene": "selfie",
+        "camera": "handheld",
+        "lens": "24mm",
+        "aspect_ratio": "9:16",
+        "look": "documentary"
+      }
+    },
+    {
+      "id": "speak-podcast",
+      "title": "Podcast",
+      "blurb": "Two-shot talking scene.",
+      "category": "cinema",
+      "skill": "@tryvinci/still-to-talk",
+      "page": "speak",
+      "inputs": ["prompt"],
+      "defaults": {
+        "prompt": "Two people talking across a table in a studio, warm practical lights",
+        "scene": "podcast",
+        "camera": "locked-off",
+        "lens": "35mm",
+        "aspect_ratio": "16:9",
+        "look": "documentary"
+      }
+    },
+    {
+      "id": "speak-car",
+      "title": "Car Talking",
+      "blurb": "Cabin conversation scene.",
+      "category": "cinema",
+      "skill": "@tryvinci/still-to-talk",
+      "page": "speak",
+      "inputs": ["prompt"],
+      "defaults": {
+        "prompt": "Two people talking in a moving car at night, dashboard glow",
+        "scene": "car-talking",
+        "camera": "handheld",
+        "lens": "35mm",
+        "aspect_ratio": "16:9",
+        "look": "noir"
+      }
+    },
+    {
+      "id": "talking-photo",
+      "title": "Talking photo",
+      "blurb": "A still that speaks.",
+      "category": "cinema",
+      "skill": "@tryvinci/talking-photo",
+      "inputs": ["prompt", "image"]
+    },
+    {
+      "id": "lipsync",
+      "title": "Lipsync",
+      "blurb": "Lock a mouth to audio.",
+      "category": "cinema",
+      "skill": "@tryvinci/lipsync",
+      "inputs": ["prompt", "audio", "video"]
+    },
+    {
+      "id": "emote",
+      "title": "Emote",
+      "blurb": "Animate a face from a still.",
+      "category": "motion",
+      "skill": "@tryvinci/emote-animate",
+      "inputs": ["prompt", "image"]
+    },
+    {
+      "id": "video-upscale",
+      "title": "Video upscale",
+      "blurb": "A second pass on a clip.",
+      "category": "upscale",
+      "skill": "@tryvinci/video-upscale",
+      "inputs": ["prompt", "media"]
+    },
+    {
+      "id": "tts",
+      "title": "Speech",
+      "blurb": "Text to voice.",
+      "category": "audio",
+      "skill": "@tryvinci/tts",
+      "inputs": ["prompt"]
+    },
+    {
+      "id": "voice-clone",
+      "title": "Voice clone",
+      "blurb": "Match a reference, then speak.",
+      "category": "audio",
+      "skill": "@tryvinci/voice-clone",
+      "inputs": ["prompt", "reference"]
+    },
+    {
+      "id": "podcast-to-shorts",
+      "title": "Podcast to shorts",
+      "blurb": "Find windows, reframe, caption.",
+      "category": "clips",
+      "skill": "@tryvinci/podcast-to-shorts",
+      "inputs": ["media", "query"]
+    },
+    {
+      "id": "clip-select",
+      "title": "Clip select",
+      "blurb": "Pull the line that matters.",
+      "category": "clips",
+      "skill": "@tryvinci/clip-select",
+      "inputs": ["media", "query"]
+    },
+    {
+      "id": "reframe",
+      "title": "Reframe 9:16",
+      "blurb": "Vertical from a landscape cut.",
+      "category": "clips",
+      "skill": "@tryvinci/reframe-9x16",
+      "inputs": ["media"]
+    },
+    {
+      "id": "captions",
+      "title": "Captions",
+      "blurb": "Burn the line into the frame.",
+      "category": "clips",
+      "skill": "@tryvinci/captions-burn",
+      "inputs": ["media", "text"]
+    },
+    {
+      "id": "streamer-split",
+      "title": "Streamer split",
+      "blurb": "Chop a long take into parts.",
+      "category": "clips",
+      "skill": "@tryvinci/streamer-split",
+      "inputs": ["media"]
+    }
+  ]
+}

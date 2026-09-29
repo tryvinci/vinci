@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vinci-provider-fal"
+version = "0.1.0"
+description = "fal.ai plugin (Phase 1)."
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = ["vinci-protocol==0.1.0", "vinci-provider-sdk==0.1.0", "vinci-core==0.1.0"]
+
+[tool.setuptools.packages.find]
+include = ["vinci_provider_fal*"]

@@ -1,0 +1,13 @@
+id: "@tryvinci/podcast-to-shorts"
+version: "1.0.0"
+tags: [video, clips, podcast, reframe, caption]
+inputs:
+  media: { type: path, required: true }
+  query: { type: string, required: false, default: pricing }
+outputs:
+  video: { kind: video }
+capabilities: [transcribe, reframe, caption]
+secret_names: []
+permissions: []
+est_cost: { min: 0.0, max: 0.0, currency: USD }
+safety_tags: []

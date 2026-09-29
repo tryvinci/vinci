@@ -1,0 +1,17 @@
+{
+  "name": "@tryvinci/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vinci protocol TypeScript types (mirrors vinci-protocol JSON Schemas).",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "src/index.ts",
+  "files": ["src", "dist"],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

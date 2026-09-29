@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tryvinci.com/schema/model_spec.json",
+  "title": "ModelSpec",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "display_name", "provider", "capabilities", "pricing"],
+  "properties": {
+    "id": { "type": "string", "minLength": 3 },
+    "display_name": { "type": "string" },
+    "provider": { "type": "string" },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "enum": ["t2i", "i2i", "t2v", "i2v", "lipsync", "tts", "sts", "voice_clone", "upscale", "transcribe", "reframe", "caption", "edit_multi"]
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "aspect_ratios": { "type": "array", "items": { "type": "string" } },
+        "max_duration": { "type": ["number", "null"] },
+        "resolutions": { "type": "array", "items": { "type": "string" } },
+        "max_input_images": { "type": ["integer", "null"] }
+      }
+    },
+    "pricing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit", "amount", "currency", "snapshot_at"],
+      "properties": {
+        "unit": { "type": "string" },
+        "amount": { "type": "number", "minimum": 0 },
+        "currency": { "type": "string" },
+        "snapshot_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "quality_tier": { "type": "string" },
+    "status": { "enum": ["active", "deprecated", "sunset"] },
+    "secret_names": { "type": "array", "items": { "type": "string" } }
+  }
+}

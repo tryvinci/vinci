@@ -1,0 +1,2575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vinci Studio</title>
+  <link rel="manifest" href="/studio/manifest.webmanifest" />
+  <link rel="icon" href="/studio/icon.svg" />
+  <meta name="theme-color" content="#f7f4ee" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Vinci" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: hsl(43, 28%, 97%);
+      --panel: hsl(40, 24%, 95%);
+      --raised: #fff;
+      --line: hsl(200, 12%, 88%);
+      --ink: hsl(200, 14%, 22%);
+      --dim: hsl(200, 6%, 42%);
+      --mute: hsl(200, 6%, 50%);
+      --teal: hsl(177, 59%, 50%);
+      --accent: hsl(177, 59%, 50%);
+      --ok: #3d9a72;
+      --btn-ink: hsl(160, 24%, 11%);
+      --rail: hsl(160 22% 7% / 0.96);
+      --rail-ink: hsl(43, 28%, 97%);
+      --board: #111113;
+      --card-shadow:
+        0 1px 0 rgb(255 255 255 / 0.85) inset,
+        0 0 0 1px hsl(200 12% 88% / 0.9),
+        0 20px 40px -24px hsl(200 20% 20% / 0.14);
+      --font-ui: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+      --font-display: "Instrument Serif", Georgia, serif;
+      --radius-lg: 1.5rem;
+      --pill: 9999px;
+    }
+    input[type="range"] { accent-color: var(--teal); width: 100%; }
+    .range-row { display: grid; gap: 4px; }
+    .range-row span { color: var(--dim); font-variant-numeric: tabular-nums; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); }
+    body {
+      font-family: var(--font-ui); font-size: 14px;
+      -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+    }
+    button, input, textarea, select { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    a { color: var(--ink); }
+    .hidden { display: none !important; }
+    .muted { color: var(--dim); }
+    .serif, em.serif {
+      font-family: var(--font-display); font-style: italic; font-weight: 400; letter-spacing: 0;
+    }
+    .top h1, .compose-head h2, .insp-h h2, .lib-page > h2, .keys > h2 {
+      font-family: var(--font-ui); font-style: normal; font-weight: 500; letter-spacing: -0.02em;
+    }
+    .shell { display: grid; grid-template-columns: 56px 1fr; height: 100%; }
+    .shell.with-insp { grid-template-columns: 56px 1fr minmax(280px, 22vw); }
+    .rail {
+      border-right: 1px solid hsl(160 18% 3% / 0.45); background: var(--rail); color: var(--rail-ink);
+      backdrop-filter: blur(28px) saturate(160%);
+      display: flex; flex-direction: column; align-items: center; padding: 10px 0 12px; gap: 2px;
+    }
+    .mark { width: 32px; height: 32px; margin: 2px 0 10px; }
+    .rail button {
+      width: 40px; height: 40px; border: 0; background: transparent;
+      color: hsl(200 6% 64%); border-radius: var(--pill);
+    }
+    .rail button.on, .rail button:hover { background: hsl(160 20% 14%); color: var(--teal); }
+    .rail .spacer { flex: 1; }
+    .main { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
+    .top {
+      height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 0 20px; border-bottom: 1px solid var(--line);
+    }
+    .top h1 { margin: 0; font-size: 15px; }
+    .chip, .ghost {
+      border: 1px solid var(--line); background: var(--raised); border-radius: var(--pill); padding: 7px 14px;
+    }
+    .run {
+      border: 1px solid hsl(160 22% 18% / 0.65);
+      background: var(--btn-ink); color: #fff; border-radius: var(--pill);
+      padding: 9px 18px; font-weight: 500;
+      box-shadow: 0 1px 0 rgb(255 255 255 / 0.1) inset, 0 10px 28px -10px hsl(160 35% 6% / 0.45);
+    }
+    .run:hover { background: hsl(160, 28%, 8%); }
+    .run[disabled] { opacity: 0.35; cursor: not-allowed; }
+    .views { display: flex; border: 1px solid var(--line); border-radius: var(--pill); overflow: hidden; background: var(--raised); }
+    .views button { border: 0; background: transparent; padding: 6px 14px; color: var(--dim); }
+    .views button.on { background: var(--btn-ink); color: var(--rail-ink); }
+    .page { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+    .explore { padding: 28px 32px 48px; }
+    .explore h2, .keys.connect h2 {
+      margin: 0 0 8px; font-family: var(--font-ui); font-style: normal; font-weight: 500;
+      font-size: 1.75rem; letter-spacing: -0.03em;
+    }
+    .cats { display: flex; gap: 6px; flex-wrap: wrap; margin: 14px 0 18px; }
+    .cats button {
+      border: 0; background: transparent; color: var(--mute);
+      border-radius: var(--pill); padding: 6px 12px;
+    }
+    .cats button.on { background: var(--raised); color: var(--ink); box-shadow: var(--card-shadow); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
+    .card {
+      text-align: left; border: 0; background: transparent;
+      border-radius: 0; overflow: hidden; padding: 0;
+    }
+    .card img, .card .blank {
+      width: 100%; height: 146px; object-fit: cover; display: block; background: #0c0c0e;
+      border-radius: 1.1rem;
+    }
+    .card:hover img { filter: brightness(1.08); }
+    .card div { padding: 10px 2px 0; }
+    .card strong { font-weight: 500; font-size: 13px; }
+    .hero {
+      flex: 1; min-height: 0; display: grid; place-items: center; padding: 24px 28px 32px;
+    }
+    .hero-stage { width: min(1100px, 100%); text-align: center; }
+    .hero-stage img, .hero-stage video {
+      width: 100%; max-height: calc(100vh - 160px); object-fit: contain;
+      background: #000; border-radius: 4px;
+    }
+    .hero-empty { color: var(--mute); font-size: 14px; letter-spacing: -0.02em; }
+    .compose { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .compose-body {
+      flex: 1; min-height: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; overflow: auto; padding: 20px 24px 12px;
+    }
+    .compose.has-media .compose-body { justify-content: stretch; }
+    .compose-offer {
+      width: min(36rem, 100%); text-align: center; display: grid; gap: 10px; justify-items: center;
+    }
+    .compose-offer h2 {
+      margin: 0; font-family: var(--font-ui); font-style: normal; font-weight: 500;
+      font-size: 2rem; line-height: 1.15; letter-spacing: -0.03em;
+    }
+    .compose-offer h2 .serif { font-size: calc(100% + 4px); }
+    .compose-offer .eyebrow { margin: 0; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--teal); font-weight: 600; }
+    .compose-offer-copy { margin: 0; color: var(--dim); max-width: 28rem; line-height: 1.45; }
+    .compose-offer-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px; }
+    .compose-offer-hint { margin: 0; font-size: 12px; color: var(--mute); }
+    .compose-sample {
+      width: min(100%, 28rem); aspect-ratio: 16 / 10; border-radius: 1.1rem; overflow: hidden;
+      position: relative; box-shadow: var(--card-shadow); background: hsl(40 18% 88%);
+    }
+    .compose-sample[data-kind="image"] {
+      background: radial-gradient(circle at 50% 58%, hsl(40 24% 98%), hsl(40 16% 80%) 64%);
+    }
+    .compose-sample[data-kind="video"] {
+      background: linear-gradient(180deg, hsl(200 10% 90%), hsl(40 16% 80%));
+    }
+    .compose-sample[data-kind="speak"] {
+      background: radial-gradient(circle at 50% 38%, hsl(177 18% 88%), hsl(40 16% 80%) 70%);
+    }
+    .compose-sample-split { display: grid; grid-template-columns: 1fr 1fr; height: 100%; position: relative; }
+    .compose-sample-before { background: linear-gradient(135deg, hsl(40 12% 72%), hsl(40 10% 64%)); }
+    .compose-sample-after { background: linear-gradient(135deg, hsl(40 24% 94%), hsl(177 22% 88%)); }
+    .compose-sample-handle {
+      position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: #fff;
+      transform: translateX(-50%);
+    }
+    .compose-sample-handle::after {
+      content: ""; position: absolute; left: 50%; top: 50%; width: 28px; height: 28px;
+      border-radius: 50%; background: #fff; border: 1px solid var(--line);
+      transform: translate(-50%, -50%); box-shadow: var(--card-shadow);
+    }
+    .compose-stage { width: 100%; flex: 1; min-height: 0; display: grid; place-items: center; }
+    .compose-stage img, .compose-stage video {
+      width: min(100%, 720px); max-height: min(62vh, 520px); object-fit: contain;
+      background: #0c0c0e; border-radius: 0.9rem;
+    }
+    .compose.has-media .split { width: min(100%, 920px); gap: 12px; }
+    .compose.has-media .split img { aspect-ratio: 1; max-height: min(60vh, 560px); object-fit: contain; }
+    .compose-models {
+      border-top: 1px solid var(--line); padding: 4px 20px 18px; flex-shrink: 0;
+    }
+    .compose-models summary {
+      cursor: pointer; list-style: none; color: var(--dim); font-size: 11px;
+      letter-spacing: 0.12em; text-transform: uppercase; padding: 10px 0;
+    }
+    .compose-models summary::-webkit-details-marker { display: none; }
+    .compose-gallery {
+      overflow: auto; max-height: min(28vh, 220px); padding: 4px 0 8px;
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+      gap: 10px; align-content: start;
+    }
+    .model-card {
+      text-align: left; border: 1px solid var(--line); background: var(--raised);
+      border-radius: 1.1rem; padding: 10px 12px; min-height: 86px;
+      box-shadow: var(--card-shadow);
+    }
+    .model-card.on, .model-card:hover { border-color: var(--teal); }
+    .model-card .who { font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--mute); }
+    .model-card strong { display: block; margin: 6px 0 4px; font-weight: 500; font-size: 13px; }
+    .model-card .meta { font-size: 11px; color: var(--mute); }
+    .compose select, .keys input, .keys select, .insp select, .insp textarea, .insp input {
+      width: 100%; border: 1px solid var(--line); background: var(--raised); border-radius: 0.85rem; padding: 8px 10px;
+    }
+    .insp textarea { min-height: 64px; max-height: 88px; resize: vertical; }
+    .stage { flex: 1; min-height: 0; display: grid; position: relative; }
+    .board {
+      position: relative; overflow: hidden; min-height: 0; height: 100%;
+      background:
+        radial-gradient(circle at 1px 1px, #27272a 0.7px, transparent 0.8px) 0 0 / 20px 20px,
+        var(--board);
+    }
+    .empty {
+      position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; color: #a1a1aa;
+    }
+    .empty .box { pointer-events: none; text-align: center; max-width: 22rem; }
+    .empty h2 { margin: 0 0 6px; font-size: 1.25rem; color: #fafafa; font-weight: 500; }
+    .graph { position: absolute; inset: 0; }
+    .node {
+      position: absolute; width: 196px; border: 1px solid var(--line); background: var(--raised);
+      border-radius: 8px; padding: 0; cursor: grab; user-select: none;
+      overflow: hidden;
+    }
+    .node .thumb { height: 88px; background: #0c0c0e; }
+    .node .thumb img, .node .thumb video { width: 100%; height: 88px; object-fit: cover; display: block; }
+    .node .meta { padding: 8px 10px 10px; }
+    .node.on { border-color: var(--teal); }
+    .node .k { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .node .thumb { position: relative; }
+    .node .thumb.empty { background: linear-gradient(180deg, #18181b, #0c0c0e); }
+    .wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    .results {
+      position: absolute; left: 12px; right: 56px; bottom: 12px;
+      display: flex; gap: 8px; overflow-x: auto; z-index: 2;
+      pointer-events: auto; max-width: calc(100% - 72px);
+    }
+    .results .shot, .shot-list .shot {
+      display: flex; flex-direction: column; width: 120px; min-width: 120px;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+      padding: 0; overflow: hidden; text-align: left; gap: 0; max-width: 120px;
+    }
+    .results .shot .muted, .shot-list .shot .muted { padding: 6px 8px 0; font-size: 10px; }
+    .shot .frame { background: #000; overflow: hidden; }
+    .results .shot img, .results .shot video, .shot-list .shot img, .shot-list .shot video {
+      width: 100%; height: 68px; object-fit: cover; display: block; max-height: 68px;
+    }
+    .shot-list {
+      padding: 28px 24px; display: flex; gap: 10px; overflow-x: auto; align-items: flex-end;
+      height: 100%;
+    }
+    .lib img, .lib video { width: 100%; display: block; height: 140px; object-fit: cover; border-radius: 8px; }
+    .lib-card { border: 0; background: transparent; padding: 0; text-align: left; color: inherit; }
+    .lib-card span { display: block; margin-top: 6px; color: var(--mute); font-size: 11px; }
+    .insp {
+      display: none; border-left: 1px solid var(--line); background: var(--panel);
+      flex-direction: column; min-height: 0;
+    }
+    .shell.with-insp .insp { display: flex; }
+    .insp-h { padding: 18px 18px 8px; }
+    .insp-h .eyebrow { margin: 0 0 4px; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--mute); font-weight: 600; }
+    .insp-h h2 { margin: 0; font-size: 15px; font-family: var(--font-ui); font-style: normal; font-weight: 500; }
+    .fields { padding: 8px 16px; display: flex; flex-direction: column; gap: 10px; flex: 1; overflow: auto; }
+    label { display: block; font-size: 11px; color: var(--mute); margin: 0 0 4px; }
+    .log { color: var(--dim); white-space: pre-wrap; min-height: 2.2rem; }
+    .foot { padding: 12px 16px 16px; border-top: 1px solid var(--line); }
+    .foot .run { width: 100%; display: flex; justify-content: space-between; }
+    .keys { padding: 28px 32px 48px; max-width: 44rem; position: relative; }
+    .keys.connect::before {
+      content: "";
+      pointer-events: none;
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(circle at 16% 0%, hsl(177 59% 50% / 0.2), transparent 48%),
+        radial-gradient(circle at 1px 1px, hsl(177 59% 40% / 0.22) 0.7px, transparent 0.8px) 0 0 / 22px 22px;
+      mask-image: linear-gradient(180deg, #000 0%, transparent 88%);
+    }
+    .keys.connect > * { position: relative; }
+    .keys.connect > .eyebrow {
+      margin: 0 0 6px; letter-spacing: 0.18em; color: var(--teal); font-weight: 600;
+    }
+    .keys.connect h2 { margin: 0 0 8px; font-size: 1.75rem; }
+    .keys.connect .lede { margin: 0 0 22px; max-width: 36rem; }
+    .connect-grid { display: flex; flex-wrap: wrap; gap: 14px; margin: 8px 0 20px; }
+    .connector-mark {
+      width: 76px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+      border: 0; background: transparent; color: var(--dim); padding: 0;
+    }
+    .connector-mark .face {
+      position: relative; width: 52px; height: 52px; border-radius: 14px;
+      border: 1px solid var(--line); background: var(--raised);
+      display: grid; place-items: center; color: var(--ink);
+    }
+    .connector-mark.on .face { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal); }
+    .connector-mark.on .face::after {
+      content: ""; position: absolute; right: -1px; bottom: -1px;
+      width: 9px; height: 9px; border-radius: 50%;
+      background: var(--teal); border: 2px solid var(--bg);
+    }
+    .connector-mark.off .face { opacity: 0.42; }
+    .connector-mark.pick .face { background: hsl(177 59% 50% / 0.16); }
+    .connector-mark.add .face {
+      border-style: dashed; color: var(--teal); background: transparent; font-size: 22px; font-weight: 400;
+    }
+    .connector-mark.add .face::after { display: none; }
+    .connector-mark small { font-size: 10px; color: var(--mute); max-width: 76px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .connect-add { display: grid; gap: 6px; max-width: 24rem; margin: 0 0 18px; }
+    .connect-add select { border-radius: 999px; padding: 10px 14px; }
+    .connect-sheet {
+      border: 1px solid var(--line); background: var(--raised); border-radius: var(--radius-lg);
+      padding: 18px; max-width: 26rem; display: grid; gap: 8px;
+      box-shadow: var(--card-shadow);
+    }
+    .connect-sheet.idle { background: transparent; box-shadow: none; }
+    .connect-sheet .kind { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--teal); }
+    .connect-routing { margin-top: 28px; padding-top: 4px; max-width: 26rem; }
+    .lib-tabs { display: flex; gap: 6px; margin: 0 0 16px; }
+    .stage-3d {
+      height: min(52vh, 420px); margin: 12px 0 16px; border-radius: 16px;
+      background: radial-gradient(circle at 50% 80%, #1a3a38, #09090b 70%);
+      perspective: 900px; display: grid; place-items: center; overflow: hidden;
+    }
+    .stage-3d .card3d {
+      width: min(46vw, 280px); height: min(32vh, 200px); border-radius: 8px;
+      transform-style: preserve-3d; transition: transform 80ms linear;
+      background: #000; display: grid; place-items: center; overflow: hidden;
+    }
+    .stage-3d .card3d img { width: 100%; height: 100%; object-fit: cover; }
+    .agent-log, .collab-card {
+      border: 1px solid var(--line); background: var(--panel); border-radius: 16px;
+      padding: 16px; max-width: 36rem; display: grid; gap: 8px;
+    }
+    .hit { padding: 14px 0; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
+    .lib-page { padding: 24px 28px 48px; max-width: 56rem; }
+    .lib-page label { display: block; margin-top: 14px; color: var(--dim); }
+    .lib-page textarea { width: 100%; min-height: 88px; max-height: 180px; margin: 8px 0 0; }
+    .lib { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+    .lib img, .lib video, .lib-card img, .lib-card video {
+      width: 100%; height: 140px; object-fit: cover; display: block; border-radius: 8px;
+    }
+    .file-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .pills { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pills button {
+      border: 1px solid var(--line); background: var(--raised); color: var(--dim);
+      border-radius: var(--pill); padding: 6px 12px;
+    }
+    .pills button.on { background: var(--btn-ink); color: var(--rail-ink); border-color: var(--btn-ink); }
+    .insp-frames { display: grid; grid-template-columns: 1fr; gap: 8px; }
+    .insp-frames input[type="file"] { width: 100%; max-width: 100%; }
+    .file-row input[type="file"] { width: auto; border: 0; background: transparent; padding: 0; }
+    .drawer {
+      position: absolute; top: 12px; left: 12px; width: min(22rem, 88%);
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+      padding: 14px; overflow: auto; z-index: 4; max-height: calc(100% - 24px);
+    }
+    .drawer h3 { margin: 0 0 8px; font-size: 14px; font-weight: 500; }
+    .drawer img, .drawer video { width: 100%; display: block; border-radius: 8px; background: #000; max-height: 220px; object-fit: contain; }
+    .zoom {
+      position: absolute; right: 12px; bottom: 12px; display: flex;
+      border: 1px solid var(--line); background: var(--panel); border-radius: 8px;
+    }
+    .zoom button { border: 0; background: transparent; width: 32px; height: 28px; }
+    .pending { opacity: 0.7; }
+    .port {
+      position: absolute; width: 10px; height: 10px; border-radius: 50%;
+      background: var(--ink); z-index: 3; cursor: pointer; border: 1px solid var(--line);
+    }
+    .port.in { left: -5px; top: 42px; }
+    .port.out { right: -5px; top: 42px; }
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .split img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; background: #000; }
+    .canvas-tools { position: absolute; right: 12px; top: 12px; display: flex; gap: 8px; z-index: 3; }
+    .tl-bar { display: flex; gap: 8px; align-items: center; padding: 8px 12px; }
+    .tl-stage {
+      height: min(48vh, 420px); display: grid; place-items: center; background: #000;
+      margin: 0 12px 12px; border-radius: 8px;
+    }
+    .tl-stage img, .tl-stage video { max-height: 100%; max-width: 100%; object-fit: contain; }
+    @media (max-width: 960px) {
+      .shell, .shell.with-insp { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; }
+      .rail { flex-direction: row; border-right: 0; border-bottom: 1px solid hsl(160 18% 3% / 0.45); overflow-x: auto; padding: 6px 8px; }
+      .insp { border-left: 0; border-top: 1px solid var(--line); max-height: 42vh; }
+      .grid { grid-template-columns: 1fr; }
+      .card img { height: 180px; }
+    }
+    #onboard {
+      position: fixed; inset: 0; z-index: 50; display: grid; place-items: center;
+    }
+    #onboard[hidden], #onboard.hidden { display: none !important; }
+    .onboard-scrim {
+      position: absolute; inset: 0;
+      background: hsl(160 22% 7% / 0.72);
+      backdrop-filter: blur(22px) saturate(150%);
+    }
+    .onboard-card {
+      position: relative; z-index: 1;
+      width: min(34rem, calc(100vw - 32px));
+      background: var(--bg); color: var(--ink);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--card-shadow), 0 32px 64px -24px rgb(0 0 0 / 0.45);
+      padding: 28px 28px 22px;
+      display: grid; gap: 10px;
+    }
+    .onboard-card .eyebrow { color: var(--teal); letter-spacing: 0.18em; text-transform: uppercase; font-size: 10px; font-weight: 600; margin: 0; }
+    .onboard-card h2 {
+      margin: 0; font-family: var(--font-ui); font-style: normal; font-weight: 500;
+      font-size: 2rem; line-height: 1.15; letter-spacing: -0.03em;
+    }
+    .onboard-card h2 .serif { font-size: calc(100% + 4px); }
+    .onboard-copy { margin: 0; color: var(--dim); max-width: 32rem; line-height: 1.45; }
+    .onboard-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav class="rail" aria-label="Studio">
+      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#34c6c0"/><path d="M9 7h5l2 11 2-11h5L18 25h-4L9 7z" fill="#06262a"/></svg>
+      <button class="on" data-page="explore" type="button" title="Explore" aria-label="Explore">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="currentColor"/><path d="M9 4v5l3 2" stroke="currentColor"/></svg>
+      </button>
+      <button data-page="image" type="button" title="Image" aria-label="Image">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="3" y="4" width="12" height="10" stroke="currentColor"/><path d="M3 12l3-3 2 2 2-2 4 4" stroke="currentColor"/><circle cx="7" cy="7" r="1" fill="currentColor"/></svg>
+      </button>
+      <button data-page="adapts" type="button" title="Adapts" aria-label="Adapts">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="3" y="3" width="5" height="5" stroke="currentColor"/><rect x="10" y="3" width="5" height="5" stroke="currentColor"/><rect x="6" y="10" width="6" height="5" stroke="currentColor"/></svg>
+      </button>
+      <button data-page="video" type="button" title="Video" aria-label="Video">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2.5" y="5" width="9" height="8" stroke="currentColor"/><path d="M11.5 8l4-2v6l-4-2z" stroke="currentColor"/></svg>
+      </button>
+      <button data-page="speak" type="button" title="Speak" aria-label="Speak">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 8v2c0 2.8 2.2 5 5 5s5-2.2 5-5V8" stroke="currentColor"/><rect x="7" y="3" width="4" height="8" rx="2" stroke="currentColor"/></svg>
+      </button>
+      <button data-page="upscale" type="button" title="Upscale still" aria-label="Upscale still">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="3" y="7" width="6" height="6" stroke="currentColor"/><rect x="8" y="3" width="7" height="7" stroke="currentColor"/></svg>
+      </button>
+      <button data-page="canvas" type="button" title="Canvas" aria-label="Canvas">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="3" y="4" width="5" height="4" stroke="currentColor"/><rect x="10" y="10" width="5" height="4" stroke="currentColor"/><path d="M8 6h3v4" stroke="currentColor"/></svg>
+      </button>
+      <button data-page="library" type="button" title="Library" aria-label="Library">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="3" y="4" width="4" height="11" stroke="currentColor"/><rect x="8" y="4" width="3" height="11" stroke="currentColor"/><path d="M12.5 4.5l2.5 10.5" stroke="currentColor"/></svg>
+      </button>
+      <button data-page="agent" type="button" title="Supercomputer" aria-label="Supercomputer">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="4" y="5" width="10" height="8" stroke="currentColor"/><path d="M7 14h4M6 3v2M12 3v2" stroke="currentColor"/></svg>
+      </button>
+      <button data-page="space" type="button" title="3D" aria-label="3D">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2l7 4v8l-7 4-7-4V6zM9 10V18M2 6l7 4 7-4" stroke="currentColor"/></svg>
+      </button>
+      <button data-page="collab" type="button" title="Collab" aria-label="Collab">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="6" cy="5.5" r="2.5" stroke="currentColor"/><circle cx="12" cy="5.5" r="2.5" stroke="currentColor"/><path d="M3 16c0-2 2-3.5 3.5-3.5S10 14 10 16M8 16c0-2 2-3.5 4-3.5s4 1.5 4 3.5" stroke="currentColor"/></svg>
+      </button>
+      <span class="spacer"></span>
+      <button data-page="skills" type="button" title="Skills" aria-label="Skills">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="3" y="4" width="12" height="10" stroke="currentColor"/><path d="M6 7h6M6 10h4" stroke="currentColor"/></svg>
+      </button>
+      <button data-page="find" type="button" title="Find" aria-label="Find">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="8" cy="8" r="4.5" stroke="currentColor"/><path d="M11.5 11.5L15 15" stroke="currentColor"/></svg>
+      </button>
+      <button data-page="cost" type="button" title="Cost report" aria-label="Cost report">$</button>
+      <button data-page="keys" type="button" title="Connect" aria-label="Connect">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="7" cy="10" r="3" stroke="currentColor"/><path d="M10 10h6v2M13 10v3" stroke="currentColor"/></svg>
+      </button>
+    </nav>
+    <section class="main">
+      <div class="top">
+        <h1 id="project-name" contenteditable="true" spellcheck="false">Explore</h1>
+        <div class="views" id="view-toggle">
+          <button class="on" data-view="canvas" type="button">Canvas</button>
+          <button data-view="timeline" type="button">Timeline</button>
+        </div>
+        <button class="ghost hidden" id="compose-new" type="button">+ New</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="muted" id="spent">≈ $0</span>
+          <button class="chip" id="provider-chip" type="button">Local</button>
+        </div>
+      </div>
+      <div class="page" id="page"></div>
+    </section>
+    <aside class="insp">
+      <div class="insp-h">
+        <p class="eyebrow" id="insp-eyebrow">Cinema stack</p>
+        <h2 id="insp-title">Generate</h2>
+        <p class="muted" id="agent-lede">Pick a template or describe a shot. Price sits on Generate.</p>
+      </div>
+      <div class="fields">
+        <div>
+          <label for="model">Model</label>
+          <select id="model"></select>
+        </div>
+        <div>
+          <label for="prompt">Prompt</label>
+          <textarea id="prompt" placeholder="north-light oak cube, 50mm cinema still."></textarea>
+        </div>
+        <div id="camera-field">
+          <label>Camera</label>
+          <div class="pills" id="camera-pills"></div>
+        </div>
+        <div id="lens-field">
+          <label>Lens</label>
+          <div class="pills" id="lens-pills"></div>
+        </div>
+        <div id="look-field">
+          <label>Look</label>
+          <div class="pills" id="look-pills"></div>
+        </div>
+        <div id="lighting-field">
+          <label>Lighting</label>
+          <div class="pills" id="lighting-pills"></div>
+        </div>
+        <div id="palette-field">
+          <label>Color palette</label>
+          <div class="pills" id="palette-pills"></div>
+        </div>
+        <div id="aperture-field">
+          <label>Aperture</label>
+          <div class="pills" id="aperture-pills"></div>
+        </div>
+        <div id="genre-field">
+          <label>Genre</label>
+          <div class="pills" id="genre-pills"></div>
+        </div>
+        <div id="motion-field" class="hidden">
+          <label>Camera motion</label>
+          <div class="pills" id="motion-pills"></div>
+        </div>
+        <div id="aspect-field">
+          <label>Aspect</label>
+          <div class="pills" id="aspect-pills"></div>
+        </div>
+        <div id="duration-field" class="hidden">
+          <label>Duration</label>
+          <div class="pills" id="duration-pills"></div>
+        </div>
+        <div id="resolution-field" class="hidden">
+          <label>Quality</label>
+          <div class="pills" id="resolution-pills"></div>
+        </div>
+        <div id="scale-field" class="hidden">
+          <label>Scale</label>
+          <div class="pills" id="scale-pills"></div>
+        </div>
+        <div>
+          <label for="still">Still or clip</label>
+          <div class="file-row">
+            <input id="still" type="file" accept="image/*,video/*,audio/*" />
+            <span class="muted" id="still-name">Optional input for upscale, i2v, clips.</span>
+          </div>
+        </div>
+        <div id="frames-field" class="hidden">
+          <label>First / last frame</label>
+          <div class="insp-frames">
+            <div>
+              <label for="first-frame">First</label>
+              <input id="first-frame" type="file" accept="image/*" />
+              <span class="muted" id="first-frame-name">Start frame</span>
+            </div>
+            <div>
+              <label for="last-frame">Last</label>
+              <input id="last-frame" type="file" accept="image/*" />
+              <span class="muted" id="last-frame-name">End frame</span>
+            </div>
+          </div>
+        </div>
+        <div id="scene-field" class="hidden">
+          <label>Speak scene</label>
+          <div class="pills" id="scene-pills"></div>
+        </div>
+        <div id="magnific-field" class="hidden">
+          <p class="muted" style="margin:0">Magnific Creative. Precision ignores these.</p>
+          <div class="range-row">
+            <label for="creativity">Creativity <span id="creativity-val">0</span></label>
+            <input id="creativity" type="range" min="-10" max="10" value="0" />
+          </div>
+          <div class="range-row">
+            <label for="resemblance">Resemblance <span id="resemblance-val">0</span></label>
+            <input id="resemblance" type="range" min="-10" max="10" value="0" />
+          </div>
+          <div class="range-row">
+            <label for="hdr">HDR <span id="hdr-val">0</span></label>
+            <input id="hdr" type="range" min="-10" max="10" value="0" />
+          </div>
+          <div class="range-row">
+            <label for="fractality">Fractality <span id="fractality-val">0</span></label>
+            <input id="fractality" type="range" min="-10" max="10" value="0" />
+          </div>
+          <label>Optimized for</label>
+          <div class="pills" id="optimized-pills"></div>
+          <label>Engine</label>
+          <div class="pills" id="engine-pills"></div>
+        </div>
+        <div class="split hidden" id="split-view">
+          <div><span class="muted">Before</span><img class="split-before" alt="" /></div>
+          <div><span class="muted">After</span><img class="split-after" alt="" /></div>
+        </div>
+        <div id="cast-field">
+          <label>Elements</label>
+          <p class="muted" style="margin:0 0 6px">Local named stills for characters, locations, and props. Not a scraped community feed.</p>
+          <div class="pills" id="element-kind-pills"></div>
+          <div class="pills" id="cast-pills"></div>
+          <div class="file-row">
+            <input id="cast-file" type="file" accept="image/*" />
+            <input id="cast-name" type="text" placeholder="Name" />
+            <button class="ghost" id="cast-add" type="button">Add to cast</button>
+          </div>
+        </div>
+        <div class="file-row">
+          <button class="ghost" id="add-image" type="button">+ Image node</button>
+          <button class="ghost" id="add-video" type="button">+ Video node</button>
+          <button class="ghost" id="add-upscale" type="button">+ Upscale node</button>
+          <button class="ghost" id="add-shot" type="button">+ Shot</button>
+        </div>
+        <p class="log" id="log"></p>
+      </div>
+      <div class="foot">
+        <button class="run" id="generate" type="button"><span id="gen-label">Generate</span><span id="est-btn">$—</span></button>
+        <p class="muted" id="est-detail" style="margin:8px 0 0">Estimates appear on Generate.</p>
+      </div>
+    </aside>
+  </div>
+  <div id="onboard" class="hidden" data-onboard data-step="0">
+    <div class="onboard-scrim"></div>
+    <div class="onboard-card">
+      <p class="eyebrow">Vinci</p>
+      <p class="muted" id="onboard-kicker">1 / 3</p>
+      <h2 id="onboard-title">Your Brand's <em class="serif">Superagency</em></h2>
+      <p class="onboard-copy" id="onboard-copy">Your Brand's Superagency — stills, video, and campaigns in one Studio. Connect a provider when you want live models.</p>
+      <div class="onboard-actions">
+        <button class="run" type="button" id="onboard-next">Continue</button>
+        <button class="ghost" type="button" id="onboard-alt" hidden>Connect a key</button>
+        <button class="ghost" type="button" id="onboard-skip">Skip for now</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    const STORE = "vinci.studio.v2";
+    const ONBOARD_KEY = "vinci-onboard-v1";
+    let state = { page: "explore", category: "all", projects: [], currentId: null, view: "canvas", zoom: 1, uploadId: null, composeReset: false, modelsOpen: false, maxCost: "", skillRef: null, graph: { nodes: [], edges: [] }, graphEdited: false, selectedRun: null, selectedNode: null, aspectRatio: "", duration: "", resolution: "", scale: "4x", firstFrameId: null, lastFrameId: null, camera: "locked-off", lens: "50mm", look: "commercial", lighting: "available", palette: "filmic", motion: "static", aperture: "f/2.8", genre: "drama", scene: "general", creativity: 0, resemblance: 0, hdr: 0, fractality: 0, optimizedFor: "standard", engine: "automatic", elementKind: "character", cast: [], connectId: "", libTab: "all", brief: "", plan: [], yaw: 18, collabId: "", collabName: "Session", adaptSourceId: null, adaptTargets: [{ preset_id: "amazon_828x300" }, { preset_id: "inuxu_1200x720" }], adaptLayout: "fit_pad_crop", adaptFit: "pad", adaptPartnerOnly: true, adaptEstimateUsd: null, adaptNote: "", adaptOutputs: [] };
+    const CAMERAS = ["locked-off", "handheld", "tracking", "crane", "aerial"];
+    const LENSES = ["24mm", "35mm", "50mm", "85mm", "anamorphic"];
+    const LOOKS = ["commercial", "documentary", "noir", "fashion", "product"];
+    const LIGHTING = ["available", "studio", "golden-hour", "overcast", "neon", "moonlight", "practical"];
+    const PALETTES = ["filmic", "teal-orange", "bleach", "tungsten", "daylight", "pastel", "verdant"];
+    const MOTIONS = ["static", "pan", "orbit", "push-in", "pull-out"];
+    const APERTURES = ["f/1.4", "f/2.8", "f/5.6", "f/11"];
+    const GENRES = ["action", "drama", "documentary", "music-video"];
+    const SCENES = ["general", "selfie", "podcast", "car-talking"];
+    const ELEMENT_KINDS = ["character", "location", "prop"];
+    const MAG_STYLES = ["standard", "soft_portraits", "hard_portraits", "art_n_illustration", "films_n_photography", "3d_renders"];
+    const MAG_ENGINES = ["automatic", "magnific_illusio", "magnific_sharpy", "magnific_sparkle"];
+    const KEY_ORDER = ["higgsfield", "magnific", "wavespeed", "google", "fal", "elevenlabs", "cloudflare", "mcp"];
+    const CONNECTOR_ORDER = ["mock", ...KEY_ORDER];
+    const CONNECTOR_GLYPH = { mock: "L", higgsfield: "H", magnific: "M", wavespeed: "W", google: "G", fal: "f", elevenlabs: "11", cloudflare: "CF", mcp: "MCP" };
+    function connectorFace(id) {
+      const faces = {
+        mock: '<svg viewBox="0 0 48 48" width="28" height="28" aria-hidden="true"><text x="24" y="30" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor">L</text></svg>',
+        higgsfield: '<svg viewBox="0 0 48 48" width="28" height="28" aria-hidden="true"><path d="M24 9l13 15-13 15L11 24z" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>',
+        magnific: '<svg viewBox="0 0 48 48" width="28" height="28" aria-hidden="true"><circle cx="19" cy="24" r="8" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="29" cy="24" r="8" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>',
+        wavespeed: '<svg viewBox="0 0 48 48" width="28" height="28" aria-hidden="true"><path d="M10 30c4-10 8-10 12 0s8 10 12 0" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M10 22c4-10 8-10 12 0s8 10 12 0" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>',
+        google: '<svg viewBox="0 0 48 48" width="28" height="28" aria-hidden="true"><circle cx="18" cy="18" r="4" fill="currentColor"/><circle cx="30" cy="18" r="4" fill="currentColor"/><circle cx="18" cy="30" r="4" fill="currentColor"/><circle cx="30" cy="30" r="4" fill="currentColor"/></svg>',
+        fal: '<svg viewBox="0 0 48 48" width="28" height="28" aria-hidden="true"><path d="M16 34V14h16" fill="none" stroke="currentColor" stroke-width="2.8"/><path d="M16 24h11" stroke="currentColor" stroke-width="2.8"/></svg>',
+        elevenlabs: '<svg viewBox="0 0 48 48" width="28" height="28" aria-hidden="true"><rect x="14" y="12" width="6" height="24" rx="1.5" fill="currentColor"/><rect x="28" y="12" width="6" height="24" rx="1.5" fill="currentColor"/></svg>',
+        cloudflare: '<svg viewBox="0 0 48 48" width="28" height="28" aria-hidden="true"><path d="M10 28h22l-6-12H16z" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>',
+        mcp: '<svg viewBox="0 0 48 48" width="28" height="28" aria-hidden="true"><rect x="18" y="16" width="12" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M22 16V11M26 16V11" stroke="currentColor" stroke-width="2.4"/></svg>',
+      };
+      return faces[id] || (id && id.startsWith("mcp_") ? faces.mcp : (CONNECTOR_GLYPH[id] || id.slice(0, 2).toUpperCase()));
+    }
+    function openConnectorPicker() {
+      const sel = $("connect-select");
+      if (!sel) return;
+      sel.focus();
+      try { if (sel.showPicker) sel.showPicker(); } catch (err) { /* ignore */ }
+    }
+    let models = [];
+    let doctor = {};
+    let skills = [];
+    let templates = [];
+    let adaptPresets = [];
+    let runs = [];
+    let assets = [];
+    let pending = false;
+    let generateInFlight = false;
+    let drag = null;
+    let linkFrom = null;
+    let tlToken = 0;
+
+    const $ = (id) => document.getElementById(id);
+    async function j(path, opts) {
+      const res = await fetch(path, opts);
+      if (!res.ok) {
+        let detail = res.statusText;
+        try { const body = await res.json(); detail = body.detail || JSON.stringify(body); } catch {}
+        throw new Error(detail);
+      }
+      if ((res.headers.get("content-type") || "").includes("svg")) return res.text();
+      return res.json();
+    }
+    function loadState() {
+      try { state = { ...state, ...JSON.parse(localStorage.getItem(STORE) || "{}") }; } catch {}
+    }
+    function saveState() {
+      localStorage.setItem(STORE, JSON.stringify({
+        projects: state.projects, currentId: state.currentId, maxCost: state.maxCost || "", page: state.page, cast: state.cast || [],
+      }));
+    }
+    function current() { return state.projects.find((p) => p.id === state.currentId) || null; }
+    function money(n) {
+      const v = Number(n || 0);
+      if (v === 0) return "$0";
+      if (v < 0.01) return "$" + v.toFixed(5).replace(/0+$/, "").replace(/\.$/, "");
+      return "$" + v.toFixed(3);
+    }
+    function log(msg) { $("log").textContent = msg; }
+    function skillById(id) { return skills.find((s) => s.id === id); }
+    function t2i() { return models.filter((m) => (m.capabilities || []).includes("t2i")); }
+    function t2v() { return models.filter((m) => (m.capabilities || []).includes("t2v")); }
+    function i2i() { return models.filter((m) => (m.capabilities || []).includes("i2i")); }
+    function selectedModel() {
+      const picked = models.find((m) => m.id === $("model").value);
+      if (picked) return picked;
+      return models.find((m) => m.provider === "mock") || models[0];
+    }
+    function modelIdForNode(node, fallbackId) {
+      const cap = node && node.capability;
+      const candidates = [node && node.model_id, fallbackId];
+      for (const id of candidates) {
+        if (!id) continue;
+        const row = models.find((m) => m.id === id);
+        if (row && (!cap || (row.capabilities || []).includes(cap))) return id;
+      }
+      const mock = models.find((m) => m.provider === "mock" && (!cap || (m.capabilities || []).includes(cap)));
+      return (mock && mock.id) || fallbackId;
+    }
+    function usable(model) {
+      if (!model) return false;
+      if (model.provider === "mock") return true;
+      return !!model.available && !!doctor.live_spend;
+    }
+    function pillRow(el, values, current, onPick) {
+      if (!el) return;
+      el.innerHTML = values.map((v) => {
+        const on = String(v) === String(current) ? " on" : "";
+        return `<button type="button" data-v="${v}" class="${on}">${v}</button>`;
+      }).join("");
+      el.querySelectorAll("button").forEach((btn) => {
+        btn.onclick = () => { onPick(btn.dataset.v); fillShotControls(); updateCost(); };
+      });
+    }
+    function durationOptions(model) {
+      const max = Number(model?.constraints?.max_duration || 0);
+      if (!max) return [];
+      const picks = [3, 5, 6, 8, 10, 15].filter((n) => n <= max);
+      if (!picks.length) picks.push(max);
+      if (max >= 5 && !picks.includes(5)) picks.unshift(5);
+      return [...new Set(picks)];
+    }
+    function wantsFrames(model) {
+      const blob = ((model?.id || "") + " " + (model?.display_name || "")).toLowerCase();
+      return blob.includes("flf") || blob.includes("first-last") || blob.includes("first_last");
+    }
+    function fillShotControls() {
+      const model = selectedModel();
+      const caps = model?.capabilities || [];
+      const constraints = model?.constraints || {};
+      const ratios = constraints.aspect_ratios || [];
+      const resolutions = (constraints.resolutions || []).filter((r) => r && r !== "1x1");
+      const durs = durationOptions(model);
+      const graphVideo = (state.graph.nodes || []).some((n) => n.capability === "t2v" || n.capability === "i2v");
+      const videoish = caps.includes("t2v") || caps.includes("i2v") || caps.includes("lipsync") || graphVideo || state.page === "video";
+      const upscalePage = state.page === "upscale";
+      const aspectField = $("aspect-field");
+      const durationField = $("duration-field");
+      const resolutionField = $("resolution-field");
+      const scaleField = $("scale-field");
+      const framesField = $("frames-field");
+      if (aspectField) {
+        aspectField.classList.toggle("hidden", !ratios.length);
+        if (ratios.length) {
+          if (!ratios.includes(state.aspectRatio)) {
+            state.aspectRatio = ratios.includes("16:9") ? "16:9" : ratios[0];
+          }
+          pillRow($("aspect-pills"), ratios, state.aspectRatio, (v) => { state.aspectRatio = v; });
+        } else {
+          state.aspectRatio = "";
+        }
+      }
+      if (durationField) {
+        durationField.classList.toggle("hidden", !videoish || !durs.length);
+        if (videoish && durs.length) {
+          const asNum = Number(state.duration);
+          if (!durs.includes(asNum)) state.duration = String(durs.includes(5) ? 5 : durs[0]);
+          pillRow($("duration-pills"), durs.map(String), String(state.duration), (v) => { state.duration = v; });
+        } else {
+          state.duration = "";
+        }
+      }
+      if (resolutionField) {
+        resolutionField.classList.toggle("hidden", !resolutions.length);
+        if (resolutions.length) {
+          if (!resolutions.includes(state.resolution)) state.resolution = resolutions[0];
+          pillRow($("resolution-pills"), resolutions, state.resolution, (v) => { state.resolution = v; });
+        } else {
+          state.resolution = "";
+        }
+      }
+      if (scaleField) {
+        scaleField.classList.toggle("hidden", !upscalePage);
+        if (upscalePage) {
+          const scales = ["2x", "4x", "8x", "16x"];
+          if (!scales.includes(state.scale)) state.scale = "4x";
+          pillRow($("scale-pills"), scales, state.scale, (v) => { state.scale = v; });
+        }
+      }
+      if (framesField) framesField.classList.toggle("hidden", !(wantsFrames(model) || videoish));
+      const optical = ["image", "video", "speak", "canvas"].includes(state.page);
+      ["camera-field", "lens-field", "look-field", "lighting-field", "palette-field", "aperture-field", "genre-field", "cast-field"].forEach((id) => {
+        $(id)?.classList.toggle("hidden", !optical);
+      });
+      const motionField = $("motion-field");
+      if (motionField) motionField.classList.toggle("hidden", !optical || !videoish);
+      $("scene-field")?.classList.toggle("hidden", state.page !== "speak");
+      $("magnific-field")?.classList.toggle("hidden", !upscalePage);
+      if (optical) {
+        if (!CAMERAS.includes(state.camera)) state.camera = "locked-off";
+        if (!LENSES.includes(state.lens)) state.lens = "50mm";
+        if (!LOOKS.includes(state.look)) state.look = "commercial";
+        if (!LIGHTING.includes(state.lighting)) state.lighting = "available";
+        if (!PALETTES.includes(state.palette)) state.palette = "filmic";
+        if (!MOTIONS.includes(state.motion)) state.motion = "static";
+        if (!APERTURES.includes(state.aperture)) state.aperture = "f/2.8";
+        if (!GENRES.includes(state.genre)) state.genre = "drama";
+        pillRow($("camera-pills"), CAMERAS, state.camera, (v) => { state.camera = v; applyOpticalToNode(); });
+        pillRow($("lens-pills"), LENSES, state.lens, (v) => { state.lens = v; applyOpticalToNode(); });
+        pillRow($("look-pills"), LOOKS, state.look, (v) => { state.look = v; applyOpticalToNode(); });
+        pillRow($("lighting-pills"), LIGHTING, state.lighting, (v) => { state.lighting = v; applyOpticalToNode(); });
+        pillRow($("palette-pills"), PALETTES, state.palette, (v) => { state.palette = v; applyOpticalToNode(); });
+        pillRow($("aperture-pills"), APERTURES, state.aperture, (v) => { state.aperture = v; applyOpticalToNode(); });
+        pillRow($("genre-pills"), GENRES, state.genre, (v) => { state.genre = v; applyOpticalToNode(); });
+        if (videoish) {
+          pillRow($("motion-pills"), MOTIONS, state.motion, (v) => { state.motion = v; applyOpticalToNode(); });
+        }
+        fillCast();
+      }
+      if (state.page === "speak") {
+        if (!SCENES.includes(state.scene)) state.scene = "general";
+        pillRow($("scene-pills"), SCENES, state.scene, (v) => { state.scene = v; });
+      }
+      if (upscalePage) {
+        pillRow($("optimized-pills"), MAG_STYLES, state.optimizedFor, (v) => { state.optimizedFor = v; });
+        pillRow($("engine-pills"), MAG_ENGINES, state.engine, (v) => { state.engine = v; });
+        ["creativity", "resemblance", "hdr", "fractality"].forEach((id) => {
+          const el = $(id);
+          if (!el) return;
+          el.value = String(state[id] || 0);
+          const lab = $(id + "-val");
+          if (lab) lab.textContent = String(state[id] || 0);
+        });
+      }
+    }
+    function opticalValue(value, fallback) {
+      if (value == null || value === "" || String(value).includes("{{")) return fallback || "";
+      return String(value);
+    }
+    function opticalLabel(node) {
+      const params = (node && node.params) || {};
+      const motion = opticalValue(params.motion, state.motion);
+      const bits = [opticalValue(params.lens, state.lens), opticalValue(params.aperture, state.aperture), opticalValue(params.look, state.look), opticalValue(params.genre, state.genre), opticalValue(params.camera, state.camera)];
+      const light = opticalValue(params.lighting, state.lighting);
+      if (light && light !== "available") bits.push(light);
+      const pal = opticalValue(params.palette, state.palette);
+      if (pal && pal !== "filmic") bits.push(pal);
+      if (motion && motion !== "static") bits.push(motion);
+      return bits.filter(Boolean).join(" · ");
+    }
+    function stampOptical(params) {
+      const out = { ...(params || {}) };
+      out.camera = opticalValue(out.camera, state.camera);
+      out.lens = opticalValue(out.lens, state.lens);
+      out.look = opticalValue(out.look, state.look);
+      out.aperture = opticalValue(out.aperture, state.aperture);
+      out.genre = opticalValue(out.genre, state.genre);
+      out.lighting = opticalValue(out.lighting, state.lighting);
+      out.palette = opticalValue(out.palette, state.palette);
+      out.motion = opticalValue(out.motion, state.motion);
+      return out;
+    }
+    function applyOpticalToNode() {
+      const node = (state.graph.nodes || []).find((n) => n.id === state.selectedNode);
+      if (!node) return;
+      node.params = { ...(node.params || {}) };
+      node.params.camera = state.camera;
+      node.params.lens = state.lens;
+      node.params.look = state.look;
+      node.params.aperture = state.aperture;
+      node.params.genre = state.genre;
+      node.params.lighting = state.lighting;
+      node.params.palette = state.palette;
+      if (node.capability === "t2v" || node.capability === "i2v") node.params.motion = state.motion;
+      if (state.aspectRatio) node.params.aspect_ratio = state.aspectRatio;
+      if (state.duration && (node.capability === "t2v" || node.capability === "i2v")) {
+        const n = Number(state.duration);
+        node.params.duration = Number.isNaN(n) ? state.duration : n;
+      }
+      persistGraph();
+      refreshBoard();
+    }
+    function fillCast() {
+      const el = $("cast-pills");
+      if (!el) return;
+      pillRow($("element-kind-pills"), ELEMENT_KINDS, state.elementKind || "character", (v) => { state.elementKind = v; fillCast(); });
+      const rows = state.cast || [];
+      const prompt = ($("prompt") && $("prompt").value) || "";
+      if (!rows.length) {
+        el.innerHTML = "<span class='muted'>None yet</span>";
+        return;
+      }
+      el.innerHTML = rows.map((c) => {
+        const on = prompt.includes("@" + c.name) ? " on" : "";
+        return `<button type="button" class="${on}" data-cast="${c.name}">@${c.name}${c.kind && c.kind !== "character" ? " · " + c.kind : ""}</button>`;
+      }).join("");
+      el.querySelectorAll("[data-cast]").forEach((btn) => {
+        btn.onclick = () => {
+          const name = btn.dataset.cast;
+          const row = (state.cast || []).find((c) => c.name === name);
+          const ta = $("prompt");
+          const tag = "@" + name;
+          if (ta && !ta.value.includes(tag)) ta.value = (ta.value.trim() + " " + tag).trim();
+          if (row && row.assetId) {
+            state.uploadId = row.assetId;
+            state.firstFrameId = row.assetId;
+            if ($("still-name")) $("still-name").textContent = tag;
+          }
+          fillCast();
+        };
+      });
+    }
+    function shotInputs(base) {
+      const inputs = { ...base };
+      if (state.aspectRatio) inputs.aspect_ratio = state.aspectRatio;
+      if (state.duration && $("duration-field") && !$("duration-field").classList.contains("hidden")) {
+        const n = Number(state.duration);
+        inputs.duration = Number.isNaN(n) ? state.duration : n;
+      }
+      if (state.resolution && $("resolution-field") && !$("resolution-field").classList.contains("hidden")) {
+        inputs.resolution = state.resolution;
+      }
+      if (state.scale && $("scale-field") && !$("scale-field").classList.contains("hidden")) {
+        inputs.scale = state.scale;
+      }
+      if (state.firstFrameId) {
+        inputs.first_frame_url = state.firstFrameId;
+        inputs.start_image_url = state.firstFrameId;
+        inputs.image = state.firstFrameId;
+      }
+      if (state.lastFrameId) {
+        inputs.last_frame_url = state.lastFrameId;
+        inputs.tail_image_url = state.lastFrameId;
+      }
+      if (state.camera) inputs.camera = state.camera;
+      if (state.lens) inputs.lens = state.lens;
+      if (state.look) inputs.look = state.look;
+      if (state.aperture) inputs.aperture = state.aperture;
+      if (state.genre) inputs.genre = state.genre;
+      if (state.lighting) inputs.lighting = state.lighting;
+      if (state.palette) inputs.palette = state.palette;
+      if (state.scene && (state.page === "speak" || state.scene !== "general")) {
+        inputs.scene = state.scene;
+      }
+      if (state.motion && $("motion-field") && !$("motion-field").classList.contains("hidden")) {
+        inputs.motion = state.motion;
+      }
+      if ($("magnific-field") && !$("magnific-field").classList.contains("hidden")) {
+        inputs.creativity = Number(state.creativity || 0);
+        inputs.resemblance = Number(state.resemblance || 0);
+        inputs.hdr = Number(state.hdr || 0);
+        inputs.fractality = Number(state.fractality || 0);
+        inputs.optimized_for = state.optimizedFor || "standard";
+        inputs.engine = state.engine || "automatic";
+      }
+      if (state.page !== "upscale") {
+        const urls = [];
+        if (typeof inputs.image === "string" && inputs.image) urls.push(inputs.image);
+        if (state.uploadId && !urls.includes(state.uploadId)) urls.push(state.uploadId);
+        for (const row of (state.cast || [])) {
+          if (row.assetId && !urls.includes(row.assetId)) urls.push(row.assetId);
+        }
+        if (urls.length) {
+          inputs.image_urls = urls.slice(0, 8);
+          if (!inputs.image) inputs.image = urls[0];
+        }
+      }
+      return inputs;
+    }
+    function subgraphTo(id) {
+      const nodes = state.graph.nodes || [];
+      const edges = state.graph.edges || [];
+      const keep = new Set([id]);
+      let added = true;
+      while (added) {
+        added = false;
+        for (const e of edges) {
+          if (keep.has(e.dst) && !keep.has(e.src)) { keep.add(e.src); added = true; }
+        }
+      }
+      return {
+        nodes: nodes.filter((n) => keep.has(n.id)).map(({ x, y, ...n }) => n),
+        edges: edges.filter((e) => keep.has(e.src) && keep.has(e.dst)),
+      };
+    }
+    function withShotParams(nodes) {
+      return (nodes || []).map((n) => {
+        const params = { ...(n.params || {}) };
+        if (!params.aspect_ratio) params.aspect_ratio = "{{inputs.aspect_ratio}}";
+        if ((n.capability === "t2v" || n.capability === "i2v") && params.duration == null) {
+          params.duration = "{{inputs.duration}}";
+        }
+        if (!params.camera) params.camera = "{{inputs.camera}}";
+        if (!params.lens) params.lens = "{{inputs.lens}}";
+        if (!params.look) params.look = "{{inputs.look}}";
+        if (!params.aperture) params.aperture = "{{inputs.aperture}}";
+        if (!params.genre) params.genre = "{{inputs.genre}}";
+        if (!params.lighting) params.lighting = "{{inputs.lighting}}";
+        if (!params.palette) params.palette = "{{inputs.palette}}";
+        if ((n.capability === "t2v" || n.capability === "i2v") && !params.motion) {
+          params.motion = "{{inputs.motion}}";
+        }
+        return { ...n, params };
+      });
+    }
+    function graphFromSkill(skill) {
+      const wf = skill.workflow || { nodes: [], edges: [] };
+      return {
+        nodes: (wf.nodes || []).map((n, i) => ({ ...n, params: stampOptical(n.params), x: 40 + (i % 3) * 230, y: 36 + Math.floor(i / 3) * 168 })),
+        edges: wf.edges || [],
+      };
+    }
+    function persistGraph() {
+      const proj = current();
+      if (!proj) return;
+      proj.graph = state.graph;
+      proj.skillRef = state.skillRef;
+      proj.graphEdited = state.graphEdited;
+      saveState();
+    }
+
+    function setPage(page) {
+      state.page = page;
+      document.querySelectorAll(".rail [data-page]").forEach((b) => b.classList.toggle("on", b.dataset.page === page));
+      renderPage();
+      saveState();
+    }
+
+    function composeDigest() {
+      if (state.composeReset) return null;
+      const last = projectRuns().at(-1);
+      return last && last.outputs && last.outputs[0];
+    }
+    function hasComposeMedia() {
+      const kind = state.page;
+      if (!["image", "video", "upscale", "speak"].includes(kind)) return false;
+      if (generateInFlight) return true;
+      if ((kind === "upscale" || kind === "speak") && state.uploadId) return true;
+      return Boolean(composeDigest());
+    }
+    function wantsInspector() {
+      if (state.page === "canvas") return true;
+      if (["image", "video", "speak"].includes(state.page)) return true;
+      if (state.page === "upscale") return hasComposeMedia() || Boolean(state.uploadId);
+      return false;
+    }
+
+    function renderPage() {
+      const page = $("page");
+      const titles = {
+        explore: "Explore", image: "Image", adapts: "Image › Adapts", video: "Video", speak: "Speak",
+        upscale: "Upscale still", canvas: current()?.name || "Canvas", library: "Library",
+        agent: "Supercomputer", space: "3D", collab: "Collab",
+        keys: "Connect", skills: "Skills", find: "Find", cost: "Cost report",
+      };
+      $("project-name").textContent = titles[state.page] || "Studio";
+      $("view-toggle").classList.toggle("hidden", state.page !== "canvas");
+      $("compose-new").classList.toggle("hidden", !["image", "video", "upscale", "speak"].includes(state.page));
+      document.querySelector(".shell").classList.toggle("with-insp", wantsInspector());
+      if (state.page === "explore") renderExplore(page);
+      else if (state.page === "image" || state.page === "video" || state.page === "upscale" || state.page === "speak") renderCompose(page);
+      else if (state.page === "adapts") renderAdapts(page);
+      else if (state.page === "canvas") renderCanvas(page);
+      else if (state.page === "library") renderLibrary(page);
+      else if (state.page === "agent") renderAgent(page);
+      else if (state.page === "space") renderSpace(page);
+      else if (state.page === "collab") void renderCollab(page);
+      else if (state.page === "keys") renderKeys(page);
+      else if (state.page === "skills") renderSkills(page);
+      else if (state.page === "find") renderFind(page);
+      else if (state.page === "cost") renderCost(page);
+      fillModels();
+      updateCost();
+    }
+
+    function renderExplore(page) {
+      const cats = ["all", "image", "motion", "upscale", "cinema", "ads", "clips", "audio"];
+      const items = templates.filter((t) => state.category === "all" || t.category === state.category);
+      page.innerHTML = `<div class="explore">
+        <h2>Templates</h2>
+        <p class="muted">First-party skill graphs. Speak scenes open Speak; the rest land on the canvas.</p>
+        <div class="cats">${cats.map((c) => `<button data-cat="${c}" class="${state.category === c ? "on" : ""}" type="button">${c}</button>`).join("")}</div>
+        <div class="grid" id="tpl-grid"></div>
+      </div>`;
+      const grid = $("tpl-grid");
+      if (!items.length) grid.innerHTML = "<p class='muted'>No templates in this category.</p>";
+      items.forEach((t) => {
+        const btn = document.createElement("button");
+        btn.className = "card";
+        btn.type = "button";
+        btn.innerHTML = `<img alt="" src="/templates/${t.id}/preview.svg" /><div><strong>${t.title}</strong><div class="muted">${t.blurb}</div></div>`;
+        btn.onclick = () => openTemplate(t);
+        grid.appendChild(btn);
+      });
+      page.querySelectorAll("[data-cat]").forEach((b) => {
+        b.onclick = () => { state.category = b.dataset.cat; renderPage(); };
+      });
+    }
+
+    function renderCompose(page) {
+      const kind = state.page;
+      const titles = { image: "Image", video: "Video", upscale: "Upscale", speak: "Speak" };
+      const offers = {
+        image: { eyebrow: "Create", title: "Image", copy: "Stills from a prompt. Write what you want, then generate.", primary: "Write a prompt", hint: "Price sits on Generate." },
+        video: { eyebrow: "Create", title: "Video", copy: "Motion from a prompt. Describe the shot, then generate.", primary: "Write a prompt", hint: "Price sits on Generate." },
+        upscale: { eyebrow: "Enhance", title: "Upscale <em class=\"serif\">still</em>", copy: "Increase resolution on a still you upload or generate.", primary: "Upload a still", hint: "PNG, JPEG, or WebP." },
+        speak: { eyebrow: "Create", title: "Speak", copy: "Talking photo from an image and a spoken line.", primary: "Upload a still", hint: "Price sits on Generate." },
+      };
+      const offer = offers[kind] || offers.image;
+      const digest = composeDigest();
+      const a = digest ? assetById(digest) : null;
+      const mime = a?.mime || "";
+      const occupied = hasComposeMedia();
+      let media = `<p class="hero-empty">${generateInFlight ? "Generating…" : ""}</p>`;
+      if (kind === "upscale" && state.uploadId && digest && state.uploadId !== digest) {
+        media = `<div class="split" id="compose-split"><div><span class="muted">Before</span><img src="/assets/${state.uploadId}/file" alt="" /></div><div><span class="muted">After</span><img src="/assets/${digest}/file" alt="" /></div></div>`;
+      } else if (digest && mime.startsWith("video/")) media = `<video src="/assets/${digest}/file" controls></video>`;
+      else if (digest && mime.startsWith("image/")) media = `<img alt="" src="/assets/${digest}/file" />`;
+      else if ((kind === "upscale" || kind === "speak") && state.uploadId) media = `<img alt="" src="/assets/${state.uploadId}/file" />`;
+      else if (digest && mime.startsWith("audio/")) media = `<p class="hero-empty">Audio landed. Inspect it on the canvas.</p>`;
+      const still = lastStillId();
+      const secondary = (kind === "upscale" && still)
+        ? `<button class="ghost" type="button" id="offer-secondary" data-act="last-still">Use last still</button>`
+        : `<button class="ghost" type="button" id="offer-secondary" data-act="models">Choose a model</button>`;
+      const sample = kind === "upscale"
+        ? `<div class="compose-sample" data-kind="upscale" aria-hidden="true"><div class="compose-sample-split"><div class="compose-sample-before"></div><div class="compose-sample-after"></div><span class="compose-sample-handle"></span></div></div>`
+        : `<div class="compose-sample" data-kind="${kind}" aria-hidden="true"></div>`;
+      const body = occupied
+        ? `<div class="compose-stage">${media}</div>`
+        : `<div class="compose-offer">${sample}<p class="eyebrow">${offer.eyebrow}</p><h2>${offer.title}</h2><p class="compose-offer-copy">${offer.copy}</p><div class="compose-offer-actions"><button class="run" type="button" id="offer-primary">${offer.primary}</button>${secondary}</div><p class="compose-offer-hint">${offer.hint}</p></div>`;
+      page.innerHTML = `<div class="compose${occupied ? " has-media" : ""}">
+        <input id="compose-still" class="hidden" type="file" accept="image/*,video/*,audio/*" />
+        <div class="compose-body">${body}</div>
+        <details class="compose-models" id="compose-models"${state.modelsOpen ? " open" : ""}>
+          <summary>Choose a model</summary>
+          <div class="compose-gallery" id="compose-gallery"></div>
+        </details>
+      </div>`;
+      const modelsEl = $("compose-models");
+      if (modelsEl) modelsEl.ontoggle = () => { state.modelsOpen = modelsEl.open; };
+      const offerFile = $("compose-still");
+      if (offerFile) offerFile.onchange = async () => {
+        const file = offerFile.files && offerFile.files[0];
+        if (!file) return;
+        try {
+          state.uploadId = await ingestFile(file, $("still-name"));
+          state.composeReset = false;
+          log("Input loaded.");
+          renderPage();
+        } catch (err) { log(String(err.message || err)); }
+      };
+      const primary = $("offer-primary");
+      if (primary) primary.onclick = () => {
+        if (kind === "upscale" || kind === "speak") offerFile && offerFile.click();
+        else $("prompt") && $("prompt").focus();
+      };
+      const secondaryBtn = $("offer-secondary");
+      if (secondaryBtn) secondaryBtn.onclick = () => {
+        if (secondaryBtn.dataset.act === "last-still" && still) {
+          state.uploadId = still;
+          state.composeReset = false;
+          renderPage();
+        } else if (modelsEl) {
+          modelsEl.open = true;
+          state.modelsOpen = true;
+        }
+      };
+      $("insp-title").textContent = titles[kind] || "Generate";
+      $("agent-lede").textContent = offer.copy;
+      const promptEl = $("prompt");
+      if (promptEl && !promptEl.value.trim()) promptEl.value = promptEl.placeholder || "north-light oak cube tumbling";
+      if (kind === "speak") {
+        const talk = templates.find((t) => t.id === "still-to-talk") || templates.find((t) => t.id === "talking-photo");
+        if (talk && !state.skillRef) {
+          const skill = skillById(talk.skill);
+          if (skill) { state.skillRef = skill.id; state.graph = graphFromSkill(skill); }
+        }
+      }
+    }
+
+    function adaptPresetChoices() {
+      if (state.adaptPartnerOnly) return adaptPresets.filter((p) => p.spec_kind === "client_partner");
+      return adaptPresets;
+    }
+    function renderAdaptGraphBox() {
+      const box = $("adapt-graph");
+      if (!box) return;
+      const src = state.adaptSourceId ? `vinci://assets/${state.adaptSourceId}` : "(upload source)";
+      const targets = (state.adaptTargets || []).map((t, i) => {
+        const preset = adaptPresetChoices().find((p) => p.id === t.preset_id);
+        const label = preset ? preset.label : `${t.width || "?"}×${t.height || "?"}`;
+        return `→ Target ${i + 1}: ${label}`;
+      }).join("<br/>");
+      box.innerHTML = `<strong>Graph</strong><br/>[Source] ${src}<br/>[Adapts node]<br/>${targets || "—"}`;
+    }
+    function renderAdaptTargets() {
+      const host = $("adapt-targets");
+      if (!host) return;
+      const opts = adaptPresetChoices().map((p) => `<option value="${p.id}">${p.label}</option>`).join("");
+      host.innerHTML = (state.adaptTargets || []).map((t, i) => `
+        <div style="margin:0.4rem 0;padding:0.4rem;border:1px solid var(--line)">
+          <label>Preset ${i + 1}</label>
+          <select data-adapt-preset="${i}">${opts}<option value="">Custom…</option></select>
+          <div class="muted" data-safe="${i}"></div>
+        </div>`).join("");
+      host.querySelectorAll("[data-adapt-preset]").forEach((sel) => {
+        const idx = Number(sel.dataset.adaptPreset);
+        const row = state.adaptTargets[idx] || {};
+        sel.value = row.preset_id || "";
+        sel.onchange = () => {
+          const val = sel.value;
+          state.adaptTargets[idx] = val ? { preset_id: val } : { width: 1080, height: 1080 };
+          saveState();
+          renderAdaptTargets();
+          renderAdaptGraphBox();
+        };
+        const preset = adaptPresetChoices().find((p) => p.id === (row.preset_id || sel.value));
+        const safe = host.querySelector(`[data-safe="${idx}"]`);
+        if (preset && safe) {
+          const adv = (preset.human_review_advisories || [])[0] || "";
+          safe.textContent = `${preset.width}×${preset.height}${adv ? " · " + adv : ""}`;
+        }
+      });
+    }
+    async function uploadAdaptSource(file) {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch("/assets", { method: "POST", body });
+      if (!res.ok) throw new Error(await res.text());
+      const asset = await res.json();
+      state.adaptSourceId = asset.id;
+      saveState();
+      await loadMedia();
+      log("Source uploaded · vinci://assets/" + asset.id);
+      renderAdaptGraphBox();
+    }
+    async function estimateAdapt() {
+      if (!state.adaptSourceId) { log("Upload a source creative first."); return; }
+      const body = await j("/adapt/estimate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          source_asset: state.adaptSourceId,
+          targets: state.adaptTargets,
+          layout: $("adapt-layout").value,
+        }),
+      });
+      state.adaptEstimateUsd = body.total;
+      state.adaptNote = body.note || "";
+      $("adapt-est-btn").textContent = money(body.total);
+      $("adapt-safe").textContent = body.note || state.adaptNote;
+      log("Estimate: " + money(body.total));
+    }
+    async function runAdapt() {
+      if (!state.adaptSourceId) { log("Upload a source creative first."); return; }
+      state.adaptLayout = $("adapt-layout").value;
+      state.adaptFit = $("adapt-fit").value;
+      await estimateAdapt();
+      const body = await j("/adapt/run", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          source_asset: state.adaptSourceId,
+          targets: state.adaptTargets,
+          layout: state.adaptLayout,
+          fit_mode: state.adaptFit,
+        }),
+      });
+      state.adaptOutputs = body.digests || [];
+      saveState();
+      await loadMedia();
+      log("Adapts complete: " + state.adaptOutputs.length + " outputs.");
+      renderAdaptGraphBox();
+      renderAdapts($("page"));
+    }
+    function renderAdapts(page) {
+      page.innerHTML = `<div class="lib-page" id="adapt-panel">
+        <p class="eyebrow">Image › Adapts</p>
+        <h2>One creative, many targets</h2>
+        <p class="muted">Canvas entry for export adapts. Fit/pad/crop is deterministic local ffmpeg ($0), not intelligent re-layout. AI extend is a separate OpenAI path when live spend is on.</p>
+        <p class="muted"><strong>Axis Max Life partner presets</strong> (client-partner spec sheet). Human-review advisories are guidance only — not automatic compliance.</p>
+        <label>Preset scope</label>
+        <select id="adapt-partner-scope">
+          <option value="axis_partner">Axis partner (Amazon · Inuxu · Jio · BPN)</option>
+          <option value="all">All presets (generic + partner)</option>
+        </select>
+        <label>Source creative</label>
+        <input id="adapt-source-file" type="file" accept="image/*" />
+        <div id="adapt-graph" class="log" style="min-height:4rem"></div>
+        <label>Layout mode</label>
+        <select id="adapt-layout">
+          <option value="fit_pad_crop">Fit / pad / crop (local ffmpeg, $0)</option>
+          <option value="ai_extend">AI extend / re-layout (OpenAI image edit)</option>
+        </select>
+        <label>Fit style (fit/pad/crop only)</label>
+        <select id="adapt-fit">
+          <option value="fit">Fit</option>
+          <option value="pad">Pad</option>
+          <option value="crop">Crop</option>
+        </select>
+        <label>Targets</label>
+        <div id="adapt-targets"></div>
+        <button class="ghost" id="adapt-add-target" type="button">+ Add target</button>
+        <p class="muted" id="adapt-safe">Safe-area overlay and export byte caps validate on run (partner presets).</p>
+        <button class="ghost" id="adapt-estimate" type="button">Estimate cost</button>
+        <button class="run" id="adapt-run" type="button"><span>Run Adapts</span><span id="adapt-est-btn">$—</span></button>
+        <button class="ghost" id="adapt-back-canvas" type="button">Back to Canvas</button>
+        <div id="adapt-outputs" class="lib"></div>
+      </div>`;
+      $("adapt-partner-scope").value = state.adaptPartnerOnly ? "axis_partner" : "all";
+      $("adapt-partner-scope").onchange = () => {
+        state.adaptPartnerOnly = $("adapt-partner-scope").value === "axis_partner";
+        saveState();
+        renderAdaptTargets();
+        renderAdaptGraphBox();
+      };
+      $("adapt-layout").value = state.adaptLayout || "fit_pad_crop";
+      $("adapt-fit").value = state.adaptFit || "pad";
+      $("adapt-source-file").onchange = (ev) => {
+        const file = ev.target.files && ev.target.files[0];
+        if (file) void uploadAdaptSource(file);
+      };
+      $("adapt-add-target").onclick = () => {
+        const first = adaptPresetChoices()[0];
+        state.adaptTargets = [...(state.adaptTargets || []), { preset_id: (first && first.id) || "instagram_feed" }];
+        saveState();
+        renderAdaptTargets();
+        renderAdaptGraphBox();
+      };
+      $("adapt-estimate").onclick = () => { void estimateAdapt(); };
+      $("adapt-run").onclick = () => { void runAdapt(); };
+      $("adapt-back-canvas").onclick = () => setPage("canvas");
+      renderAdaptTargets();
+      renderAdaptGraphBox();
+      if (state.adaptEstimateUsd != null) $("adapt-est-btn").textContent = money(state.adaptEstimateUsd);
+      if (state.adaptNote) $("adapt-safe").textContent = state.adaptNote;
+      const out = $("adapt-outputs");
+      out.innerHTML = (state.adaptOutputs || []).map((id, i) => `<div class="lib-card"><span class="muted">Adapt ${i + 1}</span><img alt="" src="/assets/${id}/file" /></div>`).join("");
+    }
+
+    function renderCanvas(page) {
+      page.innerHTML = `<div class="stage">
+        <main class="board" id="board">
+          <div id="canvas-empty" class="empty"><div class="box"><h2>Empty canvas.</h2><p>Open a template, or add image / video / upscale nodes. Camera, lens, and look sit on each shot.</p><button class="ghost" type="button" id="canvas-open-adapts">Image › Adapts (Axis partner presets)</button></div></div>
+          <svg class="wires" id="wires"></svg>
+          <div class="graph" id="graph"></div>
+          <div id="results" class="results"></div>
+          <div id="shots" class="shot-list hidden"></div>
+          <div id="timeline" class="shot-list hidden"></div>
+          <div class="canvas-tools">
+            <button class="ghost" type="button" id="canvas-adapts">Image › Adapts</button>
+            <button class="ghost" type="button" id="canvas-run-graph">Generate graph</button>
+            <button class="ghost" type="button" id="tl-play">Play timeline</button>
+          </div>
+          <div class="tl-bar hidden" id="tl-bar"><span class="muted" id="tl-status">Graph outputs in order</span></div>
+          <div class="tl-stage hidden" id="tl-stage"></div>
+          <aside id="drawer" class="drawer hidden"></aside>
+          <div class="zoom"><button id="zoom-out" type="button">−</button><button id="zoom-in" type="button">+</button></div>
+        </main>
+      </div>`;
+      $("zoom-in").onclick = () => { state.zoom = Math.min(1.6, state.zoom + 0.1); refreshBoard(); };
+      $("zoom-out").onclick = () => { state.zoom = Math.max(0.6, state.zoom - 0.1); refreshBoard(); };
+      $("canvas-run-graph").onclick = () => { void generate(null, { graph: true }); };
+      $("tl-play").onclick = () => { void playTimeline(); };
+      $("canvas-adapts").onclick = () => setPage("adapts");
+      const openAdapts = $("canvas-open-adapts");
+      if (openAdapts) openAdapts.onclick = () => setPage("adapts");
+      refreshBoard();
+    }
+
+    function renderLibrary(page) {
+      const tab = state.libTab || "all";
+      const shots = projectDigests();
+      const cast = state.cast || [];
+      const showEl = tab !== "shots";
+      const showShots = tab !== "elements";
+      const tabs = ["all", "elements", "shots"].map((t) => `<button type="button" data-lib="${t}" class="${tab === t ? "on" : ""}">${t}</button>`).join("");
+      const elCards = cast.map((c) => `<button type="button" class="connector-mark on" data-cast="${c.name}"><img class="face" alt="" src="/assets/${c.assetId}/file" style="object-fit:cover" /><small>${c.name}</small></button>`).join("");
+      const shotCards = shots.map((id) => {
+        const a = assetById(id) || { id, mime: "", kind: "asset" };
+        const preview = (a.mime || "").startsWith("image/")
+          ? `<img src="/assets/${a.id}/file" alt="" />`
+          : (a.mime || "").startsWith("video/")
+            ? `<video src="/assets/${a.id}/file"></video>`
+            : "";
+        const label = (a.kind || (a.mime || "").split("/")[0] || "asset");
+        return `<button class="lib-card" type="button" data-uri="vinci://assets/${id}">${preview}<span>${label}</span></button>`;
+      }).join("");
+      page.innerHTML = `<div class="lib-page">
+        <h2>Library</h2>
+        <p class="muted">Shots from this project and local Elements. Not a scraped community feed.</p>
+        <div class="lib-tabs cats">${tabs}</div>
+        ${showEl ? `<p class="eyebrow">Elements</p>${cast.length ? `<div class="connect-grid" id="element-kind-pills">${elCards}</div>` : `<p class="muted">No characters, locations, or props yet. Add them from Image or Canvas.</p>`}` : ""}
+        ${showShots ? `<p class="eyebrow">Shots</p>${shots.length ? `<div class="lib" id="lib">${shotCards}</div>` : `<p class="muted">Nothing in the library yet.</p>`}` : ""}
+      </div>`;
+      page.querySelectorAll("[data-lib]").forEach((b) => {
+        b.onclick = () => { state.libTab = b.dataset.lib; renderLibrary(page); };
+      });
+      page.querySelectorAll("[data-cast]").forEach((b) => {
+        b.onclick = () => {
+          const row = (state.cast || []).find((c) => c.name === b.dataset.cast);
+          if (row) state.firstFrameId = row.assetId;
+        };
+      });
+    }
+
+    function lastStillId() {
+      const ids = [...projectDigests()].reverse();
+      for (const id of ids) {
+        const a = assetById(id);
+        if (a && (a.mime || "").startsWith("image/")) return id;
+      }
+      const img = assets.find((a) => (a.mime || "").startsWith("image/"));
+      return img ? img.id : null;
+    }
+
+    function renderAgent(page) {
+      const steps = (state.plan || []).map((step, i) => `<p>${i + 1}. ${step.title} — ${step.skill}${step.note ? " · " + step.note : ""}</p>`).join("");
+      page.innerHTML = `<div class="lib-page">
+        <h2>Supercomputer</h2>
+        <p class="muted">A brief in. A plan out. Each step is a template you already own — no extra GPU farm.</p>
+        <label for="agent-brief">Brief</label>
+        <textarea id="agent-brief" placeholder="Luxury watch on marble, dusk, 8K still then a slow orbit.">${state.brief || ""}</textarea>
+        <div class="file-row" style="margin-top:12px">
+          <button class="run" type="button" id="agent-plan">Plan</button>
+          <button class="ghost" type="button" id="agent-run" ${state.plan && state.plan.length ? "" : "disabled"}>Run plan</button>
+        </div>
+        ${steps ? `<div class="agent-log">${steps}</div>` : `<p class="muted">Describe the job. Vinci maps it onto Explore templates.</p>`}
+        <p class="muted" id="surface-log"></p>
+      </div>`;
+      $("agent-brief").oninput = () => { state.brief = $("agent-brief").value; };
+      $("agent-plan").onclick = async () => {
+        state.brief = $("agent-brief").value;
+        const body = await j("/agent/plan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ brief: state.brief }) });
+        state.plan = body.steps || [];
+        log(state.plan.length ? "Plan ready." : "No matching templates.");
+        renderAgent(page);
+      };
+      $("agent-run").onclick = async () => {
+        for (const step of state.plan || []) {
+          await j("/runs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ skill: step.skill, inputs: shotInputs({ prompt: state.brief || step.blurb || step.title }), preference: ( $("pref") && $("pref").value) || doctor.preference, max_cost: 0 }) });
+        }
+        await loadMedia();
+        log("Plan complete.");
+        const status = $("surface-log");
+        if (status) status.textContent = "Plan complete.";
+      };
+    }
+
+    function renderSpace(page) {
+      const still = lastStillId();
+      page.innerHTML = `<div class="lib-page">
+        <h2>3D</h2>
+        <p class="muted">Orbit the last still. Generate a turntable plate when you want a new angle.</p>
+        <div class="stage-3d"><div class="card3d" id="card3d" style="transform:rotateY(${state.yaw || 18}deg)">${still ? `<img src="/assets/${still}/file" alt="3D still" />` : `<span class="muted">Generate a still first.</span>`}</div></div>
+        <div class="file-row">
+          <button class="ghost" type="button" id="yaw-left">Orbit left</button>
+          <button class="ghost" type="button" id="yaw-right">Orbit right</button>
+          <button class="run" type="button" id="gen-3d">Generate 3D plate</button>
+        </div>
+      </div>`;
+      const spin = (delta) => {
+        state.yaw = (state.yaw || 18) + delta;
+        const el = $("card3d");
+        if (el) el.style.transform = "rotateY(" + state.yaw + "deg)";
+      };
+      $("yaw-left").onclick = () => spin(-25);
+      $("yaw-right").onclick = () => spin(25);
+      $("gen-3d").onclick = async () => {
+        const text = (($("prompt") && $("prompt").value.trim()) || state.brief || "north-light oak cube") + ", 3D turntable plate";
+        await j("/runs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ skill: "@tryvinci/image-generate", inputs: shotInputs({ prompt: text }), preference: doctor.preference, max_cost: 0 }) });
+        await loadMedia();
+        log("3D plate landed.");
+        renderSpace(page);
+      };
+    }
+
+    async function renderCollab(page) {
+      let sessions = [];
+      try {
+        sessions = (await j("/collab/sessions")).sessions || [];
+      } catch (err) { log(String(err.message || err)); }
+      const cards = sessions.map((s) => `<article class="collab-card"><strong>${s.name}</strong><p class="muted">${s.id}</p><div class="file-row"><button class="ghost" type="button" data-open="${s.id}">Open</button><button class="ghost" type="button" data-push="${s.id}">Push</button></div></article>`).join("");
+      page.innerHTML = `<div class="lib-page">
+        <h2>Collab</h2>
+        <p class="muted">Share a session on this machine. Snapshot the graph, prompt, and cast.</p>
+        <div class="file-row">
+          <input id="collab-name" value="${state.collabName || "Session"}" placeholder="Session name" style="flex:1;min-width:160px" />
+          <button class="run" type="button" id="collab-new">New session</button>
+        </div>
+        ${state.collabId ? `<p class="muted">Open: ${state.collabId}</p>` : ""}
+        <div class="lib" style="margin-top:16px">${cards}</div>
+        ${sessions.length ? "" : `<p class="muted">No sessions yet. Create one to share this Studio graph.</p>`}
+      </div>`;
+      $("collab-name").oninput = () => { state.collabName = $("collab-name").value; };
+      $("collab-new").onclick = async () => {
+        const created = await j("/collab/sessions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: state.collabName || "Session" }) });
+        state.collabId = created.id;
+        await pushCollab(created.id);
+        await renderCollab(page);
+      };
+      page.querySelectorAll("[data-open]").forEach((btn) => {
+        btn.onclick = async () => {
+          const body = await j("/collab/sessions/" + btn.dataset.open);
+          state.collabId = body.id;
+          if (body.name) state.collabName = body.name;
+          const snap = body.snapshot || {};
+          if (snap.prompt && $("prompt")) $("prompt").value = snap.prompt;
+          if (snap.graph) state.graph = snap.graph;
+          if (snap.cast) state.cast = snap.cast;
+          log("Opened collab " + body.id);
+        };
+      });
+      page.querySelectorAll("[data-push]").forEach((btn) => {
+        btn.onclick = async () => { await pushCollab(btn.dataset.push); await renderCollab(page); };
+      });
+    }
+
+    async function pushCollab(sid) {
+      await j("/collab/sessions/" + sid, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: state.collabName || "Session",
+          snapshot: { prompt: ($("prompt") && $("prompt").value) || "", graph: state.graph, cast: state.cast || [], page: state.page },
+        }),
+      });
+      state.collabId = sid;
+      log("Pushed graph to " + sid);
+    }
+
+    function renderKeys(page) {
+      const rows = doctor.providers || {};
+      const mcpExtra = Object.keys(rows).filter((cid) => cid.startsWith("mcp_"));
+      const connected = CONNECTOR_ORDER.concat(mcpExtra).filter((cid, i, arr) => arr.indexOf(cid) === i && (cid === "mock" || (rows[cid] && (rows[cid].available || rows[cid].configured))));
+      const disconnected = KEY_ORDER.concat(mcpExtra).filter((cid) => rows[cid] && !connected.includes(cid));
+      const id = state.connectId || "";
+      const picked = id && id !== "mock" && id !== "mcp_new" ? rows[id] : null;
+      const mcpPicked = id === "mcp" || id.startsWith("mcp_");
+      const pickedStatus = !picked ? "" : picked.available ? "ready" : picked.configured ? "key stored, spend off" : "no key";
+      const markBtn = (cid, on) => {
+        const row = rows[cid];
+        const label = cid === "mock" ? "Local" : (row && row.display_name) || cid;
+        const pick = state.connectId === cid ? " pick" : "";
+        const cls = "connector-mark " + (on ? "on" : "off") + pick;
+        return `<button type="button" class="${cls}" data-connector="${cid}"><span class="face">${connectorFace(cid)}</span><small>${label}</small></button>`;
+      };
+      const httpIds = KEY_ORDER.filter((cid) => cid !== "mcp" && rows[cid]);
+      let sheet = "";
+      if (id === "mock") {
+        sheet = `<div class="connect-sheet" id="connect-sheet">
+          <span class="kind">Local</span>
+          <strong>Local</strong>
+          <p class="muted">Local provider. No key required.</p>
+          <button class="ghost" id="enable-mock" type="button">Use local models</button>
+        </div>`;
+      } else if (id === "mcp_new") {
+        sheet = `<div class="connect-sheet" id="connect-sheet">
+          <span class="kind">Custom MCP</span>
+          <strong>Named MCP</strong>
+          <p class="muted">Extra MCP servers sit beside Custom MCP. Pick a slug, URL, and optional OAuth authorize URL.</p>
+          <label>Label</label><input id="label-mcp_new" type="text" placeholder="ComfyUI" />
+          <label>Id slug</label><input id="slug-mcp_new" type="text" placeholder="comfy" />
+          <label>MCP URL</label><input id="url-mcp_new" type="text" placeholder="http://127.0.0.1:8765/mcp" />
+          <label>Authorize URL (optional)</label><input id="authurl-mcp_new" type="text" placeholder="https://…/oauth/authorize" />
+          <label>Bearer token (optional)</label><input id="key-mcp_new" type="password" autocomplete="off" />
+          <button class="run" type="button" id="add-named-mcp">Add MCP</button>
+        </div>`;
+      } else if (picked) {
+        const extraNames = picked.extra_secret_names || [];
+        const extra = extraNames.map((name) => `<label>Paste ${name}</label><input id="extra-${id}" type="password" autocomplete="off" placeholder="${name}" />`).join("");
+        const mcpFields = mcpPicked ? `<label>MCP URL</label><input id="url-${id}" type="text" placeholder="http://127.0.0.1:8765/mcp" value="${picked.url || ""}" /><label>Authorize URL (optional)</label><input id="authurl-${id}" type="text" placeholder="https://…/oauth/authorize" value="${picked.authorize_url || ""}" />` : "";
+        const acct = id === "cloudflare" ? `<label>Account id</label><input id="acct-${id}" type="text" placeholder="CLOUDFLARE_ACCOUNT_ID" />` : "";
+        sheet = `<div class="connect-sheet" id="connect-sheet">
+          <span class="kind">${picked.kind === "mcp" ? "Custom MCP" : "HTTP plugin"}</span>
+          <strong>${picked.display_name || id}</strong>
+          <div class="muted">${picked.secret_name} · ${pickedStatus}</div>
+          <p class="muted"><a href="${picked.docs || "#"}" target="_blank" rel="noreferrer">docs</a></p>
+          ${mcpFields}
+          <label>${mcpPicked ? "Optional key" : "Paste key"}</label>
+          <input id="key-${id}" type="password" autocomplete="off" placeholder="${picked.secret_name}" />
+          <label>Or env var name</label>
+          <input id="env-${id}" type="text" placeholder="${picked.secret_name}" />
+          ${acct}
+          ${extra}
+          <div class="file-row">
+            <button class="ghost" type="button" data-oauth="${id}">Start OAuth</button>
+            <button class="run" data-save="${id}" type="button">Save ${picked.display_name || id}</button>
+          </div>
+        </div>`;
+      } else {
+        sheet = `<div class="connect-sheet idle" id="connect-sheet">
+          <strong>New connector</strong>
+          <p class="muted">Pick a mark or choose from the list. HTTP plugins take a key. Custom MCP takes a URL.</p>
+        </div>`;
+      }
+      const mcpOpts = mcpExtra.map((cid) => `<option value="${cid}" ${id === cid ? "selected" : ""}>${(rows[cid] && rows[cid].display_name) || cid}</option>`).join("");
+      page.innerHTML = `<div class="keys connect">
+        <p class="eyebrow">Vinci</p>
+        <h2>Connect</h2>
+        <p class="muted lede">Bring your own keys. Higgsfield and Magnific / Freepik are first-class HTTP plugins. Custom MCP is extra. Keys stay on this machine in <code>~/.vinci/keys</code>.</p>
+        <p class="eyebrow">Connected</p>
+        <div class="connect-grid" id="connected-grid">${connected.map((cid) => markBtn(cid, true)).join("")}<button type="button" class="connector-mark add" id="new-connector"><span class="face">+</span><small>New connector</small></button></div>
+        ${disconnected.length ? `<p class="eyebrow">Not connected</p><div class="connect-grid" id="disconnected-grid">${disconnected.map((cid) => markBtn(cid, false)).join("")}</div>` : ""}
+        <div class="connect-add">
+          <label for="connect-select">New connector</label>
+          <select id="connect-select">
+            <option value="">New connector</option>
+            <optgroup label="HTTP plugins">${httpIds.map((cid) => `<option value="${cid}" ${id === cid ? "selected" : ""}>${rows[cid].display_name || cid}</option>`).join("")}</optgroup>
+            <optgroup label="MCP">${mcpOpts}${rows.mcp ? `<option value="mcp" ${id === "mcp" ? "selected" : ""}>Custom MCP</option>` : ""}<option value="mcp_new" ${id === "mcp_new" ? "selected" : ""}>Named MCP</option></optgroup>
+          </select>
+        </div>
+        ${sheet}
+        <div class="connect-routing">
+          <p class="eyebrow">Routing</p>
+          <label>Preference</label>
+          <select id="pref"><option value="cheapest">cheapest</option><option value="fastest">fastest</option><option value="quality">quality</option></select>
+          <label>Max cost per run (USD)</label>
+          <input id="max-cost" type="text" placeholder="none" />
+          <label>Monthly cap USD</label>
+          <input id="monthly-cap" type="text" placeholder="none" />
+          <button class="ghost" id="save-settings" type="button">Save routing</button>
+        </div>
+      </div>`;
+      if (doctor.preference) $("pref").value = doctor.preference;
+      $("max-cost").value = state.maxCost || "";
+      if (doctor.budget && doctor.budget.monthly_cap_usd != null) $("monthly-cap").value = doctor.budget.monthly_cap_usd;
+      const sel = $("connect-select");
+      if (sel) sel.value = id;
+      page.querySelectorAll("[data-connector]").forEach((btn) => {
+        btn.onclick = () => { state.connectId = btn.dataset.connector; renderKeys(page); };
+      });
+      if (sel) sel.onchange = () => { state.connectId = sel.value; renderKeys(page); };
+      const add = $("new-connector");
+      if (add) add.onclick = () => { state.connectId = ""; renderKeys(page); openConnectorPicker(); };
+      page.querySelectorAll("[data-save]").forEach((btn) => { btn.onclick = () => saveProvider(btn.dataset.save); });
+      page.querySelectorAll("[data-oauth]").forEach((btn) => { btn.onclick = () => oauthStart(btn.dataset.oauth); });
+      const named = $("add-named-mcp");
+      if (named) named.onclick = () => addNamedMcp();
+      $("save-settings").onclick = saveSettings;
+      const mockBtn = $("enable-mock");
+      if (mockBtn) mockBtn.onclick = async () => {
+        await j("/init", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ demo: true }) });
+        await boot(false);
+        log("Local models are on.");
+      };
+    }
+
+    function renderSkills(page) {
+      page.innerHTML = `<div class="explore"><h2>Skills</h2><div id="skill-list"></div></div>`;
+      $("skill-list").innerHTML = skills.map((s) => `<div class="hit" data-skill="${s.id}"><strong>${s.id}</strong><div class="muted">${(s.tags || []).join(" · ")}</div></div>`).join("");
+      page.querySelectorAll("[data-skill]").forEach((el) => {
+        el.onclick = () => {
+          const skill = skillById(el.dataset.skill);
+          if (skill) openSkill(skill);
+        };
+      });
+    }
+
+    function renderFind(page) {
+      page.innerHTML = `<div class="keys"><h2>Find</h2><label>Query</label><input id="q" type="text" value="pricing" /><button class="run" id="go-find" type="button">Search index</button><div id="hits"></div></div>`;
+      $("go-find").onclick = async () => {
+        const body = await j("/find?q=" + encodeURIComponent($("q").value));
+        const hits = body.hits || [];
+        $("hits").innerHTML = hits.length
+          ? hits.map((h) => `<div class="hit"><div>${h.uri || ("vinci://assets/" + h.asset_id)}</div><div class="muted">${(h.transcript || "").slice(0, 160)}</div></div>`).join("")
+          : "<p class='muted'>No hits.</p>";
+      };
+    }
+
+    function renderCost(page) {
+      page.innerHTML = `<div class="keys"><h2>Cost report</h2><p class="muted">USD by provider.</p><pre class="log" id="cost-body">loading…</pre></div>`;
+      j("/cost/report").then((body) => { $("cost-body").textContent = JSON.stringify(body.totals || {}, null, 2); })
+        .catch((err) => { $("cost-body").textContent = String(err.message || err); });
+    }
+
+    function openTemplate(t) {
+      const skill = skillById(t.skill);
+      const defaults = t.defaults || {};
+      const existing = $("prompt").value.trim();
+      const placeholder = ($("prompt").placeholder || "").trim();
+      const seeded = !existing || existing === placeholder || existing.startsWith("north-light oak cube");
+      const prompt = seeded
+        ? (defaults.prompt || existing || "north-light oak cube tumbling")
+        : existing;
+      newProject(t.title, prompt);
+      $("prompt").value = prompt;
+      if (defaults.camera) state.camera = defaults.camera;
+      if (defaults.lens) state.lens = defaults.lens;
+      if (defaults.look) state.look = defaults.look;
+      if (defaults.lighting) state.lighting = defaults.lighting;
+      if (defaults.palette) state.palette = defaults.palette;
+      if (defaults.aperture) state.aperture = defaults.aperture;
+      if (defaults.genre) state.genre = defaults.genre;
+      if (defaults.scene) state.scene = defaults.scene;
+      if (defaults.motion) state.motion = defaults.motion;
+      if (defaults.aspect_ratio) state.aspectRatio = defaults.aspect_ratio;
+      if (defaults.duration != null) state.duration = String(defaults.duration);
+      if (defaults.resolution) state.resolution = defaults.resolution;
+      if (skill) {
+        state.skillRef = skill.id;
+        state.graph = graphFromSkill(skill);
+        state.graphEdited = false;
+        persistGraph();
+      }
+      setPage(t.page || "canvas");
+      $("insp-title").textContent = t.title;
+      $("agent-lede").textContent = t.blurb;
+    }
+    function openSkill(skill) {
+      newProject(skill.id.replace("@tryvinci/", ""), $("prompt").value.trim());
+      state.skillRef = skill.id;
+      state.graph = graphFromSkill(skill);
+      state.graphEdited = false;
+      persistGraph();
+      setPage("canvas");
+    }
+
+    function newProject(name, prompt) {
+      const project = { id: crypto.randomUUID(), name: name || "Untitled canvas", createdAt: new Date().toISOString(), runIds: [], coverId: null, graph: { nodes: [], edges: [] } };
+      state.projects.push(project);
+      state.currentId = project.id;
+      state.graph = project.graph;
+      state.skillRef = null;
+      state.graphEdited = false;
+      saveState();
+      if (prompt) $("prompt").value = prompt;
+    }
+
+    function projectRuns() {
+      const ids = new Set(current()?.runIds || []);
+      return runs.filter((r) => ids.has(r.id));
+    }
+    function assetById(id) { return assets.find((a) => a.id === id); }
+    function latestRun() { return projectRuns().at(-1) || null; }
+    function nodeRecord(id) {
+      const run = latestRun();
+      return (run && run.nodes && run.nodes[id]) || null;
+    }
+    function nodeDigest(id) {
+      const mapped = nodeRecord(id);
+      if (mapped && mapped.output) return mapped.output;
+      if (mapped && mapped.outputs && mapped.outputs[0]) return mapped.outputs[0];
+      return null;
+    }
+    function projectDigests() {
+      const seen = new Set();
+      const ids = [];
+      for (const run of projectRuns()) {
+        const nodes = run.nodes || {};
+        for (const row of Object.values(nodes)) {
+          for (const digest of (row && row.outputs) || (row && row.output ? [row.output] : [])) {
+            if (digest && !seen.has(digest)) { seen.add(digest); ids.push(digest); }
+          }
+        }
+        for (const digest of run.outputs || []) {
+          if (digest && !seen.has(digest)) { seen.add(digest); ids.push(digest); }
+        }
+      }
+      return ids;
+    }
+    function mediaMarkup(digest, cap, controls) {
+      if (!digest) return "";
+      const asset = assetById(digest);
+      const mime = asset?.mime || "";
+      const still = mime.startsWith("image/") || (!mime && (cap === "t2i" || cap === "i2i" || cap === "upscale"));
+      const motion = mime.startsWith("video/") || (!mime && (cap === "t2v" || cap === "i2v"));
+      if (still) return `<img alt="" src="/assets/${digest}/file" />`;
+      if (motion) return `<video src="/assets/${digest}/file" ${controls ? "controls" : "muted"}></video>`;
+      if (mime.startsWith("image/")) return `<img alt="" src="/assets/${digest}/file" />`;
+      if (mime.startsWith("video/")) return `<video src="/assets/${digest}/file" ${controls ? "controls" : "muted"}></video>`;
+      return "";
+    }
+
+    function fillNodeModel(sel, node) {
+      if (!sel || !node) return;
+      const cap = node.capability || "t2i";
+      const rows = models.filter((m) => (m.capabilities || []).includes(cap));
+      const list = rows.length ? rows : models;
+      sel.innerHTML = `<option value="">inherit skill default</option>` + list.map((m) => {
+        return `<option value="${m.id}">${m.display_name} · ${m.provider === "mock" ? "Local" : m.provider}</option>`;
+      }).join("");
+      sel.value = node.model_id || "";
+    }
+    function fillDrawer() {
+      const drawer = $("drawer");
+      if (!drawer) return;
+      const id = state.selectedNode;
+      const node = (state.graph.nodes || []).find((n) => n.id === id);
+      if (!id || !node) { drawer.classList.add("hidden"); return; }
+      const mapped = nodeRecord(id);
+      const digest = nodeDigest(id);
+      const cap = node.capability || node.type;
+      const media = mediaMarkup(digest, cap, true);
+      drawer.classList.remove("hidden");
+      drawer.innerHTML = `<h3>${node.id}</h3>
+        <p class="muted">${cap}${mapped && mapped.job_id ? " · " + mapped.job_id.slice(0, 8) : ""}</p>
+        <p class="muted">${opticalLabel(node) || "Set camera, lens, and look in the stack."}</p>
+        ${media ? `<div class="frame">${media}</div>` : `<p class="muted">No output on this node yet.</p>`}
+        <p class="muted" style="margin:10px 0 0">${digest ? "vinci://assets/" + digest : "Generate this node or the full graph."}</p>
+        <label for="node-model" style="margin-top:10px">Node model</label>
+        <select id="node-model"></select>
+        <div class="file-row" style="margin-top:10px">
+          <button class="run" type="button" id="node-generate">Generate this node</button>
+          <button class="ghost" type="button" id="close-drawer">Close</button>
+        </div>`;
+      fillNodeModel($("node-model"), node);
+      $("node-model").onchange = () => {
+        node.model_id = $("node-model").value || undefined;
+        state.graphEdited = true;
+        persistGraph();
+      };
+      $("node-generate").onclick = () => { void generate(null, { nodeId: id }); };
+      $("close-drawer").onclick = () => {
+        state.selectedNode = null;
+        drawer.classList.add("hidden");
+        document.querySelectorAll(".node").forEach((el) => el.classList.remove("on"));
+      };
+    }
+
+    function inspectNode(id) {
+      state.selectedNode = id;
+      const node = (state.graph.nodes || []).find((n) => n.id === id);
+      if (node && node.params) {
+        const camera = opticalValue(node.params.camera, "");
+        const lens = opticalValue(node.params.lens, "");
+        const look = opticalValue(node.params.look, "");
+        const motion = opticalValue(node.params.motion, "");
+        if (camera) state.camera = camera;
+        if (lens) state.lens = lens;
+        if (look) state.look = look;
+        if (motion) state.motion = motion;
+        if (node.params.aspect_ratio && !String(node.params.aspect_ratio).includes("{{")) {
+          state.aspectRatio = node.params.aspect_ratio;
+        }
+        if (node.params.duration != null && !String(node.params.duration).includes("{{")) {
+          state.duration = String(node.params.duration);
+        }
+        fillShotControls();
+      }
+      document.querySelectorAll(".node").forEach((el) => el.classList.toggle("on", el.dataset.id === id));
+      fillDrawer();
+    }
+
+    function refreshBoard() {
+      const emptyEl = $("canvas-empty");
+      const graphEl = $("graph");
+      const wires = $("wires");
+      if (!graphEl) return;
+      const nodes = state.graph.nodes || [];
+      const empty = nodes.length === 0 && projectRuns().length === 0 && !pending;
+      if (emptyEl) emptyEl.classList.toggle("hidden", !empty || state.view === "timeline");
+      graphEl.classList.toggle("hidden", state.view !== "canvas");
+      if (wires) wires.classList.toggle("hidden", state.view !== "canvas");
+      $("shots")?.classList.toggle("hidden", state.view !== "timeline");
+      $("timeline")?.classList.toggle("hidden", state.view !== "timeline");
+      $("tl-stage")?.classList.toggle("hidden", state.view !== "timeline");
+      $("tl-bar")?.classList.toggle("hidden", state.view !== "timeline");
+      graphEl.style.zoom = state.zoom;
+      graphEl.innerHTML = nodes.map((n) => {
+        const cap = n.capability || n.type;
+        const digest = nodeDigest(n.id);
+        const media = mediaMarkup(digest, cap);
+        const stack = opticalLabel(n);
+        const on = state.selectedNode === n.id ? " on" : "";
+        const thumb = media
+          ? `<div class="thumb">${media}</div>`
+          : `<div class="thumb empty"></div>`;
+        return `<div class="node${on}" data-id="${n.id}" style="left:${n.x || 40}px;top:${n.y || 40}px"><div class="port in" data-port="in" data-id="${n.id}"></div><div class="port out" data-port="out" data-id="${n.id}"></div>${thumb}<div class="meta"><div class="k">${cap}${stack ? " · " + stack : ""}</div><strong>${n.id}</strong></div></div>`;
+      }).join("");
+      if (wires) {
+        const lines = (state.graph.edges || []).map((e) => {
+          const a = nodes.find((n) => n.id === e.src);
+          const b = nodes.find((n) => n.id === e.dst);
+          if (!a || !b) return "";
+          const x1 = (a.x || 0) + 196, y1 = (a.y || 0) + 44;
+          const x2 = (b.x || 0), y2 = (b.y || 0) + 44;
+          return `<path d="M${x1} ${y1} C${x1 + 40} ${y1}, ${x2 - 40} ${y2}, ${x2} ${y2}" fill="none" stroke="#3f3f46" stroke-width="1.4"/>`;
+        }).join("");
+        wires.innerHTML = lines;
+      }
+      graphEl.querySelectorAll(".node").forEach((el) => {
+        el.onpointerdown = (ev) => {
+          if (ev.button !== 0) return;
+          if (ev.target && ev.target.closest && ev.target.closest(".port")) return;
+          drag = { id: el.dataset.id, dx: ev.clientX - el.offsetLeft, dy: ev.clientY - el.offsetTop, x: ev.clientX, y: ev.clientY, moved: false };
+        };
+      });
+      graphEl.querySelectorAll(".port").forEach((el) => {
+        el.onpointerdown = (ev) => {
+          ev.stopPropagation();
+          const id = el.dataset.id;
+          const dir = el.dataset.port;
+          if (dir === "out") { linkFrom = id; log("Click an input port to connect."); return; }
+          if (!linkFrom || linkFrom === id) return;
+          const edges = state.graph.edges || [];
+          if (!edges.some((e) => e.src === linkFrom && e.dst === id)) {
+            edges.push({ src: linkFrom, dst: id, input_key: "media" });
+            state.graph.edges = edges;
+            state.graphEdited = true;
+            persistGraph();
+          }
+          linkFrom = null;
+          refreshBoard();
+        };
+      });
+      const mine = projectRuns();
+      const pendingCard = pending ? `<div class="shot pending"><span class="muted">Generating…</span></div>` : "";
+      const nodeShots = (state.graph.nodes || []).map((n) => {
+        const digest = nodeDigest(n.id);
+        if (!digest && !pending) return "";
+        const cap = n.capability || n.id;
+        const media = mediaMarkup(digest, cap);
+        return `<button class="shot" data-node="${n.id}" type="button"><span class="muted">${n.id}</span><span class="frame">${media}</span></button>`;
+      }).join("");
+      const older = mine.slice(0, -1).map((run, i) => {
+        const digest = (run.outputs || [])[0];
+        const media = mediaMarkup(digest, "");
+        return `<button class="shot" data-run="${run.id}" type="button"><span class="muted">Shot ${i + 1}</span><span class="frame">${media}</span></button>`;
+      }).join("");
+      const html = (nodeShots || mine.map((run, i) => {
+        const digest = (run.outputs || [])[0];
+        const media = mediaMarkup(digest, "");
+        return `<button class="shot" data-run="${run.id}" type="button"><span class="muted">Shot ${i + 1}</span><span class="frame">${media}</span></button>`;
+      }).join("")) + pendingCard;
+      const strip = (nodeShots + older + pendingCard) || html;
+      if ($("shots")) $("shots").innerHTML = strip;
+      if ($("timeline")) $("timeline").innerHTML = strip;
+      if ($("results")) {
+        $("results").innerHTML = html;
+        $("results").classList.toggle("hidden", state.view !== "canvas");
+      }
+      document.querySelectorAll("[data-node]").forEach((btn) => {
+        btn.onclick = () => inspectNode(btn.dataset.node);
+      });
+      const spent = mine.reduce((sum, r) => sum + Number(r.estimate?.total || 0), 0);
+      $("spent").textContent = "≈ " + money(spent);
+      if (state.selectedNode) fillDrawer();
+      else $("drawer")?.classList.add("hidden");
+    }
+
+    function addNode(capability) {
+      if (!current()) newProject("Untitled canvas");
+      const id = capability + "-" + Math.random().toString(16).slice(2, 6);
+      const n = { id, type: "generate", capability, params: { prompt: "{{inputs.prompt}}", aspect_ratio: "{{inputs.aspect_ratio}}", camera: state.camera || "{{inputs.camera}}", lens: state.lens || "{{inputs.lens}}", look: state.look || "{{inputs.look}}", lighting: state.lighting || "{{inputs.lighting}}", palette: state.palette || "{{inputs.palette}}", aperture: state.aperture || "{{inputs.aperture}}", genre: state.genre || "{{inputs.genre}}" }, x: 60 + (state.graph.nodes.length % 3) * 210, y: 80 };
+      if (capability === "i2i" || capability === "i2v") n.params.media = "{{inputs.media}}";
+      if (capability === "t2v" || capability === "i2v") {
+        n.params.duration = "{{inputs.duration}}";
+        n.params.motion = state.motion || "{{inputs.motion}}";
+      }
+      if (capability === "i2v") n.params.image = "{{inputs.image}}";
+      const prev = state.graph.nodes.at(-1);
+      state.graph.nodes.push(n);
+      if (prev) state.graph.edges.push({ src: prev.id, dst: id, input_key: capability === "i2v" ? "image" : "media" });
+      state.graphEdited = true;
+      state.skillRef = null;
+      persistGraph();
+      setPage("canvas");
+    }
+    function addShot() {
+      const shots = (state.graph.nodes || []).filter((n) => n.capability === "t2i").length;
+      if (shots >= 6) { log("Cinema sequences stay at 6 shots."); return; }
+      addNode("t2i");
+    }
+
+    function composeModels() {
+      const list = models.filter((m, i, arr) => {
+        const caps = m.capabilities || [];
+        let useful = caps.includes("t2i") || caps.includes("t2v") || caps.includes("i2i") || caps.includes("i2v") || caps.includes("upscale") || caps.includes("tts");
+        if (state.page === "image") useful = caps.includes("t2i");
+        else if (state.page === "video") useful = caps.includes("t2v") || caps.includes("i2v");
+        else if (state.page === "upscale") useful = caps.includes("upscale") || caps.includes("i2i");
+        else if (state.page === "speak") useful = caps.includes("tts") || caps.includes("lipsync") || caps.includes("i2v") || caps.includes("t2i");
+        return useful && arr.findIndex((x) => x.id === m.id) === i;
+      });
+      const fallback = models.filter((m, i, arr) => {
+        const caps = m.capabilities || [];
+        const useful = caps.includes("t2i") || caps.includes("t2v") || caps.includes("i2i") || caps.includes("i2v") || caps.includes("upscale") || caps.includes("tts");
+        return useful && arr.findIndex((x) => x.id === m.id) === i;
+      });
+      return (list.length ? list : fallback).slice().sort((a, b) => {
+        if (a.provider === "mock" && b.provider !== "mock") return -1;
+        if (b.provider === "mock" && a.provider !== "mock") return 1;
+        return (a.provider || "").localeCompare(b.provider || "") || (a.display_name || "").localeCompare(b.display_name || "");
+      });
+    }
+
+    function fillModels() {
+      const select = $("model");
+      if (!select) return;
+      const prev = select.value;
+      const rows = composeModels();
+      const preferred = rows.find((m) => m.provider === "mock" && (m.capabilities || []).includes("t2i"))
+        || rows.find((m) => m.provider === "mock")
+        || rows.find((m) => usable(m))
+        || rows[0];
+      select.innerHTML = rows.map((m) => {
+        const mark = usable(m) || m.provider === "mock" ? "" : " (needs key)";
+        return `<option value="${m.id}">${m.display_name} · ${m.provider === "mock" ? "Local" : m.provider} · ${money(m.pricing?.amount)}${mark}</option>`;
+      }).join("");
+      if (rows.some((m) => m.id === prev)) select.value = prev;
+      else if (preferred) select.value = preferred.id;
+      const gallery = $("compose-gallery");
+      if (gallery) {
+        gallery.innerHTML = rows.map((m) => {
+          const on = m.id === select.value ? " on" : "";
+          const mark = usable(m) || m.provider === "mock" ? money(m.pricing?.amount) : "needs key";
+          const caps = (m.capabilities || []).slice(0, 3).join(" · ");
+          const who = m.provider === "magnific" ? "Magnific / Freepik" : m.provider === "mock" ? "Local" : m.provider;
+          return `<button class="model-card${on}" data-id="${m.id}" type="button"><span class="who">${who}</span><strong>${m.display_name}</strong><span class="meta">${mark} · ${caps}</span></button>`;
+        }).join("");
+        gallery.querySelectorAll("[data-id]").forEach((btn) => {
+          btn.onclick = () => {
+            select.value = btn.dataset.id;
+            fillModels();
+          };
+        });
+      }
+      fillShotControls();
+      updateCost();
+    }
+
+    function skillFor(model) {
+      if (state.page === "upscale") return "@tryvinci/image-upscale";
+      if (state.page === "speak") return "@tryvinci/still-to-talk";
+      if (state.page === "video") return "@tryvinci/video-generate";
+      if (state.page === "image") return "@tryvinci/image-generate";
+      if (state.skillRef && !state.graphEdited) return state.skillRef;
+      const caps = model.capabilities || [];
+      if (caps.includes("t2v") || caps.includes("i2v")) return "@tryvinci/video-generate";
+      if (caps.includes("upscale") && !(caps.includes("t2i") || caps.includes("i2i"))) return "@tryvinci/video-upscale";
+      if (caps.includes("i2i") && !caps.includes("t2i")) return "@tryvinci/image-upscale";
+      return "@tryvinci/image-generate";
+    }
+
+    function updateCost() {
+      const model = selectedModel();
+      const providers = doctor.providers || {};
+      const live = Object.entries(providers).filter(([id, row]) => id !== "mock" && row && row.available);
+      $("provider-chip").textContent = live.length
+        ? live.map(([id, row]) => row.display_name || id).join(" · ")
+        : "Local";
+      if (!model) { $("est-btn").textContent = "$—"; $("generate").disabled = true; return; }
+      const nodes = (state.graph.nodes || []).filter((n) => n.type === "generate");
+      const amount = nodes.length > 1 ? nodes.length * (model.pricing?.amount || 0) : (model.pricing?.amount ?? 0);
+      $("est-btn").textContent = money(amount);
+      $("est-detail").textContent = usable(model) || model.provider === "mock"
+        ? model.display_name + " · " + (model.provider === "mock" ? "Local" : model.provider)
+        : model.available
+          ? "Live spend is off for this model."
+          : model.display_name + " needs a key. Open Connect.";
+      $("generate").disabled = generateInFlight || !model;
+    }
+
+    async function saveProvider(id) {
+      const secret = ($("key-" + id)?.value || "").trim();
+      const from_env = ($("env-" + id)?.value || "").trim();
+      const payload = { id };
+      if (secret) payload.secret = secret;
+      else if (from_env) payload.from_env = from_env;
+      const extra = ($("extra-" + id)?.value || "").trim();
+      if (extra) payload.extra_secret = extra;
+      const acct = $("acct-" + id);
+      if (acct && acct.value.trim()) payload.account_id = acct.value.trim();
+      const url = $("url-" + id);
+      if (url && url.value.trim()) payload.url = url.value.trim();
+      const label = $("label-" + id);
+      if (label && label.value.trim()) payload.label = label.value.trim();
+      const authurl = $("authurl-" + id);
+      if (authurl && authurl.value.trim()) payload.authorize_url = authurl.value.trim();
+      try {
+        const body = await j("/providers", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+        if ($("key-" + id)) $("key-" + id).value = "";
+        if ($("extra-" + id)) $("extra-" + id).value = "";
+        await boot(false);
+        log(body.available
+          ? id + " enabled." + (doctor.live_spend ? "" : " Live spend is off.")
+          : id + " saved. " + (body.test || "missing key"));
+        state.connectId = id;
+        setPage("keys");
+      } catch (err) { log(String(err.message || err)); }
+    }
+
+    async function addNamedMcp() {
+      const label = ($("label-mcp_new")?.value || "").trim();
+      const raw = (($("slug-mcp_new")?.value || label || "custom")).toLowerCase();
+      const slug = raw.replace(/^mcp_/, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "custom";
+      const id = "mcp_" + slug;
+      const payload = { id };
+      if (label) payload.label = label;
+      const url = ($("url-mcp_new")?.value || "").trim();
+      if (url) payload.url = url;
+      const authurl = ($("authurl-mcp_new")?.value || "").trim();
+      if (authurl) payload.authorize_url = authurl;
+      const secret = ($("key-mcp_new")?.value || "").trim();
+      if (secret) payload.secret = secret;
+      try {
+        const body = await j("/providers", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+        await boot(false);
+        state.connectId = id;
+        log(body.available ? id + " enabled." : id + " saved. " + (body.test || "needs URL"));
+        setPage("keys");
+      } catch (err) { log(String(err.message || err)); }
+    }
+
+    async function oauthStart(id) {
+      try {
+        const body = await j("/providers/" + encodeURIComponent(id) + "/oauth", { method: "POST" });
+        if (body.authorize_url) window.open(body.authorize_url, "_blank", "noopener,noreferrer");
+        log(body.hint || (body.mode === "key" ? "This connector uses a pasted API key." : "Paste a token."));
+      } catch (err) { log(String(err.message || err)); }
+    }
+
+    async function saveSettings() {
+      state.maxCost = ($("max-cost")?.value || "").trim();
+      saveState();
+      const body = { preference: $("pref").value };
+      const cap = $("monthly-cap").value.trim();
+      if (cap !== "") body.monthly_cap_usd = Number(cap);
+      try {
+        await j("/settings", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+        doctor = await j("/doctor");
+        log("Routing saved.");
+      } catch (err) { log(String(err.message || err)); }
+    }
+
+    async function generate(ev, opts) {
+      if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+      if (generateInFlight) return;
+      log("Running…");
+      const model = selectedModel();
+      const prompt = ($("prompt").value.trim() || ($("prompt").placeholder || "").trim());
+      if (!model) { log(models.length ? "No model." : "Studio is still loading models."); return; }
+      if (model.provider !== "mock" && !usable(model)) { setPage("keys"); log("Paste a key under Connect, or keep using local models."); return; }
+      if (!current()) newProject("Untitled canvas", prompt);
+      const skill = skillFor(model);
+      const inputs = shotInputs({ prompt });
+      const media = state.uploadId || ((projectRuns().at(-1) || {}).outputs || [])[0] || null;
+      if (skill === "@tryvinci/image-upscale" || skill === "@tryvinci/video-upscale") {
+        if (!media) { log("Generate or drop a still first, then upscale."); return; }
+        inputs.media = media;
+        inputs.prompt = prompt || "upscale";
+      } else if (!prompt && skill !== "@tryvinci/image-upscale") {
+        log("Describe the shot first.");
+        return;
+      } else if (media && ((model.capabilities || []).includes("i2v") || skill.includes("talking") || skill.includes("cinema"))) {
+        inputs.media = media;
+        if (!inputs.image) inputs.image = media;
+      }
+      generateInFlight = true;
+      state.composeReset = false;
+      state.modelsOpen = false;
+      $("generate").disabled = true;
+      if ($("gen-label")) $("gen-label").textContent = "Generating…";
+      pending = true;
+      try {
+        refreshBoard();
+      } catch (err) {
+        log("board: " + err);
+      }
+      log("Generating… " + (state.skillRef || skill));
+      if (["image", "video", "upscale", "speak"].includes(state.page)) renderPage();
+      try {
+        const payload = { inputs, preference: ($("pref") && $("pref").value) || doctor.preference };
+        const cap = Number(state.maxCost);
+        if (state.maxCost !== "" && !Number.isNaN(cap)) payload.max_cost = cap;
+        const generateNodes = (state.graph.nodes || []).filter((n) => n.type === "generate");
+        const skillNodes = (skillById(skill)?.workflow?.nodes || []).filter((n) => n.type === "generate");
+        const onlyId = opts && opts.nodeId;
+        if (onlyId) {
+          const node = (state.graph.nodes || []).find((n) => n.id === onlyId);
+          if (node && node.params) {
+            ["camera", "lens", "look", "aspect_ratio", "motion", "lighting", "palette", "aperture", "genre"].forEach((key) => {
+              const value = node.params[key];
+              if (value && !String(value).includes("{{")) inputs[key] = value;
+            });
+            if (node.params.duration != null && !String(node.params.duration).includes("{{")) {
+              inputs.duration = node.params.duration;
+            }
+          }
+          const sub = subgraphTo(onlyId);
+          payload.workflow = {
+            id: "canvas-node",
+            version: "1.0.0",
+            preference: payload.preference || "cheapest",
+            nodes: withShotParams(sub.nodes).map((n) => (
+              n.id === onlyId ? { ...n, model_id: modelIdForNode(n, model.id) } : n
+            )),
+            edges: sub.edges,
+          };
+        } else if ((state.graphEdited || (opts && opts.graph)) && generateNodes.length) {
+          payload.workflow = {
+            id: "canvas",
+            version: "1.0.0",
+            preference: payload.preference || "cheapest",
+            nodes: withShotParams(state.graph.nodes.map(({ x, y, ...n }) => n)),
+            edges: state.graph.edges,
+          };
+        } else {
+          payload.skill = skill;
+          if (skillNodes.length <= 1) payload.model_id = model.id;
+        }
+        const body = await j("/runs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+        const proj = current();
+        if (proj) {
+          proj.runIds = [...(proj.runIds || []), body.id];
+          proj.coverId = (body.outputs || [])[0] || proj.coverId;
+          saveState();
+        }
+        await loadMedia();
+        state.selectedRun = body.id;
+        log(body.state === "completed" ? "Shot landed on the canvas." : JSON.stringify(body.error || body));
+        refreshSplit((body.outputs || [])[0]);
+      } catch (err) { log(String(err.message || err)); }
+      finally {
+        generateInFlight = false;
+        pending = false;
+        $("generate").disabled = false;
+        if ($("gen-label")) $("gen-label").textContent = "Generate";
+        updateCost();
+        try { refreshBoard(); } catch {}
+        if (["image", "video", "upscale", "speak"].includes(state.page)) renderPage();
+      }
+    }
+
+    function refreshSplit(digest) {
+      const el = $("split-view");
+      if (!el) return;
+      const before = state.uploadId;
+      const show = Boolean(before && digest && (state.page === "upscale" || (state.skillRef || "").includes("upscale")));
+      el.classList.toggle("hidden", !show);
+      if (!show) return;
+      const beforeImg = el.querySelector(".split-before");
+      const afterImg = el.querySelector(".split-after");
+      if (beforeImg) beforeImg.src = "/assets/" + before + "/file";
+      if (afterImg) afterImg.src = "/assets/" + digest + "/file";
+    }
+    function topoNodes() {
+      const nodes = state.graph.nodes || [];
+      const edges = state.graph.edges || [];
+      const incoming = {};
+      for (const n of nodes) incoming[n.id] = 0;
+      for (const e of edges) if (incoming[e.dst] != null) incoming[e.dst] += 1;
+      const queue = nodes.filter((n) => !incoming[n.id]).map((n) => n.id);
+      const ordered = [];
+      while (queue.length) {
+        const id = queue.shift();
+        const node = nodes.find((n) => n.id === id);
+        if (node) ordered.push(node);
+        for (const e of edges) {
+          if (e.src === id && incoming[e.dst] != null) {
+            incoming[e.dst] -= 1;
+            if (incoming[e.dst] === 0) queue.push(e.dst);
+          }
+        }
+      }
+      return ordered;
+    }
+    async function playTimeline() {
+      const token = ++tlToken;
+      state.view = "timeline";
+      document.querySelectorAll(".views button").forEach((b) => b.classList.toggle("on", b.dataset.view === "timeline"));
+      refreshBoard();
+      const stage = $("tl-stage");
+      const status = $("tl-status");
+      if (!stage) return;
+      const nodes = topoNodes();
+      if (!nodes.length) { log("Canvas is empty."); return; }
+      for (const n of nodes) {
+        if (token !== tlToken) return;
+        const digest = nodeDigest(n.id);
+        if (status) status.textContent = n.id;
+        stage.innerHTML = "";
+        if (!digest) {
+          stage.innerHTML = "<p class='muted'>No output yet — generate the graph</p>";
+          await new Promise((r) => setTimeout(r, 700));
+          continue;
+        }
+        const cap = n.capability || n.type;
+        const asset = assetById(digest);
+        const mime = (asset && asset.mime) || "";
+        const isVideo = mime.startsWith("video/") || cap === "t2v" || cap === "i2v";
+        if (isVideo) {
+          const v = document.createElement("video");
+          v.src = "/assets/" + digest + "/file";
+          v.autoplay = true;
+          v.muted = true;
+          v.playsInline = true;
+          stage.appendChild(v);
+          await new Promise((r) => {
+            v.onended = r;
+            v.onerror = r;
+            setTimeout(r, 8000);
+          });
+        } else {
+          const img = document.createElement("img");
+          img.alt = "";
+          img.src = "/assets/" + digest + "/file";
+          stage.appendChild(img);
+          await new Promise((r) => setTimeout(r, 1400));
+        }
+      }
+      if (status && token === tlToken) status.textContent = "Done";
+    }
+
+    async function loadMedia() {
+      const [runBody, assetBody] = await Promise.all([j("/runs"), j("/assets")]);
+      runs = runBody.runs || [];
+      assets = assetBody.assets || [];
+    }
+
+    async function boot(openLast) {
+      loadState();
+      try {
+        doctor = await j("/doctor");
+        await j("/init", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ demo: true }) });
+        const [modelBody, skillBody, tplBody, presetBody] = await Promise.all([j("/models"), j("/skills"), j("/templates"), j("/adapt/presets")]);
+        models = modelBody.models || [];
+        skills = skillBody.skills || [];
+        templates = tplBody.templates || [];
+        adaptPresets = presetBody.presets || [];
+        await loadMedia();
+        doctor = await j("/doctor");
+      } catch (err) {
+        log("Daemon unreachable. Start vinci-daemon on :4310.");
+        console.error(err);
+      }
+      fillModels();
+      const proj = current();
+      if (proj && proj.graph) { state.graph = proj.graph; state.skillRef = proj.skillRef || null; }
+      renderPage();
+      showOnboard();
+    }
+
+    const ONBOARD_STEPS = [
+      {
+        kicker: "1 / 3",
+        title: "Intelligent generative media",
+        copy: "Your Brand's Superagency — stills, video, and campaigns in one Studio. Connect a provider when you want live models.",
+        next: "Continue",
+        alt: "",
+      },
+      {
+        kicker: "2 / 3",
+        title: "Connect when you need live models",
+        copy: "Work locally now. Paste a Higgsfield or Magnific key under Connect, or add a custom MCP URL.",
+        next: "Start generating",
+        alt: "Connect a key",
+      },
+      {
+        kicker: "3 / 3",
+        title: "Make a still",
+        copy: "Open Image, pick a model, then Generate. Estimates appear on the button.",
+        next: "Open Image",
+        alt: "",
+      },
+    ];
+
+    function onboardDone() {
+      try { localStorage.setItem(ONBOARD_KEY, "done"); } catch (err) { /* ignore */ }
+      $("onboard").classList.add("hidden");
+    }
+
+    function renderOnboard(step) {
+      const s = ONBOARD_STEPS[step];
+      const root = $("onboard");
+      root.dataset.step = String(step);
+      $("onboard-kicker").textContent = s.kicker;
+      if (step === 0) {
+        $("onboard-title").innerHTML = "Your Brand's <em class=\"serif\">Superagency</em>";
+      } else {
+        $("onboard-title").textContent = s.title;
+      }
+      $("onboard-copy").textContent = s.copy;
+      $("onboard-next").textContent = s.next;
+      const alt = $("onboard-alt");
+      if (s.alt) { alt.hidden = false; alt.textContent = s.alt; }
+      else { alt.hidden = true; }
+    }
+
+    function showOnboard() {
+      let done = false;
+      try { done = localStorage.getItem(ONBOARD_KEY) === "done"; } catch (err) { done = false; }
+      if (done) return;
+      $("onboard").classList.remove("hidden");
+      renderOnboard(0);
+    }
+
+    $("onboard-skip").onclick = onboardDone;
+    $("onboard-next").onclick = () => {
+      const step = Number($("onboard").dataset.step || 0);
+      if (step === 1) {
+        renderOnboard(2);
+        return;
+      }
+      if (step >= ONBOARD_STEPS.length - 1) {
+        onboardDone();
+        setPage("image");
+        return;
+      }
+      renderOnboard(step + 1);
+    };
+    $("onboard-alt").onclick = () => {
+      onboardDone();
+      setPage("keys");
+    };
+
+    document.querySelectorAll(".rail [data-page]").forEach((btn) => {
+      btn.onclick = () => {
+        const next = btn.dataset.page;
+        if (
+          ["image", "video", "upscale", "speak"].includes(next)
+          && ["explore", "canvas", "library", "skills"].includes(state.page)
+        ) {
+          const names = { image: "Image", video: "Video", upscale: "Upscale still", speak: "Speak" };
+          newProject(names[next], $("prompt").value.trim());
+          if (next === "speak") {
+            const talk = templates.find((t) => t.id === "still-to-talk");
+            const skill = talk && skillById(talk.skill);
+            if (skill) {
+              state.skillRef = skill.id;
+              state.graph = graphFromSkill(skill);
+              persistGraph();
+            }
+          }
+        }
+        setPage(next);
+      };
+    });
+    $("provider-chip").onclick = () => setPage("keys");
+    $("compose-new").onclick = () => {
+      state.composeReset = true;
+      state.uploadId = null;
+      state.modelsOpen = false;
+      renderPage();
+    };
+    $("model").onchange = () => { fillShotControls(); updateCost(); };
+    $("generate").addEventListener("pointerdown", (ev) => ev.stopPropagation(), true);
+    $("generate").addEventListener("pointerup", (ev) => ev.stopPropagation(), true);
+    $("generate").addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      void generate(ev);
+    }, true);
+    window.addEventListener("pointermove", (ev) => {
+      if (!drag) return;
+      if (!drag.moved && Math.hypot(ev.clientX - drag.x, ev.clientY - drag.y) < 4) return;
+      drag.moved = true;
+      const node = (state.graph.nodes || []).find((n) => n.id === drag.id);
+      const el = document.querySelector('.node[data-id="' + drag.id + '"]');
+      if (!node || !el) return;
+      node.x = Math.max(8, ev.clientX - drag.dx);
+      node.y = Math.max(8, ev.clientY - drag.dy);
+      el.style.left = node.x + "px";
+      el.style.top = node.y + "px";
+      const wiresEl = $("wires");
+      if (!wiresEl) return;
+      const lines = (state.graph.edges || []).map((e) => {
+        const a = (state.graph.nodes || []).find((n) => n.id === e.src);
+        const b = (state.graph.nodes || []).find((n) => n.id === e.dst);
+        if (!a || !b) return "";
+        const x1 = (a.x || 0) + 196, y1 = (a.y || 0) + 44;
+        const x2 = (b.x || 0), y2 = (b.y || 0) + 44;
+        return `<path d="M${x1} ${y1} C${x1 + 40} ${y1}, ${x2 - 40} ${y2}, ${x2} ${y2}" fill="none" stroke="#3f3f46" stroke-width="1.4"/>`;
+      }).join("");
+      wiresEl.innerHTML = lines;
+    });
+    window.addEventListener("pointerup", (ev) => {
+      if (ev.target && ev.target.closest && ev.target.closest("#generate")) return;
+      if (drag && !drag.moved) inspectNode(drag.id);
+      else if (drag) persistGraph();
+      drag = null;
+    });
+    $("add-image").onclick = () => addNode("t2i");
+    $("add-video").onclick = () => addNode("t2v");
+    $("add-upscale").onclick = () => addNode("i2i");
+    $("add-shot").onclick = () => addShot();
+    ["creativity", "resemblance", "hdr", "fractality"].forEach((id) => {
+      $(id)?.addEventListener("input", () => {
+        state[id] = Number($(id).value || 0);
+        const lab = $(id + "-val");
+        if (lab) lab.textContent = String(state[id]);
+      });
+    });
+    $("still").onchange = async () => {
+      const file = $("still").files && $("still").files[0];
+      if (!file) return;
+      try {
+        state.uploadId = await ingestFile(file, $("still-name"));
+        state.composeReset = false;
+        log("Input loaded.");
+        if (["image", "video", "upscale", "speak"].includes(state.page)) renderPage();
+      } catch (err) { log(String(err.message || err)); }
+    };
+    async function ingestFile(file, nameEl) {
+      const data = new FormData();
+      data.append("file", file);
+      const res = await fetch("/assets", { method: "POST", body: data });
+      if (!res.ok) throw new Error(await res.text());
+      const asset = await res.json();
+      if (nameEl) nameEl.textContent = file.name + " · " + (asset.uri || asset.id);
+      return asset.id;
+    }
+    $("first-frame").onchange = async () => {
+      const file = $("first-frame").files && $("first-frame").files[0];
+      if (!file) return;
+      try {
+        state.firstFrameId = await ingestFile(file, $("first-frame-name"));
+        log("First frame loaded.");
+      } catch (err) { log(String(err.message || err)); }
+    };
+    $("last-frame").onchange = async () => {
+      const file = $("last-frame").files && $("last-frame").files[0];
+      if (!file) return;
+      try {
+        state.lastFrameId = await ingestFile(file, $("last-frame-name"));
+        log("Last frame loaded.");
+      } catch (err) { log(String(err.message || err)); }
+    };
+    $("cast-add").onclick = async () => {
+      const file = $("cast-file") && $("cast-file").files && $("cast-file").files[0];
+      const name = (($("cast-name") && $("cast-name").value) || "").trim() || (file && file.name.replace(/\.[^.]+$/, "")) || "Cast";
+      if (!file) { log("Pick a still, then Add to cast."); return; }
+      try {
+        const assetId = await ingestFile(file);
+        state.cast = [...(state.cast || []).filter((c) => c.name !== name), { name, assetId, kind: state.elementKind || "character" }];
+        saveState();
+        if ($("cast-name")) $("cast-name").value = "";
+        fillCast();
+        log("Cast saved locally as @" + name + ".");
+      } catch (err) { log(String(err.message || err)); }
+    };
+    $("project-name").addEventListener("blur", () => {
+      const proj = current();
+      if (!proj || state.page !== "canvas") return;
+      proj.name = $("project-name").textContent.trim() || "Untitled canvas";
+      saveState();
+    });
+    document.querySelectorAll(".views button").forEach((btn) => {
+      btn.onclick = () => {
+        document.querySelectorAll(".views button").forEach((b) => b.classList.toggle("on", b === btn));
+        state.view = btn.dataset.view;
+        refreshBoard();
+      };
+    });
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "/" && document.activeElement.tagName !== "TEXTAREA" && document.activeElement.tagName !== "INPUT") {
+        e.preventDefault();
+        setPage("find");
+        setTimeout(() => $("q") && $("q").focus(), 0);
+      }
+    });
+    boot(false);
+  </script>
+</body>
+</html>

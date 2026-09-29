@@ -1,0 +1,48 @@
+id: "@tryvinci/cinema-still"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: still
+    type: generate
+    capability: t2i
+    params:
+      prompt: "{{inputs.prompt}}"
+      aspect_ratio: "{{inputs.aspect_ratio}}"
+      camera: "{{inputs.camera}}"
+      lens: "{{inputs.lens}}"
+      look: "{{inputs.look}}"
+      aperture: "{{inputs.aperture}}"
+      genre: "{{inputs.genre}}"
+      lighting: "{{inputs.lighting}}"
+      palette: "{{inputs.palette}}"
+  - id: upscale
+    type: generate
+    capability: i2i
+    params:
+      prompt: "{{inputs.prompt}}"
+      media: "{{nodes.still.output}}"
+      aspect_ratio: "{{inputs.aspect_ratio}}"
+      scale: "{{inputs.scale}}"
+  - id: motion
+    type: generate
+    capability: i2v
+    params:
+      prompt: "{{inputs.prompt}}"
+      image: "{{nodes.upscale.output}}"
+      duration: "{{inputs.duration}}"
+      aspect_ratio: "{{inputs.aspect_ratio}}"
+      camera: "{{inputs.camera}}"
+      lens: "{{inputs.lens}}"
+      look: "{{inputs.look}}"
+      motion: "{{inputs.motion}}"
+      aperture: "{{inputs.aperture}}"
+      genre: "{{inputs.genre}}"
+      lighting: "{{inputs.lighting}}"
+      palette: "{{inputs.palette}}"
+edges:
+  - src: still
+    dst: upscale
+    input_key: media
+  - src: upscale
+    dst: motion
+    input_key: image

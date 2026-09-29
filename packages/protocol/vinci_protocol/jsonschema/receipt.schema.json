@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tryvinci.com/schema/receipt.json",
+  "title": "Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["job_id", "model_id", "provider", "list_price", "unit_count", "computed_cost", "currency", "pricing_snapshot_at"],
+  "properties": {
+    "job_id": { "type": "string" },
+    "model_id": { "type": "string" },
+    "provider": { "type": "string" },
+    "list_price": { "type": "number", "minimum": 0 },
+    "unit_count": { "type": "number" },
+    "computed_cost": { "type": "number", "minimum": 0 },
+    "currency": { "type": "string" },
+    "pricing_snapshot_at": { "type": "string", "format": "date-time" },
+    "retries_cost": { "type": "number" },
+    "wall_time": { "type": "number" },
+    "cached": { "type": "boolean" }
+  }
+}

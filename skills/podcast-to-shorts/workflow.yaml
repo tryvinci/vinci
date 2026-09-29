@@ -1,0 +1,41 @@
+id: "@tryvinci/podcast-to-shorts"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: transcribe
+    type: media
+    params:
+      op: transcribe
+      media: "{{inputs.media}}"
+  - id: select
+    type: media
+    params:
+      op: select_windows
+      transcript: "{{nodes.transcribe.data}}"
+      query: "{{inputs.query}}"
+  - id: cut
+    type: media
+    params:
+      op: cut
+      media: "{{inputs.media}}"
+      windows: "{{nodes.select.data}}"
+  - id: reframe
+    type: media
+    params:
+      op: reframe_9x16
+      media: "{{nodes.cut.output}}"
+  - id: captions
+    type: media
+    params:
+      op: burn_captions
+      media: "{{nodes.reframe.output}}"
+      text: "{{nodes.transcribe.data.text}}"
+edges:
+  - src: transcribe
+    dst: select
+  - src: select
+    dst: cut
+  - src: cut
+    dst: reframe
+  - src: reframe
+    dst: captions

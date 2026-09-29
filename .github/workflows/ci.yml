@@ -1,0 +1,51 @@
+name: ci
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Forbid live spend
+        run: test -z "${VINCI_ALLOW_LIVE_SPEND:-}"
+      - name: Install
+        run: make install
+      - name: Test
+        run: make test
+      - name: Conformance (mock, no live keys)
+        run: make conformance
+      - name: Lint
+        run: make lint
+      - name: Secret scan
+        run: make secret-scan
+
+  clone-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Forbid live spend
+        run: test -z "${VINCI_ALLOW_LIVE_SPEND:-}"
+      - name: Clone path ($0 CLI, park+approve, POST /runs, MCP, podcast-to-shorts, skill installs, Studio, loopback MCP provider PNG+MP4)
+        run: make clone-smoke

@@ -1,0 +1,12 @@
+id: "@example/stamp-video"
+version: "1.0.0"
+tags: [example, install, t2v]
+inputs:
+  prompt: { type: string, required: true }
+outputs:
+  video: { kind: video }
+capabilities: [t2v]
+secret_names: []
+permissions: []
+est_cost: { min: 0.0, max: 0.0, currency: USD }
+safety_tags: []
