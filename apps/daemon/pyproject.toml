@@ -17,6 +17,9 @@ dependencies = [
     "PyYAML>=6.0",
 ]
 
+[project.optional-dependencies]
+gsheet = ["google-auth>=2", "gspread>=6"]
+
 [project.scripts]
 vinci-daemon = "vinci_daemon.app:main"
 

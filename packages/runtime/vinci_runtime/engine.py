@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import base64
 import difflib
+import io
 import json
 import os
 import re
 import shutil
 import time
+import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
+import zipfile
 from collections import defaultdict, deque
 from datetime import UTC, datetime
 from pathlib import Path
@@ -42,11 +46,14 @@ from vinci_media.adapt import (
     adapt_image_ai_extend_placeholder,
     adapt_image_fit_pad_crop,
     estimate_adapt_targets,
+    png_dimensions,
     presets_document,
+    resolve_preset,
     resolve_target,
     safe_area_report,
     validate_output_image,
 )
+from vinci_media.custom_presets import create_custom_preset, delete_custom_preset
 from vinci_media.ops import (
     burn_captions,
     concat,
@@ -58,8 +65,16 @@ from vinci_media.ops import (
     select_windows,
     split_fixed,
 )
+from vinci_media.partner_presets import check_export_bytes
 from vinci_protocol.constants import PROTOCOL_VERSION
-from vinci_protocol.enums import AssetKind, AssetSource, Capability, JobState, RoutePreference
+from vinci_protocol.enums import (
+    AssetKind,
+    AssetSource,
+    Capability,
+    JobState,
+    NodeType,
+    RoutePreference,
+)
 from vinci_protocol.models import (
     Asset,
     Estimate,
@@ -741,6 +756,9 @@ class Engine:
             },
             "demo": self.config.demo,
             "live_spend": allow_live_spend(),
+            "gsheet_id": self.config.gsheet_id,
+            "gsheet_tab": self.config.gsheet_tab,
+            "gsheet_credentials_path": os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", ""),
         }
 
     def update_settings(
@@ -749,6 +767,8 @@ class Engine:
         preference: str | None = None,
         monthly_cap_usd: float | None = None,
         require_approval_over: float | None = None,
+        gsheet_id: str | None = None,
+        gsheet_tab: str | None = None,
     ) -> dict[str, Any]:
         if preference is not None:
             self.config.preference = RoutePreference(preference).value
@@ -756,6 +776,10 @@ class Engine:
             self.config.budget.monthly_cap_usd = monthly_cap_usd
         if require_approval_over is not None:
             self.config.budget.require_approval_over = require_approval_over
+        if gsheet_id is not None:
+            self.config.gsheet_id = gsheet_id.strip()
+        if gsheet_tab is not None:
+            self.config.gsheet_tab = gsheet_tab.strip()
         write_config(self.config)
         self.config = load_config(self.config.home)
         return self.settings()
@@ -975,7 +999,7 @@ class Engine:
         except Exception as exc:  # noqa: BLE001 — normalize into run failure
             run["job_ids"] = job_ids
             run["nodes"] = node_map
-            run["error"] = {"code": "unknown", "message": type(exc).__name__}
+            run["error"] = {"code": "unknown", "message": str(exc) or type(exc).__name__}
             self.store.put_run(run_id, run, JobState.FAILED.value)
             self._emit("run.failed", run_id=run_id, payload=run["error"])
             raise
@@ -1213,7 +1237,13 @@ class Engine:
         return asset
 
     def adapt_presets(self) -> list[dict[str, Any]]:
-        return presets_document()
+        return presets_document(self.config.home)
+
+    def save_custom_preset(self, body: dict[str, Any]) -> dict[str, Any]:
+        return create_custom_preset(body, self.config.home)
+
+    def remove_custom_preset(self, preset_id: str) -> None:
+        delete_custom_preset(preset_id, self.config.home)
 
     def _openai_i2i_unit_cost(self) -> float:
         """OpenAI GPT Image 2.5 is token-billed; catalog amounts stay at 0 (no fake USD)."""
@@ -1238,7 +1268,7 @@ class Engine:
         )
         unit = self._openai_i2i_unit_cost() if parsed_layout == "ai_extend" else 0.0
         estimate = estimate_adapt_targets(
-            targets, layout=parsed_layout, unit_cost_ai=unit
+            targets, layout=parsed_layout, unit_cost_ai=unit, home=self.config.home
         )
         estimate["source_asset"] = source_asset
         estimate["model_id"] = model_id
@@ -1287,7 +1317,7 @@ class Engine:
         outputs: list[dict[str, Any]] = []
         digests: list[str] = []
         for index, raw in enumerate(targets):
-            width, height, preset_id = resolve_target(raw)
+            width, height, preset_id = resolve_target(raw, self.config.home)
             dest = work / f"adapt-{index}.png"
             if parsed_layout == "fit_pad_crop":
                 adapt_image_fit_pad_crop(
@@ -1297,6 +1327,7 @@ class Engine:
                     height=height,
                     fit=parsed_fit,
                     preset_id=preset_id,
+                    home=self.config.home,
                 )
                 mode_label = f"fit_pad_crop:{parsed_fit}"
             elif allow_live_spend() and self.provider_available("openai"):
@@ -1329,17 +1360,24 @@ class Engine:
                         "digest": digest,
                         "layout": "ai_extend",
                         "validation": {"width": width, "height": height},
-                        "safe_area": safe_area_report(preset_id, width, height),
+                        "safe_area": safe_area_report(
+                            preset_id, width, height, self.config.home
+                        ),
                     }
                 )
                 continue
             else:
                 adapt_image_ai_extend_placeholder(
-                    src_path, dest, width=width, height=height, preset_id=preset_id
+                    src_path,
+                    dest,
+                    width=width,
+                    height=height,
+                    preset_id=preset_id,
+                    home=self.config.home,
                 )
                 mode_label = "ai_extend:mock_pad"
             image_meta = validate_output_image(
-                dest, width=width, height=height, preset_id=preset_id
+                dest, width=width, height=height, preset_id=preset_id, home=self.config.home
             )
             digest = self._put_path(
                 dest,
@@ -1348,7 +1386,7 @@ class Engine:
                 run_id="",
             )
             digests.append(digest)
-            validation = safe_area_report(preset_id, width, height)
+            validation = safe_area_report(preset_id, width, height, self.config.home)
             if image_meta.get("export_validation"):
                 validation["export_validation"] = image_meta["export_validation"]
             validation["export_bytes"] = image_meta.get("bytes")
@@ -1367,6 +1405,249 @@ class Engine:
             "digests": digests,
             "estimate": estimate,
         }
+
+    def ingest_url(self, url: str) -> Asset:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in {"http", "https"}:
+            raise ValueError("source_url must be http or https")
+        request = urllib.request.Request(url, headers={"User-Agent": "vinci-oss"})
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                data = response.read(20 * 1024 * 1024 + 1)
+                raw_mime = response.headers.get("Content-Type", "application/octet-stream")
+        except urllib.error.URLError as exc:
+            raise ValueError(f"could not download source_url: {exc}") from exc
+        if len(data) > 20 * 1024 * 1024:
+            raise ValueError("source_url exceeds 20MB")
+        mime = raw_mime.split(";", 1)[0].strip() or "application/octet-stream"
+        filename = Path(parsed.path).name or "source"
+        return self.ingest_bytes(data, mime=mime, filename=filename)
+
+    def start_adapt_batch(
+        self,
+        items: list[dict[str, Any]],
+        *,
+        fit_mode: str = "pad",
+        layout: str = "fit_pad_crop",
+    ) -> dict[str, Any]:
+        if not items:
+            raise ValueError("batch requires at least one item")
+        prepared: list[dict[str, Any]] = []
+        for index, raw in enumerate(items):
+            if not isinstance(raw, dict):
+                raise ValueError("batch item must be an object")
+            preset_ids = raw.get("preset_ids")
+            if (
+                not isinstance(preset_ids, list)
+                or not preset_ids
+                or not all(isinstance(preset_id, str) and preset_id for preset_id in preset_ids)
+            ):
+                raise ValueError(f"item {index} needs preset_ids")
+            for preset_id in preset_ids:
+                if resolve_preset(str(preset_id), self.config.home) is None:
+                    raise ValueError(f"unknown adapt preset: {preset_id}")
+            source_url = raw.get("source_url") if isinstance(raw.get("source_url"), str) else None
+            asset_id = raw.get("asset_id") if isinstance(raw.get("asset_id"), str) else None
+            error: str | None = None
+            if asset_id:
+                if not self.cas.exists(asset_id):
+                    error = "source asset not found"
+                    asset_id = None
+            elif source_url:
+                try:
+                    asset_id = self.ingest_url(source_url).id
+                except ValueError as exc:
+                    error = str(exc)
+                    asset_id = None
+            else:
+                raise ValueError(f"item {index} needs asset_id or source_url")
+            prepared.append(
+                {
+                    "index": index,
+                    "asset_id": asset_id,
+                    "source_url": source_url,
+                    "preset_ids": [str(preset_id) for preset_id in preset_ids],
+                    "error": error,
+                }
+            )
+        batch_id = uuid.uuid4().hex
+        stored: list[dict[str, Any]] = []
+        for item in prepared:
+            record: dict[str, Any] = {
+                "index": item["index"],
+                "asset_id": item["asset_id"],
+                "source_url": item["source_url"],
+                "preset_ids": item["preset_ids"],
+                "run_id": None,
+                "error": item["error"],
+            }
+            if item["error"] or not item["asset_id"]:
+                stored.append(record)
+                continue
+            spec = WorkflowSpec(
+                id=f"axis-adapt-{item['index']}",
+                version="1",
+                nodes=[
+                    WorkflowNode(
+                        id="adapt",
+                        type=NodeType.MEDIA,
+                        params={
+                            "op": "adapt",
+                            "media": item["asset_id"],
+                            "preset_ids": item["preset_ids"],
+                            "fit_mode": fit_mode,
+                            "layout": layout,
+                        },
+                    )
+                ],
+            )
+            before = {row["id"] for row in self.store.list_runs()}
+            try:
+                run = self.start_run(None, {"media": item["asset_id"]}, workflow=spec)
+                record["run_id"] = run.get("id")
+                if run.get("state") == JobState.FAILED.value:
+                    err = run.get("error") or {}
+                    record["error"] = str(err.get("message") or "adapt failed")
+            except Exception as exc:  # noqa: BLE001 — item status records the failure
+                created = [row for row in self.store.list_runs() if row["id"] not in before]
+                if created:
+                    record["run_id"] = created[-1]["id"]
+                record["error"] = str(exc) or type(exc).__name__
+            stored.append(record)
+        path = self._batch_path(batch_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps({"batch_id": batch_id, "items": stored}),
+            encoding="utf-8",
+        )
+        return {"batch_id": batch_id}
+
+    def adapt_batch_status(self, batch_id: str) -> dict[str, Any]:
+        path = self._batch_path(batch_id)
+        if not path.is_file():
+            raise KeyError(batch_id)
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        items_out: list[dict[str, Any]] = []
+        for item in raw.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            run = self.store.get_run(str(item["run_id"])) if item.get("run_id") else None
+            status, error, outputs = self._batch_item_view(item, run)
+            items_out.append(
+                {
+                    "index": item.get("index"),
+                    "asset_id": item.get("asset_id"),
+                    "source_url": item.get("source_url"),
+                    "preset_ids": item.get("preset_ids") or [],
+                    "run_id": item.get("run_id"),
+                    "status": status,
+                    "error": error,
+                    "output_asset_ids": [row["asset_id"] for row in outputs],
+                    "outputs": outputs,
+                }
+            )
+        return {"batch_id": batch_id, "items": items_out}
+
+    def adapt_batch_bundle(self, batch_id: str) -> bytes:
+        status = self.adapt_batch_status(batch_id)
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for item in status["items"]:
+                if item.get("status") != "done":
+                    continue
+                for output in item.get("outputs") or []:
+                    name = (
+                        f"{item['index']}_{output['preset_id']}_"
+                        f"{output['width']}x{output['height']}.png"
+                    )
+                    info = zipfile.ZipInfo(filename=name, date_time=(1980, 1, 1, 0, 0, 0))
+                    info.compress_type = zipfile.ZIP_DEFLATED
+                    archive.writestr(info, self.cas.get(str(output["asset_id"])))
+        return buffer.getvalue()
+
+    def _batch_path(self, batch_id: str) -> Path:
+        if not re.fullmatch(r"[a-f0-9]{32}", batch_id):
+            raise KeyError(batch_id)
+        return self.config.home / "batches" / f"{batch_id}.json"
+
+    def _batch_item_view(
+        self, item: dict[str, Any], run: dict[str, Any] | None
+    ) -> tuple[str, str | None, list[dict[str, Any]]]:
+        state = str(run.get("state") or "") if run else ""
+        if state == JobState.COMPLETED.value:
+            preset_ids = [str(preset_id) for preset_id in item.get("preset_ids") or []]
+            digests = [str(digest) for digest in (run or {}).get("outputs") or []]
+            return "done", None, self._adapt_output_checks(preset_ids, digests)
+        if state == JobState.RUNNING.value:
+            return "running", None, []
+        if state in {JobState.FAILED.value, JobState.CANCELLED.value}:
+            err = (run or {}).get("error") or {}
+            message = item.get("error") or err.get("message") or state
+            return "failed", str(message), []
+        if item.get("error"):
+            return "failed", str(item["error"]), []
+        queued = {
+            JobState.QUEUED.value,
+            JobState.AWAITING_APPROVAL.value,
+            JobState.CREATED.value,
+        }
+        if state in queued:
+            return "queued", None, []
+        return "queued", None, []
+
+    def _adapt_output_checks(
+        self, preset_ids: list[str], digests: list[str]
+    ) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for preset_id, digest in zip(preset_ids, digests, strict=False):
+            preset = resolve_preset(preset_id, self.config.home)
+            if preset is None or not self.cas.exists(digest):
+                continue
+            blob = self.cas.get(digest)
+            try:
+                actual_w, actual_h = png_dimensions(blob)
+            except ValueError:
+                actual_w, actual_h = 0, 0
+            cap = getattr(preset, "byte_cap", None)
+            cap_doc: dict[str, Any] | None = None
+            if cap is not None:
+                cap_doc = {
+                    "max_bytes": cap.max_bytes,
+                    "op": cap.op,
+                    "actual_bytes": len(blob),
+                    "pass": check_export_bytes(len(blob), cap),
+                }
+            margins = getattr(preset, "safe_rect_margins_px", None)
+            if margins is not None:
+                safe: dict[str, Any] = {
+                    "applied": True,
+                    "margins_px": {
+                        "left": margins.left,
+                        "right": margins.right,
+                        "top": margins.top,
+                        "bottom": margins.bottom,
+                    },
+                }
+            else:
+                safe = {"applied": False, "margins_px": None}
+            rows.append(
+                {
+                    "preset_id": preset_id,
+                    "asset_id": digest,
+                    "width": preset.width,
+                    "height": preset.height,
+                    "dimensions": {
+                        "width": preset.width,
+                        "height": preset.height,
+                        "actual_width": actual_w,
+                        "actual_height": actual_h,
+                        "pass": actual_w == preset.width and actual_h == preset.height,
+                    },
+                    "byte_cap": cap_doc,
+                    "safe_area": safe,
+                }
+            )
+        return rows
 
     def handshake(self) -> dict[str, str]:
         return {"protocol_version": PROTOCOL_VERSION, "daemon_version": "0.1.0"}
@@ -1632,6 +1913,43 @@ class Engine:
             dest = work / "timeline.mp4"
             render_timeline(parts, dest)
             outputs = [self._put_path(dest, kind=AssetKind.VIDEO, mime="video/mp4", run_id=run_id)]
+        elif op == "adapt":
+            src = self._materialize(params.get("media"))
+            preset_ids = params.get("preset_ids")
+            if not isinstance(preset_ids, list) or not preset_ids:
+                raise ValueError("adapt needs preset_ids")
+            fit_raw = str(params.get("fit_mode") or "pad")
+            parsed_fit: FitMode = fit_raw if fit_raw in {"fit", "pad", "crop"} else "pad"  # type: ignore[assignment]
+            layout = str(params.get("layout") or "fit_pad_crop")
+            for index, preset_id in enumerate(preset_ids):
+                if not isinstance(preset_id, str) or not preset_id:
+                    raise ValueError("preset_ids must be strings")
+                width, height, resolved = resolve_target(
+                    {"preset_id": preset_id}, self.config.home
+                )
+                dest = work / f"adapt-{index}.png"
+                if layout == "ai_extend":
+                    adapt_image_ai_extend_placeholder(
+                        src,
+                        dest,
+                        width=width,
+                        height=height,
+                        preset_id=resolved,
+                        home=self.config.home,
+                    )
+                else:
+                    adapt_image_fit_pad_crop(
+                        src,
+                        dest,
+                        width=width,
+                        height=height,
+                        fit=parsed_fit,
+                        preset_id=resolved,
+                        home=self.config.home,
+                    )
+                outputs.append(
+                    self._put_path(dest, kind=AssetKind.IMAGE, mime="image/png", run_id=run_id)
+                )
         elif op == "split":
             src = self._materialize(params.get("media"))
             info = probe(src)

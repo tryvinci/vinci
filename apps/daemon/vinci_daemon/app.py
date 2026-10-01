@@ -72,6 +72,8 @@ class SettingsBody(BaseModel):
     preference: str | None = None
     monthly_cap_usd: float | None = None
     require_approval_over: float | None = None
+    gsheet_id: str | None = None
+    gsheet_tab: str | None = None
 
 
 class InstallSkillBody(BaseModel):
@@ -104,10 +106,46 @@ class AdaptRunBody(AdaptEstimateBody):
     max_cost: float | None = None
 
 
-def create_app(engine: Engine | None = None) -> FastAPI:
+class PresetByteCapBody(BaseModel):
+    max_bytes: int
+    op: str = "lte"
+
+
+class PresetMarginsBody(BaseModel):
+    left: int = 0
+    right: int = 0
+    top: int = 0
+    bottom: int = 0
+
+
+class PresetCreateBody(BaseModel):
+    id: str | None = None
+    label: str
+    partner: str | None = None
+    platform: str | None = None
+    width: int
+    height: int
+    byte_cap: PresetByteCapBody | None = None
+    safe_rect_margins_px: PresetMarginsBody | None = None
+
+
+class BatchItemBody(BaseModel):
+    asset_id: str | None = None
+    source_url: str | None = None
+    preset_ids: list[str]
+
+
+class BatchBody(BaseModel):
+    items: list[BatchItemBody]
+    fit_mode: str = "pad"
+    layout: str = "fit_pad_crop"
+
+
+def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -> FastAPI:
     eng = engine or Engine()
     app = FastAPI(title="vinci-daemon", version="0.1.0")
     app.state.engine = eng
+    app.state.sheets_client = sheets_client
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -161,6 +199,8 @@ def create_app(engine: Engine | None = None) -> FastAPI:
                 preference=body.preference,
                 monthly_cap_usd=body.monthly_cap_usd,
                 require_approval_over=body.require_approval_over,
+                gsheet_id=body.gsheet_id,
+                gsheet_tab=body.gsheet_tab,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -370,6 +410,92 @@ def create_app(engine: Engine | None = None) -> FastAPI:
             )
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
+
+    @app.get("/presets")
+    def list_presets() -> dict[str, Any]:
+        return {"presets": eng.adapt_presets()}
+
+    @app.post("/presets")
+    def create_preset(body: PresetCreateBody) -> dict[str, Any]:
+        try:
+            preset = eng.save_custom_preset(body.model_dump(exclude_none=True))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"preset": preset}
+
+    @app.delete("/presets/{preset_id}")
+    def delete_preset(preset_id: str) -> dict[str, Any]:
+        try:
+            eng.remove_custom_preset(preset_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="preset not found") from exc
+        return {"deleted": preset_id}
+
+    @app.post("/adapts/batch")
+    def create_adapt_batch(body: BatchBody) -> dict[str, Any]:
+        try:
+            return eng.start_adapt_batch(
+                [item.model_dump(exclude_none=True) for item in body.items],
+                fit_mode=body.fit_mode,
+                layout=body.layout,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
+
+    @app.get("/adapts/batch/{batch_id}/bundle.zip")
+    def adapt_batch_bundle(batch_id: str) -> Response:
+        try:
+            data = eng.adapt_batch_bundle(batch_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="batch not found") from exc
+        return Response(
+            content=data,
+            media_type="application/zip",
+            headers={"Content-Disposition": 'attachment; filename="bundle.zip"'},
+        )
+
+    @app.get("/adapts/batch/{batch_id}")
+    def adapt_batch_status(batch_id: str) -> dict[str, Any]:
+        try:
+            return eng.adapt_batch_status(batch_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="batch not found") from exc
+
+    @app.post("/integrations/gsheet/sync")
+    def gsheet_sync(request: Request) -> dict[str, Any]:
+        from vinci_runtime.sheets import sync_sheet
+
+        from vinci_daemon.gsheet_live import SheetsConfigError, build_live_sheet_client
+
+        settings = eng.settings()
+        if not settings.get("gsheet_id") or not settings.get("gsheet_tab"):
+            raise HTTPException(
+                status_code=501,
+                detail=(
+                    "Google Sheet sync is not configured: set gsheet_id and gsheet_tab "
+                    "via PATCH /settings."
+                ),
+            )
+        client = app.state.sheets_client
+        if client is None:
+            try:
+                client = build_live_sheet_client()
+            except SheetsConfigError as exc:
+                raise HTTPException(status_code=501, detail=str(exc)) from exc
+        try:
+            return sync_sheet(
+                eng,
+                client,
+                sheet_id=str(settings["gsheet_id"]),
+                tab=str(settings["gsheet_tab"]),
+                public_base=str(request.base_url).rstrip("/"),
+            )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:  # noqa: BLE001

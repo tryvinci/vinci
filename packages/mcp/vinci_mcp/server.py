@@ -17,6 +17,9 @@ TOOL_NAMES = (
     "vinci.jobs_get",
     "vinci.jobs_cancel",
     "vinci.cost_estimate",
+    "vinci.presets_list",
+    "vinci.adapts_run",
+    "vinci.batch_status",
 )
 
 _TOOL_DESCRIPTIONS = {
@@ -29,6 +32,9 @@ _TOOL_DESCRIPTIONS = {
     "vinci.jobs_get": "Get a job by id.",
     "vinci.jobs_cancel": "Cancel a run (run_id) or no-op cancel of a provider job.",
     "vinci.cost_estimate": "Estimate a skill without submitting work.",
+    "vinci.presets_list": "List generic, partner, and custom adapt presets.",
+    "vinci.adapts_run": "Adapt one asset or source URL through preset ids. Returns a batch_id.",
+    "vinci.batch_status": "Status, outputs, and per-preset checks for an adapt batch.",
 }
 
 _SPEND_TOOLS = {"vinci.image_generate", "vinci.video_generate", "vinci.workflow_run"}
@@ -59,6 +65,12 @@ def tool_schemas() -> list[dict[str, Any]]:
         if name == "vinci.workflow_run":
             schema["properties"]["skill"] = {"type": "string"}
             schema["properties"]["workflow"] = {"type": "object"}
+        if name == "vinci.adapts_run":
+            schema["properties"]["asset_id"] = {"type": "string"}
+            schema["properties"]["source_url"] = {"type": "string"}
+            schema["properties"]["preset_ids"] = {"type": "array", "items": {"type": "string"}}
+        if name == "vinci.batch_status":
+            schema["properties"]["batch_id"] = {"type": "string"}
         tools.append(
             {
                 "name": name,
@@ -136,6 +148,17 @@ def call_tool(engine: Engine, name: str, arguments: dict[str, Any]) -> dict[str,
         dumped = asset.model_dump(mode="json")
         redacted = redact_mapping(dumped, extra_values=secrets)
         return redacted if isinstance(redacted, dict) else dumped
+    if name == "vinci.presets_list":
+        return {"presets": engine.adapt_presets()}
+    if name == "vinci.adapts_run":
+        item: dict[str, Any] = {"preset_ids": list(args.get("preset_ids") or [])}
+        if args.get("asset_id"):
+            item["asset_id"] = str(args["asset_id"])
+        if args.get("source_url"):
+            item["source_url"] = str(args["source_url"])
+        return engine.start_adapt_batch([item])
+    if name == "vinci.batch_status":
+        return engine.adapt_batch_status(str(args["batch_id"]))
     raise KeyError(name)
 
 

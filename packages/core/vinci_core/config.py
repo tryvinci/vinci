@@ -24,6 +24,8 @@ class VinciConfig:
     preference: str = "cheapest"
     demo: bool = False
     daemon_port: int = 4310
+    gsheet_id: str = ""
+    gsheet_tab: str = ""
 
     @property
     def cas_dir(self) -> Path:
@@ -59,6 +61,8 @@ def load_config(home: Path | None = None) -> VinciConfig:
         preference=str(data.get("preference", "cheapest")),
         demo=bool(data.get("demo", False)),
         daemon_port=int(data.get("daemon_port", 4310)),
+        gsheet_id=str(data.get("gsheet_id") or ""),
+        gsheet_tab=str(data.get("gsheet_tab") or ""),
     )
 
 
@@ -80,8 +84,12 @@ def write_config(config: VinciConfig) -> Path:
         f"demo = {_toml_value(config.demo)}",
         f"daemon_port = {config.daemon_port}",
         "",
-        "[budget]",
     ]
+    if config.gsheet_id:
+        lines.append(f"gsheet_id = {_toml_value(config.gsheet_id)}")
+    if config.gsheet_tab:
+        lines.append(f"gsheet_tab = {_toml_value(config.gsheet_tab)}")
+    lines.extend(["", "[budget]"])
     if config.budget.monthly_cap_usd is not None:
         lines.append(f"monthly_cap_usd = {config.budget.monthly_cap_usd}")
     if config.budget.require_approval_over is not None:

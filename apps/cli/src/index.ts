@@ -24,6 +24,7 @@ Usage:
   vinci cost [report --by skill|provider|day]
   vinci catalog refresh
   vinci find <query>
+  vinci sheets sync
   vinci mcp print-config
   vinci studio [--lan] [--host HOST] [--port PORT] [--html] [--no-open]
 `);
@@ -181,6 +182,21 @@ async function main(): Promise<void> {
   if (cmd === "find") {
     const q = argv.slice(1).join(" ");
     print(await get(`/find?q=${encodeURIComponent(q)}`));
+    return;
+  }
+  if (cmd === "sheets") {
+    if (argv[1] !== "sync") usage();
+    const res = await fetch(DAEMON + "/integrations/gsheet/sync", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    const body = (await res.json()) as { detail?: string };
+    if (!res.ok) {
+      console.error(typeof body.detail === "string" ? body.detail : JSON.stringify(body));
+      process.exit(1);
+    }
+    print(body);
     return;
   }
   usage();

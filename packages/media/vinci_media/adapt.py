@@ -6,9 +6,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from vinci_core.paths import default_home
+
+from vinci_media.custom_presets import custom_preset_by_id, custom_presets_document
 from vinci_media.ops import FFMPEG, MediaError, probe, require_ffmpeg
 from vinci_media.partner_presets import (
     PARTNER_ADAPT_PRESETS,
+    ByteCap,
     PartnerAdaptPreset,
     check_export_bytes,
     partner_preset_by_id,
@@ -83,7 +87,11 @@ ADAPT_PRESETS: tuple[AdaptPreset, ...] = (
 )
 
 
-def presets_document() -> list[dict[str, Any]]:
+def _preset_home(home: Path | None) -> Path:
+    return home if home is not None else default_home()
+
+
+def presets_document(home: Path | None = None) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for preset in ADAPT_PRESETS:
         rows.append(
@@ -91,7 +99,9 @@ def presets_document() -> list[dict[str, Any]]:
                 "id": preset.id,
                 "label": preset.label,
                 "platform": preset.platform,
+                "partner": preset.platform,
                 "spec_kind": "generic",
+                "source": "generic",
                 "width": preset.width,
                 "height": preset.height,
                 "safe_area": {
@@ -102,7 +112,11 @@ def presets_document() -> list[dict[str, Any]]:
                 },
             }
         )
-    rows.extend(partner_preset_document(p) for p in PARTNER_ADAPT_PRESETS)
+    for partner in PARTNER_ADAPT_PRESETS:
+        document = partner_preset_document(partner)
+        document["source"] = "partner"
+        rows.append(document)
+    rows.extend(custom_presets_document(_preset_home(home)))
     return rows
 
 
@@ -113,14 +127,28 @@ def preset_by_id(preset_id: str) -> AdaptPreset | None:
     return None
 
 
-def resolve_preset(preset_id: str) -> AdaptPreset | PartnerAdaptPreset | None:
-    return preset_by_id(preset_id) or partner_preset_by_id(preset_id)
+def resolve_preset(
+    preset_id: str, home: Path | None = None
+) -> AdaptPreset | PartnerAdaptPreset | None:
+    return (
+        preset_by_id(preset_id)
+        or partner_preset_by_id(preset_id)
+        or custom_preset_by_id(preset_id, _preset_home(home))
+    )
 
 
-def resolve_target(raw: dict[str, Any]) -> tuple[int, int, str | None]:
+def shaped_preset(preset_id: str, home: Path | None = None) -> PartnerAdaptPreset | None:
+    """Partner or custom preset that carries byte caps and pixel safe margins."""
+    partner = partner_preset_by_id(preset_id)
+    if partner is not None:
+        return partner
+    return custom_preset_by_id(preset_id, _preset_home(home))
+
+
+def resolve_target(raw: dict[str, Any], home: Path | None = None) -> tuple[int, int, str | None]:
     preset_id = raw.get("preset_id")
     if isinstance(preset_id, str) and preset_id:
-        preset = resolve_preset(preset_id)
+        preset = resolve_preset(preset_id, home)
         if preset is None:
             raise ValueError(f"unknown adapt preset: {preset_id}")
         return preset.width, preset.height, preset.id
@@ -153,6 +181,7 @@ def adapt_image_fit_pad_crop(
     height: int,
     fit: FitMode = "fit",
     preset_id: str | None = None,
+    home: Path | None = None,
 ) -> Path:
     require_ffmpeg()
     dst.parent.mkdir(parents=True, exist_ok=True)
@@ -169,7 +198,8 @@ def adapt_image_fit_pad_crop(
     )
     if proc.returncode != 0:
         raise MediaError(proc.stderr.strip() or "ffmpeg adapt failed")
-    validate_output_image(dst, width=width, height=height, preset_id=preset_id)
+    _enforce_byte_cap(dst, preset_id, home)
+    validate_output_image(dst, width=width, height=height, preset_id=preset_id, home=home)
     return dst
 
 
@@ -180,11 +210,67 @@ def adapt_image_ai_extend_placeholder(
     width: int,
     height: int,
     preset_id: str | None = None,
+    home: Path | None = None,
 ) -> Path:
     """Mock/local placeholder: letterbox pad only. Live OpenAI extend uses provider i2i."""
     return adapt_image_fit_pad_crop(
-        src, dst, width=width, height=height, fit="pad", preset_id=preset_id
+        src, dst, width=width, height=height, fit="pad", preset_id=preset_id, home=home
     )
+
+
+def _enforce_byte_cap(path: Path, preset_id: str | None, home: Path | None) -> None:
+    if not preset_id:
+        return
+    preset = shaped_preset(preset_id, home)
+    if preset is None or preset.byte_cap is None:
+        return
+    if check_export_bytes(path.stat().st_size, preset.byte_cap):
+        return
+    _quantize_under_cap(path, preset.byte_cap)
+
+
+def _quantize_under_cap(path: Path, cap: ByteCap) -> None:
+    """Palette-quantize a PNG until it meets the cap, or leave the last attempt."""
+    for colors in (128, 64, 32, 16, 8):
+        palette = path.with_name(f"{path.stem}.pal{colors}.png")
+        quantized = path.with_name(f"{path.stem}.q{colors}.png")
+        gen = subprocess.run(
+            [
+                FFMPEG,
+                "-y",
+                "-i",
+                str(path),
+                "-vf",
+                f"palettegen=max_colors={colors}:stats_mode=single",
+                str(palette),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        use = subprocess.run(
+            [
+                FFMPEG,
+                "-y",
+                "-i",
+                str(path),
+                "-i",
+                str(palette),
+                "-lavfi",
+                "paletteuse=dither=bayer",
+                str(quantized),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        palette.unlink(missing_ok=True)
+        if gen.returncode != 0 or use.returncode != 0 or not quantized.is_file():
+            quantized.unlink(missing_ok=True)
+            continue
+        quantized.replace(path)
+        if check_export_bytes(path.stat().st_size, cap):
+            return
 
 
 def _png_dimensions(path: Path) -> tuple[int, int] | None:
@@ -201,8 +287,9 @@ def validate_export_for_preset(
     preset_id: str,
     width: int,
     height: int,
+    home: Path | None = None,
 ) -> dict[str, Any]:
-    partner = partner_preset_by_id(preset_id)
+    partner = shaped_preset(preset_id, home)
     if partner is None:
         return {"spec_kind": "generic", "automated": {"dimensions_ok": True, "bytes_ok": True}}
     size = path.stat().st_size
@@ -251,12 +338,19 @@ def validate_export_for_preset(
     }
 
 
+def png_dimensions(data: bytes) -> tuple[int, int]:
+    if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("not a png")
+    return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
+
+
 def validate_output_image(
     path: Path,
     *,
     width: int,
     height: int,
     preset_id: str | None = None,
+    home: Path | None = None,
 ) -> dict[str, Any]:
     if not path.is_file():
         raise MediaError("adapt output missing")
@@ -276,12 +370,16 @@ def validate_output_image(
         raise MediaError(f"adapt output dimensions {out_w}x{out_h} != {width}x{height}")
     base: dict[str, Any] = {"width": out_w, "height": out_h, "bytes": size, "path": str(path)}
     if preset_id:
-        base["export_validation"] = validate_export_for_preset(path, preset_id, width, height)
+        base["export_validation"] = validate_export_for_preset(
+            path, preset_id, width, height, home
+        )
     return base
 
 
-def safe_area_report(preset_id: str | None, width: int, height: int) -> dict[str, Any]:
-    partner = partner_preset_by_id(preset_id or "") if preset_id else None
+def safe_area_report(
+    preset_id: str | None, width: int, height: int, home: Path | None = None
+) -> dict[str, Any]:
+    partner = shaped_preset(preset_id, home) if preset_id else None
     if partner is not None:
         return _partner_safe_area_without_file(partner, width, height)
 
@@ -360,13 +458,14 @@ def estimate_adapt_targets(
     *,
     layout: AdaptLayout,
     unit_cost_ai: float,
+    home: Path | None = None,
 ) -> dict[str, Any]:
     if not targets:
         raise ValueError("at least one adapt target required")
     per_target: list[dict[str, Any]] = []
     total = 0.0
     for index, raw in enumerate(targets):
-        width, height, preset_id = resolve_target(raw)
+        width, height, preset_id = resolve_target(raw, home)
         amount = 0.0 if layout == "fit_pad_crop" else unit_cost_ai
         total += amount
         per_target.append(
@@ -377,7 +476,7 @@ def estimate_adapt_targets(
                 "height": height,
                 "layout": layout,
                 "amount_usd": amount,
-                "safe_area": safe_area_report(preset_id, width, height),
+                "safe_area": safe_area_report(preset_id, width, height, home),
             }
         )
     pricing_unknown = layout == "ai_extend" and unit_cost_ai <= 0
