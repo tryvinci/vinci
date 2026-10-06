@@ -12,7 +12,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from vinci_daemon.app import create_app
-from vinci_media.adapt import png_dimensions
+from vinci_media.adapt import image_dimensions
+from vinci_media.partner_presets import partner_preset_by_id
 from vinci_provider_sdk.mock import png_scene
 from vinci_runtime.engine import Engine
 
@@ -183,7 +184,7 @@ def test_axis_pipeline_e2e(
         for output in item["outputs"]:
             blob = http.get(f"/assets/{output['asset_id']}/file")
             assert blob.status_code == 200
-            width, height = png_dimensions(blob.content)
+            width, height = image_dimensions(blob.content)
             assert (width, height) == (output["width"], output["height"])
             assert output["dimensions"]["pass"] is True
             if output["preset_id"] == "amazon_828x300":
@@ -196,8 +197,17 @@ def test_axis_pipeline_e2e(
                 assert output["safe_area"]["applied"] is True
             if output["preset_id"] == "jio_320x50":
                 assert output["byte_cap"] is None
+            partner = partner_preset_by_id(output["preset_id"])
+            if output["preset_id"] == "jio_320x50":
+                ext = "png"
+            elif output["preset_id"] == custom_id or (
+                partner is not None and partner.byte_cap is not None
+            ):
+                ext = "jpg"
+            else:
+                ext = "png"
             expected_names.add(
-                f"{item['index']}_{output['preset_id']}_{output['width']}x{output['height']}.png"
+                f"{item['index']}_{output['preset_id']}_{output['width']}x{output['height']}.{ext}"
             )
     bundle = http.get(f"/adapts/batch/{batch_id}/bundle.zip")
     assert bundle.status_code == 200

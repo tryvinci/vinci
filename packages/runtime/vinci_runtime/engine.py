@@ -46,7 +46,7 @@ from vinci_media.adapt import (
     adapt_image_ai_extend_placeholder,
     adapt_image_fit_pad_crop,
     estimate_adapt_targets,
-    png_dimensions,
+    image_dimensions,
     presets_document,
     resolve_preset,
     resolve_target,
@@ -1320,7 +1320,7 @@ class Engine:
             width, height, preset_id = resolve_target(raw, self.config.home)
             dest = work / f"adapt-{index}.png"
             if parsed_layout == "fit_pad_crop":
-                adapt_image_fit_pad_crop(
+                dest = adapt_image_fit_pad_crop(
                     src_path,
                     dest,
                     width=width,
@@ -1367,7 +1367,7 @@ class Engine:
                 )
                 continue
             else:
-                adapt_image_ai_extend_placeholder(
+                dest = adapt_image_ai_extend_placeholder(
                     src_path,
                     dest,
                     width=width,
@@ -1379,10 +1379,15 @@ class Engine:
             image_meta = validate_output_image(
                 dest, width=width, height=height, preset_id=preset_id, home=self.config.home
             )
+            export_mime = (
+                "image/jpeg"
+                if str(dest).lower().endswith((".jpg", ".jpeg"))
+                else "image/png"
+            )
             digest = self._put_path(
                 dest,
                 kind=AssetKind.IMAGE,
-                mime="image/png",
+                mime=export_mime,
                 run_id="",
             )
             digests.append(digest)
@@ -1556,13 +1561,15 @@ class Engine:
                 if item.get("status") != "done":
                     continue
                 for output in item.get("outputs") or []:
+                    blob = self.cas.get(str(output["asset_id"]))
+                    ext = "jpg" if blob[:2] == b"\xff\xd8" else "png"
                     name = (
                         f"{item['index']}_{output['preset_id']}_"
-                        f"{output['width']}x{output['height']}.png"
+                        f"{output['width']}x{output['height']}.{ext}"
                     )
                     info = zipfile.ZipInfo(filename=name, date_time=(1980, 1, 1, 0, 0, 0))
                     info.compress_type = zipfile.ZIP_DEFLATED
-                    archive.writestr(info, self.cas.get(str(output["asset_id"])))
+                    archive.writestr(info, blob)
         return buffer.getvalue()
 
     def _batch_path(self, batch_id: str) -> Path:
@@ -1605,7 +1612,7 @@ class Engine:
                 continue
             blob = self.cas.get(digest)
             try:
-                actual_w, actual_h = png_dimensions(blob)
+                actual_w, actual_h = image_dimensions(blob)
             except ValueError:
                 actual_w, actual_h = 0, 0
             cap = getattr(preset, "byte_cap", None)
@@ -1929,7 +1936,7 @@ class Engine:
                 )
                 dest = work / f"adapt-{index}.png"
                 if layout == "ai_extend":
-                    adapt_image_ai_extend_placeholder(
+                    dest = adapt_image_ai_extend_placeholder(
                         src,
                         dest,
                         width=width,
@@ -1938,7 +1945,7 @@ class Engine:
                         home=self.config.home,
                     )
                 else:
-                    adapt_image_fit_pad_crop(
+                    dest = adapt_image_fit_pad_crop(
                         src,
                         dest,
                         width=width,
@@ -1947,8 +1954,13 @@ class Engine:
                         preset_id=resolved,
                         home=self.config.home,
                     )
+                export_mime = (
+                    "image/jpeg"
+                    if str(dest).lower().endswith((".jpg", ".jpeg"))
+                    else "image/png"
+                )
                 outputs.append(
-                    self._put_path(dest, kind=AssetKind.IMAGE, mime="image/png", run_id=run_id)
+                    self._put_path(dest, kind=AssetKind.IMAGE, mime=export_mime, run_id=run_id)
                 )
         elif op == "split":
             src = self._materialize(params.get("media"))

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -173,6 +174,66 @@ def _vf_fit_pad_crop(width: int, height: int, fit: FitMode) -> str:
     return f"scale={width}:{height}:force_original_aspect_ratio=decrease"
 
 
+def _preset_byte_cap(preset_id: str | None, home: Path | None) -> ByteCap | None:
+    if not preset_id:
+        return None
+    preset = shaped_preset(preset_id, home)
+    if preset is None:
+        return None
+    return preset.byte_cap
+
+
+def _jpeg_qscale(quality: int) -> int:
+    """Map JPEG quality 1–100 to ffmpeg -q:v (2≈high … 31≈low)."""
+    clamped = max(1, min(100, quality))
+    return max(2, min(31, int(round(2 + (100 - clamped) * 29 / 99))))
+
+
+def _write_jpeg(src: Path, dst: Path, quality: int) -> None:
+    proc = subprocess.run(
+        [
+            FFMPEG,
+            "-y",
+            "-i",
+            str(src),
+            "-frames:v",
+            "1",
+            "-q:v",
+            str(_jpeg_qscale(quality)),
+            str(dst),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise MediaError(proc.stderr.strip() or "ffmpeg jpeg encode failed")
+
+
+def _jpeg_under_cap(src: Path, dst: Path, cap: ByteCap) -> Path:
+    """Encode as JPEG, lowering quality until the export meets the byte cap."""
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    work_src = src
+    temp_src: Path | None = None
+    if src.resolve() == dst.resolve():
+        temp_src = dst.with_name(f"{dst.stem}.reencode{dst.suffix}")
+        shutil.copy2(src, temp_src)
+        work_src = temp_src
+    best = dst.with_name(f"{dst.stem}.cap.jpg")
+    try:
+        for quality in range(92, 39, -4):
+            _write_jpeg(work_src, best, quality)
+            if check_export_bytes(best.stat().st_size, cap):
+                best.replace(dst)
+                return dst
+        if best.is_file():
+            best.replace(dst)
+    finally:
+        if temp_src is not None:
+            temp_src.unlink(missing_ok=True)
+    return dst
+
+
 def adapt_image_fit_pad_crop(
     src: Path,
     dst: Path,
@@ -185,11 +246,15 @@ def adapt_image_fit_pad_crop(
 ) -> Path:
     require_ffmpeg()
     dst.parent.mkdir(parents=True, exist_ok=True)
+    byte_cap = _preset_byte_cap(preset_id, home)
+    out = dst
+    if byte_cap is not None and str(out).lower().endswith(".png"):
+        out = out.with_suffix(".jpg")
     vf = _vf_fit_pad_crop(width, height, fit)
     args = [FFMPEG, "-y", "-i", str(src), "-vf", vf, "-frames:v", "1"]
-    if str(dst).lower().endswith((".jpg", ".jpeg")):
-        args.extend(["-q:v", "5"])
-    args.append(str(dst))
+    if str(out).lower().endswith((".jpg", ".jpeg")):
+        args.extend(["-q:v", str(_jpeg_qscale(92))])
+    args.append(str(out))
     proc = subprocess.run(
         args,
         check=False,
@@ -198,9 +263,9 @@ def adapt_image_fit_pad_crop(
     )
     if proc.returncode != 0:
         raise MediaError(proc.stderr.strip() or "ffmpeg adapt failed")
-    _enforce_byte_cap(dst, preset_id, home)
-    validate_output_image(dst, width=width, height=height, preset_id=preset_id, home=home)
-    return dst
+    out = _enforce_byte_cap(out, preset_id, home)
+    validate_output_image(out, width=width, height=height, preset_id=preset_id, home=home)
+    return out
 
 
 def adapt_image_ai_extend_placeholder(
@@ -218,59 +283,28 @@ def adapt_image_ai_extend_placeholder(
     )
 
 
-def _enforce_byte_cap(path: Path, preset_id: str | None, home: Path | None) -> None:
-    if not preset_id:
-        return
-    preset = shaped_preset(preset_id, home)
-    if preset is None or preset.byte_cap is None:
-        return
-    if check_export_bytes(path.stat().st_size, preset.byte_cap):
-        return
-    _quantize_under_cap(path, preset.byte_cap)
+def _enforce_byte_cap(path: Path, preset_id: str | None, home: Path | None) -> Path:
+    cap = _preset_byte_cap(preset_id, home)
+    if cap is None:
+        _png_oversize_guard(path)
+        return path
+    if check_export_bytes(path.stat().st_size, cap):
+        return path
+    jpg = path if str(path).lower().endswith((".jpg", ".jpeg")) else path.with_suffix(".jpg")
+    _jpeg_under_cap(path, jpg, cap)
+    if jpg != path and path.is_file():
+        path.unlink(missing_ok=True)
+    if not check_export_bytes(jpg.stat().st_size, cap):
+        raise MediaError(
+            f"export {jpg.stat().st_size} bytes still exceeds preset cap "
+            f"({cap.op} {cap.max_bytes}) after jpeg quality reduction"
+        )
+    return jpg
 
 
-def _quantize_under_cap(path: Path, cap: ByteCap) -> None:
-    """Palette-quantize a PNG until it meets the cap, or leave the last attempt."""
-    for colors in (128, 64, 32, 16, 8):
-        palette = path.with_name(f"{path.stem}.pal{colors}.png")
-        quantized = path.with_name(f"{path.stem}.q{colors}.png")
-        gen = subprocess.run(
-            [
-                FFMPEG,
-                "-y",
-                "-i",
-                str(path),
-                "-vf",
-                f"palettegen=max_colors={colors}:stats_mode=single",
-                str(palette),
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        use = subprocess.run(
-            [
-                FFMPEG,
-                "-y",
-                "-i",
-                str(path),
-                "-i",
-                str(palette),
-                "-lavfi",
-                "paletteuse=dither=bayer",
-                str(quantized),
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        palette.unlink(missing_ok=True)
-        if gen.returncode != 0 or use.returncode != 0 or not quantized.is_file():
-            quantized.unlink(missing_ok=True)
-            continue
-        quantized.replace(path)
-        if check_export_bytes(path.stat().st_size, cap):
-            return
+def _png_oversize_guard(path: Path) -> None:
+    """No-op for uncapped exports; capped paths are handled via JPEG re-encode."""
+    return
 
 
 def _png_dimensions(path: Path) -> tuple[int, int] | None:
@@ -280,6 +314,52 @@ def _png_dimensions(path: Path) -> tuple[int, int] | None:
     out_w = int.from_bytes(header[16:20], "big")
     out_h = int.from_bytes(header[20:24], "big")
     return out_w, out_h
+
+
+def _jpeg_dimensions(data: bytes) -> tuple[int, int] | None:
+    if len(data) < 4 or data[:2] != b"\xff\xd8":
+        return None
+    offset = 2
+    while offset + 4 < len(data):
+        if data[offset] != 0xff:
+            offset += 1
+            continue
+        marker = data[offset + 1]
+        if marker in (0xd9, 0xda):
+            break
+        length = int.from_bytes(data[offset + 2 : offset + 4], "big")
+        if length < 2 or offset + 2 + length > len(data):
+            break
+        if 0xc0 <= marker <= 0xcf and marker not in (0xc4, 0xc8, 0xcc):
+            height = int.from_bytes(data[offset + 5 : offset + 7], "big")
+            width = int.from_bytes(data[offset + 7 : offset + 9], "big")
+            if width > 0 and height > 0:
+                return width, height
+            return None
+        offset += 2 + length
+    return None
+
+
+def image_dimensions(data: bytes) -> tuple[int, int]:
+    if len(data) >= 24 and data[:8] == b"\x89PNG\r\n\x1a\n":
+        return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
+    jpeg = _jpeg_dimensions(data)
+    if jpeg is not None:
+        return jpeg
+    raise ValueError("not a png or jpeg")
+
+
+def _dimensions_from_path(path: Path) -> tuple[int, int]:
+    data = path.read_bytes()
+    try:
+        return image_dimensions(data)
+    except ValueError:
+        meta = probe(path)
+        streams = meta.get("streams") or []
+        image_stream = next((s for s in streams if s.get("codec_type") == "video"), None)
+        if image_stream is None:
+            image_stream = streams[0] if streams else {}
+        return int(image_stream.get("width") or 0), int(image_stream.get("height") or 0)
 
 
 def validate_export_for_preset(
@@ -300,6 +380,15 @@ def validate_export_for_preset(
     }
     if partner.byte_cap is not None:
         ok = check_export_bytes(size, partner.byte_cap)
+        if not ok and str(path).lower().endswith(".png"):
+            jpg = path.with_suffix(".jpg")
+            _jpeg_under_cap(path, jpg, partner.byte_cap)
+            if jpg.is_file():
+                if path.is_file():
+                    path.unlink(missing_ok=True)
+                path = jpg
+                size = path.stat().st_size
+                ok = check_export_bytes(size, partner.byte_cap)
         automated["byte_cap_ok"] = ok
         automated["bytes_ok"] = ok
         if not ok:
@@ -357,15 +446,7 @@ def validate_output_image(
     size = path.stat().st_size
     if size <= 0 or size > MAX_OUTPUT_BYTES:
         raise MediaError(f"adapt output size out of range: {size} bytes")
-    dims = _png_dimensions(path)
-    if dims is None:
-        meta = probe(path)
-        streams = meta.get("streams") or []
-        image_stream = next((s for s in streams if s.get("codec_type") == "video"), None)
-        if image_stream is None:
-            image_stream = streams[0] if streams else {}
-        dims = (int(image_stream.get("width") or 0), int(image_stream.get("height") or 0))
-    out_w, out_h = dims
+    out_w, out_h = _dimensions_from_path(path)
     if out_w != width or out_h != height:
         raise MediaError(f"adapt output dimensions {out_w}x{out_h} != {width}x{height}")
     base: dict[str, Any] = {"width": out_w, "height": out_h, "bytes": size, "path": str(path)}
