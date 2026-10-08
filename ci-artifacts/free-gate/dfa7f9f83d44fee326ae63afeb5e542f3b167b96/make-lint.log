@@ -1,0 +1,55 @@
+make[1]: Entering directory '/workspace/apps/vinci-oss'
+ruff check packages tests apps/daemon scripts/*.py
+[1;32mAll checks passed![0m
+mypy --config-file pyproject.toml \
+	packages/protocol/vinci_protocol \
+	packages/core/vinci_core \
+	packages/storage/vinci_storage \
+	packages/provider-sdk/vinci_provider_sdk \
+	packages/skills/vinci_skills \
+	packages/runtime/vinci_runtime \
+	packages/mcp/vinci_mcp \
+	packages/media/vinci_media \
+	packages/index/vinci_index \
+	packages/provider-elevenlabs/vinci_provider_elevenlabs \
+	packages/provider-cloudflare/vinci_provider_cloudflare \
+	packages/provider-wavespeed/vinci_provider_wavespeed \
+	packages/provider-google/vinci_provider_google \
+	packages/provider-fal/vinci_provider_fal \
+	packages/provider-higgsfield/vinci_provider_higgsfield \
+	packages/provider-magnific/vinci_provider_magnific \
+	packages/harness/vinci_harness
+Success: no issues found in 65 source files
+npm run typecheck
+
+> typecheck
+> npm run typecheck --workspaces --if-present
+
+
+> @tryvinci/protocol@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @tryvinci/cli@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @tryvinci/studio@0.1.0 typecheck
+> tsc --noEmit
+
+make proprietary-scan
+make[2]: Entering directory '/workspace/apps/vinci-oss'
+python3 scripts/check_no_proprietary.py
+proprietary/AGPL scan clean
+make[2]: Leaving directory '/workspace/apps/vinci-oss'
+make secret-scan
+make[2]: Entering directory '/workspace/apps/vinci-oss'
+python3 scripts/check_no_secrets.py
+secret scan clean
+make[2]: Leaving directory '/workspace/apps/vinci-oss'
+make skills-validate
+make[2]: Entering directory '/workspace/apps/vinci-oss'
+python3 scripts/validate_skills.py
+skill validation ok (21 skills)
+make[2]: Leaving directory '/workspace/apps/vinci-oss'
+make[1]: Leaving directory '/workspace/apps/vinci-oss'

@@ -39,6 +39,25 @@ _TOOL_DESCRIPTIONS = {
 
 _SPEND_TOOLS = {"vinci.image_generate", "vinci.video_generate", "vinci.workflow_run"}
 
+MUTATING_TOOLS = frozenset(
+    {
+        "vinci.image_generate",
+        "vinci.video_generate",
+        "vinci.workflow_run",
+        "vinci.adapts_run",
+        "vinci.jobs_cancel",
+    }
+)
+
+_DEFERRED_EXEC_TOOLS = frozenset(
+    {
+        "vinci.image_generate",
+        "vinci.video_generate",
+        "vinci.workflow_run",
+        "vinci.adapts_run",
+    }
+)
+
 
 def tool_schemas() -> list[dict[str, Any]]:
     tools: list[dict[str, Any]] = []
@@ -81,7 +100,13 @@ def tool_schemas() -> list[dict[str, Any]]:
     return tools
 
 
-def call_tool(engine: Engine, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+def call_tool(
+    engine: Engine,
+    name: str,
+    arguments: dict[str, Any],
+    *,
+    operation_id: str | None = None,
+) -> dict[str, Any]:
     secrets = engine.resolver.known_values(
         [
             "MOCK_API_KEY",
@@ -107,7 +132,16 @@ def call_tool(engine: Engine, name: str, arguments: dict[str, Any]) -> dict[str,
             max_cost=_max_cost(args),
             model_id=args.get("model_id"),
         )
+    journal_deferred = getattr(engine, "_journal", None) is not None and bool(operation_id)
     if name == "vinci.image_generate":
+        if journal_deferred:
+            return engine.accept_run(
+                "@tryvinci/image-generate",
+                _inputs(args),
+                max_cost=_max_cost(args),
+                model_id=args.get("model_id"),
+                operation_id=operation_id,
+            )
         return engine.start_run(
             "@tryvinci/image-generate",
             _inputs(args),
@@ -115,6 +149,13 @@ def call_tool(engine: Engine, name: str, arguments: dict[str, Any]) -> dict[str,
             model_id=args.get("model_id"),
         )
     if name == "vinci.video_generate":
+        if journal_deferred:
+            return engine.accept_run(
+                "@tryvinci/video-generate",
+                _inputs(args),
+                max_cost=_max_cost(args),
+                operation_id=operation_id,
+            )
         return engine.start_run(
             "@tryvinci/video-generate",
             _inputs(args),
@@ -123,6 +164,15 @@ def call_tool(engine: Engine, name: str, arguments: dict[str, Any]) -> dict[str,
     if name == "vinci.workflow_run":
         workflow = args.get("workflow")
         spec = WorkflowSpec.model_validate(workflow) if workflow else None
+        if journal_deferred:
+            return engine.accept_run(
+                args.get("skill"),
+                _inputs(args),
+                max_cost=_max_cost(args),
+                preference=args.get("preference"),
+                workflow=spec,
+                operation_id=operation_id,
+            )
         return engine.start_run(
             args.get("skill"),
             _inputs(args),
@@ -156,7 +206,7 @@ def call_tool(engine: Engine, name: str, arguments: dict[str, Any]) -> dict[str,
             item["asset_id"] = str(args["asset_id"])
         if args.get("source_url"):
             item["source_url"] = str(args["source_url"])
-        return engine.start_adapt_batch([item])
+        return engine.start_adapt_batch([item], operation_id=operation_id)
     if name == "vinci.batch_status":
         return engine.adapt_batch_status(str(args["batch_id"]))
     raise KeyError(name)
@@ -174,7 +224,12 @@ def _max_cost(args: dict[str, Any]) -> float | None:
     return float(value) if value is not None else None
 
 
-def handle_rpc(engine: Engine, message: dict[str, Any]) -> dict[str, Any] | None:
+def handle_rpc(
+    engine: Engine,
+    message: dict[str, Any],
+    *,
+    operation_id: str | None = None,
+) -> dict[str, Any] | None:
     method = message.get("method")
     rpc_id = message.get("id")
     if method is None or str(method).startswith("notifications/"):
@@ -196,7 +251,7 @@ def handle_rpc(engine: Engine, message: dict[str, Any]) -> dict[str, Any] | None
         name = params["name"]
         arguments = params.get("arguments") or {}
         try:
-            result = call_tool(engine, name, arguments)
+            result = call_tool(engine, name, arguments, operation_id=operation_id)
             text = json.dumps(result, default=str)
             return {
                 "jsonrpc": "2.0",

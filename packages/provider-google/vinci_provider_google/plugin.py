@@ -60,6 +60,7 @@ def _http_urls(payload: Any) -> list[str]:
 
 
 class GoogleProvider(CatalogBackedProvider):
+    durable_job_reconciliation = True
     catalog_name = "google"
     provider_id = "google"
     secret_name = "GEMINI_API_KEY"

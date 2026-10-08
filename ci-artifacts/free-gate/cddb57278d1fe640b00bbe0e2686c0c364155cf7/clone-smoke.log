@@ -1,0 +1,15 @@
+make[1]: Entering directory '/workspace/apps/vinci-oss'
+./scripts/clone-smoke.sh
+The virtual environment was not created successfully because ensurepip is not
+available.  On Debian/Ubuntu systems, you need to install the python3-venv
+package using the following command.
+
+    apt install python3.12-venv
+
+You may need to use sudo with that command.  After installing the python3-venv
+package, recreate your virtual environment.
+
+Failing command: /tmp/vinci-clone-smoke.wyFF/.venv/bin/python3
+
+make[1]: *** [Makefile:98: clone-smoke] Error 1
+make[1]: Leaving directory '/workspace/apps/vinci-oss'

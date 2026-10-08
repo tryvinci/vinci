@@ -1,0 +1,4 @@
+make[1]: Entering directory '/workspace/apps/vinci-oss'
+python3 scripts/validate_skills.py
+skill validation ok (21 skills)
+make[1]: Leaving directory '/workspace/apps/vinci-oss'

@@ -12,7 +12,9 @@ Phases 0–3 are in this tree: protocol v0, local CAS+SQLite, daemon `:4310`, co
 
 This repository is **private** until a human opens it. Do not publish to npm or PyPI yet. npm `vinci` and PyPI `vinci` are taken — packages use `@tryvinci/*` and `vinci-core` / `vinci-runtime` / `vinci-media` / `vinci-harness` / `vinci-provider-*`. See `NAMESPACE.md`.
 
-Until `tryvinci/vinci` exists, this tree ships at `apps/vinci-oss/` in `tryvinci/vinci-monorepo` (not turbo/npm workspaces). Clone the monorepo, `cd apps/vinci-oss`, then the same gates. Extract later without changing the architecture. Monorepo link plan: `docs/VINCI_OSS_PUBLIC_LINK.md` at repo root.
+Canonical OSS git tree: [`tryvinci/vinci`](https://github.com/tryvinci/vinci) (split-sync from `apps/vinci-oss/` in `tryvinci/vinci-monorepo`). For monorepo contributors: `cd apps/vinci-oss` and run the same `make` gates. Link plan: `docs/VINCI_OSS_PUBLIC_LINK.md` at repo root.
+
+**Self-host on your Cloudflare account** (single-tenant, not Vinci Platform): see [`docs/SELF_HOST_CLOUDFLARE.md`](docs/SELF_HOST_CLOUDFLARE.md). Local `make install` / `./scripts/vinci studio` behavior is unchanged.
 
 ## Quick start (demo, no provider spend)
 

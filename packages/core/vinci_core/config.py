@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -29,6 +30,9 @@ class VinciConfig:
 
     @property
     def cas_dir(self) -> Path:
+        override = os.environ.get("VINCI_CAS_DIR", "").strip()
+        if override:
+            return Path(override).expanduser()
         return self.home / "cas"
 
     @property

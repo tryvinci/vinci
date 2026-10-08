@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import shutil
 import struct
 import subprocess
@@ -26,7 +27,7 @@ from vinci_protocol.models import (
     ProviderManifest,
     VinciError,
 )
-from vinci_storage.cas import ContentAddressedStore
+from vinci_storage.cas import CasStore, ContentAddressedStore
 
 from vinci_provider_sdk.base import Provider
 from vinci_provider_sdk.shot import compose_shot_prompt, mock_duration_seconds
@@ -290,6 +291,8 @@ def mp4_scene(
 class MockProvider(Provider):
     """Deterministic fake generations + fake pricing. For CI, tests, and demo mode."""
 
+    durable_job_reconciliation = True
+
     manifest = ProviderManifest(
         id="mock",
         display_name="Mock",
@@ -297,7 +300,7 @@ class MockProvider(Provider):
         docs_url="https://github.com/tryvinci/vinci",
     )
 
-    def __init__(self, cas: ContentAddressedStore, api_key: str | None = None) -> None:
+    def __init__(self, cas: CasStore, api_key: str | None = None) -> None:
         self._cas = cas
         self._api_key = api_key
         self._catalog = load_catalog()
@@ -328,6 +331,12 @@ class MockProvider(Provider):
         return estimate
 
     def submit(self, req: JobRequest) -> ProviderJobRef:
+        counter_path = os.environ.get("VINCI_TEST_MOCK_SUBMIT_COUNTER_PATH")
+        if counter_path:
+            p = Path(counter_path)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            n = int(p.read_text(encoding="utf-8").strip() or "0") if p.is_file() else 0
+            p.write_text(str(n + 1), encoding="utf-8")
         spec = self._resolve(req)
         key = req.idempotency_key or idempotency_key(spec.id, req.inputs)
         if key not in self._estimated:

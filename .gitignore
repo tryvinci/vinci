@@ -23,5 +23,7 @@ coverage/
 .gradle/
 next.config.js
 apps/studio/.next/
+deploy/cloudflare/.deploy-state.json
+deploy/cloudflare/.deploy-state.json.fixture
 apps/cli/dist/
 packages/protocol/dist/

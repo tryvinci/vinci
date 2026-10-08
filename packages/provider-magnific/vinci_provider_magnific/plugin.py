@@ -37,6 +37,7 @@ def _task_id(body: dict[str, Any]) -> str:
 class MagnificProvider(CatalogBackedProvider):
     """First-class Magnific REST plugin. Header x-magnific-api-key. Not MCP."""
 
+    durable_job_reconciliation = True
     catalog_name = "magnific"
     provider_id = "magnific"
     secret_name = "MAGNIFIC_API_KEY"

@@ -33,6 +33,7 @@ class LiveSpendDisabled(RuntimeError):
 class CatalogBackedProvider(Provider):
     """Estimate from a checked-in catalog snapshot. Live HTTP is opt-in."""
 
+    durable_job_reconciliation: bool = False
     catalog_name: str = ""
     provider_id: str = ""
     secret_name: str = ""

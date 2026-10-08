@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import difflib
+import hashlib
 import io
 import json
 import os
@@ -71,6 +72,7 @@ from vinci_protocol.enums import (
     AssetKind,
     AssetSource,
     Capability,
+    ErrorCode,
     JobState,
     NodeType,
     RoutePreference,
@@ -86,6 +88,7 @@ from vinci_protocol.models import (
     Provenance,
     ProviderJobRef,
     Receipt,
+    VinciError,
     WorkflowNode,
     WorkflowSpec,
 )
@@ -99,10 +102,17 @@ from vinci_provider_openai import OpenAIProvider
 from vinci_provider_sdk.mock import MockProvider
 from vinci_provider_wavespeed import WavespeedProvider
 from vinci_skills.loader import Skill, SkillLoader, install_skill_dir, interpolate
-from vinci_storage.cas import ContentAddressedStore
+from vinci_storage.backends import make_cas
 from vinci_storage.sqlite_store import SqliteStore
 
 from vinci_runtime.comfy import import_comfy
+from vinci_runtime.provider_reconciliation import (
+    ProviderInflightUncertain,
+    load_ledger_provider_inflight,
+    provider_inflight_pending_without_ref,
+    supports_durable_reconciliation,
+)
+from vinci_runtime.writer_effect_trace import record_writer_effect
 
 PROVIDER_DOCS = {
     "mock": "https://github.com/tryvinci/vinci",
@@ -270,7 +280,7 @@ def _decode_data_uri(item: str) -> tuple[bytes, str] | None:
 class Engine:
     def __init__(self, home: Path | None = None, skills_root: Path | None = None) -> None:
         self.config: VinciConfig = load_config(home)
-        self.cas = ContentAddressedStore(self.config.cas_dir)
+        self.cas = make_cas(self.config.cas_dir)
         self.store = SqliteStore(self.config.sqlite_path)
         self.index = AssetIndex(self.config.home / "index.sqlite")
         self.resolver = CredentialResolver(self.config)
@@ -284,17 +294,28 @@ class Engine:
         self.providers: dict[str, Any] = {}
         self._rebuild_providers()
 
+    def _loopback_i2i_enabled(self) -> bool:
+        return bool(os.environ.get("VINCI_TEST_LOOPBACK_I2I_URL", "").strip())
+
     def _rebuild_providers(self) -> None:
         cas = self.cas
         resolver = self.resolver
+        from vinci_provider_sdk.loopback_i2i import loopback_i2i_from_env
+
+        loopback_openai = loopback_i2i_from_env(cas=cas)
+        openai_provider = (
+            loopback_openai
+            if loopback_openai is not None
+            else OpenAIProvider(
+                api_key=resolver.resolve("OPENAI_API_KEY"),
+                cas=cas,
+            )
+        )
         self.providers = {
             "mock": MockProvider(cas, api_key=resolver.resolve("MOCK_API_KEY")),
             "wavespeed": WavespeedProvider(api_key=resolver.resolve("WAVESPEED_API_KEY")),
             "google": GoogleProvider(api_key=resolver.resolve("GEMINI_API_KEY")),
-            "openai": OpenAIProvider(
-                api_key=resolver.resolve("OPENAI_API_KEY"),
-                cas=cas,
-            ),
+            "openai": openai_provider,
             "fal": FalProvider(api_key=resolver.resolve("FAL_KEY")),
             "elevenlabs": ElevenLabsProvider(api_key=resolver.resolve("ELEVENLABS_API_KEY")),
             "cloudflare": CloudflareProvider(
@@ -488,6 +509,38 @@ class Engine:
             checks["home"] and checks["cas"] and checks["sqlite"] and checks["ffmpeg"]
         )
         return checks
+
+    def recover_interrupted_jobs(self) -> int:
+        """Mark in-flight jobs/runs failed after unclean restart when journaling is off.
+
+        Not used when a durable journal is enabled; see `reconcile_pending_outbox` instead.
+        """
+        active_jobs = {
+            JobState.RUNNING,
+            JobState.QUEUED,
+            JobState.CREATED,
+        }
+        recovered = 0
+        for job in self.store.list_jobs():
+            if job.state not in active_jobs:
+                continue
+            job.state = JobState.FAILED
+            job.error = VinciError(code=ErrorCode.UNKNOWN, message="recovered after restart")
+            self.store.put_job(job)
+            recovered += 1
+        active_runs = {"running", "queued", "processing"}
+        for run in self.store.list_runs():
+            state = str(run.get("state") or "")
+            if state not in active_runs:
+                continue
+            run_id = str(run["id"])
+            body = dict(run)
+            body.pop("id", None)
+            body.pop("state", None)
+            body["error"] = "interrupted restart"
+            self.store.put_run(run_id, body, JobState.FAILED.value)
+            recovered += 1
+        return recovered
 
     def templates(self) -> list[dict[str, Any]]:
         return list_templates()
@@ -840,7 +893,12 @@ class Engine:
             "preference": spec.preference.value,
         }
 
-    def start_run(
+    def _stable_run_id(self, operation_id: str | None) -> str:
+        if operation_id:
+            return hashlib.sha256(operation_id.encode()).hexdigest()[:24]
+        return uuid.uuid4().hex
+
+    def accept_run(
         self,
         skill_ref: str | None,
         inputs: dict[str, Any],
@@ -849,7 +907,13 @@ class Engine:
         preference: str | None = None,
         workflow: WorkflowSpec | None = None,
         model_id: str | None = None,
+        operation_id: str | None = None,
     ) -> dict[str, Any]:
+        """Persist run intent only (no provider execution)."""
+        run_id = self._stable_run_id(operation_id)
+        existing = self.store.get_run(run_id)
+        if existing is not None:
+            return existing
         secrets = self.resolver.known_values(all_secret_names())
         if workflow is not None:
             spec = workflow
@@ -903,7 +967,6 @@ class Engine:
             ),
             "preference": spec.preference.value,
         }
-        run_id = uuid.uuid4().hex
         body: dict[str, Any] = {
             "skill": f"{skill_name}@{skill_version}",
             "inputs": safe_inputs,
@@ -927,7 +990,65 @@ class Engine:
         self._emit(
             "run.created", run_id=run_id, payload={"skill": body["skill"], "total": plan["total"]}
         )
-        return self._execute_run(run_id)
+        return self.store.get_run(run_id) or body
+
+    def dispatch_run(
+        self,
+        run_id: str,
+        *,
+        operation_id: str | None = None,
+        receipt_parent_op_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Execute a queued run after durable intent is committed."""
+        run = self.store.get_run(run_id)
+        if run is None:
+            raise KeyError(run_id)
+        state = str(run.get("state") or "")
+        if state == JobState.RUNNING.value:
+            journal = getattr(self, "_journal", None)
+            parent = receipt_parent_op_id or operation_id
+            if journal is not None and parent:
+                receipt_row = journal.get_operation(f"{parent}:output")
+                has_receipt = (
+                    receipt_row is not None and receipt_row.get("status") == "committed"
+                )
+                if not has_receipt:
+                    return self._execute_run(
+                        run_id, receipt_parent_op_id=receipt_parent_op_id or operation_id
+                    )
+            return run
+        if state in {JobState.COMPLETED.value, JobState.FAILED.value}:
+            return run
+        if state == JobState.AWAITING_APPROVAL.value:
+            return run
+        if state != JobState.QUEUED.value:
+            return run
+        return self._execute_run(
+            run_id,
+            receipt_parent_op_id=receipt_parent_op_id or operation_id,
+        )
+
+    def start_run(
+        self,
+        skill_ref: str | None,
+        inputs: dict[str, Any],
+        *,
+        max_cost: float | None = None,
+        preference: str | None = None,
+        workflow: WorkflowSpec | None = None,
+        model_id: str | None = None,
+    ) -> dict[str, Any]:
+        run = self.accept_run(
+            skill_ref,
+            inputs,
+            max_cost=max_cost,
+            preference=preference,
+            workflow=workflow,
+            model_id=model_id,
+        )
+        if str(run.get("state") or "") == JobState.QUEUED.value:
+            return self.dispatch_run(str(run["id"]))
+        return run
 
     def approve_run(self, run_id: str) -> dict[str, Any]:
         run = self.store.get_run(run_id)
@@ -937,7 +1058,9 @@ class Engine:
             raise ValueError(f"run {run_id} is {run['state']}")
         self.store.put_run(run_id, run, JobState.QUEUED.value)
         self._emit("run.approved", run_id=run_id, payload={})
-        return self._execute_run(run_id)
+        if getattr(self, "_journal", None) is None:
+            return self.dispatch_run(run_id)
+        return self.store.get_run(run_id) or run
 
     def cancel_run(self, run_id: str) -> dict[str, Any]:
         run = self.store.get_run(run_id)
@@ -948,25 +1071,93 @@ class Engine:
         self._emit("run.cancelled", run_id=run_id, payload={})
         return self.store.get_run(run_id) or run
 
-    def _execute_run(self, run_id: str) -> dict[str, Any]:
+    def _bump_test_exec_counter(self) -> None:
+        record_writer_effect("completion")
+        path = os.environ.get("VINCI_TEST_EXEC_COUNTER_PATH")
+        if not path:
+            return
+        counter = Path(path)
+        counter.parent.mkdir(parents=True, exist_ok=True)
+        n = 0
+        if counter.is_file():
+            n = int(counter.read_text(encoding="utf-8").strip() or "0")
+        counter.write_text(str(n + 1), encoding="utf-8")
+
+    def _bump_test_counter(self, env_key: str) -> None:
+        path = os.environ.get(env_key)
+        if not path:
+            return
+        counter = Path(path)
+        counter.parent.mkdir(parents=True, exist_ok=True)
+        n = int(counter.read_text(encoding="utf-8").strip() or "0") if counter.is_file() else 0
+        counter.write_text(str(n + 1), encoding="utf-8")
+
+    def _put_run_state(self, run_id: str, run: dict[str, Any], state: str) -> None:
+        self._require_journal_writer_live()
+        record_writer_effect(f"run_state_{state}")
+        self.store.put_run(run_id, run, state)
+
+    def _require_journal_writer_live(self) -> None:
+        journal = getattr(self, "_journal", None)
+        if journal is None:
+            return
+        if getattr(self, "_journal_writer_fenced", False):
+            raise RuntimeError("journal writer fenced")
+        token = getattr(self, "_journal_token", None)
+        if token is None:
+            raise RuntimeError("journal writer token missing")
+        renew = getattr(self, "_renew_journal_writer", None)
+        try:
+            if callable(renew):
+                renew()
+            else:
+                self._journal_token = journal.renew_writer(token)
+        except Exception:
+            self._journal_writer_fenced = True
+            self._journal_token = None
+            raise
+
+    def _cas_put(self, data: bytes) -> str:
+        self._require_journal_writer_live()
+        record_writer_effect("cas")
+        self._bump_test_counter("VINCI_TEST_CAS_PUT_COUNTER_PATH")
+        return self.cas.put(data)
+
+    def _execute_run(
+        self, run_id: str, *, receipt_parent_op_id: str | None = None
+    ) -> dict[str, Any]:
         run = self.store.get_run(run_id)
         if run is None:
             raise KeyError(run_id)
         spec = WorkflowSpec.model_validate(run["workflow"])
         inputs = run.get("inputs") or {}
-        self.store.put_run(run_id, run, JobState.RUNNING.value)
+        try:
+            self._require_journal_writer_live()
+        except Exception:
+            self._journal_writer_fenced = True
+            self._journal_token = None
+            raise
+        if os.environ.get("VINCI_TEST_SLEEP_DURING_EXECUTE_MS"):
+            time.sleep(int(os.environ["VINCI_TEST_SLEEP_DURING_EXECUTE_MS"]) / 1000.0)
+            self._require_journal_writer_live()
+        record_writer_effect("execute_entry")
+        self._put_run_state(run_id, run, JobState.RUNNING.value)
         self._emit("run.started", run_id=run_id, payload={})
         context: dict[str, Any] = {"inputs": inputs, "nodes": {}}
         job_ids: list[str] = []
         final_outputs: list[str] = []
         node_map: dict[str, Any] = {}
         try:
-            for node in _topo(spec):
+            for node_index, node in enumerate(_topo(spec)):
+                self._require_journal_writer_live()
+                record_writer_effect("node")
                 params = interpolate(node.params, context)
                 if not isinstance(params, dict):
                     params = {"value": params}
                 if node.type.value == "generate":
-                    job = self._run_generate(run_id, node, params, spec)
+                    job = self._run_generate(
+                        run_id, node, params, spec, receipt_parent_op_id=receipt_parent_op_id
+                    )
                 elif node.type.value == "media":
                     job = self._run_media(run_id, node, params)
                 elif node.type.value == "indexquery":
@@ -988,25 +1179,233 @@ class Engine:
                     "capability": node.capability.value if node.capability else None,
                 }
                 final_outputs = job.outputs
+                sleep_after = os.environ.get("VINCI_TEST_SLEEP_AFTER_NODE_MS")
+                if sleep_after and str(node_index) == os.environ.get(
+                    "VINCI_TEST_SLEEP_AFTER_NODE_INDEX", "0"
+                ):
+                    time.sleep(int(sleep_after) / 1000.0)
+                    self._require_journal_writer_live()
             run["job_ids"] = job_ids
             run["outputs"] = final_outputs
             run["nodes"] = node_map
             run["asset_uris"] = [f"vinci://assets/{digest}" for digest in final_outputs]
             run["job_uris"] = [f"vinci://jobs/{jid}" for jid in job_ids]
             run["receipt_uris"] = [f"vinci://receipts/{jid}" for jid in job_ids]
-            self.store.put_run(run_id, run, JobState.COMPLETED.value)
+            hook = getattr(self, "_commit_run_receipt_hook", None)
+            self._bump_test_exec_counter()
+            if hook is not None and receipt_parent_op_id:
+                hook(run_id, run, receipt_parent_op_id)
+            self._put_run_state(run_id, run, JobState.COMPLETED.value)
             self._emit("run.completed", run_id=run_id, payload={"outputs": final_outputs})
         except Exception as exc:  # noqa: BLE001 — normalize into run failure
             run["job_ids"] = job_ids
             run["nodes"] = node_map
             run["error"] = {"code": "unknown", "message": str(exc) or type(exc).__name__}
-            self.store.put_run(run_id, run, JobState.FAILED.value)
-            self._emit("run.failed", run_id=run_id, payload=run["error"])
+            try:
+                self._put_run_state(run_id, run, JobState.FAILED.value)
+                self._emit("run.failed", run_id=run_id, payload=run["error"])
+            except Exception:
+                pass
             raise
         return self.store.get_run(run_id) or run
 
+    def _prepare_provider_submit_intent(
+        self,
+        *,
+        parent_op_id: str | None,
+        run_id: str,
+        node_id: str,
+        job_id: str,
+        model_id: str,
+        provider_name: str,
+        idempotency_key_value: str,
+    ) -> None:
+        journal = getattr(self, "_journal", None)
+        if journal is None or not parent_op_id:
+            return
+        try:
+            from vinci_daemon.durable_provider_inflight import (  # type: ignore[import-not-found]
+                prepare_provider_submit_intent,
+            )
+
+            prepare_provider_submit_intent(
+                journal,
+                self,
+                parent_op_id=parent_op_id,
+                run_id=run_id,
+                node_id=node_id,
+                job_id=job_id,
+                model_id=model_id,
+                provider_name=provider_name,
+                idempotency_key=idempotency_key_value,
+            )
+        except ImportError:
+            return
+
+    def _commit_provider_inflight_ledger(
+        self,
+        *,
+        parent_op_id: str | None,
+        run_id: str,
+        node_id: str,
+        job_id: str,
+        model_id: str,
+        provider_name: str,
+        provider_job_ref: str,
+        idempotency_key_value: str,
+    ) -> None:
+        journal = getattr(self, "_journal", None)
+        if journal is None or not parent_op_id:
+            return
+        try:
+            from vinci_daemon.durable_provider_inflight import commit_provider_inflight
+
+            commit_provider_inflight(
+                journal,
+                self,
+                parent_op_id=parent_op_id,
+                run_id=run_id,
+                node_id=node_id,
+                job_id=job_id,
+                model_id=model_id,
+                provider_name=provider_name,
+                provider_job_ref=provider_job_ref,
+                idempotency_key=idempotency_key_value,
+            )
+        except ImportError:
+            return
+
+    def _durable_provider_submit(
+        self,
+        *,
+        parent_op_id: str | None,
+        run_id: str,
+        node_id: str,
+        provider: Any,
+        model_id: str,
+        provider_name: str,
+        req: JobRequest,
+        idempotency_key_value: str,
+        secrets: list[str],
+        estimate: Estimate,
+        started: datetime,
+    ) -> tuple[ProviderJobRef, str]:
+        """Submit or resume provider work with durable provider_inflight ledger child."""
+        journal = getattr(self, "_journal", None)
+        parent_op = parent_op_id
+        ledger_row = load_ledger_provider_inflight(journal, parent_op, node_id)
+        pending_intent = provider_inflight_pending_without_ref(journal, parent_op, node_id)
+        deny_reconcile = os.environ.get("VINCI_TEST_FORCE_NO_PROVIDER_RECONCILIATION") == "1"
+        if ledger_row is not None and (
+            deny_reconcile or not supports_durable_reconciliation(provider)
+        ):
+            raise ProviderInflightUncertain(
+                f"ledger has provider ref for {provider_name} but vendor cannot reconcile; "
+                "fail closed (no blind resubmit)"
+            )
+        inflight = self._inflight_job_for_node(run_id, node_id)
+        if pending_intent is not None:
+            if inflight is not None and inflight.provider_job_ref:
+                self._commit_provider_inflight_ledger(
+                    parent_op_id=parent_op,
+                    run_id=run_id,
+                    node_id=node_id,
+                    job_id=str(pending_intent.get("job_id") or inflight.id),
+                    model_id=str(pending_intent.get("model_id") or model_id),
+                    provider_name=str(pending_intent.get("provider") or provider_name),
+                    provider_job_ref=inflight.provider_job_ref,
+                    idempotency_key_value=str(
+                        pending_intent.get("idempotency_key") or idempotency_key_value
+                    ),
+                )
+                ledger_row = load_ledger_provider_inflight(journal, parent_op, node_id)
+            else:
+                raise ProviderInflightUncertain(
+                    "provider submit accepted but durable provider_inflight ref was not "
+                    "committed; fail closed (no blind resubmit)"
+                )
+        if inflight is not None and inflight.provider_job_ref:
+            job_id = inflight.id
+            ref = ProviderJobRef(provider=provider_name, ref=inflight.provider_job_ref)
+            record_writer_effect("submit_resume")
+        elif ledger_row is not None:
+            job_id = str(ledger_row.get("job_id") or uuid.uuid4().hex)
+            ref = ProviderJobRef(
+                provider=str(ledger_row.get("provider") or provider_name),
+                ref=str(ledger_row["provider_job_ref"]),
+            )
+            if self.store.get_job(job_id) is None:
+                pending = Job(
+                    id=job_id,
+                    workflow_run_id=run_id,
+                    node_id=node_id,
+                    model_id=str(ledger_row.get("model_id") or model_id),
+                    provider_job_ref=ref.ref,
+                    state=JobState.RUNNING,
+                    inputs=redact_mapping(req.inputs, extra_values=secrets),
+                    outputs=[],
+                    estimate=estimate,
+                    timings=JobTimings(created_at=started, started_at=started),
+                    idempotency_key=idempotency_key_value,
+                )
+                self._persist_job(pending, secrets)
+            record_writer_effect("submit_resume_ledger")
+        else:
+            job_id = uuid.uuid4().hex
+            self._require_journal_writer_live()
+            self._prepare_provider_submit_intent(
+                parent_op_id=parent_op,
+                run_id=run_id,
+                node_id=node_id,
+                job_id=job_id,
+                model_id=model_id,
+                provider_name=provider_name,
+                idempotency_key_value=idempotency_key_value,
+            )
+            record_writer_effect("submit")
+            ref = provider.submit(req)
+            record_writer_effect("submit_accepted")
+            pending = Job(
+                id=job_id,
+                workflow_run_id=run_id,
+                node_id=node_id,
+                model_id=model_id,
+                provider_job_ref=ref.ref,
+                state=JobState.RUNNING,
+                inputs=redact_mapping(req.inputs, extra_values=secrets),
+                outputs=[],
+                estimate=estimate,
+                timings=JobTimings(created_at=started, started_at=started),
+                idempotency_key=idempotency_key_value,
+            )
+            self._persist_job(pending, secrets)
+            if os.environ.get("VINCI_TEST_EXIT_AFTER_SUBMIT_ACCEPTED") == "1":
+                os._exit(137)  # noqa: SLF001
+            self._commit_provider_inflight_ledger(
+                parent_op_id=parent_op,
+                run_id=run_id,
+                node_id=node_id,
+                job_id=job_id,
+                model_id=model_id,
+                provider_name=provider_name,
+                provider_job_ref=ref.ref,
+                idempotency_key_value=idempotency_key_value,
+            )
+            if os.environ.get("VINCI_TEST_SLEEP_AFTER_SUBMIT_MS"):
+                time.sleep(int(os.environ["VINCI_TEST_SLEEP_AFTER_SUBMIT_MS"]) / 1000.0)
+                self._require_journal_writer_live()
+            if os.environ.get("VINCI_TEST_EXIT_AFTER_SUBMIT") == "1":
+                os._exit(137)  # noqa: SLF001
+        return ref, job_id
+
     def _run_generate(
-        self, run_id: str, node: WorkflowNode, params: dict[str, Any], spec: WorkflowSpec
+        self,
+        run_id: str,
+        node: WorkflowNode,
+        params: dict[str, Any],
+        spec: WorkflowSpec,
+        *,
+        receipt_parent_op_id: str | None = None,
     ) -> Job:
         secrets = self.resolver.known_values(all_secret_names())
         catalog = self.catalog()
@@ -1024,9 +1423,9 @@ class Engine:
         provider = self.providers[model.provider]
         key = idempotency_key(model.id, req.inputs)
         prior = self.store.find_by_idempotency(key)
-        job_id = uuid.uuid4().hex
         created = now_utc()
         if prior is not None and prior.outputs:
+            job_id = uuid.uuid4().hex
             estimate = estimate_from_spec(model, cached=True)
             receipt = Receipt(
                 job_id=job_id,
@@ -1059,8 +1458,21 @@ class Engine:
             return job
         estimate = with_alternative(provider.estimate(req), catalog, capability.value)
         started = now_utc()
-        ref = provider.submit(req)
+        ref, job_id = self._durable_provider_submit(
+            parent_op_id=receipt_parent_op_id,
+            run_id=run_id,
+            node_id=node.id,
+            provider=provider,
+            model_id=model.id,
+            provider_name=model.provider,
+            req=req,
+            idempotency_key_value=key,
+            secrets=secrets,
+            estimate=estimate,
+            started=started,
+        )
         status = self._wait_status(provider, ref)
+        self._require_journal_writer_live()
         if status.state in {JobState.FAILED, JobState.CANCELLED}:
             message = status.error.message if status.error else status.state.value
             raise RuntimeError(message)
@@ -1119,6 +1531,7 @@ class Engine:
         pending = {JobState.QUEUED, JobState.RUNNING, JobState.CREATED}
         while status.state in pending and time.monotonic() < deadline:
             time.sleep(interval)
+            self._require_journal_writer_live()
             status = self._coerce_status(provider.status(ref))
         if status.state in pending:
             raise TimeoutError("provider status timed out")
@@ -1146,14 +1559,14 @@ class Engine:
             decoded = _decode_data_uri(item)
             if decoded is not None:
                 blob, uri_mime = decoded
-                digest = self.cas.put(blob)
+                digest = self._cas_put(blob)
                 fallback = uri_mime or mime
             elif item.startswith("http://") or item.startswith("https://"):
                 if not allow_live_spend():
                     raise RuntimeError("live download requires VINCI_ALLOW_LIVE_SPEND=1")
                 with urllib.request.urlopen(item, timeout=30) as response:
                     blob = response.read()
-                digest = self.cas.put(blob)
+                digest = self._cas_put(blob)
             else:
                 digest = item
                 blob = self.cas.get(digest) if self.cas.exists(digest) else b""
@@ -1177,9 +1590,23 @@ class Engine:
         return outputs
 
     def _persist_job(self, job: Job, secrets: list[str]) -> None:
+        self._require_journal_writer_live()
+        record_writer_effect("persist_job")
         self.store.put_job(job, secret_values=secrets)
         if job.receipt is not None:
             self.store.put_receipt(job.receipt, secret_values=secrets)
+
+    def _inflight_job_for_node(self, run_id: str, node_id: str) -> Job | None:
+        for row in self.store.list_jobs():
+            if row.workflow_run_id != run_id or row.node_id != node_id:
+                continue
+            if row.provider_job_ref and row.state in {
+                JobState.RUNNING,
+                JobState.QUEUED,
+                JobState.CREATED,
+            }:
+                return row
+        return None
 
     def cost_report(self, by: str = "provider") -> dict[str, Any]:
         jobs = self.store.list_jobs()
@@ -1217,7 +1644,7 @@ class Engine:
     def ingest_bytes(self, data: bytes, *, mime: str, filename: str | None = None) -> Asset:
         if (not mime or mime == "application/octet-stream") and filename:
             mime = _mime_from_path(Path(filename))
-        digest = self.cas.put(data)
+        digest = self._cas_put(data)
         kind = _kind_from_mime(mime)
         asset = Asset(
             id=digest,
@@ -1285,6 +1712,7 @@ class Engine:
         fit_mode: str = "fit",
         model_id: str | None = None,
         max_cost: float | None = None,
+        receipt_parent_op_id: str | None = None,
     ) -> dict[str, Any]:
         if not self.cas.exists(source_asset):
             raise ValueError("source asset not found")
@@ -1316,7 +1744,9 @@ class Engine:
         src_path.write_bytes(self.cas.get(source_asset))
         outputs: list[dict[str, Any]] = []
         digests: list[str] = []
+        adapt_secrets = self.resolver.known_values(all_secret_names())
         for index, raw in enumerate(targets):
+            self._require_journal_writer_live()
             width, height, preset_id = resolve_target(raw, self.config.home)
             dest = work / f"adapt-{index}.png"
             if parsed_layout == "fit_pad_crop":
@@ -1330,7 +1760,9 @@ class Engine:
                     home=self.config.home,
                 )
                 mode_label = f"fit_pad_crop:{parsed_fit}"
-            elif allow_live_spend() and self.provider_available("openai"):
+            elif (allow_live_spend() or self._loopback_i2i_enabled()) and self.provider_available(
+                "openai"
+            ):
                 provider = self.providers.get("openai")
                 if provider is None:
                     raise RuntimeError("openai provider missing")
@@ -1347,9 +1779,25 @@ class Engine:
                         "size": f"{width}x{height}",
                     },
                 )
-                provider.estimate(req)
-                ref = provider.submit(req)
-                status = provider.status(ref)
+                estimate_i2i = provider.estimate(req)
+                started = now_utc()
+                adapt_node_id = f"adapt:{index}"
+                adapt_run_id = receipt_parent_op_id or ""
+                ref, _adapt_job_id = self._durable_provider_submit(
+                    parent_op_id=receipt_parent_op_id,
+                    run_id=adapt_run_id,
+                    node_id=adapt_node_id,
+                    provider=provider,
+                    model_id=chosen,
+                    provider_name=str(getattr(provider, "provider_id", None) or "openai"),
+                    req=req,
+                    idempotency_key_value=idempotency_key(chosen, req.inputs),
+                    secrets=adapt_secrets,
+                    estimate=estimate_i2i,
+                    started=started,
+                )
+                status = self._wait_status(provider, ref)
+                self._require_journal_writer_live()
                 if status.state != JobState.COMPLETED or not status.outputs:
                     raise RuntimeError("openai adapt did not complete")
                 digest = status.outputs[0]
@@ -1375,6 +1823,7 @@ class Engine:
                     preset_id=preset_id,
                     home=self.config.home,
                 )
+                record_writer_effect("ai_extend")
                 mode_label = "ai_extend:mock_pad"
             image_meta = validate_output_image(
                 dest, width=width, height=height, preset_id=preset_id, home=self.config.home
@@ -1434,6 +1883,7 @@ class Engine:
         *,
         fit_mode: str = "pad",
         layout: str = "fit_pad_crop",
+        operation_id: str | None = None,
     ) -> dict[str, Any]:
         if not items:
             raise ValueError("batch requires at least one item")
@@ -1475,7 +1925,12 @@ class Engine:
                     "error": error,
                 }
             )
-        batch_id = uuid.uuid4().hex
+        journal_deferred = getattr(self, "_journal", None) is not None and bool(operation_id)
+        if journal_deferred:
+            op_key = operation_id if operation_id is not None else ""
+            batch_id = hashlib.sha256(op_key.encode()).hexdigest()[:32]
+        else:
+            batch_id = uuid.uuid4().hex
         stored: list[dict[str, Any]] = []
         for item in prepared:
             record: dict[str, Any] = {
@@ -1506,9 +1961,18 @@ class Engine:
                     )
                 ],
             )
+            item_op = f"{operation_id}:item:{item['index']}" if journal_deferred else None
             before = {row["id"] for row in self.store.list_runs()}
             try:
-                run = self.start_run(None, {"media": item["asset_id"]}, workflow=spec)
+                if journal_deferred:
+                    run = self.accept_run(
+                        None,
+                        {"media": item["asset_id"]},
+                        workflow=spec,
+                        operation_id=item_op,
+                    )
+                else:
+                    run = self.start_run(None, {"media": item["asset_id"]}, workflow=spec)
                 record["run_id"] = run.get("id")
                 if run.get("state") == JobState.FAILED.value:
                     err = run.get("error") or {}
@@ -1748,7 +2212,8 @@ class Engine:
         extra_text: str = "",
     ) -> str:
         data = path.read_bytes()
-        digest = self.cas.put(data)
+        digest = self._cas_put(data)
+        self._require_journal_writer_live()
         asset = Asset(
             id=digest,
             kind=kind,
@@ -1817,6 +2282,7 @@ class Engine:
         return job
 
     def _run_media(self, run_id: str, node: WorkflowNode, params: dict[str, Any]) -> Job:
+        self._require_journal_writer_live()
         op = str(params.get("op") or "")
         work = self.config.home / "tmp" / uuid.uuid4().hex
         work.mkdir(parents=True, exist_ok=True)
@@ -1931,6 +2397,7 @@ class Engine:
             for index, preset_id in enumerate(preset_ids):
                 if not isinstance(preset_id, str) or not preset_id:
                     raise ValueError("preset_ids must be strings")
+                self._require_journal_writer_live()
                 width, height, resolved = resolve_target(
                     {"preset_id": preset_id}, self.config.home
                 )
@@ -1944,6 +2411,7 @@ class Engine:
                         preset_id=resolved,
                         home=self.config.home,
                     )
+                    record_writer_effect("ai_extend")
                 else:
                     dest = adapt_image_fit_pad_crop(
                         src,
