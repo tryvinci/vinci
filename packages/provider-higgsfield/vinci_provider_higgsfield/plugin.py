@@ -27,6 +27,7 @@ def _image_input(req: JobRequest) -> str | None:
 class HiggsfieldProvider(CatalogBackedProvider):
     """First-class Higgsfield REST plugin. Auth is key + secret, not MCP."""
 
+    durable_job_reconciliation = True
     catalog_name = "higgsfield"
     provider_id = "higgsfield"
     secret_name = "HIGGSFIELD_API_KEY"

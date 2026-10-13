@@ -42,6 +42,7 @@ def resolve_model(
     candidates = active_candidates(catalog, req.capability.value)
     if available_providers is not None:
         candidates = [m for m in candidates if m.provider in available_providers]
+    candidates = [m for m in candidates if m.pricing.currency.upper() == "USD"]
     if not candidates:
         raise KeyError(f"no model for {req.capability}")
     if req.preference == RoutePreference.QUALITY:

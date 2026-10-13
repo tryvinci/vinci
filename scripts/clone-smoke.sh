@@ -21,7 +21,12 @@ if [[ -e "$DEST/apps/vinci-backend" || -e "$DEST/apps/vinci-frontend" || -e "$DE
   exit 1
 fi
 cd "$DEST"
-python3 -m venv .venv
+if python3 -c "import ensurepip" 2>/dev/null; then
+  python3 -m venv .venv
+else
+  python3 -m venv --without-pip .venv
+  curl -fsSL https://bootstrap.pypa.io/get-pip.py | .venv/bin/python
+fi
 # shellcheck disable=SC1091
 source .venv/bin/activate
 make install

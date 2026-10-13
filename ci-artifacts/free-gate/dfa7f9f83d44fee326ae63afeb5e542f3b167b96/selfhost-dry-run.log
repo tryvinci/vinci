@@ -1,0 +1,67 @@
+make[1]: Entering directory '/workspace/apps/vinci-oss'
+DRY_RUN=1 FIXTURE_MODE=1 ROOT=deploy/cloudflare ./deploy/cloudflare/scripts/deploy.sh
+DRY_RUN=1 — validation only (no Cloudflare resources created).
+
+> vinci-oss-selfhost@0.1.0 typecheck
+> tsc --noEmit
+
+
+> vinci-oss-selfhost@0.1.0 test
+> node --import tsx --test test/**/*.test.ts
+
+TAP version 13
+# Subtest: authConfigured requires 16+ char secret
+ok 1 - authConfigured requires 16+ char secret
+  ---
+  duration_ms: 0.560333
+  ...
+# Subtest: session mint and verify with expiry
+ok 2 - session mint and verify with expiry
+  ---
+  duration_ms: 4.191835
+  ...
+# Subtest: bearer authorization
+ok 3 - bearer authorization
+  ---
+  duration_ms: 10.756358
+  ...
+# Subtest: bridge journal authorization
+ok 4 - bridge journal authorization
+  ---
+  duration_ms: 0.319172
+  ...
+# Subtest: offset query param is rejected
+ok 5 - offset query param is rejected
+  ---
+  duration_ms: 0.505745
+  ...
+# Subtest: committed limit is bounded 1..500
+ok 6 - committed limit is bounded 1..500
+  ---
+  duration_ms: 0.118913
+  ...
+# Subtest: next cursor only when page is full
+ok 7 - next cursor only when page is full
+  ---
+  duration_ms: 0.452574
+  ...
+# Subtest: in-memory paging walks more than 10000 committed rows without repeat
+ok 8 - in-memory paging walks more than 10000 committed rows without repeat
+  ---
+  duration_ms: 16.715968
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 163.743896
+FIXTURE_MODE=1 — validating deploy CLI wiring (no remote mutation).
+4.40.2
+fixture ok vinci-oss-selfhost vinci-oss-data
+dry-run ok: worker=vinci-oss-selfhost bucket=vinci-oss-data
+To deploy: VINCI_INSTANCE_SECRET=$(openssl rand -hex 24) ./deploy/cloudflare/scripts/deploy.sh
+make[1]: Leaving directory '/workspace/apps/vinci-oss'

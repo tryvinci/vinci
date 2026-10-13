@@ -14,6 +14,7 @@ from vinci_runtime.engine import Engine
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv("VINCI_HOME", str(tmp_path))
+    monkeypatch.setenv("VINCI_SKIP_HOME_LOCK", "1")
     monkeypatch.delenv("VINCI_ALLOW_LIVE_SPEND", raising=False)
     engine = Engine(tmp_path)
     engine.init_home(demo=True)

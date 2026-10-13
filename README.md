@@ -12,7 +12,9 @@ Phases 0–3 are in this tree: protocol v0, local CAS+SQLite, daemon `:4310`, co
 
 This repository is **private** until a human opens it. Do not publish to npm or PyPI yet. npm `vinci` and PyPI `vinci` are taken — packages use `@tryvinci/*` and `vinci-core` / `vinci-runtime` / `vinci-media` / `vinci-harness` / `vinci-provider-*`. See `NAMESPACE.md`.
 
-Until `tryvinci/vinci` exists, this tree ships at `apps/vinci-oss/` in `tryvinci/vinci-monorepo` (not turbo/npm workspaces). Clone the monorepo, `cd apps/vinci-oss`, then the same gates. Extract later without changing the architecture. Monorepo link plan: `docs/VINCI_OSS_PUBLIC_LINK.md` at repo root.
+Canonical OSS git tree: [`tryvinci/vinci`](https://github.com/tryvinci/vinci) (split-sync from `apps/vinci-oss/` in `tryvinci/vinci-monorepo`). For monorepo contributors: `cd apps/vinci-oss` and run the same `make` gates. Link plan: `docs/VINCI_OSS_PUBLIC_LINK.md` at repo root.
+
+**Self-host on your Cloudflare account** (single-tenant, not Vinci Platform): see [`docs/SELF_HOST_CLOUDFLARE.md`](docs/SELF_HOST_CLOUDFLARE.md). Local `make install` / `./scripts/vinci studio` behavior is unchanged.
 
 ## Quick start (demo, no provider spend)
 
@@ -28,6 +30,8 @@ make test && make conformance && make lint
 ```
 
 Studio opens at `http://127.0.0.1:4310/studio`. Paste any supported provider key under **Keys**, or stay on mock at $0. Live HTTP stays off until `VINCI_ALLOW_LIVE_SPEND=1`.
+
+Higgsfield and Magnific can also sign in with OAuth (no API key) via their MCP servers: `./scripts/vinci providers connect higgsfield` or `magnific`. That spends the account's plan credits, which are not USD and are not picked by cheapest routing unless you pin the model. Higgsfield's MCP tool names are provisional until a live `tools/list` capture.
 
 `make demo` runs `python -m vinci_harness demo` (in-process skill + $0 receipt) then `./scripts/vinci init --demo` and `./scripts/vinci run @tryvinci/image-generate`. The CLI starts `vinci-daemon` on `:4310` if it is not already up.
 
@@ -52,6 +56,37 @@ Do not `npx @tryvinci/cli` from the npm registry until a human publishes.
 See `docs/VINCI_OSS_RUNTIME.md`. Python owns protocol/core/runtime/providers/media/index/MCP. TypeScript owns CLI and Studio talking to the daemon over HTTP.
 
 Config lives in `~/.vinci/` (config.toml, `keys/` at mode 0600, sqlite, cas/). Asset URIs: `vinci://assets/{id}`, `vinci://jobs/{id}`, `vinci://receipts/{id}`.
+
+## Google Sheets (Axis export driver)
+
+`vinci sheets sync` reads a Google Sheet and runs the same batch path as `POST /integrations/gsheet/sync`.
+
+1. Install the optional extra (the daemon boots without it):
+
+```bash
+pip install 'vinci-daemon[gsheet]'
+```
+
+2. Create a service account, download its JSON key, and point `GOOGLE_APPLICATION_CREDENTIALS` at that file.
+
+3. Share the spreadsheet with the service-account email (Viewer is not enough — the sync writes status back).
+
+4. Put this header row on the tab you want to sync:
+
+```text
+source_url	presets	status	output_links	error
+```
+
+`presets` is a comma-separated list of preset ids (`amazon_828x300,inuxu_728x90`). Leave `status` blank for rows that should run. Rows already `processing` or `done` are skipped. The sync writes `processing` before enqueue, then `done` plus asset file URLs, or `error` plus the message.
+
+5. Save the sheet id and tab name:
+
+```bash
+curl -X PATCH http://127.0.0.1:4310/settings \
+  -H 'content-type: application/json' \
+  -d '{"gsheet_id":"SPREADSHEET_ID","gsheet_tab":"Sheet1"}'
+./scripts/vinci sheets sync
+```
 
 ## License
 

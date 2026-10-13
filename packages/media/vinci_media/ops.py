@@ -1,13 +1,32 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
 
-FFMPEG = shutil.which("ffmpeg") or "ffmpeg"
-FFPROBE = shutil.which("ffprobe") or "ffprobe"
+from vinci_media.encoders import pick_video_encoder
+
+
+def _resolve_tool(name: str, env_key: str) -> str:
+    override = os.environ.get(env_key, "").strip()
+    if override:
+        path = Path(override).expanduser()
+        if path.is_file():
+            return str(path)
+    bundled = os.environ.get(f"VINCI_BUNDLED_{name.upper()}", "").strip()
+    if bundled:
+        path = Path(bundled).expanduser()
+        if path.is_file():
+            return str(path)
+    found = shutil.which(name)
+    return found or name
+
+
+FFMPEG = _resolve_tool("ffmpeg", "VINCI_FFMPEG")
+FFPROBE = _resolve_tool("ffprobe", "VINCI_FFPROBE")
 
 
 def _fontfile() -> str | None:
@@ -26,8 +45,12 @@ class MediaError(RuntimeError):
 
 
 def require_ffmpeg() -> None:
-    if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
-        raise MediaError("ffmpeg/ffprobe not on PATH")
+    ffmpeg = _resolve_tool("ffmpeg", "VINCI_FFMPEG")
+    ffprobe = _resolve_tool("ffprobe", "VINCI_FFPROBE")
+    if not Path(ffmpeg).is_file() and shutil.which(ffmpeg) is None:
+        raise MediaError("ffmpeg not found (set VINCI_FFMPEG or PATH)")
+    if not Path(ffprobe).is_file() and shutil.which(ffprobe) is None:
+        raise MediaError("ffprobe not found (set VINCI_FFPROBE or PATH)")
 
 
 def probe(path: Path) -> dict[str, Any]:
@@ -92,7 +115,7 @@ def cut(src: Path, dst: Path, start: float, end: float) -> Path:
                 "-i",
                 str(src),
                 "-c:v",
-                "libx264",
+                pick_video_encoder(),
                 "-c:a",
                 "aac",
                 "-pix_fmt",
@@ -121,7 +144,7 @@ def reframe_9x16(src: Path, dst: Path) -> Path:
             "-vf",
             vf,
             "-c:v",
-            "libx264",
+            pick_video_encoder(),
             "-c:a",
             "aac",
             "-pix_fmt",
@@ -156,7 +179,7 @@ def burn_captions(src: Path, dst: Path, text: str) -> Path:
             "-vf",
             vf,
             "-c:v",
-            "libx264",
+            pick_video_encoder(),
             "-c:a",
             "copy",
             "-pix_fmt",
@@ -177,7 +200,7 @@ def burn_captions(src: Path, dst: Path, text: str) -> Path:
                 "-vf",
                 vf,
                 "-c:v",
-                "libx264",
+                pick_video_encoder(),
                 "-c:a",
                 "aac",
                 "-pix_fmt",
@@ -228,7 +251,7 @@ def concat(paths: list[Path], dst: Path) -> Path:
                 "-i",
                 str(listing),
                 "-c:v",
-                "libx264",
+                pick_video_encoder(),
                 "-c:a",
                 "aac",
                 "-pix_fmt",
@@ -302,7 +325,7 @@ def make_fixture_video(path: Path, duration: float = 3.0) -> Path:
             f"sine=frequency=440:duration={duration:.3f}",
             "-shortest",
             "-c:v",
-            "libx264",
+            pick_video_encoder(),
             "-pix_fmt",
             "yuv420p",
             "-c:a",

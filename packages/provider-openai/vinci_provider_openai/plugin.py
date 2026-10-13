@@ -43,6 +43,7 @@ class CasStore(CasGet, CasPut, Protocol):
 
 
 class OpenAIProvider(CatalogBackedProvider):
+    durable_job_reconciliation = False
     catalog_name = "openai"
     provider_id = "openai"
     secret_name = "OPENAI_API_KEY"

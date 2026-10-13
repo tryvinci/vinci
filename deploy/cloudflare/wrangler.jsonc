@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "vinci-oss-selfhost",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
+  "observability": { "enabled": true },
+  "durable_objects": {
+    "bindings": [{ "name": "HOST", "class_name": "VinciHost" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["VinciHost"] }],
+  "containers": [
+    {
+      "class_name": "VinciHost",
+      "image": "./container/Dockerfile",
+      "image_build_context": "../..",
+      "max_instances": 1,
+      "instance_type": "basic"
+    }
+  ]
+}

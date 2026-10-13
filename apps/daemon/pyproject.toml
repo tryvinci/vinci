@@ -17,8 +17,12 @@ dependencies = [
     "PyYAML>=6.0",
 ]
 
+[project.optional-dependencies]
+gsheet = ["google-auth>=2", "gspread>=6"]
+
 [project.scripts]
 vinci-daemon = "vinci_daemon.app:main"
+vinci-selfhost = "vinci_daemon.selfhost_entry:main"
 
 [tool.setuptools.packages.find]
 include = ["vinci_daemon*"]

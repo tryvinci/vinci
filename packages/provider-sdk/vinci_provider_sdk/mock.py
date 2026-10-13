@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import shutil
 import struct
 import subprocess
@@ -26,7 +27,7 @@ from vinci_protocol.models import (
     ProviderManifest,
     VinciError,
 )
-from vinci_storage.cas import ContentAddressedStore
+from vinci_storage.cas import CasStore, ContentAddressedStore
 
 from vinci_provider_sdk.base import Provider
 from vinci_provider_sdk.shot import compose_shot_prompt, mock_duration_seconds
@@ -209,8 +210,13 @@ def _stamp_mp4(base: bytes, seed: str) -> bytes:
 def _encode_mp4(
     seed: str, width: int, height: int, duration: float = 1.0
 ) -> bytes | None:
-    ffmpeg = shutil.which("ffmpeg")
-    if not ffmpeg:
+    try:
+        from vinci_media.encoders import ffmpeg_executable, pick_video_encoder
+    except ImportError:
+        ffmpeg_executable = lambda: shutil.which("ffmpeg") or ""  # noqa: E731
+        pick_video_encoder = lambda: "mpeg4"  # noqa: E731
+    ffmpeg = ffmpeg_executable()
+    if not ffmpeg or (not Path(ffmpeg).is_file() and shutil.which(ffmpeg) is None):
         return None
     half = max(float(duration) / 2.0, 0.1)
     with tempfile.TemporaryDirectory(prefix="vinci-mock-mp4-") as raw:
@@ -245,7 +251,7 @@ def _encode_mp4(
                 f"[0:v][1:v]concat=n=2:v=1:a=0,fps=2,format=yuv420p,scale={width}:{height}",
                 "-an",
                 "-c:v",
-                "libx264",
+                pick_video_encoder(),
                 "-pix_fmt",
                 "yuv420p",
                 "-movflags",
@@ -290,6 +296,8 @@ def mp4_scene(
 class MockProvider(Provider):
     """Deterministic fake generations + fake pricing. For CI, tests, and demo mode."""
 
+    durable_job_reconciliation = True
+
     manifest = ProviderManifest(
         id="mock",
         display_name="Mock",
@@ -297,7 +305,7 @@ class MockProvider(Provider):
         docs_url="https://github.com/tryvinci/vinci",
     )
 
-    def __init__(self, cas: ContentAddressedStore, api_key: str | None = None) -> None:
+    def __init__(self, cas: CasStore, api_key: str | None = None) -> None:
         self._cas = cas
         self._api_key = api_key
         self._catalog = load_catalog()
@@ -328,6 +336,12 @@ class MockProvider(Provider):
         return estimate
 
     def submit(self, req: JobRequest) -> ProviderJobRef:
+        counter_path = os.environ.get("VINCI_TEST_MOCK_SUBMIT_COUNTER_PATH")
+        if counter_path:
+            p = Path(counter_path)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            n = int(p.read_text(encoding="utf-8").strip() or "0") if p.is_file() else 0
+            p.write_text(str(n + 1), encoding="utf-8")
         spec = self._resolve(req)
         key = req.idempotency_key or idempotency_key(spec.id, req.inputs)
         if key not in self._estimated:

@@ -19,7 +19,7 @@ make test && make conformance && make lint
 
 That starts `vinci-daemon` on `:4310` and TypeScript Studio on `:4311` (HTML `/studio` is the fallback). No account. Mock generations stay $0. Pass `--html` to skip Next.
 
-Bring your own key: in Studio, **Connect**, paste a Wavespeed / Google / fal / ElevenLabs / Cloudflare / MCP secret (or an env var name). Named MCP (`mcp_<slug>`) takes a URL plus an optional bearer. Stored under `~/.vinci/keys` (mode 0600) or the OS keychain. Live HTTP stays off until `VINCI_ALLOW_LIVE_SPEND=1`. Supercomputer, 3D, and Collab are first-party Studio pages on the same daemon.
+Bring your own key: in Studio, **Connect**, paste a Wavespeed / Google / fal / ElevenLabs / Cloudflare / MCP secret (or an env var name). Named MCP (`mcp_<slug>`) takes a URL plus an optional bearer. Higgsfield and Magnific also offer **Sign in**, which runs OAuth against their MCP servers and stores tokens under `~/.vinci/keys` (mode 0600) or the OS keychain. Live HTTP stays off until `VINCI_ALLOW_LIVE_SPEND=1`. Supercomputer, 3D, and Collab are first-party Studio pages on the same daemon.
 
 Phone or another Mac: `./scripts/vinci studio --lan` then load the printed LAN TypeScript URL (`:4311`) in `apps/android` or `apps/mac`. HTML `/studio` is the fallback.
 

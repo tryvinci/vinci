@@ -22,7 +22,13 @@ EDITABLE := \
 	-e packages/harness \
 	-e apps/daemon
 
-.PHONY: install test conformance lint proprietary-scan secret-scan skills-validate demo clone-smoke github studio require-python
+.PHONY: install test conformance lint proprietary-scan secret-scan skills-validate demo clone-smoke github studio require-python selfhost-dry-run free-gate
+
+free-gate:
+	chmod +x scripts/run-free-gate.sh && ./scripts/run-free-gate.sh
+
+selfhost-dry-run:
+	DRY_RUN=1 FIXTURE_MODE=1 ROOT=deploy/cloudflare ./deploy/cloudflare/scripts/deploy.sh
 
 require-python:
 	@if ! $(PYTHON) -c 'import sys; raise SystemExit(0 if sys.version_info>=(3,12) else 1)'; then \

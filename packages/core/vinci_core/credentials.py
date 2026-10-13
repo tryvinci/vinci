@@ -162,6 +162,12 @@ class CredentialResolver:
                 return value
         return None
 
+    def delete(self, secret_name: str) -> None:
+        if not secret_name.isidentifier():
+            raise ValueError("secret_name must be an identifier, not a value")
+        KeychainBackend().delete(secret_name)
+        self._file.delete(secret_name)
+
     def require(self, secret_name: str) -> str:
         value = self.resolve(secret_name)
         if not value:

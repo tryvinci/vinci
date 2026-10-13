@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "python_build_standalone": {
+    "version": "3.12.8",
+    "release_tag": "20241219",
+    "target": "aarch64-apple-darwin",
+    "flavor": "install_only_stripped",
+    "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20241219/cpython-3.12.8+20241219-aarch64-apple-darwin-install_only_stripped.tar.gz",
+    "sha256": "abe1de2494bb8b243fd507944f4d50292848fa00685d5288c858a72623a16635",
+    "sha256_manifest_url": "https://github.com/astral-sh/python-build-standalone/releases/download/20241219/SHA256SUMS"
+  },
+  "node": {
+    "version": "22.12.0",
+    "target": "darwin-arm64",
+    "url": "https://nodejs.org/dist/v22.12.0/node-v22.12.0-darwin-arm64.tar.gz",
+    "sha256": "293dcc6c2408da21562d135b0412525e381bb6fe150d688edb58fe850d0f3e13",
+    "sha256_manifest_url": "https://nodejs.org/dist/v22.12.0/SHASUMS256.txt"
+  },
+  "ffmpeg_source": {
+    "version": "7.1",
+    "url": "https://ffmpeg.org/releases/ffmpeg-7.1.tar.xz",
+    "sha256": "40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6"
+  }
+}

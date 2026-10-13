@@ -4,6 +4,15 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from typing import Protocol
+
+
+class CasStore(Protocol):
+    def put(self, data: bytes) -> str: ...
+
+    def get(self, digest: str) -> bytes: ...
+
+    def exists(self, digest: str) -> bool: ...
 
 
 class ContentAddressedStore:

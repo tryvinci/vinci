@@ -17,6 +17,9 @@ TOOL_NAMES = (
     "vinci.jobs_get",
     "vinci.jobs_cancel",
     "vinci.cost_estimate",
+    "vinci.presets_list",
+    "vinci.adapts_run",
+    "vinci.batch_status",
 )
 
 _TOOL_DESCRIPTIONS = {
@@ -29,9 +32,31 @@ _TOOL_DESCRIPTIONS = {
     "vinci.jobs_get": "Get a job by id.",
     "vinci.jobs_cancel": "Cancel a run (run_id) or no-op cancel of a provider job.",
     "vinci.cost_estimate": "Estimate a skill without submitting work.",
+    "vinci.presets_list": "List generic, partner, and custom adapt presets.",
+    "vinci.adapts_run": "Adapt one asset or source URL through preset ids. Returns a batch_id.",
+    "vinci.batch_status": "Status, outputs, and per-preset checks for an adapt batch.",
 }
 
 _SPEND_TOOLS = {"vinci.image_generate", "vinci.video_generate", "vinci.workflow_run"}
+
+MUTATING_TOOLS = frozenset(
+    {
+        "vinci.image_generate",
+        "vinci.video_generate",
+        "vinci.workflow_run",
+        "vinci.adapts_run",
+        "vinci.jobs_cancel",
+    }
+)
+
+_DEFERRED_EXEC_TOOLS = frozenset(
+    {
+        "vinci.image_generate",
+        "vinci.video_generate",
+        "vinci.workflow_run",
+        "vinci.adapts_run",
+    }
+)
 
 
 def tool_schemas() -> list[dict[str, Any]]:
@@ -59,6 +84,12 @@ def tool_schemas() -> list[dict[str, Any]]:
         if name == "vinci.workflow_run":
             schema["properties"]["skill"] = {"type": "string"}
             schema["properties"]["workflow"] = {"type": "object"}
+        if name == "vinci.adapts_run":
+            schema["properties"]["asset_id"] = {"type": "string"}
+            schema["properties"]["source_url"] = {"type": "string"}
+            schema["properties"]["preset_ids"] = {"type": "array", "items": {"type": "string"}}
+        if name == "vinci.batch_status":
+            schema["properties"]["batch_id"] = {"type": "string"}
         tools.append(
             {
                 "name": name,
@@ -69,7 +100,13 @@ def tool_schemas() -> list[dict[str, Any]]:
     return tools
 
 
-def call_tool(engine: Engine, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+def call_tool(
+    engine: Engine,
+    name: str,
+    arguments: dict[str, Any],
+    *,
+    operation_id: str | None = None,
+) -> dict[str, Any]:
     secrets = engine.resolver.known_values(
         [
             "MOCK_API_KEY",
@@ -95,7 +132,16 @@ def call_tool(engine: Engine, name: str, arguments: dict[str, Any]) -> dict[str,
             max_cost=_max_cost(args),
             model_id=args.get("model_id"),
         )
+    journal_deferred = getattr(engine, "_journal", None) is not None and bool(operation_id)
     if name == "vinci.image_generate":
+        if journal_deferred:
+            return engine.accept_run(
+                "@tryvinci/image-generate",
+                _inputs(args),
+                max_cost=_max_cost(args),
+                model_id=args.get("model_id"),
+                operation_id=operation_id,
+            )
         return engine.start_run(
             "@tryvinci/image-generate",
             _inputs(args),
@@ -103,6 +149,13 @@ def call_tool(engine: Engine, name: str, arguments: dict[str, Any]) -> dict[str,
             model_id=args.get("model_id"),
         )
     if name == "vinci.video_generate":
+        if journal_deferred:
+            return engine.accept_run(
+                "@tryvinci/video-generate",
+                _inputs(args),
+                max_cost=_max_cost(args),
+                operation_id=operation_id,
+            )
         return engine.start_run(
             "@tryvinci/video-generate",
             _inputs(args),
@@ -111,6 +164,15 @@ def call_tool(engine: Engine, name: str, arguments: dict[str, Any]) -> dict[str,
     if name == "vinci.workflow_run":
         workflow = args.get("workflow")
         spec = WorkflowSpec.model_validate(workflow) if workflow else None
+        if journal_deferred:
+            return engine.accept_run(
+                args.get("skill"),
+                _inputs(args),
+                max_cost=_max_cost(args),
+                preference=args.get("preference"),
+                workflow=spec,
+                operation_id=operation_id,
+            )
         return engine.start_run(
             args.get("skill"),
             _inputs(args),
@@ -136,6 +198,17 @@ def call_tool(engine: Engine, name: str, arguments: dict[str, Any]) -> dict[str,
         dumped = asset.model_dump(mode="json")
         redacted = redact_mapping(dumped, extra_values=secrets)
         return redacted if isinstance(redacted, dict) else dumped
+    if name == "vinci.presets_list":
+        return {"presets": engine.adapt_presets()}
+    if name == "vinci.adapts_run":
+        item: dict[str, Any] = {"preset_ids": list(args.get("preset_ids") or [])}
+        if args.get("asset_id"):
+            item["asset_id"] = str(args["asset_id"])
+        if args.get("source_url"):
+            item["source_url"] = str(args["source_url"])
+        return engine.start_adapt_batch([item], operation_id=operation_id)
+    if name == "vinci.batch_status":
+        return engine.adapt_batch_status(str(args["batch_id"]))
     raise KeyError(name)
 
 
@@ -151,7 +224,12 @@ def _max_cost(args: dict[str, Any]) -> float | None:
     return float(value) if value is not None else None
 
 
-def handle_rpc(engine: Engine, message: dict[str, Any]) -> dict[str, Any] | None:
+def handle_rpc(
+    engine: Engine,
+    message: dict[str, Any],
+    *,
+    operation_id: str | None = None,
+) -> dict[str, Any] | None:
     method = message.get("method")
     rpc_id = message.get("id")
     if method is None or str(method).startswith("notifications/"):
@@ -173,7 +251,7 @@ def handle_rpc(engine: Engine, message: dict[str, Any]) -> dict[str, Any] | None
         name = params["name"]
         arguments = params.get("arguments") or {}
         try:
-            result = call_tool(engine, name, arguments)
+            result = call_tool(engine, name, arguments, operation_id=operation_id)
             text = json.dumps(result, default=str)
             return {
                 "jsonrpc": "2.0",

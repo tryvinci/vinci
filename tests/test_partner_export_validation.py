@@ -19,6 +19,7 @@ def test_partner_presets_in_catalog() -> None:
     assert "inuxu_1200x720" in ids
     assert "jio_1200x627" in ids
     assert "bpn_360x180" in ids
+    assert "meta_google_1200x1200" in ids
 
 
 def test_inclusive_byte_cap_boundary() -> None:
@@ -78,7 +79,7 @@ def test_bpn_human_review_advisories_labeled() -> None:
     report = safe_area_report("bpn_360x180", 360, 180)
     advisories = report["human_review_advisories"]
     assert any("Buy Now" in line for line in advisories)
-    assert any("human-review" in line.lower() for line in advisories)
+    assert any("No logos" in line for line in advisories)
     assert any("IRDAI" in line for line in advisories)
 
 

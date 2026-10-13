@@ -47,7 +47,11 @@ class Catalog:
         return [m for m in self.models if capability in [c.value for c in m.capabilities]]
 
     def cheapest(self, capability: str) -> ModelSpec | None:
-        candidates = [m for m in self.by_capability(capability) if m.status.value == "active"]
+        candidates = [
+            m
+            for m in self.by_capability(capability)
+            if m.status.value == "active" and m.pricing.currency.upper() == "USD"
+        ]
         if not candidates:
             return None
         return min(candidates, key=lambda m: m.pricing.amount)

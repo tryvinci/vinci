@@ -16,6 +16,7 @@ Usage:
   vinci init [--demo]
   vinci doctor
   vinci providers add <name> [--from-env NAME] [--from-file PATH] [--extra-from-env NAME] [--extra-from-file PATH] [--url URL] [--account-id ID] [--label NAME] [--authorize-url URL]
+  vinci providers connect <higgsfield|magnific|url>
   vinci providers list|test|remove <name>
   vinci models [--capability t2i] [--max-price 0.10]
   vinci run <skill|workflow.yaml> [--input JSON] [--max-cost N] [--prefer cheapest]
@@ -24,6 +25,7 @@ Usage:
   vinci cost [report --by skill|provider|day]
   vinci catalog refresh
   vinci find <query>
+  vinci sheets sync
   vinci mcp print-config
   vinci studio [--lan] [--host HOST] [--port PORT] [--html] [--no-open]
 `);
@@ -59,6 +61,42 @@ async function main(): Promise<void> {
   }
   if (cmd === "providers") {
     const sub = argv[1];
+    if (sub === "connect") {
+      const target = argv[2];
+      if (!target) usage();
+      const presets: Record<string, { id: string; label: string }> = {
+        higgsfield: { id: "mcp_higgsfield", label: "Higgsfield" },
+        magnific: { id: "mcp_magnific", label: "Magnific" },
+      };
+      const preset = presets[target];
+      const id = preset?.id || flag(argv, "--id") || "mcp";
+      print(
+        await post("/providers", {
+          id,
+          url: preset ? undefined : target,
+          label: preset?.label || flag(argv, "--label"),
+        }),
+      );
+      const started = (await post(`/providers/${encodeURIComponent(id)}/oauth`, {})) as {
+        mode?: string;
+        authorize_url?: string;
+        hint?: string;
+      };
+      print(started);
+      if (started.mode === "oauth" && started.authorize_url) {
+        console.log(started.authorize_url);
+        for (let i = 0; i < 60; i += 1) {
+          await delay(1000);
+          const rows = (await get("/providers")) as Record<string, { auth_state?: string }>;
+          if (rows[id]?.auth_state === "connected") {
+            console.log(`${id} connected`);
+            return;
+          }
+        }
+        console.log("still waiting for sign-in");
+      }
+      return;
+    }
     if (sub === "add") {
       const fromFile = flag(argv, "--from-file");
       const extraFile = flag(argv, "--extra-from-file");
@@ -181,6 +219,21 @@ async function main(): Promise<void> {
   if (cmd === "find") {
     const q = argv.slice(1).join(" ");
     print(await get(`/find?q=${encodeURIComponent(q)}`));
+    return;
+  }
+  if (cmd === "sheets") {
+    if (argv[1] !== "sync") usage();
+    const res = await fetch(DAEMON + "/integrations/gsheet/sync", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    const body = (await res.json()) as { detail?: string };
+    if (!res.ok) {
+      console.error(typeof body.detail === "string" ? body.detail : JSON.stringify(body));
+      process.exit(1);
+    }
+    print(body);
     return;
   }
   usage();

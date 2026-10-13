@@ -1,0 +1,964 @@
+make[1]: Entering directory '/workspace/apps/vinci-oss'
+./scripts/clone-smoke.sh
+Collecting pip
+  Using cached pip-26.2.1-py3-none-any.whl.metadata (4.6 kB)
+Using cached pip-26.2.1-py3-none-any.whl (1.8 MB)
+Installing collected packages: pip
+Successfully installed pip-26.2.1
+make[2]: Entering directory '/tmp/vinci-clone-smoke.bQ67'
+python3 -m pip install -U pip
+Requirement already satisfied: pip in ./.venv/lib/python3.12/site-packages (26.2.1)
+python3 -m pip install pytest ruff mypy jsonschema types-jsonschema pyyaml types-PyYAML httpx fastapi uvicorn python-multipart
+Collecting pytest
+  Using cached pytest-9.1.1-py3-none-any.whl.metadata (7.6 kB)
+Collecting ruff
+  Using cached ruff-0.16.10-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (20 kB)
+Collecting mypy
+  Using cached mypy-2.4.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.4 kB)
+Collecting jsonschema
+  Using cached jsonschema-4.26.0-py3-none-any.whl.metadata (7.6 kB)
+Collecting types-jsonschema
+  Using cached types_jsonschema-4.26.0.20261006-py3-none-any.whl.metadata (1.9 kB)
+Collecting pyyaml
+  Using cached pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.4 kB)
+Collecting types-PyYAML
+  Using cached types_pyyaml-6.0.12.20260906-py3-none-any.whl.metadata (1.8 kB)
+Collecting httpx
+  Using cached httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+Collecting fastapi
+  Using cached fastapi-0.143.0-py3-none-any.whl.metadata (26 kB)
+Collecting uvicorn
+  Using cached uvicorn-0.54.0-py3-none-any.whl.metadata (6.6 kB)
+Collecting python-multipart
+  Using cached python_multipart-0.0.32-py3-none-any.whl.metadata (2.1 kB)
+Collecting iniconfig>=1.0.1 (from pytest)
+  Using cached iniconfig-2.3.1-py3-none-any.whl.metadata (2.8 kB)
+Collecting packaging>=22 (from pytest)
+  Using cached packaging-26.3-py3-none-any.whl.metadata (3.5 kB)
+Collecting pluggy<2,>=1.5 (from pytest)
+  Using cached pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+Collecting pygments>=2.7.2 (from pytest)
+  Using cached pygments-2.21.0-py3-none-any.whl.metadata (2.5 kB)
+Collecting typing_extensions>=4.6.0 (from mypy)
+  Using cached typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting mypy_extensions>=1.0.0 (from mypy)
+  Using cached mypy_extensions-1.1.0-py3-none-any.whl.metadata (1.1 kB)
+Collecting pathspec>=1.0.0 (from mypy)
+  Using cached pathspec-1.1.1-py3-none-any.whl.metadata (14 kB)
+Collecting librt>=0.16.0 (from mypy)
+  Using cached librt-0.16.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (1.3 kB)
+Collecting ast-serialize<1.0.0,>=0.11.2 (from mypy)
+  Using cached ast_serialize-0.12.1-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (1.4 kB)
+Collecting attrs>=22.2.0 (from jsonschema)
+  Using cached attrs-26.1.0-py3-none-any.whl.metadata (8.8 kB)
+Collecting jsonschema-specifications>=2023.03.6 (from jsonschema)
+  Using cached jsonschema_specifications-2025.9.1-py3-none-any.whl.metadata (2.9 kB)
+Collecting referencing>=0.28.4 (from jsonschema)
+  Using cached referencing-0.37.0-py3-none-any.whl.metadata (2.8 kB)
+Collecting rpds-py>=0.25.0 (from jsonschema)
+  Using cached rpds_py-2026.9.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.1 kB)
+Collecting anyio (from httpx)
+  Using cached anyio-4.15.1-py3-none-any.whl.metadata (4.7 kB)
+Collecting certifi (from httpx)
+  Using cached certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+Collecting httpcore==1.* (from httpx)
+  Using cached httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+Collecting idna (from httpx)
+  Using cached idna-3.20-py3-none-any.whl.metadata (7.2 kB)
+Collecting h11>=0.16 (from httpcore==1.*->httpx)
+  Using cached h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+Collecting starlette>=0.46.0 (from fastapi)
+  Using cached starlette-1.7.0-py3-none-any.whl.metadata (6.6 kB)
+Collecting pydantic>=2.9.0 (from fastapi)
+  Using cached pydantic-2.14.0-py3-none-any.whl.metadata (131 kB)
+Collecting typing-inspection>=0.4.2 (from fastapi)
+  Using cached typing_inspection-0.4.4-py3-none-any.whl.metadata (2.6 kB)
+Collecting annotated-doc>=0.0.2 (from fastapi)
+  Using cached annotated_doc-0.0.5-py3-none-any.whl.metadata (6.5 kB)
+Collecting opentelemetry-api>=1.44.0 (from fastapi)
+  Using cached opentelemetry_api-1.45.1-py3-none-any.whl.metadata (1.4 kB)
+Collecting click>=7.0 (from uvicorn)
+  Using cached click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+Collecting annotated-types>=0.6.0 (from pydantic>=2.9.0->fastapi)
+  Using cached annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+Collecting pydantic-core==2.50.0 (from pydantic>=2.9.0->fastapi)
+  Using cached pydantic_core-2.50.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.5 kB)
+Using cached pytest-9.1.1-py3-none-any.whl (386 kB)
+Using cached pluggy-1.6.0-py3-none-any.whl (20 kB)
+Using cached ruff-0.16.10-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (10.4 MB)
+Using cached mypy-2.4.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (15.6 MB)
+Using cached ast_serialize-0.12.1-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (1.3 MB)
+Using cached jsonschema-4.26.0-py3-none-any.whl (90 kB)
+Using cached types_jsonschema-4.26.0.20261006-py3-none-any.whl (16 kB)
+Using cached pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (807 kB)
+Using cached types_pyyaml-6.0.12.20260906-py3-none-any.whl (21 kB)
+Using cached httpx-0.28.1-py3-none-any.whl (73 kB)
+Using cached httpcore-1.0.9-py3-none-any.whl (78 kB)
+Using cached fastapi-0.143.0-py3-none-any.whl (144 kB)
+Using cached uvicorn-0.54.0-py3-none-any.whl (87 kB)
+Using cached python_multipart-0.0.32-py3-none-any.whl (30 kB)
+Using cached annotated_doc-0.0.5-py3-none-any.whl (5.3 kB)
+Using cached attrs-26.1.0-py3-none-any.whl (67 kB)
+Using cached click-8.5.0-py3-none-any.whl (125 kB)
+Using cached h11-0.16.0-py3-none-any.whl (37 kB)
+Using cached iniconfig-2.3.1-py3-none-any.whl (7.6 kB)
+Using cached jsonschema_specifications-2025.9.1-py3-none-any.whl (18 kB)
+Using cached librt-0.16.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (531 kB)
+Using cached mypy_extensions-1.1.0-py3-none-any.whl (5.0 kB)
+Using cached opentelemetry_api-1.45.1-py3-none-any.whl (60 kB)
+Using cached packaging-26.3-py3-none-any.whl (129 kB)
+Using cached pathspec-1.1.1-py3-none-any.whl (57 kB)
+Using cached pydantic-2.14.0-py3-none-any.whl (487 kB)
+Using cached pydantic_core-2.50.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.2 MB)
+Using cached annotated_types-0.8.0-py3-none-any.whl (13 kB)
+Using cached pygments-2.21.0-py3-none-any.whl (1.3 MB)
+Using cached referencing-0.37.0-py3-none-any.whl (26 kB)
+Using cached rpds_py-2026.9.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (371 kB)
+Using cached starlette-1.7.0-py3-none-any.whl (78 kB)
+Using cached anyio-4.15.1-py3-none-any.whl (132 kB)
+Using cached idna-3.20-py3-none-any.whl (69 kB)
+Using cached typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Using cached typing_inspection-0.4.4-py3-none-any.whl (14 kB)
+Using cached certifi-2026.7.22-py3-none-any.whl (136 kB)
+Installing collected packages: typing_extensions, types-PyYAML, ruff, rpds-py, pyyaml, python-multipart, pygments, pluggy, pathspec, packaging, mypy_extensions, librt, iniconfig, idna, h11, click, certifi, attrs, ast-serialize, annotated-types, annotated-doc, uvicorn, typing-inspection, referencing, pytest, pydantic-core, opentelemetry-api, mypy, httpcore, anyio, types-jsonschema, starlette, pydantic, jsonschema-specifications, httpx, jsonschema, fastapi
+
+
+Successfully installed annotated-doc-0.0.5 annotated-types-0.8.0 anyio-4.15.1 ast-serialize-0.12.1 attrs-26.1.0 certifi-2026.7.22 click-8.5.0 fastapi-0.143.0 h11-0.16.0 httpcore-1.0.9 httpx-0.28.1 idna-3.20 iniconfig-2.3.1 jsonschema-4.26.0 jsonschema-specifications-2025.9.1 librt-0.16.0 mypy-2.4.0 mypy_extensions-1.1.0 opentelemetry-api-1.45.1 packaging-26.3 pathspec-1.1.1 pluggy-1.6.0 pydantic-2.14.0 pydantic-core-2.50.0 pygments-2.21.0 pytest-9.1.1 python-multipart-0.0.32 pyyaml-6.0.3 referencing-0.37.0 rpds-py-2026.9.1 ruff-0.16.10 starlette-1.7.0 types-PyYAML-6.0.12.20260906 types-jsonschema-4.26.0.20261006 typing-inspection-0.4.4 typing_extensions-4.16.0 uvicorn-0.54.0
+python3 -m pip install -e packages/protocol -e packages/core -e packages/storage -e packages/provider-sdk -e packages/runtime -e packages/media -e packages/index -e packages/mcp -e packages/skills -e packages/provider-google -e packages/provider-openai -e packages/provider-wavespeed -e packages/provider-fal -e packages/provider-elevenlabs -e packages/provider-cloudflare -e packages/provider-higgsfield -e packages/provider-magnific -e packages/harness -e apps/daemon
+Obtaining file:///tmp/vinci-clone-smoke.bQ67/packages/protocol
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Obtaining file:///tmp/vinci-clone-smoke.bQ67/packages/core
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Obtaining file:///tmp/vinci-clone-smoke.bQ67/packages/storage
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Obtaining file:///tmp/vinci-clone-smoke.bQ67/packages/provider-sdk
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Obtaining file:///tmp/vinci-clone-smoke.bQ67/packages/runtime
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Obtaining file:///tmp/vinci-clone-smoke.bQ67/packages/media
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Obtaining file:///tmp/vinci-clone-smoke.bQ67/packages/index
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Obtaining file:///tmp/vinci-clone-smoke.bQ67/packages/mcp
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Obtaining file:///tmp/vinci-clone-smoke.bQ67/packages/skills
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Obtaining file:///tmp/vinci-clone-smoke.bQ67/packages/provider-google
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Obtaining file:///tmp/vinci-clone-smoke.bQ67/packages/provider-openai
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Obtaining file:///tmp/vinci-clone-smoke.bQ67/packages/provider-wavespeed
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Obtaining file:///tmp/vinci-clone-smoke.bQ67/packages/provider-fal
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Obtaining file:///tmp/vinci-clone-smoke.bQ67/packages/provider-elevenlabs
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Obtaining file:///tmp/vinci-clone-smoke.bQ67/packages/provider-cloudflare
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Obtaining file:///tmp/vinci-clone-smoke.bQ67/packages/provider-higgsfield
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Obtaining file:///tmp/vinci-clone-smoke.bQ67/packages/provider-magnific
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Obtaining file:///tmp/vinci-clone-smoke.bQ67/packages/harness
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Obtaining file:///tmp/vinci-clone-smoke.bQ67/apps/daemon
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Requirement already satisfied: pydantic>=2.6 in ./.venv/lib/python3.12/site-packages (from vinci-protocol==0.1.0) (2.14.0)
+Requirement already satisfied: PyYAML>=6.0 in ./.venv/lib/python3.12/site-packages (from vinci-skills==0.1.0) (6.0.3)
+Requirement already satisfied: fastapi>=0.115 in ./.venv/lib/python3.12/site-packages (from vinci-daemon==0.1.0) (0.143.0)
+Requirement already satisfied: uvicorn>=0.32 in ./.venv/lib/python3.12/site-packages (from vinci-daemon==0.1.0) (0.54.0)
+Requirement already satisfied: python-multipart>=0.0.9 in ./.venv/lib/python3.12/site-packages (from vinci-daemon==0.1.0) (0.0.32)
+Requirement already satisfied: starlette>=0.46.0 in ./.venv/lib/python3.12/site-packages (from fastapi>=0.115->vinci-daemon==0.1.0) (1.7.0)
+Requirement already satisfied: typing-extensions>=4.8.0 in ./.venv/lib/python3.12/site-packages (from fastapi>=0.115->vinci-daemon==0.1.0) (4.16.0)
+Requirement already satisfied: typing-inspection>=0.4.2 in ./.venv/lib/python3.12/site-packages (from fastapi>=0.115->vinci-daemon==0.1.0) (0.4.4)
+Requirement already satisfied: annotated-doc>=0.0.2 in ./.venv/lib/python3.12/site-packages (from fastapi>=0.115->vinci-daemon==0.1.0) (0.0.5)
+Requirement already satisfied: opentelemetry-api>=1.44.0 in ./.venv/lib/python3.12/site-packages (from fastapi>=0.115->vinci-daemon==0.1.0) (1.45.1)
+Requirement already satisfied: annotated-types>=0.6.0 in ./.venv/lib/python3.12/site-packages (from pydantic>=2.6->vinci-protocol==0.1.0) (0.8.0)
+Requirement already satisfied: pydantic-core==2.50.0 in ./.venv/lib/python3.12/site-packages (from pydantic>=2.6->vinci-protocol==0.1.0) (2.50.0)
+Requirement already satisfied: anyio<5,>=4.0.0 in ./.venv/lib/python3.12/site-packages (from starlette>=0.46.0->fastapi>=0.115->vinci-daemon==0.1.0) (4.15.1)
+Requirement already satisfied: idna>=2.8 in ./.venv/lib/python3.12/site-packages (from anyio<5,>=4.0.0->starlette>=0.46.0->fastapi>=0.115->vinci-daemon==0.1.0) (3.20)
+Requirement already satisfied: click>=7.0 in ./.venv/lib/python3.12/site-packages (from uvicorn>=0.32->vinci-daemon==0.1.0) (8.5.0)
+Requirement already satisfied: h11>=0.8 in ./.venv/lib/python3.12/site-packages (from uvicorn>=0.32->vinci-daemon==0.1.0) (0.16.0)
+Building wheels for collected packages: vinci-protocol, vinci-core, vinci-storage, vinci-provider-sdk, vinci-runtime, vinci-media, vinci-index, vinci-skills, vinci-provider-google, vinci-provider-openai, vinci-provider-wavespeed, vinci-provider-fal, vinci-provider-elevenlabs, vinci-provider-cloudflare, vinci-provider-higgsfield, vinci-provider-magnific, vinci-mcp, vinci-harness, vinci-daemon
+  Building editable for vinci-protocol (pyproject.toml): started
+  Building editable for vinci-protocol (pyproject.toml): finished with status 'done'
+  Created wheel for vinci-protocol: filename=vinci_protocol-0.1.0-0.editable-py3-none-any.whl size=3025 sha256=6eb1bfb73d6ae6dab5ca8912a6542b5648f702a565d36910f327920098c21d58
+  Stored in directory: /tmp/pip-ephem-wheel-cache-xlly_mba/wheels/73/6b/f1/08936ef9d6cb9170a39000a88ab4566ffe47407d34c9722bf8
+  Building editable for vinci-core (pyproject.toml): started
+  Building editable for vinci-core (pyproject.toml): finished with status 'done'
+  Created wheel for vinci-core: filename=vinci_core-0.1.0-0.editable-py3-none-any.whl size=2835 sha256=ff6ad0580b320ebb25ce9839087bf401bd39472920f850bc4b16e3a2501cac9f
+  Stored in directory: /tmp/pip-ephem-wheel-cache-xlly_mba/wheels/68/7d/0a/f80f9e95aaee30bcecf855cd07819611aecda0e0e4b928424b
+  Building editable for vinci-storage (pyproject.toml): started
+  Building editable for vinci-storage (pyproject.toml): finished with status 'done'
+  Created wheel for vinci-storage: filename=vinci_storage-0.1.0-0.editable-py3-none-any.whl size=2820 sha256=11bdc21a5b80694e2470269f06786e7958297263803f11452f0493b6dc68b026
+  Stored in directory: /tmp/pip-ephem-wheel-cache-xlly_mba/wheels/94/d3/7c/4ca86baa53943b0ac6a4e6e12a8739850a6d3dbe5ff75eecb0
+  Building editable for vinci-provider-sdk (pyproject.toml): started
+  Building editable for vinci-provider-sdk (pyproject.toml): finished with status 'done'
+  Created wheel for vinci-provider-sdk: filename=vinci_provider_sdk-0.1.0-0.editable-py3-none-any.whl size=2938 sha256=4605852241c5e4b126d47f795b3bb650c784991dfefa2fb075c0b5aa0f35e1b8
+  Stored in directory: /tmp/pip-ephem-wheel-cache-xlly_mba/wheels/b1/3e/cf/88eccac7c14148414f1a3d0214ee2fc42e4f9b77898857ea3a
+  Building editable for vinci-runtime (pyproject.toml): started
+  Building editable for vinci-runtime (pyproject.toml): finished with status 'done'
+  Created wheel for vinci-runtime: filename=vinci_runtime-0.1.0-0.editable-py3-none-any.whl size=2909 sha256=7299145e0584aa095227e01c356243154da6c243f850dcc7c704f96a3ea9153d
+  Stored in directory: /tmp/pip-ephem-wheel-cache-xlly_mba/wheels/6b/10/99/c870386cb9084ec9088715510c1766a0b6e3f052c3669a68b0
+  Building editable for vinci-media (pyproject.toml): started
+  Building editable for vinci-media (pyproject.toml): finished with status 'done'
+  Created wheel for vinci-media: filename=vinci_media-0.1.0-0.editable-py3-none-any.whl size=2768 sha256=096cbfe8968d43da23e42aaf3c6ff2ff4385a24a3cd535b329e3e8a859fc8cc5
+  Stored in directory: /tmp/pip-ephem-wheel-cache-xlly_mba/wheels/d2/38/94/2a80737090808c3b760b908246952b3f7f3844821378bc07f9
+  Building editable for vinci-index (pyproject.toml): started
+  Building editable for vinci-index (pyproject.toml): finished with status 'done'
+  Created wheel for vinci-index: filename=vinci_index-0.1.0-0.editable-py3-none-any.whl size=2771 sha256=6ba60661ad54f58c1bc8287c7006ab6fcab81a68a17a7cfbe1dddabd850a9507
+  Stored in directory: /tmp/pip-ephem-wheel-cache-xlly_mba/wheels/4f/03/92/8eb76bf2f0d15ab6bae43582c7f18a2c83d98c284349318464
+  Building editable for vinci-skills (pyproject.toml): started
+  Building editable for vinci-skills (pyproject.toml): finished with status 'done'
+  Created wheel for vinci-skills: filename=vinci_skills-0.1.0-0.editable-py3-none-any.whl size=2801 sha256=aa0280f9b9e41937c12defb702918075a8d27007e2768a76fd8a83ff52d95dea
+  Stored in directory: /tmp/pip-ephem-wheel-cache-xlly_mba/wheels/ca/66/44/72410948181574b6974c2dc94fb24e4281c25e6f98a74043eb
+  Building editable for vinci-provider-google (pyproject.toml): started
+  Building editable for vinci-provider-google (pyproject.toml): finished with status 'done'
+  Created wheel for vinci-provider-google: filename=vinci_provider_google-0.1.0-0.editable-py3-none-any.whl size=2955 sha256=2a844ea3dd1117a9ae69a5be1177410354b692f0cb6b0d9803be4f5d6155627d
+  Stored in directory: /tmp/pip-ephem-wheel-cache-xlly_mba/wheels/35/3b/f9/3d6dd22e6a1dbff38330a1faf13a645936a6b69e78c880206c
+  Building editable for vinci-provider-openai (pyproject.toml): started
+  Building editable for vinci-provider-openai (pyproject.toml): finished with status 'done'
+  Created wheel for vinci-provider-openai: filename=vinci_provider_openai-0.1.0-0.editable-py3-none-any.whl size=2962 sha256=57a5a217d09fc23a1e0cdf9af18f54e360e256c46f3bc98059cda8e737e43c3e
+  Stored in directory: /tmp/pip-ephem-wheel-cache-xlly_mba/wheels/29/d4/17/757d24b41beb036b712e26896a328f6a4e1a4afe0a0b91dc8c
+  Building editable for vinci-provider-wavespeed (pyproject.toml): started
+  Building editable for vinci-provider-wavespeed (pyproject.toml): finished with status 'done'
+  Created wheel for vinci-provider-wavespeed: filename=vinci_provider_wavespeed-0.1.0-0.editable-py3-none-any.whl size=2999 sha256=df2779044598d4b93b7fd8c1ed8475042b8fc01c8c30b9b311eed7b24706c446
+  Stored in directory: /tmp/pip-ephem-wheel-cache-xlly_mba/wheels/bd/23/df/3992c434538bedfdd2decc4351c5535f8df5e4cba84b81b4f4
+  Building editable for vinci-provider-fal (pyproject.toml): started
+  Building editable for vinci-provider-fal (pyproject.toml): finished with status 'done'
+  Created wheel for vinci-provider-fal: filename=vinci_provider_fal-0.1.0-0.editable-py3-none-any.whl size=2902 sha256=354bf1a7c320e87da1410c953ce2ba85c2f45debf3b12df3a42a1204aba7d7ed
+  Stored in directory: /tmp/pip-ephem-wheel-cache-xlly_mba/wheels/98/70/21/accf2c142cf47d082ecd71651013ee164cbefb1c7af61ccb38
+  Building editable for vinci-provider-elevenlabs (pyproject.toml): started
+  Building editable for vinci-provider-elevenlabs (pyproject.toml): finished with status 'done'
+  Created wheel for vinci-provider-elevenlabs: filename=vinci_provider_elevenlabs-0.1.0-0.editable-py3-none-any.whl size=3017 sha256=5d5c29a71794fdc22c77eaaea1b20d962c6bcdfe8a65a04281c77e5336f7dddc
+  Stored in directory: /tmp/pip-ephem-wheel-cache-xlly_mba/wheels/2e/15/e0/24cee327355410d6c7ef0b0b3776492a34eafae23b2207ac3a
+  Building editable for vinci-provider-cloudflare (pyproject.toml): started
+  Building editable for vinci-provider-cloudflare (pyproject.toml): finished with status 'done'
+  Created wheel for vinci-provider-cloudflare: filename=vinci_provider_cloudflare-0.1.0-0.editable-py3-none-any.whl size=3022 sha256=b0e65fd57c100b2a53fe8e8d591cb56f75d12f6f3da75f3275a4debc4f6fc304
+  Stored in directory: /tmp/pip-ephem-wheel-cache-xlly_mba/wheels/b6/53/af/07c2c1c7c1c16d04d162cc5fb743baec10b19dd37d18c917bc
+  Building editable for vinci-provider-higgsfield (pyproject.toml): started
+  Building editable for vinci-provider-higgsfield (pyproject.toml): finished with status 'done'
+  Created wheel for vinci-provider-higgsfield: filename=vinci_provider_higgsfield-0.1.0-0.editable-py3-none-any.whl size=3028 sha256=4d381d83ac5d2aed988bae6e5074826e0b8d51d59129719c3138e46601e9c663
+  Stored in directory: /tmp/pip-ephem-wheel-cache-xlly_mba/wheels/7f/1d/56/a225a2676a5f873ec1168b008ba101041a7a5a1e2189ad8798
+  Building editable for vinci-provider-magnific (pyproject.toml): started
+  Building editable for vinci-provider-magnific (pyproject.toml): finished with status 'done'
+  Created wheel for vinci-provider-magnific: filename=vinci_provider_magnific-0.1.0-0.editable-py3-none-any.whl size=2994 sha256=fb49923f9046f4baeb94830f210d9489c4a8d87c68313d172d12face68c1cdcb
+  Stored in directory: /tmp/pip-ephem-wheel-cache-xlly_mba/wheels/b8/84/84/6643d18ff7ff3f7d02b4a1b8bcbe9c45a8cd821c0c188d7c44
+  Building editable for vinci-mcp (pyproject.toml): started
+  Building editable for vinci-mcp (pyproject.toml): finished with status 'done'
+  Created wheel for vinci-mcp: filename=vinci_mcp-0.1.0-0.editable-py3-none-any.whl size=2774 sha256=a601d35670c5a144353a92a74d89268d4660938d197027d00d5bc3544be1cb55
+  Stored in directory: /tmp/pip-ephem-wheel-cache-xlly_mba/wheels/2f/07/70/44804f78c306c90fdd2a28ac23c95adf6638034be897053263
+  Building editable for vinci-harness (pyproject.toml): started
+  Building editable for vinci-harness (pyproject.toml): finished with status 'done'
+  Created wheel for vinci-harness: filename=vinci_harness-0.1.0-0.editable-py3-none-any.whl size=3192 sha256=ec2ffe0b07572fd16e51e502f7fda11ff1718af867ff2f5a77f76523f35f4e50
+  Stored in directory: /tmp/pip-ephem-wheel-cache-xlly_mba/wheels/74/9a/38/92b5a53123f81e67da83dde0c4e4c7aaff3919508707fee754
+  Building editable for vinci-daemon (pyproject.toml): started
+  Building editable for vinci-daemon (pyproject.toml): finished with status 'done'
+  Created wheel for vinci-daemon: filename=vinci_daemon-0.1.0-0.editable-py3-none-any.whl size=3200 sha256=a97ec225de83c50f77dcbc277cc9700e26ef800f16d1505e6b8a671c324ecd4c
+  Stored in directory: /tmp/pip-ephem-wheel-cache-xlly_mba/wheels/ba/ab/0a/2557b4f453b8a4ca519f81fae6ff1d0784aa24ff45e92089e8
+Successfully built vinci-protocol vinci-core vinci-storage vinci-provider-sdk vinci-runtime vinci-media vinci-index vinci-skills vinci-provider-google vinci-provider-openai vinci-provider-wavespeed vinci-provider-fal vinci-provider-elevenlabs vinci-provider-cloudflare vinci-provider-higgsfield vinci-provider-magnific vinci-mcp vinci-harness vinci-daemon
+Installing collected packages: vinci-protocol, vinci-skills, vinci-media, vinci-index, vinci-core, vinci-storage, vinci-provider-sdk, vinci-provider-wavespeed, vinci-provider-openai, vinci-provider-magnific, vinci-provider-higgsfield, vinci-provider-google, vinci-provider-fal, vinci-provider-elevenlabs, vinci-provider-cloudflare, vinci-runtime, vinci-mcp, vinci-harness, vinci-daemon
+
+
+Successfully installed vinci-core-0.1.0 vinci-daemon-0.1.0 vinci-harness-0.1.0 vinci-index-0.1.0 vinci-mcp-0.1.0 vinci-media-0.1.0 vinci-protocol-0.1.0 vinci-provider-cloudflare-0.1.0 vinci-provider-elevenlabs-0.1.0 vinci-provider-fal-0.1.0 vinci-provider-google-0.1.0 vinci-provider-higgsfield-0.1.0 vinci-provider-magnific-0.1.0 vinci-provider-openai-0.1.0 vinci-provider-sdk-0.1.0 vinci-provider-wavespeed-0.1.0 vinci-runtime-0.1.0 vinci-skills-0.1.0 vinci-storage-0.1.0
+npm install
+
+added 35 packages, and audited 39 packages in 4s
+
+8 packages are looking for funding
+  run `npm fund` for details
+
+4 vulnerabilities (1 moderate, 3 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+npm run typecheck --workspaces --if-present
+
+> @tryvinci/protocol@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @tryvinci/cli@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @tryvinci/studio@0.1.0 typecheck
+> tsc --noEmit
+
+npm run build --workspace @tryvinci/cli --if-present
+
+> @tryvinci/cli@0.1.0 build
+> tsc
+
+make[2]: Leaving directory '/tmp/vinci-clone-smoke.bQ67'
+{
+  "home": "/tmp/vinci-clone-smoke.bQ67/.vinci-home",
+  "state": "completed",
+  "skill": "@tryvinci/image-generate@1.0.0",
+  "total": 0.0,
+  "model_id": "mock:png:v1",
+  "outputs": [
+    "dc0218638fd0e61f3fdefe9fb8fe780de328ec52d8146b0c2f95e8fbc365151b"
+  ],
+  "asset_uris": [
+    "vinci://assets/dc0218638fd0e61f3fdefe9fb8fe780de328ec52d8146b0c2f95e8fbc365151b"
+  ],
+  "job_uris": [
+    "vinci://jobs/584a0ea5043a4211840e4968f6e03920"
+  ],
+  "asset_uri": "vinci://assets/dc0218638fd0e61f3fdefe9fb8fe780de328ec52d8146b0c2f95e8fbc365151b",
+  "job_uri": "vinci://jobs/584a0ea5043a4211840e4968f6e03920",
+  "receipt_uri": "vinci://receipts/584a0ea5043a4211840e4968f6e03920",
+  "computed_cost": 0.0,
+  "cached": false,
+  "replay_cached": true,
+  "replay_cost": 0.0,
+  "replay_outputs": [
+    "dc0218638fd0e61f3fdefe9fb8fe780de328ec52d8146b0c2f95e8fbc365151b"
+  ],
+  "png_ihdr": [
+    960,
+    540
+  ],
+  "live_usd": 0
+}
+{
+  "state": "completed",
+  "total": 0.0,
+  "asset_uris": [
+    "vinci://assets/b1bbd88e9ef027d358eaa00e517522abb33b36072199fe0671a7b5eb304350c9"
+  ],
+  "job_uris": [
+    "vinci://jobs/f3f7913bdf07417395542eb208a67431"
+  ],
+  "receipt_uris": [
+    "vinci://receipts/f3f7913bdf07417395542eb208a67431"
+  ],
+  "png_ihdr": [
+    960,
+    540
+  ],
+  "live_usd": 0
+}
+{
+  "home": "/tmp/vinci-clone-smoke.bQ67/.vinci-home",
+  "demo": true,
+  "protocol_version": "0.1.0"
+}
+this run ≈ $0 via mock:png:v1
+vinci://assets/fa6d55b8d77da6eb4c6f4f0304143e8f844d5584c9dbb09bc43b04b80a7bfddf
+vinci://jobs/a6c1dc9e2bb445d080824f4ff307f074
+vinci://receipts/a6c1dc9e2bb445d080824f4ff307f074
+{
+  "skill": "@tryvinci/image-generate@1.0.0",
+  "inputs": {
+    "prompt": "clone smoke cli",
+    "aspect_ratio": "",
+    "camera": "",
+    "lens": "",
+    "look": "",
+    "aperture": "",
+    "genre": "",
+    "lighting": "",
+    "palette": ""
+  },
+  "max_cost": null,
+  "preference": "cheapest",
+  "estimate": {
+    "skill": "@tryvinci/image-generate@1.0.0",
+    "total": 0,
+    "currency": "USD",
+    "nodes": [
+      {
+        "node_id": "generate",
+        "model_id": "mock:png:v1",
+        "amount": 0,
+        "alternative": null
+      }
+    ],
+    "awaiting_reason": null,
+    "preference": "cheapest"
+  },
+  "job_ids": [
+    "a6c1dc9e2bb445d080824f4ff307f074"
+  ],
+  "outputs": [
+    "fa6d55b8d77da6eb4c6f4f0304143e8f844d5584c9dbb09bc43b04b80a7bfddf"
+  ],
+  "workflow": {
+    "id": "@tryvinci/image-generate",
+    "version": "1.0.0",
+    "nodes": [
+      {
+        "id": "generate",
+        "type": "generate",
+        "capability": "t2i",
+        "model_id": null,
+        "params": {
+          "prompt": "{{inputs.prompt}}",
+          "aspect_ratio": "{{inputs.aspect_ratio}}",
+          "camera": "{{inputs.camera}}",
+          "lens": "{{inputs.lens}}",
+          "look": "{{inputs.look}}",
+          "lighting": "{{inputs.lighting}}",
+          "palette": "{{inputs.palette}}",
+          "aperture": "{{inputs.aperture}}",
+          "genre": "{{inputs.genre}}"
+        },
+        "budget_hint": null
+      }
+    ],
+    "edges": [],
+    "preference": "cheapest",
+    "max_cost": null
+  },
+  "state": "completed",
+  "created_at": "2026-10-09T13:51:15.680817+00:00",
+  "nodes": {
+    "generate": {
+      "output": "fa6d55b8d77da6eb4c6f4f0304143e8f844d5584c9dbb09bc43b04b80a7bfddf",
+      "outputs": [
+        "fa6d55b8d77da6eb4c6f4f0304143e8f844d5584c9dbb09bc43b04b80a7bfddf"
+      ],
+      "job_id": "a6c1dc9e2bb445d080824f4ff307f074",
+      "capability": "t2i"
+    }
+  },
+  "asset_uris": [
+    "vinci://assets/fa6d55b8d77da6eb4c6f4f0304143e8f844d5584c9dbb09bc43b04b80a7bfddf"
+  ],
+  "job_uris": [
+    "vinci://jobs/a6c1dc9e2bb445d080824f4ff307f074"
+  ],
+  "receipt_uris": [
+    "vinci://receipts/a6c1dc9e2bb445d080824f4ff307f074"
+  ],
+  "id": "c48ad47ac7c3437aacfcfc6892762606"
+}
+cli_png_ihdr 960 540
+this run ≈ $0 via mock:mp4:v1
+vinci://assets/deff468539638a053e89ecb59fe250e339529ff8f2f1482d4ca9be541b4e5ae9
+vinci://jobs/6d43e8ab67424849aef05a7df3cc7006
+vinci://receipts/6d43e8ab67424849aef05a7df3cc7006
+{
+  "skill": "@tryvinci/video-generate@1.0.0",
+  "inputs": {
+    "prompt": "clone smoke video",
+    "aspect_ratio": "",
+    "duration": 5,
+    "camera": "",
+    "lens": "",
+    "look": "",
+    "motion": "",
+    "aperture": "",
+    "genre": "",
+    "lighting": "",
+    "palette": ""
+  },
+  "max_cost": null,
+  "preference": "cheapest",
+  "estimate": {
+    "skill": "@tryvinci/video-generate@1.0.0",
+    "total": 0,
+    "currency": "USD",
+    "nodes": [
+      {
+        "node_id": "generate",
+        "model_id": "mock:mp4:v1",
+        "amount": 0,
+        "alternative": null
+      }
+    ],
+    "awaiting_reason": null,
+    "preference": "cheapest"
+  },
+  "job_ids": [
+    "6d43e8ab67424849aef05a7df3cc7006"
+  ],
+  "outputs": [
+    "deff468539638a053e89ecb59fe250e339529ff8f2f1482d4ca9be541b4e5ae9"
+  ],
+  "workflow": {
+    "id": "@tryvinci/video-generate",
+    "version": "1.0.0",
+    "nodes": [
+      {
+        "id": "generate",
+        "type": "generate",
+        "capability": "t2v",
+        "model_id": null,
+        "params": {
+          "prompt": "{{inputs.prompt}}",
+          "aspect_ratio": "{{inputs.aspect_ratio}}",
+          "duration": "{{inputs.duration}}",
+          "camera": "{{inputs.camera}}",
+          "lens": "{{inputs.lens}}",
+          "look": "{{inputs.look}}",
+          "lighting": "{{inputs.lighting}}",
+          "palette": "{{inputs.palette}}",
+          "motion": "{{inputs.motion}}",
+          "aperture": "{{inputs.aperture}}",
+          "genre": "{{inputs.genre}}"
+        },
+        "budget_hint": null
+      }
+    ],
+    "edges": [],
+    "preference": "cheapest",
+    "max_cost": null
+  },
+  "state": "completed",
+  "created_at": "2026-10-09T13:51:16.900490+00:00",
+  "nodes": {
+    "generate": {
+      "output": "deff468539638a053e89ecb59fe250e339529ff8f2f1482d4ca9be541b4e5ae9",
+      "outputs": [
+        "deff468539638a053e89ecb59fe250e339529ff8f2f1482d4ca9be541b4e5ae9"
+      ],
+      "job_id": "6d43e8ab67424849aef05a7df3cc7006",
+      "capability": "t2v"
+    }
+  },
+  "asset_uris": [
+    "vinci://assets/deff468539638a053e89ecb59fe250e339529ff8f2f1482d4ca9be541b4e5ae9"
+  ],
+  "job_uris": [
+    "vinci://jobs/6d43e8ab67424849aef05a7df3cc7006"
+  ],
+  "receipt_uris": [
+    "vinci://receipts/6d43e8ab67424849aef05a7df3cc7006"
+  ],
+  "id": "c9a79f68c2234f74b4dac301d8eb9db8"
+}
+cli_mp4_ftyp ftyp size (960, 540) bytes 117267 seconds 5.0
+cli_receipt_cost 0.0 vinci://receipts/a6c1dc9e2bb445d080824f4ff307f074
+this run ≈ $0 via mock:png:v1
+awaiting approval: estimate 0.0 exceeds --max-cost -0.01
+vinci jobs approve c0b56d8190784a8eb484e93316823e11
+{
+  "skill": "@tryvinci/image-generate@1.0.0",
+  "inputs": {
+    "prompt": "clone smoke park",
+    "aspect_ratio": "",
+    "camera": "",
+    "lens": "",
+    "look": "",
+    "aperture": "",
+    "genre": "",
+    "lighting": "",
+    "palette": ""
+  },
+  "max_cost": -0.01,
+  "preference": "cheapest",
+  "estimate": {
+    "skill": "@tryvinci/image-generate@1.0.0",
+    "total": 0,
+    "currency": "USD",
+    "nodes": [
+      {
+        "node_id": "generate",
+        "model_id": "mock:png:v1",
+        "amount": 0,
+        "alternative": null
+      }
+    ],
+    "awaiting_reason": "estimate 0.0 exceeds --max-cost -0.01",
+    "preference": "cheapest"
+  },
+  "job_ids": [],
+  "outputs": [],
+  "workflow": {
+    "id": "@tryvinci/image-generate",
+    "version": "1.0.0",
+    "nodes": [
+      {
+        "id": "generate",
+        "type": "generate",
+        "capability": "t2i",
+        "model_id": null,
+        "params": {
+          "prompt": "{{inputs.prompt}}",
+          "aspect_ratio": "{{inputs.aspect_ratio}}",
+          "camera": "{{inputs.camera}}",
+          "lens": "{{inputs.lens}}",
+          "look": "{{inputs.look}}",
+          "lighting": "{{inputs.lighting}}",
+          "palette": "{{inputs.palette}}",
+          "aperture": "{{inputs.aperture}}",
+          "genre": "{{inputs.genre}}"
+        },
+        "budget_hint": null
+      }
+    ],
+    "edges": [],
+    "preference": "cheapest",
+    "max_cost": -0.01
+  },
+  "awaiting_reason": "estimate 0.0 exceeds --max-cost -0.01",
+  "id": "c0b56d8190784a8eb484e93316823e11",
+  "state": "awaiting_approval",
+  "created_at": "2026-10-09T13:51:19.001603+00:00"
+}
+parked c0b56d8190784a8eb484e93316823e11 estimate 0.0 exceeds --max-cost -0.01
+{
+  "skill": "@tryvinci/image-generate@1.0.0",
+  "inputs": {
+    "prompt": "clone smoke park",
+    "aspect_ratio": "",
+    "camera": "",
+    "lens": "",
+    "look": "",
+    "aperture": "",
+    "genre": "",
+    "lighting": "",
+    "palette": ""
+  },
+  "max_cost": -0.01,
+  "preference": "cheapest",
+  "estimate": {
+    "skill": "@tryvinci/image-generate@1.0.0",
+    "total": 0,
+    "currency": "USD",
+    "nodes": [
+      {
+        "node_id": "generate",
+        "model_id": "mock:png:v1",
+        "amount": 0,
+        "alternative": null
+      }
+    ],
+    "awaiting_reason": "estimate 0.0 exceeds --max-cost -0.01",
+    "preference": "cheapest"
+  },
+  "job_ids": [
+    "f09c704f8d5142a59f4754881e1fdff1"
+  ],
+  "outputs": [
+    "c8d1cab3f7cb8da066a6ac480a9da4f8c14e928e4a0a880512d3271b7da50c59"
+  ],
+  "workflow": {
+    "id": "@tryvinci/image-generate",
+    "version": "1.0.0",
+    "nodes": [
+      {
+        "id": "generate",
+        "type": "generate",
+        "capability": "t2i",
+        "model_id": null,
+        "params": {
+          "prompt": "{{inputs.prompt}}",
+          "aspect_ratio": "{{inputs.aspect_ratio}}",
+          "camera": "{{inputs.camera}}",
+          "lens": "{{inputs.lens}}",
+          "look": "{{inputs.look}}",
+          "lighting": "{{inputs.lighting}}",
+          "palette": "{{inputs.palette}}",
+          "aperture": "{{inputs.aperture}}",
+          "genre": "{{inputs.genre}}"
+        },
+        "budget_hint": null
+      }
+    ],
+    "edges": [],
+    "preference": "cheapest",
+    "max_cost": -0.01
+  },
+  "awaiting_reason": "estimate 0.0 exceeds --max-cost -0.01",
+  "state": "completed",
+  "created_at": "2026-10-09T13:51:19.001603+00:00",
+  "nodes": {
+    "generate": {
+      "output": "c8d1cab3f7cb8da066a6ac480a9da4f8c14e928e4a0a880512d3271b7da50c59",
+      "outputs": [
+        "c8d1cab3f7cb8da066a6ac480a9da4f8c14e928e4a0a880512d3271b7da50c59"
+      ],
+      "job_id": "f09c704f8d5142a59f4754881e1fdff1",
+      "capability": "t2i"
+    }
+  },
+  "asset_uris": [
+    "vinci://assets/c8d1cab3f7cb8da066a6ac480a9da4f8c14e928e4a0a880512d3271b7da50c59"
+  ],
+  "job_uris": [
+    "vinci://jobs/f09c704f8d5142a59f4754881e1fdff1"
+  ],
+  "receipt_uris": [
+    "vinci://receipts/f09c704f8d5142a59f4754881e1fdff1"
+  ],
+  "id": "c0b56d8190784a8eb484e93316823e11"
+}
+approved completed 0 vinci://receipts/f09c704f8d5142a59f4754881e1fdff1
+http_run completed 0.0 vinci://receipts/7b600a61c89645db9f696165d20a5d3a
+portrait_run completed 6d750fb1510cc988448492dc9c49d7dd4d47925cb915f94af0ba82ee34938af2
+portrait_png_ihdr 540 960
+optical_run completed 24e130fbeb8c2dfa80b44f9086df088661bb2ba15ba7b294b286294f7d223562
+optical_png_diff 30772
+product_reveal_5s completed 0.0 jobs 2
+cinema_still completed 0.0 jobs 3 nodes ['motion', 'still', 'upscale']
+cinema_motion 960 540 bytes 93535
+still_to_talk completed 0.0 jobs 2 nodes ['still', 'talk']
+templates 24 includes ['cinema-sequence', 'first-last-frame', 'soul-character', 'speak-car', 'speak-podcast', 'speak-selfie']
+cinema_sequence completed 0.0 jobs 4 nodes ['close', 'coverage', 'establish', 'reverse']
+first_last_frame completed 0.0 jobs 3 nodes ['first', 'last', 'motion']
+speak_selfie completed 0.0 jobs 2
+soul_character completed 0.0 jobs 2
+mcp_image_generate ok
+mcp_video_generate ok
+fixture_podcast podcast.mp4
+podcast_to_shorts completed 0 jobs 5
+{
+  "id": "@example/stamp-text",
+  "version": "1.0.0",
+  "tags": [
+    "example",
+    "install",
+    "t2i"
+  ],
+  "permissions": [],
+  "secret_names": [],
+  "est_cost": {
+    "min": 0,
+    "max": 0,
+    "currency": "USD"
+  },
+  "capabilities": [
+    "t2i"
+  ],
+  "safety_tags": [],
+  "skill_md": "# Stamp text\n\nCommunity-style t2i skill used to prove `vinci skills add` installs a second skill into `~/.vinci/skills`.\n",
+  "inputs": {
+    "prompt": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "workflow": {
+    "id": "@example/stamp-text",
+    "version": "1.0.0",
+    "nodes": [
+      {
+        "id": "generate",
+        "type": "generate",
+        "capability": "t2i",
+        "model_id": null,
+        "params": {
+          "prompt": "{{inputs.prompt}}"
+        },
+        "budget_hint": null
+      }
+    ],
+    "edges": [],
+    "preference": "cheapest",
+    "max_cost": null
+  }
+}
+{
+  "id": "@example/stamp-video",
+  "version": "1.0.0",
+  "tags": [
+    "example",
+    "install",
+    "t2v"
+  ],
+  "permissions": [],
+  "secret_names": [],
+  "est_cost": {
+    "min": 0,
+    "max": 0,
+    "currency": "USD"
+  },
+  "capabilities": [
+    "t2v"
+  ],
+  "safety_tags": [],
+  "skill_md": "# Stamp video\n\nSecond installable skill for the Phase 3 registry exit gate.\n",
+  "inputs": {
+    "prompt": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "workflow": {
+    "id": "@example/stamp-video",
+    "version": "1.0.0",
+    "nodes": [
+      {
+        "id": "generate",
+        "type": "generate",
+        "capability": "t2v",
+        "model_id": null,
+        "params": {
+          "prompt": "{{inputs.prompt}}"
+        },
+        "budget_hint": null
+      }
+    ],
+    "edges": [],
+    "preference": "cheapest",
+    "max_cost": null
+  }
+}
+skills_installed 23 includes ['@example/stamp-text', '@example/stamp-video']
+stamp_text completed 0.0
+Vinci Studio → http://127.0.0.1:14310/studio
+Vinci Studio (HTML) → http://127.0.0.1:14310/studio
+studio_html ok
+studio_ts ok
+find_pricing hits 20
+{
+  "id": "mcp",
+  "docs_url": "https://modelcontextprotocol.io",
+  "secret_name": "MCP_API_KEY",
+  "extra_secret_names": [],
+  "display_name": "Custom MCP",
+  "kind": "mcp",
+  "ref": "env:MCP_API_KEY",
+  "extra_ref": null,
+  "available": true,
+  "url": "http://127.0.0.1:14311/mcp",
+  "account_id": null,
+  "authorize_url": null,
+  "auth": "oauth_or_key",
+  "test": "ok"
+}
+mcp_provider completed 0.0 mcp:png:v1
+mcp_png_ihdr 960 540
+mcp_provider_video completed 0.0 mcp:mp4:v1
+mcp_mp4_ftyp ftyp size (960, 540) bytes 46311
+clone-smoke ok dest=/tmp/vinci-clone-smoke.bQ67 live_usd=0
+make[1]: Leaving directory '/workspace/apps/vinci-oss'
