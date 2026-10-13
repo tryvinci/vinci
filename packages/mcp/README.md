@@ -18,3 +18,5 @@ Authored MCP tools served by the local daemon at `POST /mcp`.
 | `vinci.batch_status` | `GET /adapts/batch/{batch_id}` |
 
 `vinci mcp print-config` prints a client config whose URL is the daemon `/mcp` endpoint.
+
+Remote MCP servers that publish OAuth discovery and dynamic client registration can sign in through `POST /providers/{id}/oauth` and `GET /providers/oauth/callback`. Higgsfield (`mcp_higgsfield`) and Magnific (`mcp_magnific`) are presets. Other servers connect and list tools; generation still requires an explicit tool mapping or Vinci's own `vinci.*` tools. The Mac app bundle lock does not yet include the `mcp` package; regenerate it on a macOS builder before shipping a desktop build that signs in.

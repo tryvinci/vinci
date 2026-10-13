@@ -210,8 +210,13 @@ def _stamp_mp4(base: bytes, seed: str) -> bytes:
 def _encode_mp4(
     seed: str, width: int, height: int, duration: float = 1.0
 ) -> bytes | None:
-    ffmpeg = shutil.which("ffmpeg")
-    if not ffmpeg:
+    try:
+        from vinci_media.encoders import ffmpeg_executable, pick_video_encoder
+    except ImportError:
+        ffmpeg_executable = lambda: shutil.which("ffmpeg") or ""  # noqa: E731
+        pick_video_encoder = lambda: "mpeg4"  # noqa: E731
+    ffmpeg = ffmpeg_executable()
+    if not ffmpeg or (not Path(ffmpeg).is_file() and shutil.which(ffmpeg) is None):
         return None
     half = max(float(duration) / 2.0, 0.1)
     with tempfile.TemporaryDirectory(prefix="vinci-mock-mp4-") as raw:
@@ -246,7 +251,7 @@ def _encode_mp4(
                 f"[0:v][1:v]concat=n=2:v=1:a=0,fps=2,format=yuv420p,scale={width}:{height}",
                 "-an",
                 "-c:v",
-                "libx264",
+                pick_video_encoder(),
                 "-pix_fmt",
                 "yuv420p",
                 "-movflags",

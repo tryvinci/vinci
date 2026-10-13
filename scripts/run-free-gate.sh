@@ -58,5 +58,39 @@ if [[ -f "$OUT/make-test.log" ]]; then
   tail -n 3 "$OUT/make-test.log" >>"$SUMMARY"
 fi
 
+MANIFEST="$OUT/logs-manifest.txt"
+{
+  echo "git_head=$HEAD"
+  echo "artifact_dir=ci-artifacts/free-gate/$HEAD"
+  for f in "$OUT"/*.log; do
+    [[ -f "$f" ]] || continue
+    base="$(basename "$f")"
+    ecfile="${f%.log}.exit"
+    ec="?"
+    [[ -f "$ecfile" ]] && ec="$(cat "$ecfile")"
+    bytes="$(wc -c <"$f" | tr -d ' ')"
+    echo "log $base exit=$ec bytes=$bytes"
+  done
+} >"$MANIFEST"
+cat "$MANIFEST" >>"$SUMMARY"
+
+GATE_REPORT="$OUT/gate-report.txt"
+{
+  echo "vinci-oss free-gate report"
+  echo "git_head=$HEAD"
+  echo "overall_fail=$FAIL"
+  echo "--- summary ---"
+  cat "$SUMMARY"
+} >"$GATE_REPORT"
+
+ARTIFACTS_ROOT="${VINCI_GATE_ARTIFACT_EXPORT:-/opt/cursor/artifacts/vinci-oss-free-gate}"
+EXPORT="$ARTIFACTS_ROOT/$HEAD"
+mkdir -p "$EXPORT"
+cp "$SUMMARY" "$MANIFEST" "$GATE_REPORT" "$EXPORT/"
+for f in "$OUT"/*.log; do
+  [[ -f "$f" ]] && cp "$f" "$EXPORT/"
+done
+
 echo "overall_fail=$FAIL" | tee -a "$SUMMARY"
+echo "gate_artifacts_export=$EXPORT" | tee -a "$SUMMARY"
 exit "$FAIL"

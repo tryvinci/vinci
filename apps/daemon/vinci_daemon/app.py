@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import html
 import json
 import os
+import socket
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -32,6 +34,7 @@ from vinci_daemon.outbox_dispatch import reconcile_pending_outbox
 from vinci_daemon.persistence_middleware import PersistenceHealthMiddleware
 
 DAEMON_PORT = 4310
+_OAUTH_LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1", "testserver"}
 STUDIO_HTML = Path(__file__).with_name("studio.html")
 STUDIO_ICON = Path(__file__).with_name("studio-icon.svg")
 STUDIO_MANIFEST = {
@@ -153,6 +156,27 @@ class BatchBody(BaseModel):
     layout: str = "fit_pad_crop"
 
 
+def _oauth_redirect_uri(request: Request) -> str:
+    """Callback URL for provider sign-in.
+
+    A configured public origin wins. Otherwise only loopback (and the test
+    client host) may supply the host, so a forged Host header cannot receive
+    the authorization code.
+    """
+    configured = os.environ.get("VINCI_PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if configured:
+        base = configured
+    else:
+        host = (request.url.hostname or "").lower()
+        if host not in _OAUTH_LOOPBACK_HOSTS:
+            raise HTTPException(
+                status_code=400,
+                detail="set VINCI_PUBLIC_BASE_URL before starting OAuth on a public host",
+            )
+        base = str(request.base_url).rstrip("/")
+    return f"{base}/providers/oauth/callback"
+
+
 def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -> FastAPI:
     persistence = None
     journal = None
@@ -228,6 +252,12 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
         snapshot_role = os.environ.get("VINCI_HOME_SNAPSHOT_ROLE", "compact")
         if persistence is not None and snapshot_role == "compact":
             persistence.start_background()
+        if os.environ.get("VINCI_EMIT_READY", "") == "1":
+            from vinci_daemon.desktop_boot import emit_ready
+
+            port = int(os.environ.get("VINCI_DAEMON_PORT", str(DAEMON_PORT)))
+            nonce = os.environ.get("VINCI_READY_NONCE", os.environ.get("VINCI_LAUNCH_NONCE", ""))
+            emit_ready(port, nonce)
         yield
         if heartbeat is not None:
             heartbeat.stop()
@@ -242,7 +272,8 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
     app.state.persistence = persistence
     app.state.journal = journal
     app.state.journal_token = journal_token
-    selfhost = os.environ.get("VINCI_SELFHOST", "") == "1" or bool(
+    desktop = os.environ.get("VINCI_DESKTOP", "") == "1"
+    selfhost = desktop or os.environ.get("VINCI_SELFHOST", "") == "1" or bool(
         os.environ.get("VINCI_BRIDGE_TOKEN", "").strip()
     )
     if not selfhost:
@@ -284,7 +315,12 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
         persistence = app.state.persistence
         if journal_state is None and persistence is not None and not persistence.healthy:
             raise HTTPException(status_code=503, detail="persistence_unhealthy")
-        return {"status": "ok", **eng.handshake()}
+        payload: dict[str, str] = {"status": "ok", **eng.handshake()}
+        if desktop:
+            payload["desktop"] = "1"
+            payload["pid"] = str(os.getpid())
+            payload["launch_nonce"] = os.environ.get("VINCI_LAUNCH_NONCE", "")
+        return payload
 
     @app.get("/handshake")
     def handshake() -> dict[str, str]:
@@ -490,13 +526,36 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
         return asset.model_dump(mode="json")
 
     @app.get("/assets/{asset_id}/file")
-    def asset_file(asset_id: str) -> Response:
+    def asset_file(asset_id: str, request: Request) -> Response:
         if not eng.cas.exists(asset_id):
             raise HTTPException(status_code=404, detail="asset not found")
         blob = eng.cas.get(asset_id)
         asset = eng.store.get_asset(asset_id)
         mime = asset.mime if asset else "application/octet-stream"
-        return Response(content=blob, media_type=mime)
+        total = len(blob)
+        range_header = request.headers.get("range")
+        if range_header and range_header.startswith("bytes="):
+            spec = range_header.removeprefix("bytes=").split("-", 1)
+            try:
+                start = int(spec[0]) if spec[0] else 0
+                end = int(spec[1]) if len(spec) > 1 and spec[1] else total - 1
+            except ValueError:
+                raise HTTPException(status_code=416, detail="invalid range") from None
+            end = min(end, total - 1)
+            if start > end or start >= total:
+                raise HTTPException(status_code=416, detail="range not satisfiable")
+            chunk = blob[start : end + 1]
+            headers = {
+                "Content-Range": f"bytes {start}-{end}/{total}",
+                "Accept-Ranges": "bytes",
+                "Content-Length": str(len(chunk)),
+            }
+            return Response(content=chunk, status_code=206, media_type=mime, headers=headers)
+        return Response(
+            content=blob,
+            media_type=mime,
+            headers={"Accept-Ranges": "bytes", "Content-Length": str(total)},
+        )
 
     @app.get("/receipts/{job_id}")
     def get_receipt(job_id: str) -> dict[str, Any]:
@@ -816,10 +875,13 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
     @app.post("/providers/{name}/oauth")
     def oauth_start(name: str, request: Request) -> dict[str, Any]:
         def _oauth() -> dict[str, Any]:
+            redirect_uri = _oauth_redirect_uri(request)
             try:
-                return eng.oauth_start(name)
+                return eng.oauth_start(name, redirect_uri)
             except KeyError as exc:
                 raise HTTPException(status_code=404, detail="unknown provider") from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         return with_journal_ack(
             request,
@@ -829,6 +891,67 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
             blob_keys=[],
             build_response=_oauth,
         )
+
+    @app.post("/providers/{name}/disconnect")
+    def oauth_disconnect(name: str, request: Request) -> dict[str, Any]:
+        def _drop() -> dict[str, str]:
+            try:
+                return eng.disconnect_oauth(name)
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail="unknown provider") from exc
+
+        return with_journal_ack(
+            request,
+            method="POST",
+            path=f"/providers/{name}/disconnect",
+            payload={"name": name},
+            blob_keys=[],
+            build_response=_drop,
+        )
+
+    @app.get("/providers/oauth/callback", response_class=HTMLResponse)
+    def oauth_callback(
+        request: Request,
+        code: str = "",
+        state: str = "",
+        error: str = "",
+    ) -> HTMLResponse:
+        from vinci_mcp.oauth import callback_block_reason, discard_pending
+
+        blocked = callback_block_reason(state)
+        if error:
+            discard_pending(state)
+            blocked = blocked or "authorization was denied"
+        if blocked:
+            page = (
+                "<!doctype html><meta charset=utf-8><title>Vinci</title>"
+                f"<p>{html.escape(blocked)}</p>"
+            )
+            return HTMLResponse(page, status_code=400)
+
+        def _finish() -> dict[str, Any]:
+            try:
+                return eng.oauth_callback(code=code, state=state, error=error)
+            except ValueError as exc:
+                return {"ok": False, "detail": str(exc)}
+
+        body = with_journal_ack(
+            request,
+            method="GET",
+            path="/providers/oauth/callback",
+            payload={"has_code": bool(code), "has_state": bool(state)},
+            blob_keys=[],
+            build_response=_finish,
+        )
+        if body.get("ok"):
+            message = "Connected. You can close this tab."
+        else:
+            message = str(body.get("detail") or "Sign-in failed.")
+        page = (
+            "<!doctype html><meta charset=utf-8><title>Vinci</title>"
+            f"<p>{html.escape(message)}</p>"
+        )
+        return HTMLResponse(page)
 
     @app.post("/agent/plan")
     def agent_plan(body: AgentPlanBody) -> dict[str, Any]:
@@ -918,15 +1041,53 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
 
 
 def main() -> None:
+    from vinci_daemon.desktop_boot import configure_desktop
+    from vinci_daemon.home_lock import acquire_home_daemon_lock, release_home_daemon_lock
+
     parser = argparse.ArgumentParser(prog="vinci-daemon")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument(
-        "--port", type=int, default=int(os.environ.get("VINCI_DAEMON_PORT", DAEMON_PORT))
+        "--port",
+        type=int,
+        default=int(os.environ.get("VINCI_DAEMON_PORT", DAEMON_PORT)),
+        help="TCP port; 0 picks a free loopback port",
     )
+    parser.add_argument(
+        "--desktop",
+        action="store_true",
+        help="Desktop bundle mode: scoped CORS, healthz-only auth bypass",
+    )
+    parser.add_argument("--parent-pid", type=int, default=0, help="Exit when parent process dies")
+    parser.add_argument("--launch-nonce", default="", help="Per-launch nonce echoed on /healthz")
     args = parser.parse_args()
+    if args.desktop:
+        if not os.environ.get("VINCI_BRIDGE_TOKEN", "").strip():
+            raise SystemExit("desktop mode requires VINCI_BRIDGE_TOKEN")
+        configure_desktop(args.launch_nonce, args.parent_pid)
+        os.environ["VINCI_EMIT_READY"] = "1"
+        os.environ["VINCI_READY_NONCE"] = args.launch_nonce
+    home_path = Path(os.environ.get("VINCI_HOME", str(default_home()))).expanduser()
+    acquire_home_daemon_lock(home_path)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    bind_port = args.port if args.port != 0 else 0
+    sock.bind((args.host, bind_port))
+    port = int(sock.getsockname()[1])
+    os.environ["VINCI_DAEMON_PORT"] = str(port)
     import uvicorn
 
-    uvicorn.run("vinci_daemon.app:create_app", host=args.host, port=args.port, factory=True)
+    config = uvicorn.Config(
+        "vinci_daemon.app:create_app",
+        host=args.host,
+        port=port,
+        factory=True,
+        log_level=os.environ.get("VINCI_LOG_LEVEL", "info"),
+    )
+    server = uvicorn.Server(config)
+    try:
+        server.run(sockets=[sock])
+    finally:
+        release_home_daemon_lock()
 
 
 if __name__ == "__main__":

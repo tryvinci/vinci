@@ -31,6 +31,8 @@ make test && make conformance && make lint
 
 Studio opens at `http://127.0.0.1:4310/studio`. Paste any supported provider key under **Keys**, or stay on mock at $0. Live HTTP stays off until `VINCI_ALLOW_LIVE_SPEND=1`.
 
+Higgsfield and Magnific can also sign in with OAuth (no API key) via their MCP servers: `./scripts/vinci providers connect higgsfield` or `magnific`. That spends the account's plan credits, which are not USD and are not picked by cheapest routing unless you pin the model. Higgsfield's MCP tool names are provisional until a live `tools/list` capture.
+
 `make demo` runs `python -m vinci_harness demo` (in-process skill + $0 receipt) then `./scripts/vinci init --demo` and `./scripts/vinci run @tryvinci/image-generate`. The CLI starts `vinci-daemon` on `:4310` if it is not already up.
 
 Mac / Android: `apps/mac` and `apps/android` wrap the same `/studio` page. For a phone on the LAN: `./scripts/vinci studio --lan`.

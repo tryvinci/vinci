@@ -1,0 +1,23 @@
+# Vinci Studio Mac bundle — runtime tree (regenerate: scripts/mac/generate-python-bundle-lock.sh).
+pip==24.3.1
+setuptools==75.6.0
+wheel==0.45.1
+
+-e packages/protocol
+-e packages/core
+-e packages/storage
+-e packages/provider-sdk
+-e packages/runtime
+-e packages/media
+-e packages/index
+-e packages/mcp
+-e packages/skills
+-e packages/provider-google
+-e packages/provider-openai
+-e packages/provider-wavespeed
+-e packages/provider-fal
+-e packages/provider-elevenlabs
+-e packages/provider-cloudflare
+-e packages/provider-higgsfield
+-e packages/provider-magnific
+-e apps/daemon

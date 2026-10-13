@@ -1,0 +1,4 @@
+make[1]: Entering directory '/workspace/apps/vinci-oss'
+python3 scripts/check_no_proprietary.py
+proprietary/AGPL scan clean
+make[1]: Leaving directory '/workspace/apps/vinci-oss'

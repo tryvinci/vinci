@@ -1,0 +1,248 @@
+{
+  "local": [
+    {
+      "license": "MIT",
+      "name": "apps/daemon",
+      "sha256": "2cb5ecbe72ef2cc83c89a060b710b61dc0e2de57d53b6c60f67509832cac8e5c",
+      "source": "monorepo",
+      "version": "workspace"
+    },
+    {
+      "license": "MIT",
+      "name": "packages/core",
+      "sha256": "0d94eca1fef4532470445a1d841f4895fd2b620b6a62e328979bdf3d88469c52",
+      "source": "monorepo",
+      "version": "workspace"
+    },
+    {
+      "license": "MIT",
+      "name": "packages/index",
+      "sha256": "aa19dfcfa392b99f985b1319b7892cdb5701332aa1e98c8d287a829906b38b34",
+      "source": "monorepo",
+      "version": "workspace"
+    },
+    {
+      "license": "MIT",
+      "name": "packages/mcp",
+      "sha256": "8159690b611e57191e11774c7fee3ec34c2558a508b40aabc44e0fd9075f8214",
+      "source": "monorepo",
+      "version": "workspace"
+    },
+    {
+      "license": "MIT",
+      "name": "packages/media",
+      "sha256": "0c9adcca8a24b0ebe263072cb492d02fe8c6d8b76115c32de4638ca09a8005c3",
+      "source": "monorepo",
+      "version": "workspace"
+    },
+    {
+      "license": "MIT",
+      "name": "packages/protocol",
+      "sha256": "7b118521ad4d40f5830dff1014cc24a32ef726692ffac7aee4fdd098ce7e358b",
+      "source": "monorepo",
+      "version": "workspace"
+    },
+    {
+      "license": "MIT",
+      "name": "packages/provider-cloudflare",
+      "sha256": "49ab6355b5f1e9702ef84e19caddcd006c33e4facb00baa231cd753c9acb2b37",
+      "source": "monorepo",
+      "version": "workspace"
+    },
+    {
+      "license": "MIT",
+      "name": "packages/provider-elevenlabs",
+      "sha256": "6bc33585e02d5f25f30e2f0060c5fdc0a3c90978c4cb03140f64b7ead485933d",
+      "source": "monorepo",
+      "version": "workspace"
+    },
+    {
+      "license": "MIT",
+      "name": "packages/provider-fal",
+      "sha256": "710f8b2554fb18ab019d59812432b131f476a600c76bc7f81ce08dca060b5538",
+      "source": "monorepo",
+      "version": "workspace"
+    },
+    {
+      "license": "MIT",
+      "name": "packages/provider-google",
+      "sha256": "f67909f84d100f934b07ded687e304cfa6c101d8517f4868595784e2bbd4a098",
+      "source": "monorepo",
+      "version": "workspace"
+    },
+    {
+      "license": "MIT",
+      "name": "packages/provider-higgsfield",
+      "sha256": "3bd9eacbb63d668de3eae5ab1a91ee3d34f85b77ab936bfcbb99d8e24977d20d",
+      "source": "monorepo",
+      "version": "workspace"
+    },
+    {
+      "license": "MIT",
+      "name": "packages/provider-magnific",
+      "sha256": "b8be7b7a4a04d33c41fc60106fa50753b0a7b122d166053e8b3cccc1e1e57095",
+      "source": "monorepo",
+      "version": "workspace"
+    },
+    {
+      "license": "MIT",
+      "name": "packages/provider-openai",
+      "sha256": "dbaa040f8697d2757399af937a83ee63d46928c23c422322989f49b9fc8be912",
+      "source": "monorepo",
+      "version": "workspace"
+    },
+    {
+      "license": "MIT",
+      "name": "packages/provider-sdk",
+      "sha256": "a7a3beb167eb5505241d0e43d19d8de9748fdd2d9df9353eed043577b3d2b406",
+      "source": "monorepo",
+      "version": "workspace"
+    },
+    {
+      "license": "MIT",
+      "name": "packages/provider-wavespeed",
+      "sha256": "bbcb29db707cf4db55bb2d0ae96d04009103a232dc924310fa2edd401ae47048",
+      "source": "monorepo",
+      "version": "workspace"
+    },
+    {
+      "license": "MIT",
+      "name": "packages/runtime",
+      "sha256": "1ae80ec3234d7a4e2bcf5e2db9416e814eb5454cba40fb1b63ea0b1ccec6a57f",
+      "source": "monorepo",
+      "version": "workspace"
+    },
+    {
+      "license": "MIT",
+      "name": "packages/skills",
+      "sha256": "85970397184c54460f77d5bdafa37d1cb0642545d4bfdf2e362df6487118cc47",
+      "source": "monorepo",
+      "version": "workspace"
+    },
+    {
+      "license": "MIT",
+      "name": "packages/storage",
+      "sha256": "6a2ddaf8e2ae0011ddd3a36b14bb9cdf67129791fda9826ad929b5ef4f3edb07",
+      "source": "monorepo",
+      "version": "workspace"
+    }
+  ],
+  "lock_sha256": "c5edb81ebf7f388911aadf453fdcff44873d33e963614938c0cdb2591ae7cc20",
+  "pypi": [
+    {
+      "license": "MIT",
+      "name": "annotated-doc",
+      "source": "pypi",
+      "version": "0.0.5"
+    },
+    {
+      "license": "MIT",
+      "name": "annotated-types",
+      "source": "pypi",
+      "version": "0.8.0"
+    },
+    {
+      "license": "MIT",
+      "name": "anyio",
+      "source": "pypi",
+      "version": "4.15.1"
+    },
+    {
+      "license": "BSD-3-Clause",
+      "name": "click",
+      "source": "pypi",
+      "version": "8.5.0"
+    },
+    {
+      "license": "MIT",
+      "name": "fastapi",
+      "source": "pypi",
+      "version": "0.143.0"
+    },
+    {
+      "license": "MIT",
+      "name": "h11",
+      "source": "pypi",
+      "version": "0.16.0"
+    },
+    {
+      "license": "BSD-3-Clause",
+      "name": "idna",
+      "source": "pypi",
+      "version": "3.20"
+    },
+    {
+      "license": "Apache-2.0",
+      "name": "opentelemetry-api",
+      "source": "pypi",
+      "version": "1.45.1"
+    },
+    {
+      "license": "MIT",
+      "name": "pip",
+      "source": "pypi",
+      "version": "24.3.1"
+    },
+    {
+      "license": "MIT",
+      "name": "pydantic",
+      "source": "pypi",
+      "version": "2.14.0"
+    },
+    {
+      "license": "MIT",
+      "name": "pydantic-core",
+      "source": "pypi",
+      "version": "2.50.0"
+    },
+    {
+      "license": "Apache-2.0",
+      "name": "python-multipart",
+      "source": "pypi",
+      "version": "0.0.32"
+    },
+    {
+      "license": "MIT",
+      "name": "pyyaml",
+      "source": "pypi",
+      "version": "6.0.3"
+    },
+    {
+      "license": "OSI Approved :: MIT License",
+      "name": "setuptools",
+      "source": "pypi",
+      "version": "75.6.0"
+    },
+    {
+      "license": "BSD-3-Clause",
+      "name": "starlette",
+      "source": "pypi",
+      "version": "1.7.0"
+    },
+    {
+      "license": "PSF-2.0",
+      "name": "typing-extensions",
+      "source": "pypi",
+      "version": "4.16.0"
+    },
+    {
+      "license": "MIT",
+      "name": "typing-inspection",
+      "source": "pypi",
+      "version": "0.4.4"
+    },
+    {
+      "license": "BSD-3-Clause",
+      "name": "uvicorn",
+      "source": "pypi",
+      "version": "0.54.0"
+    },
+    {
+      "license": "OSI Approved :: MIT License",
+      "name": "wheel",
+      "source": "pypi",
+      "version": "0.45.1"
+    }
+  ],
+  "schema": 2
+}

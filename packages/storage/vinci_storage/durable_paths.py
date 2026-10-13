@@ -22,6 +22,8 @@ MUTATION_RULES: tuple[tuple[str, re.Pattern[str], str], ...] = (
     ("POST", re.compile(r"^/providers$"), "provider_add"),
     ("DELETE", re.compile(r"^/providers/[^/]+$"), "provider_remove"),
     ("POST", re.compile(r"^/providers/[^/]+/oauth$"), "provider_oauth"),
+    ("POST", re.compile(r"^/providers/[^/]+/disconnect$"), "provider_oauth_disconnect"),
+    ("GET", re.compile(r"^/providers/oauth/callback$"), "provider_oauth_callback"),
     ("POST", re.compile(r"^/collab/sessions$"), "collab_create"),
     ("PUT", re.compile(r"^/collab/sessions/[^/]+$"), "collab_put"),
     ("POST", re.compile(r"^/catalog/refresh$"), "catalog_refresh"),

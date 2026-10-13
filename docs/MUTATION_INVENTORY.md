@@ -21,6 +21,8 @@ Paths that change durable application state or accept work that must survive abr
 | `/providers` | POST | provider secret config | no | secrets at rest in home |
 | `/providers/{name}` | DELETE | provider config | no | |
 | `/providers/{name}/oauth` | POST | oauth state | no | |
+| `/providers/{name}/disconnect` | POST | drop oauth tokens | no | provider URL stays |
+| `/providers/oauth/callback` | GET | oauth tokens at rest | no | code is not stored in the journal payload |
 | `/agent/plan` | POST | plan artifact | no | ephemeral unless persisted |
 | `/collab/sessions` | POST | collab session | no | |
 | `/collab/sessions/{sid}` | PUT | canvas snapshot | optional | |

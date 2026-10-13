@@ -282,6 +282,6 @@ class SqliteStore:
             if not str(row["updated_at"]).startswith(prefix):
                 continue
             receipt = json.loads(row["receipt"]) if row["receipt"] else None
-            if receipt:
+            if receipt and str(receipt.get("currency") or "USD").upper() == "USD":
                 total += float(receipt.get("computed_cost") or 0)
         return total

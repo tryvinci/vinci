@@ -193,6 +193,23 @@ def all_secret_names() -> list[str]:
     for name in PROVIDER_SECRETS:
         names.extend(provider_secret_names(name))
     return names
+
+
+def _mcp_token(provider_name: str, lookup: Any) -> Any:
+    def token_for() -> str | None:
+        token = lookup(provider_name)
+        return token if isinstance(token, str) and token else None
+
+    return token_for
+
+
+def _usd_total(rows: list[dict[str, Any]]) -> float:
+    total = 0.0
+    for row in rows:
+        estimate = row["estimate"]
+        if str(estimate.currency).upper() == "USD":
+            total += float(estimate.amount)
+    return total
 CAP_KIND = {
     Capability.T2I: (AssetKind.IMAGE, "image/png"),
     Capability.I2I: (AssetKind.IMAGE, "image/png"),
@@ -337,8 +354,22 @@ class Engine:
             url = cfg.get("url")
             if not isinstance(url, str) or not url:
                 continue
-            key = resolver.resolve(mcp_secret_name(name)) or resolver.resolve("MCP_API_KEY")
-            self.providers[name] = McpProvider(HttpMcpTransport(url), api_key=key, cas=cas)
+            from vinci_mcp.oauth import access_token
+
+            def bearer(provider_name: str = name) -> str | None:
+                token = access_token(resolver, provider_name)
+                if token:
+                    return token
+                return resolver.resolve(mcp_secret_name(provider_name)) or resolver.resolve(
+                    "MCP_API_KEY"
+                )
+
+            self.providers[name] = McpProvider(
+                HttpMcpTransport(url, token_provider=_mcp_token(name, bearer)),
+                api_key=bearer(name),
+                cas=cas,
+                provider_id=name,
+            )
 
     def _mcp_catalog(self, name: str = "mcp") -> Catalog | None:
         provider = self.providers.get(name)
@@ -427,6 +458,24 @@ class Engine:
         catalogs.extend(self._mcp_catalogs())
         return merge_catalogs(catalogs)
 
+    def _secret_values(self) -> list[str]:
+        from vinci_mcp.oauth import oauth_secret_name, secret_material
+
+        names = list(all_secret_names())
+        for name in self.config.providers:
+            if not is_mcp_name(name):
+                continue
+            names.append(mcp_secret_name(name))
+            try:
+                names.append(oauth_secret_name(name))
+            except ValueError:
+                continue
+        values = self.resolver.known_values(names)
+        extra: list[str] = []
+        for value in values:
+            extra.extend(secret_material(value))
+        return values + extra
+
     def _emit(
         self,
         type_: str,
@@ -435,7 +484,7 @@ class Engine:
         job_id: str | None = None,
         payload: dict[str, Any] | None = None,
     ) -> None:
-        secrets = self.resolver.known_values(all_secret_names())
+        secrets = self._secret_values()
         event = Event(
             type=type_,
             run_id=run_id,
@@ -458,32 +507,53 @@ class Engine:
     def _provider_row(self, name: str) -> dict[str, Any]:
         raw = self.config.providers.get(name)
         cfg = raw if isinstance(raw, dict) else {}
+        from vinci_mcp.connectors import connector_for
+        from vinci_mcp.oauth import auth_state
+
         secrets = provider_secret_names(name)
         mcp = is_mcp_name(name)
+        preset = connector_for(name)
+        stored_url = cfg.get("url") if mcp else None
         configured = name == "mock" or bool(
-            (mcp and cfg.get("url"))
+            (mcp and stored_url)
             or (secrets and all(self.resolver.resolve(secret) for secret in secrets))
         )
+        state = auth_state(self.resolver, name) if mcp else "key"
+        if mcp and state == "disconnected" and configured and not preset:
+            has_secret = any(self.resolver.resolve(secret) for secret in secrets)
+            state = "connected" if has_secret else state
         return {
             "enabled": name in self.enabled_provider_ids(),
             "available": self.provider_available(name),
             "configured": configured,
             "secret_name": secrets[0] if secrets else "",
             "extra_secret_names": list(PROVIDER_EXTRA_SECRETS.get(name, ())),
-            "display_name": str(cfg.get("label") or PROVIDER_LABELS.get(name) or name),
+            "display_name": str(
+                cfg.get("label")
+                or (preset.label if preset else None)
+                or PROVIDER_LABELS.get(name)
+                or name
+            ),
             "kind": "mcp" if mcp else "http",
-            "docs": PROVIDER_DOCS.get(name) or ("https://modelcontextprotocol.io" if mcp else ""),
-            "url": cfg.get("url") if mcp else None,
+            "docs": (
+                preset.docs
+                if preset
+                else PROVIDER_DOCS.get(name) or ("https://modelcontextprotocol.io" if mcp else "")
+            ),
+            "url": stored_url or (preset.url if preset else None),
             "authorize_url": cfg.get("authorize_url"),
-            "auth": "oauth_or_key" if mcp else "key",
+            "auth": "oauth" if preset else ("oauth_or_key" if mcp else "key"),
+            "auth_state": state,
         }
 
     def doctor(self) -> dict[str, Any]:
         home = self.config.home
         ffmpeg = shutil.which("ffmpeg")
         disk = shutil.disk_usage(home)
+        from vinci_mcp.connectors import CONNECTORS
+
         names = list(PROVIDER_DOCS)
-        for name in self.config.providers:
+        for name in list(self.config.providers) + list(CONNECTORS):
             if name not in names:
                 names.append(name)
         checks = {
@@ -629,10 +699,15 @@ class Engine:
         if authorize_url:
             body["authorize_url"] = authorize_url
         if is_mcp_name(name):
-            resolved_url = url or body.get("url")
+            from vinci_mcp.connectors import connector_for
+
+            preset = connector_for(name)
+            resolved_url = url or body.get("url") or (preset.url if preset else None)
             if not resolved_url:
                 raise ValueError("mcp provider requires url")
             body["url"] = resolved_url
+            if preset and "label" not in body:
+                body["label"] = preset.label
         if name == "cloudflare":
             resolved_account = account_id or body.get("account_id") or os.environ.get(
                 "CLOUDFLARE_ACCOUNT_ID"
@@ -689,29 +764,52 @@ class Engine:
             "test": "ok" if available or name == "mock" else "missing key",
         }
 
-    def oauth_start(self, name: str) -> dict[str, Any]:
+    def oauth_start(self, name: str, redirect_uri: str) -> dict[str, Any]:
+        from vinci_mcp.connectors import connector_for
+        from vinci_mcp.oauth import OAuthError, start
+
         if name not in PROVIDER_SECRETS and not is_mcp_name(name):
             raise KeyError(name)
-        if is_mcp_name(name):
-            cfg = self.config.providers.get(name) or {}
-            authorize = cfg.get("authorize_url") if isinstance(cfg, dict) else None
+        if not is_mcp_name(name):
+            label = PROVIDER_LABELS.get(name, name)
             return {
                 "id": name,
-                "mode": "token" if authorize else "paste",
-                "authorize_url": authorize,
-                "hint": (
-                    "Remote MCP OAuth: open the authorize URL, then paste the token."
-                    if authorize
-                    else "This MCP uses a pasted bearer. HTTP plugins still use API keys."
-                ),
+                "mode": "key",
+                "authorize_url": None,
+                "hint": f"{label} uses a pasted API key, not a browser login.",
             }
-        label = PROVIDER_LABELS.get(name, name)
+        preset = connector_for(name)
+        cfg = self.config.providers.get(name) or {}
+        if preset and not (isinstance(cfg, dict) and cfg.get("url")):
+            self.add_provider(name, url=preset.url, label=preset.label)
+            cfg = self.config.providers.get(name) or {}
+        authorize = cfg.get("authorize_url") if isinstance(cfg, dict) else None
+        server_url = cfg.get("url") if isinstance(cfg, dict) else None
+        if isinstance(server_url, str) and server_url:
+            try:
+                started = start(self.resolver, name, server_url, redirect_uri)
+                self._rebuild_providers()
+                return started
+            except OAuthError:
+                if not authorize:
+                    raise
         return {
             "id": name,
-            "mode": "key",
-            "authorize_url": None,
-            "hint": f"{label} uses a pasted API key, not a browser login.",
+            "mode": "token" if authorize else "paste",
+            "authorize_url": authorize,
+            "hint": (
+                "Remote MCP OAuth: open the authorize URL, then paste the token."
+                if authorize
+                else "This MCP uses a pasted bearer. HTTP plugins still use API keys."
+            ),
         }
+
+    def oauth_callback(self, *, code: str, state: str, error: str = "") -> dict[str, Any]:
+        from vinci_mcp.oauth import finish
+
+        result = finish(self.resolver, code=code, state=state, error=error)
+        self._rebuild_providers()
+        return result
 
     def plan_brief(self, brief: str) -> dict[str, Any]:
         query = (brief or "").lower()
@@ -838,10 +936,23 @@ class Engine:
         return self.settings()
 
     def remove_provider(self, name: str) -> None:
+        if is_mcp_name(name):
+            from vinci_mcp.oauth import disconnect
+
+            disconnect(self.resolver, name)
         self.config.providers.pop(name, None)
         write_config(self.config)
         self.config = load_config(self.config.home)
         self._rebuild_providers()
+
+    def disconnect_oauth(self, name: str) -> dict[str, str]:
+        if not is_mcp_name(name):
+            raise KeyError(name)
+        from vinci_mcp.oauth import disconnect
+
+        disconnect(self.resolver, name)
+        self._rebuild_providers()
+        return {"id": name, "auth_state": "disconnected"}
 
     def estimate_skill(
         self,
@@ -865,7 +976,7 @@ class Engine:
         catalog = self.catalog()
         available = self.routing_providers()
         rows = plan_workflow(catalog, spec, available_providers=available or None)
-        total = sum(float(row["estimate"].amount) for row in rows)
+        total = _usd_total(rows)
         reason = should_await_approval(
             total,
             max_cost=spec.max_cost,
@@ -881,6 +992,7 @@ class Engine:
                     "node_id": row["node_id"],
                     "model_id": row["model"].id,
                     "amount": estimate.amount,
+                    "currency": estimate.currency,
                     "alternative": estimate.alternative,
                 }
             )
@@ -914,7 +1026,7 @@ class Engine:
         existing = self.store.get_run(run_id)
         if existing is not None:
             return existing
-        secrets = self.resolver.known_values(all_secret_names())
+        secrets = self._secret_values()
         if workflow is not None:
             spec = workflow
             skill_name = workflow.id
@@ -944,7 +1056,7 @@ class Engine:
                 "no available providers; run vinci init --demo or add a provider key"
             )
         rows = plan_workflow(catalog, spec, available_providers=available)
-        total = sum(float(row["estimate"].amount) for row in rows)
+        total = _usd_total(rows)
         plan = {
             "skill": f"{skill_name}@{skill_version}",
             "total": total,
@@ -954,6 +1066,7 @@ class Engine:
                     "node_id": row["node_id"],
                     "model_id": row["model"].id,
                     "amount": row["estimate"].amount,
+                    "currency": row["estimate"].currency,
                     "alternative": row["estimate"].alternative,
                 }
                 for row in rows
@@ -1407,7 +1520,7 @@ class Engine:
         *,
         receipt_parent_op_id: str | None = None,
     ) -> Job:
-        secrets = self.resolver.known_values(all_secret_names())
+        secrets = self._secret_values()
         catalog = self.catalog()
         available = self.routing_providers()
         capability = node.capability
@@ -1494,7 +1607,7 @@ class Engine:
             list_price=model.pricing.amount,
             unit_count=1,
             computed_cost=0.0 if cached else float(estimate.amount),
-            currency="USD",
+            currency=estimate.currency,
             pricing_snapshot_at=estimate.pricing_snapshot_at,
             wall_time=(now_utc() - started).total_seconds(),
             cached=cached,
@@ -1744,7 +1857,7 @@ class Engine:
         src_path.write_bytes(self.cas.get(source_asset))
         outputs: list[dict[str, Any]] = []
         digests: list[str] = []
-        adapt_secrets = self.resolver.known_values(all_secret_names())
+        adapt_secrets = self._secret_values()
         for index, raw in enumerate(targets):
             self._require_journal_writer_live()
             width, height, preset_id = resolve_target(raw, self.config.home)
@@ -2238,7 +2351,7 @@ class Engine:
         outputs: list[str],
         extra: Any = None,
     ) -> Job:
-        secrets = self.resolver.known_values(all_secret_names())
+        secrets = self._secret_values()
         job_id = uuid.uuid4().hex
         created = now_utc()
         estimate = Estimate(

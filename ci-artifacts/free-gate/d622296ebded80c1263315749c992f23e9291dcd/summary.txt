@@ -1,0 +1,17 @@
+ruff-baseline exit=0
+pytest-gates exit=0
+make-test exit=0
+make-conformance exit=0
+make-lint exit=0
+proprietary-scan exit=0
+secret-scan exit=0
+skills-validate exit=0
+clone-smoke exit=0
+selfhost-dry-run exit=0
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+make[1]: Leaving directory '/workspace/apps/vinci-oss'
+overall_fail=0

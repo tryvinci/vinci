@@ -1,0 +1,178 @@
+{
+  "graph_fingerprint": {
+    "machine": "x86_64",
+    "package_count": 28,
+    "platform": "linux"
+  },
+  "packages": [
+    {
+      "licenses": "MIT",
+      "name": "@emnapi/runtime",
+      "resolved": "https://registry.npmjs.org/@emnapi/runtime/-/runtime-1.11.3.tgz",
+      "version": "1.11.3"
+    },
+    {
+      "licenses": "MIT",
+      "name": "@img/colour",
+      "resolved": "https://registry.npmjs.org/@img/colour/-/colour-1.1.0.tgz",
+      "version": "1.1.0"
+    },
+    {
+      "licenses": "LGPL-3.0-or-later",
+      "name": "@img/sharp-libvips-linux-x64",
+      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linux-x64/-/sharp-libvips-linux-x64-1.3.3.tgz",
+      "version": "1.3.3"
+    },
+    {
+      "licenses": "LGPL-3.0-or-later",
+      "name": "@img/sharp-libvips-linuxmusl-x64",
+      "resolved": "https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-x64/-/sharp-libvips-linuxmusl-x64-1.3.3.tgz",
+      "version": "1.3.3"
+    },
+    {
+      "licenses": "Apache-2.0",
+      "name": "@img/sharp-linux-x64",
+      "resolved": "https://registry.npmjs.org/@img/sharp-linux-x64/-/sharp-linux-x64-0.35.4.tgz",
+      "version": "0.35.4"
+    },
+    {
+      "licenses": "Apache-2.0",
+      "name": "@img/sharp-linuxmusl-x64",
+      "resolved": "https://registry.npmjs.org/@img/sharp-linuxmusl-x64/-/sharp-linuxmusl-x64-0.35.4.tgz",
+      "version": "0.35.4"
+    },
+    {
+      "licenses": "Apache-2.0 AND LGPL-3.0-or-later AND MIT",
+      "name": "@img/sharp-wasm32",
+      "resolved": "https://registry.npmjs.org/@img/sharp-wasm32/-/sharp-wasm32-0.35.4.tgz",
+      "version": "0.35.4"
+    },
+    {
+      "licenses": "MIT",
+      "name": "@next/env",
+      "resolved": "https://registry.npmjs.org/@next/env/-/env-15.5.24.tgz",
+      "version": "15.5.24"
+    },
+    {
+      "licenses": "MIT",
+      "name": "@next/swc-linux-x64-gnu",
+      "resolved": "https://registry.npmjs.org/@next/swc-linux-x64-gnu/-/swc-linux-x64-gnu-15.5.24.tgz",
+      "version": "15.5.24"
+    },
+    {
+      "licenses": "MIT",
+      "name": "@next/swc-linux-x64-musl",
+      "resolved": "https://registry.npmjs.org/@next/swc-linux-x64-musl/-/swc-linux-x64-musl-15.5.24.tgz",
+      "version": "15.5.24"
+    },
+    {
+      "licenses": "Apache-2.0",
+      "name": "@swc/helpers",
+      "resolved": "https://registry.npmjs.org/@swc/helpers/-/helpers-0.5.15.tgz",
+      "version": "0.5.15"
+    },
+    {
+      "licenses": "CC-BY-4.0",
+      "name": "caniuse-lite",
+      "resolved": "https://registry.npmjs.org/caniuse-lite/-/caniuse-lite-1.0.30001810.tgz",
+      "version": "1.0.30001810"
+    },
+    {
+      "licenses": "MIT",
+      "name": "client-only",
+      "resolved": "https://registry.npmjs.org/client-only/-/client-only-0.0.1.tgz",
+      "version": "0.0.1"
+    },
+    {
+      "licenses": "MIT",
+      "name": "csstype",
+      "resolved": "https://registry.npmjs.org/csstype/-/csstype-3.2.3.tgz",
+      "version": "3.2.3"
+    },
+    {
+      "licenses": "Apache-2.0",
+      "name": "detect-libc",
+      "resolved": "https://registry.npmjs.org/detect-libc/-/detect-libc-2.1.2.tgz",
+      "version": "2.1.2"
+    },
+    {
+      "licenses": "MIT",
+      "name": "nanoid",
+      "resolved": "https://registry.npmjs.org/nanoid/-/nanoid-3.3.18.tgz",
+      "version": "3.3.18"
+    },
+    {
+      "licenses": "MIT",
+      "name": "next",
+      "resolved": "https://registry.npmjs.org/next/-/next-15.5.24.tgz",
+      "version": "15.5.24"
+    },
+    {
+      "licenses": "ISC",
+      "name": "picocolors",
+      "resolved": "https://registry.npmjs.org/picocolors/-/picocolors-1.1.1.tgz",
+      "version": "1.1.1"
+    },
+    {
+      "licenses": "MIT",
+      "name": "postcss",
+      "resolved": "https://registry.npmjs.org/postcss/-/postcss-8.4.31.tgz",
+      "version": "8.4.31"
+    },
+    {
+      "licenses": "MIT",
+      "name": "react",
+      "resolved": "https://registry.npmjs.org/react/-/react-19.2.8.tgz",
+      "version": "19.2.8"
+    },
+    {
+      "licenses": "MIT",
+      "name": "react-dom",
+      "resolved": "https://registry.npmjs.org/react-dom/-/react-dom-19.2.8.tgz",
+      "version": "19.2.8"
+    },
+    {
+      "licenses": "MIT",
+      "name": "scheduler",
+      "resolved": "https://registry.npmjs.org/scheduler/-/scheduler-0.27.0.tgz",
+      "version": "0.27.0"
+    },
+    {
+      "licenses": "ISC",
+      "name": "semver",
+      "resolved": "https://registry.npmjs.org/semver/-/semver-7.8.5.tgz",
+      "version": "7.8.5"
+    },
+    {
+      "licenses": "Apache-2.0",
+      "name": "sharp",
+      "resolved": "https://registry.npmjs.org/sharp/-/sharp-0.35.4.tgz",
+      "version": "0.35.4"
+    },
+    {
+      "licenses": "BSD-3-Clause",
+      "name": "source-map-js",
+      "resolved": "https://registry.npmjs.org/source-map-js/-/source-map-js-1.2.1.tgz",
+      "version": "1.2.1"
+    },
+    {
+      "licenses": "MIT",
+      "name": "styled-jsx",
+      "resolved": "https://registry.npmjs.org/styled-jsx/-/styled-jsx-5.1.6.tgz",
+      "version": "5.1.6"
+    },
+    {
+      "licenses": "0BSD",
+      "name": "tslib",
+      "resolved": "https://registry.npmjs.org/tslib/-/tslib-2.8.1.tgz",
+      "version": "2.8.1"
+    },
+    {
+      "licenses": "MIT",
+      "name": "undici-types",
+      "resolved": "https://registry.npmjs.org/undici-types/-/undici-types-6.21.0.tgz",
+      "version": "6.21.0"
+    }
+  ],
+  "schema": 2
+}

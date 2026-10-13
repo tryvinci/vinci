@@ -183,6 +183,7 @@ type ProviderRow = {
   url?: string;
   authorize_url?: string;
   auth?: string;
+  auth_state?: string;
 };
 type Doctor = {
   live_spend?: boolean;
@@ -463,6 +464,7 @@ export function StudioClient() {
   const castFileRef = useRef<HTMLInputElement>(null);
   const composeStillRef = useRef<HTMLInputElement>(null);
   const adaptFileRef = useRef<HTMLInputElement>(null);
+  const oauthAttemptRef = useRef(0);
   const [adaptPresets, setAdaptPresets] = useState<AdaptPresetRow[]>([]);
   const [adaptSourceId, setAdaptSourceId] = useState<string | null>(null);
   const [adaptTargets, setAdaptTargets] = useState<AdaptTarget[]>([
@@ -1189,8 +1191,39 @@ export function StudioClient() {
         `/providers/${encodeURIComponent(id)}/oauth`,
         { method: "POST" },
       );
+      if (body.mode === "key") {
+        setLog(body.hint || "This connector uses a pasted API key.");
+        return;
+      }
       if (body.authorize_url) window.open(body.authorize_url, "_blank", "noopener,noreferrer");
-      setLog(body.hint || (body.mode === "key" ? "This connector uses a pasted API key." : "Paste a token."));
+      if (body.mode !== "oauth") {
+        setLog(body.hint || "Paste a token.");
+        return;
+      }
+      setLog("Finish sign-in in the browser.");
+      const attempt = ++oauthAttemptRef.current;
+      for (let i = 0; i < 60; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        if (attempt !== oauthAttemptRef.current) return;
+        let next: Doctor;
+        try {
+          next = await api<Doctor>("/doctor");
+        } catch {
+          continue;
+        }
+        if (attempt !== oauthAttemptRef.current) return;
+        const row = next.providers?.[id];
+        if (row?.auth_state === "needs_reconnect") {
+          setLog(id + " needs reconnect.");
+          return;
+        }
+        if (row?.auth_state === "connected") {
+          await boot();
+          setLog(id + " connected.");
+          return;
+        }
+      }
+      if (attempt === oauthAttemptRef.current) setLog("Still waiting for sign-in.");
     } catch (err) {
       setLog(String(err instanceof Error ? err.message : err));
     }
@@ -2180,8 +2213,23 @@ export function StudioClient() {
             ))}
             <div className="file-row">
               <button className="ghost" type="button" onClick={() => void oauthStart(connectId)}>
-                Start OAuth
+                {picked.auth === "oauth" ? "Sign in" : "Start OAuth"}
               </button>
+              {picked.auth_state === "connected" || picked.auth_state === "needs_reconnect" ? (
+                <button
+                  className="ghost"
+                  type="button"
+                  onClick={() => {
+                    void api(`/providers/${encodeURIComponent(connectId)}/disconnect`, {
+                      method: "POST",
+                    })
+                      .then(() => boot())
+                      .catch((err) => setLog(String(err instanceof Error ? err.message : err)));
+                  }}
+                >
+                  Disconnect
+                </button>
+              ) : null}
               <button className="run" type="button" onClick={() => void saveProvider(connectId)}>
                 Save {picked.display_name || connectId}
               </button>
@@ -2305,7 +2353,7 @@ export function StudioClient() {
   }
 
   return (
-    <div className={"shell" + (wantsInsp ? " with-insp" : "")}>
+    <div className={"shell" + (wantsInsp ? " with-insp" : "")} data-testid="vinci-studio-root">
       <nav className="rail" aria-label="Studio">
         <svg className="mark" viewBox="0 0 32 32" aria-hidden="true">
           <rect width="32" height="32" rx="8" fill="#34c6c0" />
@@ -2719,6 +2767,17 @@ export function StudioClient() {
               <span>{busy ? "Generating…" : "Generate"}</span>
               <span>{money(selected?.pricing?.amount)}</span>
             </button>
+            {lastDigest ? (
+              <a
+                className="ghost"
+                data-testid="studio-export-last"
+                download={`vinci-${lastDigest.slice(0, 12)}`}
+                href={`${API}/assets/${lastDigest}/file`}
+                style={{ display: "inline-block", marginTop: 8 }}
+              >
+                Export last output
+              </a>
+            ) : null}
             <p className="muted" style={{ margin: "8px 0 0" }}>
               Estimates appear on Generate.
             </p>

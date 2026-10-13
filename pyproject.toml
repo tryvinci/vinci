@@ -23,7 +23,7 @@ show_error_codes = true
 mypy_path = "packages/protocol:packages/core:packages/storage:packages/provider-sdk:packages/skills:packages/runtime:packages/mcp:packages/provider-wavespeed:packages/provider-google:packages/provider-openai:packages/provider-fal:packages/provider-elevenlabs:packages/provider-cloudflare:packages/provider-higgsfield:packages/provider-magnific:packages/media:packages/index:packages/harness"
 
 [[tool.mypy.overrides]]
-module = ["keyring", "yaml", "uvicorn"]
+module = ["keyring", "yaml", "uvicorn", "mcp", "mcp.*", "httpx", "anyio"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

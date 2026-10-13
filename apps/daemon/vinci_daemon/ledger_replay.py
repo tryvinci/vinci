@@ -247,7 +247,12 @@ def apply_committed_operation(engine: Any, op: dict[str, Any]) -> None:
         )
         return
 
-    if kind in {"provider_oauth", "run_cancel"}:
+    if kind in {
+        "provider_oauth",
+        "provider_oauth_callback",
+        "provider_oauth_disconnect",
+        "run_cancel",
+    }:
         LOG.debug("ledger apply snapshot kind=%s", kind)
         return
 

@@ -1716,7 +1716,7 @@
         sheet = `<div class="connect-sheet" id="connect-sheet">
           <span class="kind">${picked.kind === "mcp" ? "Custom MCP" : "HTTP plugin"}</span>
           <strong>${picked.display_name || id}</strong>
-          <div class="muted">${picked.secret_name} · ${pickedStatus}</div>
+          <div class="muted">${picked.secret_name} · ${pickedStatus}${picked.auth_state ? " · " + picked.auth_state : ""}</div>
           <p class="muted"><a href="${picked.docs || "#"}" target="_blank" rel="noreferrer">docs</a></p>
           ${mcpFields}
           <label>${mcpPicked ? "Optional key" : "Paste key"}</label>
@@ -1726,7 +1726,8 @@
           ${acct}
           ${extra}
           <div class="file-row">
-            <button class="ghost" type="button" data-oauth="${id}">Start OAuth</button>
+            <button class="ghost" type="button" data-oauth="${id}">${picked.auth === "oauth" ? "Sign in" : "Start OAuth"}</button>
+            ${picked.auth_state === "connected" || picked.auth_state === "needs_reconnect" ? `<button class="ghost" type="button" data-disconnect="${id}">Disconnect</button>` : ""}
             <button class="run" data-save="${id}" type="button">Save ${picked.display_name || id}</button>
           </div>
         </div>`;
@@ -1777,6 +1778,19 @@
       if (add) add.onclick = () => { state.connectId = ""; renderKeys(page); openConnectorPicker(); };
       page.querySelectorAll("[data-save]").forEach((btn) => { btn.onclick = () => saveProvider(btn.dataset.save); });
       page.querySelectorAll("[data-oauth]").forEach((btn) => { btn.onclick = () => oauthStart(btn.dataset.oauth); });
+      page.querySelectorAll("[data-disconnect]").forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            await j("/providers/" + encodeURIComponent(btn.dataset.disconnect) + "/disconnect", { method: "POST" });
+          } catch (err) {
+            log(String(err.message || err));
+            return;
+          }
+          await boot(false);
+          log(btn.dataset.disconnect + " disconnected.");
+          renderKeys(page);
+        };
+      });
       const named = $("add-named-mcp");
       if (named) named.onclick = () => addNamedMcp();
       $("save-settings").onclick = saveSettings;
@@ -2245,11 +2259,43 @@
       } catch (err) { log(String(err.message || err)); }
     }
 
+    let oauthPoll = 0;
     async function oauthStart(id) {
       try {
         const body = await j("/providers/" + encodeURIComponent(id) + "/oauth", { method: "POST" });
+        if (body.mode === "key") {
+          log(body.hint || "This connector uses a pasted API key.");
+          return;
+        }
         if (body.authorize_url) window.open(body.authorize_url, "_blank", "noopener,noreferrer");
-        log(body.hint || (body.mode === "key" ? "This connector uses a pasted API key." : "Paste a token."));
+        if (body.mode !== "oauth") {
+          log(body.hint || "Paste a token.");
+          return;
+        }
+        log("Finish sign-in in the browser.");
+        const attempt = ++oauthPoll;
+        for (let i = 0; i < 60; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          if (attempt !== oauthPoll) return;
+          try {
+            doctor = await j("/doctor");
+          } catch (err) {
+            continue;
+          }
+          if (attempt !== oauthPoll) return;
+          const row = doctor.providers && doctor.providers[id];
+          if (row && row.auth_state === "needs_reconnect") {
+            log(id + " needs reconnect.");
+            return;
+          }
+          if (row && row.auth_state === "connected") {
+            log(id + " connected.");
+            const page = $("page");
+            if (page) renderKeys(page);
+            return;
+          }
+        }
+        if (attempt === oauthPoll) log("Still waiting for sign-in.");
       } catch (err) { log(String(err.message || err)); }
     }
 

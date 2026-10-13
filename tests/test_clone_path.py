@@ -130,7 +130,7 @@ def test_clone_tree_has_north_star_files() -> None:
     android = (
         ROOT / "apps/android/app/src/main/java/ai/tryvinci/studio/MainActivity.kt"
     ).read_text(encoding="utf-8")
-    assert "http://127.0.0.1:4311" in mac
+    assert "studioPort" in mac and "server.js" in mac
     assert "http://10.0.2.2:4311" in android
     assert "Vinci Studio" in smoke_text
     assert "Bring your own keys" in smoke_text

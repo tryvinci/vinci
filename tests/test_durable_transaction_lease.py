@@ -7,9 +7,11 @@ import os
 import shutil
 import signal
 import socket
+import sqlite3
 import subprocess
 import sys
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib import error, request
 
@@ -25,6 +27,43 @@ ROOT = Path(__file__).resolve().parents[1]
 def _daemon_python() -> str:
     venv = ROOT / ".venv" / "bin" / "python"
     return str(venv) if venv.is_file() else sys.executable
+
+
+def _writer_lease(db: Path) -> sqlite3.Row | None:
+    if not db.is_file():
+        return None
+    try:
+        conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=0.2)
+    except sqlite3.Error:
+        return None
+    try:
+        conn.row_factory = sqlite3.Row
+        return conn.execute(
+            "SELECT generation, lease_until, released FROM writer_lease WHERE id = 1"
+        ).fetchone()
+    except sqlite3.Error:
+        return None
+    finally:
+        conn.close()
+
+
+def _wait_for_expired_successor_lease(db: Path, generation: int, timeout: float = 30.0) -> None:
+    """Wait until a newer writer lease exists and its TTL has elapsed.
+
+    A fixed sleep races daemon startup: the successor can acquire while the
+    previous 2s lease is still active.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        row = _writer_lease(db)
+        if row is not None and int(row["generation"]) > generation and int(row["released"]) == 0:
+            until = datetime.fromisoformat(str(row["lease_until"]))
+            if until.tzinfo is None:
+                until = until.replace(tzinfo=UTC)
+            if until <= datetime.now(tz=UTC):
+                return
+        time.sleep(0.05)
+    raise AssertionError("successor writer lease did not expire")
 
 
 def test_pending_output_row_is_not_a_committed_receipt(tmp_path: Path) -> None:
@@ -424,6 +463,8 @@ def test_takeover_fences_stale_writer_mid_startup_outbox(tmp_path: Path) -> None
 
     import threading
 
+    prior = _writer_lease(durable / "ledger.sqlite")
+    prior_generation = int(prior["generation"]) if prior is not None else -1
     stale_failed: list[bool] = []
 
     def _start_stale() -> None:
@@ -445,7 +486,7 @@ def test_takeover_fences_stale_writer_mid_startup_outbox(tmp_path: Path) -> None
 
     thread = threading.Thread(target=_start_stale)
     thread.start()
-    time.sleep(2.4)
+    _wait_for_expired_successor_lease(durable / "ledger.sqlite", prior_generation)
     owner = _spawn(owner_port, base)
     try:
         _wait_health(owner_port, owner)
