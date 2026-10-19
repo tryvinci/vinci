@@ -342,6 +342,57 @@ function wantsFrames(model?: Model): boolean {
   return blob.includes("flf") || blob.includes("first-last") || blob.includes("first_last");
 }
 
+function panelFor(model: Model | undefined, page: string) {
+  const caps = model?.capabilities || [];
+  const blob = `${model?.id || ""} ${model?.display_name || ""}`.toLowerCase();
+  const t2v = caps.includes("t2v");
+  const i2v = caps.includes("i2v");
+  const t2i = caps.includes("t2i");
+  const i2i = caps.includes("i2i");
+  const upscale = caps.includes("upscale");
+  const videoJob = t2v || i2v;
+  const tts = caps.includes("tts") && !videoJob && !t2i;
+  const lipsync = caps.includes("lipsync") && !videoJob;
+  const voice = (caps.includes("voice_clone") || caps.includes("sts")) && !videoJob && !t2i;
+  const clip = upscale && !i2i && !videoJob && blob.includes("video");
+  const imageUpscale = upscale && !videoJob && !clip;
+  let stillAccept = "image/*";
+  let stillLabel = "Still";
+  let stillHint = "Optional.";
+  if (clip) {
+    stillAccept = "video/*";
+    stillLabel = "Clip";
+    stillHint = "Required.";
+  } else if (lipsync) {
+    stillAccept = "video/*,audio/*";
+    stillLabel = "Video and audio";
+    stillHint = "Required.";
+  } else if (voice) {
+    stillAccept = "audio/*";
+    stillLabel = "Reference audio";
+    stillHint = "Required.";
+  } else if (imageUpscale || (i2v && !t2v) || (i2i && !t2i) || blob.includes("r2v")) {
+    stillHint = "Required.";
+  } else if (i2v && t2v) {
+    stillHint = "Optional. A still runs image-to-video.";
+  } else if (i2i && t2i) {
+    stillHint = "Optional. A still edits this image.";
+  }
+  return {
+    showStill: Boolean(i2v || (i2i && !videoJob) || clip || imageUpscale || lipsync || voice || blob.includes("r2v")),
+    showFrames: wantsFrames(model),
+    showOptical: Boolean((t2i || i2i || videoJob) && !tts && !lipsync && !voice),
+    showMotion: videoJob,
+    showScale: Boolean(upscale && i2i && !videoJob),
+    showMagnific: Boolean(model?.provider === "magnific" && upscale && !blob.includes("precision") && !videoJob),
+    showScene: page === "speak" && Boolean((t2i || i2v) && !tts && !lipsync && !voice),
+    showCast: Boolean(t2i || i2i || i2v),
+    stillAccept,
+    stillLabel,
+    stillHint,
+  };
+}
+
 function wirePath(a: GraphNode, b: GraphNode): string {
   const x1 = (a.x || 0) + 196;
   const y1 = (a.y || 0) + 44;
@@ -357,8 +408,8 @@ function modelIdForNode(node: GraphNode, fallbackId: string, catalog: Model[]): 
     const row = catalog.find((m) => m.id === id);
     if (row && (!cap || row.capabilities.includes(cap))) return id;
   }
-  const mock = catalog.find((m) => m.provider === "mock" && (!cap || m.capabilities.includes(cap)));
-  return mock?.id || fallbackId;
+  const match = catalog.find((m) => !cap || m.capabilities.includes(cap));
+  return match?.id || fallbackId;
 }
 
 function graphFromSkill(
@@ -489,14 +540,12 @@ export function StudioClient() {
       const caps = m.capabilities || [];
       if (page === "image") return caps.includes("t2i");
       if (page === "video") return caps.includes("t2v") || caps.includes("i2v");
-      if (page === "upscale") return caps.includes("upscale") || caps.includes("i2i");
+      if (page === "upscale") return caps.includes("upscale");
       if (page === "speak") return caps.includes("tts") || caps.includes("lipsync") || caps.includes("i2v");
       return caps.includes("t2i") || caps.includes("t2v") || caps.includes("i2i");
     });
-    const rows = (list.length ? list : models).slice();
+    const rows = (list.length ? list : models).filter((m) => m.provider !== "mock").slice();
     rows.sort((a, b) => {
-      if (a.provider === "mock" && b.provider !== "mock") return -1;
-      if (b.provider === "mock" && a.provider !== "mock") return 1;
       if (page === "upscale") {
         const stillA = (a.capabilities || []).includes("i2i") ? 0 : 1;
         const stillB = (b.capabilities || []).includes("i2i") ? 0 : 1;
@@ -511,30 +560,21 @@ export function StudioClient() {
     if (!composeModels.length) return;
     const current = composeModels.find((m) => m.id === modelId);
     if (page === "upscale") {
-      const still =
-        composeModels.find((m) => m.provider === "mock" && (m.capabilities || []).includes("i2i")) ||
-        composeModels.find((m) => (m.capabilities || []).includes("i2i"));
+      const still = composeModels.find((m) => (m.capabilities || []).includes("i2i"));
       if (still && (!current || !(current.capabilities || []).includes("i2i"))) {
         setModelId(still.id);
         return;
       }
     }
     if (current) return;
-    const mock = composeModels.find((m) => m.provider === "mock") || composeModels[0];
-    if (mock) setModelId(mock.id);
+    const next = composeModels[0];
+    if (next) setModelId(next.id);
   }, [composeModels, modelId, page]);
 
-  const selected =
-    composeModels.find((m) => m.id === modelId) ||
-    composeModels.find((m) => m.provider === "mock") ||
-    composeModels[0];
-  const opticalPage = ["image", "video", "speak", "canvas"].includes(page);
-  const videoish = Boolean(
-    selected?.capabilities?.includes("t2v") ||
-      selected?.capabilities?.includes("i2v") ||
-      page === "video" ||
-      graph.nodes.some((n) => n.capability === "t2v" || n.capability === "i2v"),
-  );
+  const selected = composeModels.find((m) => m.id === modelId) || composeModels[0];
+  const mode = panelFor(selected, page);
+  const opticalPage = mode.showOptical;
+  const videoish = mode.showMotion;
 
   const loadMedia = useCallback(async () => {
     const [runBody, assetBody] = await Promise.all([
@@ -700,12 +740,12 @@ export function StudioClient() {
       setDoctor(doc);
       setPref(doc.preference || "cheapest");
       setMonthlyCap(doc.budget?.monthly_cap_usd != null ? String(doc.budget.monthly_cap_usd) : "");
-      setModels(modelBody.models || []);
+      setModels((modelBody.models || []).filter((m) => m.provider !== "mock"));
       setSkills(skillBody.skills || []);
       setTemplates(tplBody.templates || []);
       setAdaptPresets(presetBody.presets || []);
-      const mock = (modelBody.models || []).find((m) => m.provider === "mock");
-      setModelId((prev) => prev || mock?.id || modelBody.models?.[0]?.id || "");
+      const first = (modelBody.models || []).find((m) => m.provider !== "mock");
+      setModelId((prev) => prev || first?.id || "");
       await loadMedia();
     } catch (err) {
       setLog(err instanceof Error ? err.message : String(err));
@@ -810,33 +850,53 @@ export function StudioClient() {
     return assets.find((a) => a.mime?.startsWith("image/"))?.id || null;
   }, [assets, projectRuns]);
 
-  function skillFor(model?: Model): string {
-    if (page === "upscale") return "@tryvinci/image-upscale";
-    if (page === "speak") return "@tryvinci/still-to-talk";
-    if (page === "video") return "@tryvinci/video-generate";
-    if (page === "image") return "@tryvinci/image-generate";
-    if (skillRef && !graphEdited) return skillRef;
+  function imageAssetId(id: string | null): string | null {
+    if (!id) return null;
+    const row = assets.find((item) => item.id === id);
+    return row?.mime?.startsWith("image/") ? id : null;
+  }
+
+  function animateStill(model?: Model): boolean {
     const caps = model?.capabilities || [];
-    if (caps.includes("t2v") || caps.includes("i2v")) return "@tryvinci/video-generate";
+    if (!caps.includes("i2v")) return false;
+    if (!caps.includes("t2v")) return true;
+    return Boolean(imageAssetId(uploadId) || imageAssetId(firstFrameId));
+  }
+
+  function skillFor(model?: Model): string {
+    const caps = model?.capabilities || [];
+    const videoJob = caps.includes("t2v") || caps.includes("i2v");
+    if (page === "canvas" && skillRef && !graphEdited) return skillRef;
+    if (caps.includes("voice_clone") && !videoJob && !caps.includes("t2i")) return "@tryvinci/voice-clone";
+    if (caps.includes("tts") && !videoJob && !caps.includes("t2i")) return "@tryvinci/tts";
+    if (caps.includes("lipsync") && !videoJob) return "@tryvinci/lipsync";
+    if (caps.includes("upscale") && !caps.includes("i2i") && !caps.includes("t2i") && !videoJob) return "@tryvinci/video-upscale";
+    if ((caps.includes("i2i") || caps.includes("upscale")) && !videoJob && !caps.includes("t2i")) return "@tryvinci/image-upscale";
+    if (caps.includes("i2i") && caps.includes("t2i") && Boolean(imageAssetId(uploadId) || imageAssetId(firstFrameId)) && !videoJob) {
+      return "@tryvinci/image-upscale";
+    }
+    if (videoJob) return "@tryvinci/video-generate";
     return "@tryvinci/image-generate";
   }
 
   function shotInputs(base: Record<string, unknown>) {
     const inputs = { ...base };
-    if (aspectRatio) inputs.aspect_ratio = aspectRatio;
-    if (duration && videoish) inputs.duration = Number(duration);
-    if (resolution) inputs.resolution = resolution;
-    if (scale && page === "upscale") inputs.scale = scale;
-    if (camera) inputs.camera = camera;
-    if (lens) inputs.lens = lens;
-    if (look) inputs.look = look;
-    if (lighting) inputs.lighting = lighting;
-    if (palette) inputs.palette = palette;
-    if (motion && videoish) inputs.motion = motion;
-    if (aperture) inputs.aperture = aperture;
-    if (genre) inputs.genre = genre;
-    if (scene && (page === "speak" || scene !== "general")) inputs.scene = scene;
-    if (page === "upscale") {
+    if (aspectRatio && ratios.length) inputs.aspect_ratio = aspectRatio;
+    if (duration && mode.showMotion) inputs.duration = Number(duration);
+    if (resolution && (selected?.constraints?.resolutions || []).length) inputs.resolution = resolution;
+    if (scale && mode.showScale) inputs.scale = scale;
+    if (mode.showOptical) {
+      if (camera) inputs.camera = camera;
+      if (lens) inputs.lens = lens;
+      if (look) inputs.look = look;
+      if (lighting) inputs.lighting = lighting;
+      if (palette) inputs.palette = palette;
+      if (aperture) inputs.aperture = aperture;
+      if (genre) inputs.genre = genre;
+    }
+    if (motion && mode.showMotion) inputs.motion = motion;
+    if (scene && mode.showScene) inputs.scene = scene;
+    if (mode.showMagnific) {
       inputs.creativity = creativity;
       inputs.resemblance = resemblance;
       inputs.hdr = hdr;
@@ -844,24 +904,26 @@ export function StudioClient() {
       inputs.optimized_for = optimizedFor;
       inputs.engine = engine;
     }
-    if (firstFrameId) {
+    if (mode.showFrames && firstFrameId) {
       inputs.first_frame_url = firstFrameId;
       inputs.start_image_url = firstFrameId;
       inputs.image = firstFrameId;
     }
-    if (lastFrameId) {
+    if (mode.showFrames && lastFrameId) {
       inputs.last_frame_url = lastFrameId;
       inputs.tail_image_url = lastFrameId;
     }
-    if (uploadId) {
+    if (mode.showStill && uploadId) {
       inputs.media = uploadId;
       if (!inputs.image) inputs.image = uploadId;
     }
-    if (page !== "upscale") {
+    if (mode.showCast || mode.showStill) {
       const urls: string[] = [];
       if (typeof inputs.image === "string" && inputs.image) urls.push(inputs.image);
-      for (const row of cast) {
-        if (row.assetId && !urls.includes(row.assetId)) urls.push(row.assetId);
+      if (mode.showCast) {
+        for (const row of cast) {
+          if (row.assetId && !urls.includes(row.assetId)) urls.push(row.assetId);
+        }
       }
       if (urls.length) {
         inputs.image_urls = urls.slice(0, 8);
@@ -887,7 +949,11 @@ export function StudioClient() {
     data.append("file", file);
     const res = await fetch(API + "/assets", { method: "POST", body: data });
     if (!res.ok) throw new Error(await res.text());
-    return (await res.json()) as Asset;
+    const asset = (await res.json()) as Asset;
+    const mime = asset.mime && asset.mime !== "application/octet-stream" ? asset.mime : file.type || asset.mime;
+    const stored = { ...asset, mime };
+    setAssets((rows) => (rows.some((row) => row.id === stored.id) ? rows : [stored, ...rows]));
+    return stored;
   }
 
   function nodeDigest(id: string): string | null {
@@ -926,7 +992,14 @@ export function StudioClient() {
   async function generate(opts?: { nodeId?: string; graph?: boolean }) {
     if (busy) return;
     const model = selected;
-    const text = prompt.trim() || "north-light oak cube, 50mm cinema still.";
+    const animating = animateStill(model) && mode.showStill;
+    const skill = skillFor(model);
+    const upscaling = page === "upscale";
+    const text = upscaling
+      ? prompt.trim() || "upscale"
+      : animating
+        ? prompt.trim()
+        : prompt.trim() || "north-light oak cube, 50mm cinema still.";
     if (!model) {
       setLog("Studio is still loading models.");
       return;
@@ -936,9 +1009,23 @@ export function StudioClient() {
       setLog("Paste a key under Connect, or keep using local models.");
       return;
     }
-    const skill = skillFor(model);
     const inputs = shotInputs({ prompt: text });
-    if ((skill.includes("upscale") || page === "upscale") && !uploadId && !lastDigest) {
+    const previousImage =
+      [...projectRuns]
+        .reverse()
+        .flatMap((run) => [...(run.outputs || [])].reverse())
+        .map((id) => imageAssetId(id))
+        .find((id) => id) || null;
+    const fallback = !model.capabilities?.includes("t2v") ? previousImage : null;
+    const mediaId = imageAssetId(uploadId) || imageAssetId(firstFrameId) || fallback;
+    if (animating) {
+      if (!mediaId) {
+        setLog("Add a still, then describe how it should move.");
+        return;
+      }
+      inputs.media = mediaId;
+      inputs.image = mediaId;
+    } else if ((skill.includes("upscale") || page === "upscale") && !uploadId && !lastDigest) {
       setLog("Generate or drop a still first, then upscale.");
       return;
     }
@@ -948,6 +1035,41 @@ export function StudioClient() {
     setLog("Generating… " + (skillRef || skill));
     try {
       const payload: Record<string, unknown> = { inputs, preference: pref };
+      if (animating) {
+        payload.workflow = {
+          id: "image-to-video",
+          version: "1.0.0",
+          preference: pref,
+          nodes: [
+            {
+              id: "generate",
+              type: "generate",
+              capability: "i2v",
+              model_id: model.id,
+              params: {
+                prompt: "{{inputs.prompt}}",
+                image: "{{inputs.image}}",
+                media: "{{inputs.media}}",
+                aspect_ratio: "{{inputs.aspect_ratio}}",
+                duration: "{{inputs.duration}}",
+                resolution: "{{inputs.resolution}}",
+                camera: "{{inputs.camera}}",
+                lens: "{{inputs.lens}}",
+                look: "{{inputs.look}}",
+                lighting: "{{inputs.lighting}}",
+                palette: "{{inputs.palette}}",
+                motion: "{{inputs.motion}}",
+                aperture: "{{inputs.aperture}}",
+                genre: "{{inputs.genre}}",
+                first_frame_url: "{{inputs.first_frame_url}}",
+                last_frame_url: "{{inputs.last_frame_url}}",
+                image_urls: "{{inputs.image_urls}}",
+              },
+            },
+          ],
+          edges: [],
+        };
+      }
       const cap = Number(maxCost);
       if (maxCost !== "" && !Number.isNaN(cap)) payload.max_cost = cap;
       const generateNodes = graph.nodes.filter((n) => n.type === "generate");
@@ -974,7 +1096,7 @@ export function StudioClient() {
           ),
           edges: graph.edges.filter((e) => keep.has(e.src) && keep.has(e.dst)),
         };
-      } else if ((graphEdited || opts?.graph) && generateNodes.length) {
+      } else if (!payload.workflow && (graphEdited || opts?.graph) && generateNodes.length) {
         payload.workflow = {
           id: "canvas",
           version: "1.0.0",
@@ -982,7 +1104,7 @@ export function StudioClient() {
           nodes: withShotParams(graph.nodes),
           edges: graph.edges,
         };
-      } else {
+      } else if (!payload.workflow) {
         payload.skill = skill;
         if (skillNodes.length <= 1) payload.model_id = model.id;
       }
@@ -1447,8 +1569,8 @@ export function StudioClient() {
       speak: {
         eyebrow: "Create",
         title: "Speak",
-        copy: "Talking photo from an image and a spoken line.",
-        primary: "Upload a still",
+        copy: "Speech from a line of text. Add a still only when the model animates a photo.",
+        primary: "Write a line",
         hint: "Price sits on Generate.",
       },
     };
@@ -1518,7 +1640,7 @@ export function StudioClient() {
                   className="run"
                   type="button"
                   onClick={() => {
-                    if (page === "upscale" || page === "speak") composeStillRef.current?.click();
+                    if (page === "upscale") composeStillRef.current?.click();
                     else document.getElementById("prompt")?.focus();
                   }}
                 >
@@ -2395,6 +2517,8 @@ export function StudioClient() {
               onClick={() => {
                 setStageReset(true);
                 setUploadId(null);
+                setFirstFrameId(null);
+                setLastFrameId(null);
                 setModelsOpen(false);
               }}
             >
@@ -2426,7 +2550,11 @@ export function StudioClient() {
           <div className="insp-h">
             <p className="eyebrow">Cinema stack</p>
             <h2>{titles[page]}</h2>
-            <p className="muted">Pick a template or describe a shot. Price sits on Generate.</p>
+            <p className="muted">
+              {page === "upscale"
+                ? "Increase resolution on the still. A prompt is not required."
+                : "Pick a template or describe a shot. Price sits on Generate."}
+            </p>
           </div>
           <div className="fields">
             <div>
@@ -2439,11 +2567,17 @@ export function StudioClient() {
                 ))}
               </select>
             </div>
-            <div>
-              <label htmlFor="prompt">Prompt</label>
+            <div className={page === "upscale" && !mode.showMagnific ? "hidden" : ""}>
+              <label htmlFor="prompt">{animateStill(selected) ? "Motion" : "Prompt"}</label>
               <textarea
                 id="prompt"
-                placeholder="north-light oak cube, 50mm cinema still."
+                placeholder={
+                  page === "upscale"
+                    ? "Optional. Leave blank to upscale the still as-is."
+                    : animateStill(selected)
+                      ? "How the still should move."
+                      : "north-light oak cube, 50mm cinema still."
+                }
                 value={prompt}
                 onChange={(ev) => setPrompt(ev.target.value)}
               />
@@ -2534,7 +2668,7 @@ export function StudioClient() {
                 }}
               />
             </div>
-            {videoish ? (
+            {videoish && opticalPage ? (
               <div>
                 <label>Camera motion</label>
                 <Pills
@@ -2564,7 +2698,7 @@ export function StudioClient() {
                 />
               </div>
             ) : null}
-            {page !== "upscale" && videoish && durs.length ? (
+            {page !== "upscale" && mode.showMotion && durs.length ? (
               <div>
                 <label>Duration</label>
                 <Pills
@@ -2592,19 +2726,19 @@ export function StudioClient() {
                 />
               </div>
             ) : null}
-            {page === "upscale" ? (
+            {mode.showScale ? (
               <div>
                 <label>Scale</label>
                 <Pills id="scale-pills" values={["2x", "4x", "8x", "16x"]} current={scale} onPick={setScale} />
               </div>
             ) : null}
-            {page === "speak" ? (
+            {mode.showScene ? (
               <div id="scene-field">
                 <label>Speak scene</label>
                 <Pills id="scene-pills" values={SCENES} current={scene} onPick={setScene} />
               </div>
             ) : null}
-            {page === "upscale" ? (
+            {mode.showMagnific ? (
               <div id="magnific-field">
                 <p className="muted" style={{ margin: 0 }}>
                   Magnific Creative. Precision ignores these.
@@ -2619,12 +2753,13 @@ export function StudioClient() {
                 <Pills id="engine-pills" values={MAG_ENGINES} current={engine} onPick={setEngine} />
               </div>
             ) : null}
-            <div>
-              <label>Still or clip</label>
+            {mode.showStill ? (
+            <div id="still-field">
+              <label htmlFor="insp-still">{mode.stillLabel}</label>
               <input
                 id="insp-still"
                 type="file"
-                accept="image/*,video/*,audio/*"
+                accept={mode.stillAccept}
                 onChange={async (ev) => {
                   const file = ev.target.files?.[0];
                   if (!file) return;
@@ -2638,8 +2773,10 @@ export function StudioClient() {
                   }
                 }}
               />
+              <span className="muted">{uploadId ? "vinci://assets/" + uploadId : mode.stillHint}</span>
             </div>
-            {page !== "upscale" && (wantsFrames(selected) || videoish) ? (
+            ) : null}
+            {mode.showFrames ? (
               <div id="frames-field">
                 <label>First / last frame</label>
                 <div className="insp-frames">
@@ -2676,7 +2813,7 @@ export function StudioClient() {
                 </div>
               </div>
             ) : null}
-            {["image", "video", "speak", "canvas"].includes(page) ? (
+            {mode.showCast ? (
               <div id="cast-field">
                 <label>Elements</label>
                 <p className="muted" style={{ margin: "0 0 6px" }}>
@@ -2756,8 +2893,27 @@ export function StudioClient() {
             ) : null}
             <div className="file-row">
               <button className="ghost" type="button" onClick={() => addNode("t2i")}>+ Image node</button>
-              <button className="ghost" type="button" onClick={() => addNode("t2v")}>+ Video node</button>
-              <button className="ghost" type="button" onClick={() => addNode("i2i")}>+ Upscale node</button>
+              <button
+                className="ghost"
+                type="button"
+                onClick={() => {
+                  const caps = selected?.capabilities || [];
+                  addNode(caps.includes("i2v") && !caps.includes("t2v") ? "i2v" : "t2v");
+                }}
+              >
+                + Video node
+              </button>
+              <button
+                className="ghost"
+                type="button"
+                onClick={() => {
+                  const caps = selected?.capabilities || [];
+                  const videoJob = caps.includes("t2v") || caps.includes("i2v");
+                  addNode(caps.includes("upscale") && !caps.includes("i2i") && !videoJob ? "upscale" : "i2i");
+                }}
+              >
+                + Upscale node
+              </button>
               <button className="ghost" id="add-shot" type="button" onClick={() => addShot()}>+ Shot</button>
             </div>
             <p className="log">{log}</p>

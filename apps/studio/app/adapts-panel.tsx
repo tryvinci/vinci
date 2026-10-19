@@ -306,87 +306,89 @@ export function AdaptsPanel(props: Props) {
               Estimate
             </button>
             <button className="run" id="adapt-run" type="button" disabled={props.busy} onClick={props.onRun}>
-              <span>Run Adapts</span>
+              <span>{props.busy ? "Running…" : "Run Adapts"}</span>
               <span id="adapt-est-btn">{props.adaptEstimateUsd == null ? "$—" : props.money(props.adaptEstimateUsd)}</span>
             </button>
           </div>
+          <p className="adapt-status" id="adapt-status">
+            {props.busy ? "Running…" : props.batch ? `Done. ${checks.length} export${checks.length === 1 ? "" : "s"}.` : ""}
+          </p>
+          {props.batch ? (
+            <section className="adapt-batch" id="adapt-batch">
+              <header>
+                <h3>Batch</h3>
+                {bundleHref ? (
+                  <a className="ghost adapt-bundle" id="adapt-bundle" href={bundleHref}>
+                    bundle.zip
+                  </a>
+                ) : null}
+              </header>
+              <ul>
+                {props.batch.items.map((item) => (
+                  <li key={item.index} className={"adapt-batch-row is-" + item.status}>
+                    <span>Item {item.index + 1}</span>
+                    <strong>{item.status}</strong>
+                    {item.error ? <em>{item.error}</em> : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+          {checks.length ? (
+            <section className="adapt-outputs" id="adapt-results">
+              <header>
+                <h3>Results</h3>
+                <button className="ghost" type="button" onClick={props.onToggleSafe}>
+                  {props.showSafe ? "Hide safe area" : "Show safe area"}
+                </button>
+              </header>
+              <div className="adapt-output-grid">
+                {checks.map((check) => {
+                  const preset = props.adaptPresetChoices.find((row) => row.id === check.preset_id);
+                  const margins = check.safe_area?.margins_px;
+                  const cap = check.byte_cap;
+                  return (
+                    <article key={check.asset_id + check.preset_id} className="adapt-output-card">
+                      <header>
+                        <strong>{preset?.label || check.preset_id}</strong>
+                        {cap ? (
+                          <span className={cap.pass ? "adapt-bytes ok" : "adapt-bytes bad"}>
+                            {formatBytes(cap.actual_bytes)} / {formatBytes(cap.max_bytes)}
+                          </span>
+                        ) : null}
+                      </header>
+                      <div className="adapt-pixel-frame">
+                        <div
+                          className="adapt-pixel-stage"
+                          style={{ width: check.width, height: check.height }}
+                        >
+                          <img
+                            alt=""
+                            width={check.width}
+                            height={check.height}
+                            src={`${props.apiBase}/assets/${check.asset_id}/file`}
+                          />
+                          {props.showSafe && margins ? (
+                            <span
+                              className="adapt-safe-overlay"
+                              style={{
+                                left: margins.left,
+                                top: margins.top,
+                                width: Math.max(0, check.width - margins.left - margins.right),
+                                height: Math.max(0, check.height - margins.top - margins.bottom),
+                              }}
+                            />
+                          ) : null}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
         </section>
       </div>
-
-      {props.batch ? (
-        <section className="adapt-batch" id="adapt-batch">
-          <header>
-            <h3>Batch</h3>
-            {bundleHref ? (
-              <a className="ghost adapt-bundle" id="adapt-bundle" href={bundleHref}>
-                bundle.zip
-              </a>
-            ) : null}
-          </header>
-          <ul>
-            {props.batch.items.map((item) => (
-              <li key={item.index} className={"adapt-batch-row is-" + item.status}>
-                <span>Item {item.index + 1}</span>
-                <strong>{item.status}</strong>
-                {item.error ? <em>{item.error}</em> : null}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {checks.length ? (
-        <section className="adapt-outputs">
-          <header>
-            <h3>Results</h3>
-            <button className="ghost" type="button" onClick={props.onToggleSafe}>
-              {props.showSafe ? "Hide safe area" : "Show safe area"}
-            </button>
-          </header>
-          <div className="adapt-output-grid">
-            {checks.map((check) => {
-              const preset = props.adaptPresetChoices.find((row) => row.id === check.preset_id);
-              const margins = check.safe_area?.margins_px;
-              const cap = check.byte_cap;
-              return (
-                <article key={check.asset_id + check.preset_id} className="adapt-output-card">
-                  <header>
-                    <strong>{preset?.label || check.preset_id}</strong>
-                    {cap ? (
-                      <span className={cap.pass ? "adapt-bytes ok" : "adapt-bytes bad"}>
-                        {formatBytes(cap.actual_bytes)} / {formatBytes(cap.max_bytes)}
-                      </span>
-                    ) : (
-                      <span className="adapt-bytes">{check.width}×{check.height}</span>
-                    )}
-                  </header>
-                  <div className="adapt-pixel-frame">
-                    <div className="adapt-pixel-stage" style={{ width: check.width, height: check.height }}>
-                      <img
-                        alt=""
-                        width={check.width}
-                        height={check.height}
-                        src={`${props.apiBase}/assets/${check.asset_id}/file`}
-                      />
-                      {props.showSafe && margins ? (
-                        <span
-                          className="adapt-safe-overlay"
-                          style={{
-                            left: margins.left,
-                            top: margins.top,
-                            width: Math.max(0, check.width - margins.left - margins.right),
-                            height: Math.max(0, check.height - margins.top - margins.bottom),
-                          }}
-                        />
-                      ) : null}
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
     </div>
   );
 }

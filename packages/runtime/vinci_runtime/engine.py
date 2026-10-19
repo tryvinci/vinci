@@ -330,10 +330,13 @@ class Engine:
         )
         self.providers = {
             "mock": MockProvider(cas, api_key=resolver.resolve("MOCK_API_KEY")),
-            "wavespeed": WavespeedProvider(api_key=resolver.resolve("WAVESPEED_API_KEY")),
-            "google": GoogleProvider(api_key=resolver.resolve("GEMINI_API_KEY")),
+            "wavespeed": WavespeedProvider(
+                api_key=resolver.resolve("WAVESPEED_API_KEY"),
+                cas=cas,
+            ),
+            "google": GoogleProvider(api_key=resolver.resolve("GEMINI_API_KEY"), cas=cas),
             "openai": openai_provider,
-            "fal": FalProvider(api_key=resolver.resolve("FAL_KEY")),
+            "fal": FalProvider(api_key=resolver.resolve("FAL_KEY"), cas=cas),
             "elevenlabs": ElevenLabsProvider(api_key=resolver.resolve("ELEVENLABS_API_KEY")),
             "cloudflare": CloudflareProvider(
                 api_key=resolver.resolve("CLOUDFLARE_API_TOKEN"),
@@ -343,8 +346,9 @@ class Engine:
             "higgsfield": HiggsfieldProvider(
                 api_key=resolver.resolve("HIGGSFIELD_API_KEY"),
                 api_secret=resolver.resolve("HIGGSFIELD_API_SECRET"),
+                cas=cas,
             ),
-            "magnific": MagnificProvider(api_key=resolver.resolve("MAGNIFIC_API_KEY")),
+            "magnific": MagnificProvider(api_key=resolver.resolve("MAGNIFIC_API_KEY"), cas=cas),
         }
         from vinci_mcp.adapter import HttpMcpTransport, McpProvider
 
@@ -1637,18 +1641,24 @@ class Engine:
         return job
 
     def _wait_status(self, provider: Any, ref: ProviderJobRef) -> JobStatus:
-        timeout = float(os.environ.get("VINCI_JOB_POLL_TIMEOUT", "120"))
+        timeout = float(os.environ.get("VINCI_JOB_POLL_TIMEOUT", "300"))
         interval = float(os.environ.get("VINCI_JOB_POLL_INTERVAL", "0.4"))
         deadline = time.monotonic() + timeout
-        status = self._coerce_status(provider.status(ref))
+        status: JobStatus | None = None
         pending = {JobState.QUEUED, JobState.RUNNING, JobState.CREATED}
-        while status.state in pending and time.monotonic() < deadline:
-            time.sleep(interval)
+        while time.monotonic() < deadline:
+            try:
+                status = self._coerce_status(provider.status(ref))
+            except urllib.error.HTTPError:
+                raise
+            except urllib.error.URLError:
+                time.sleep(min(interval, max(0.0, deadline - time.monotonic())))
+                continue
+            if status.state not in pending:
+                return status
             self._require_journal_writer_live()
-            status = self._coerce_status(provider.status(ref))
-        if status.state in pending:
-            raise TimeoutError("provider status timed out")
-        return status
+            time.sleep(min(interval, max(0.0, deadline - time.monotonic())))
+        raise TimeoutError("provider status timed out")
 
     def _coerce_status(self, raw: Any) -> JobStatus:
         if isinstance(raw, JobStatus):

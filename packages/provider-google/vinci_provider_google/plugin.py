@@ -71,6 +71,10 @@ class GoogleProvider(CatalogBackedProvider):
         docs_url="https://aistudio.google.com/apikey",
     )
 
+    def __init__(self, api_key: str | None = None, *, cas: Any | None = None) -> None:
+        super().__init__(api_key=api_key)
+        self._cas = cas
+
     def _headers(self) -> dict[str, str]:
         return {"Content-Type": "application/json", "x-goog-api-key": str(self._api_key)}
 
@@ -99,9 +103,23 @@ class GoogleProvider(CatalogBackedProvider):
     def _submit_veo(self, req: JobRequest, model: str) -> ProviderJobRef:
         url = f"{self._root()}/v1beta/models/{model}:predictLongRunning"
         instance: dict[str, Any] = {"prompt": self.prompt_text(req)}
-        image = req.inputs.get("image") or req.inputs.get("image_url")
-        if isinstance(image, str) and image.startswith(("http://", "https://")):
-            instance["image"] = {"uri": image}
+        image = req.inputs.get("image") or req.inputs.get("media") or req.inputs.get("image_url")
+        if isinstance(image, str) and image:
+            from vinci_provider_sdk.local_image import local_image_bytes
+
+            loaded = local_image_bytes(image, getattr(self, "_cas", None))
+            if loaded is not None:
+                import base64
+
+                blob, mime = loaded
+                instance["image"] = {
+                    "inlineData": {
+                        "mimeType": mime,
+                        "data": base64.b64encode(blob).decode("ascii"),
+                    }
+                }
+            elif image.startswith(("http://", "https://")):
+                instance["image"] = {"uri": image}
         parameters: dict[str, Any] = {
             "aspectRatio": str(req.inputs.get("aspect_ratio") or "16:9"),
         }

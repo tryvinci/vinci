@@ -72,6 +72,10 @@ class FalProvider(CatalogBackedProvider):
         docs_url="https://docs.fal.ai",
     )
 
+    def __init__(self, api_key: str | None = None, *, cas: Any | None = None) -> None:
+        super().__init__(api_key=api_key)
+        self._cas = cas
+
     def _headers(self) -> dict[str, str]:
         return {
             "Authorization": f"Key {self._api_key}",
@@ -96,16 +100,18 @@ class FalProvider(CatalogBackedProvider):
             payload["prompt"] = self.prompt_text(req)
         image = _image_input(req)
         if image:
+            from vinci_provider_sdk.local_image import as_data_uri
+
+            image = as_data_uri(image, self._cas)
             if endpoint.endswith("/edit"):
                 payload["image_urls"] = [image]
             elif "kling-video/v2.6" in endpoint and "image-to-video" in endpoint:
                 payload["start_image_url"] = image
             elif "upscale" in endpoint or "image-to-video" in endpoint:
                 payload["image_url"] = image
-                if req.inputs.get("tail_image_url") or req.inputs.get("last_frame_url"):
-                    payload["tail_image_url"] = str(
-                        req.inputs.get("tail_image_url") or req.inputs.get("last_frame_url")
-                    )
+                tail = req.inputs.get("tail_image_url") or req.inputs.get("last_frame_url")
+                if tail:
+                    payload["tail_image_url"] = as_data_uri(str(tail), self._cas)
         duration = req.inputs.get("duration")
         if duration and "video" in endpoint:
             payload["duration"] = str(duration)

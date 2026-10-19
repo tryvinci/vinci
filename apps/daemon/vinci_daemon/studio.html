@@ -409,6 +409,7 @@
     .adapt-studio, .adapt-flow { padding: 8px 4px 32px; max-width: 80rem; }
     .adapt-head, .adapt-flow-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
     .adapt-head-actions, .adapt-source-actions, .adapt-run-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .adapt-status { margin: 8px 0 0; min-height: 1.2em; color: var(--ink); }
     .adapt-layout { display: grid; grid-template-columns: minmax(260px, 1.1fr) minmax(280px, 1fr); gap: 20px; }
     @media (max-width: 900px) { .adapt-layout { grid-template-columns: 1fr; } }
     .adapt-source-frame { min-height: 180px; border: 1px solid var(--line); border-radius: 1rem; display: grid; place-items: center; overflow: hidden; background: var(--raised); }
@@ -550,11 +551,11 @@
           <label>Scale</label>
           <div class="pills" id="scale-pills"></div>
         </div>
-        <div>
-          <label for="still">Still or clip</label>
+        <div id="still-field">
+          <label id="still-label" for="still">Still or clip</label>
           <div class="file-row">
-            <input id="still" type="file" accept="image/*,video/*,audio/*" />
-            <span class="muted" id="still-name">Optional input for upscale, i2v, clips.</span>
+            <input id="still" type="file" accept="image/*" />
+            <span class="muted" id="still-name">Optional.</span>
           </div>
         </div>
         <div id="frames-field" class="hidden">
@@ -728,7 +729,7 @@
     function selectedModel() {
       const picked = models.find((m) => m.id === $("model").value);
       if (picked) return picked;
-      return models.find((m) => m.provider === "mock") || models[0];
+      return models.find((m) => usable(m)) || models[0];
     }
     function modelIdForNode(node, fallbackId) {
       const cap = node && node.capability;
@@ -738,13 +739,29 @@
         const row = models.find((m) => m.id === id);
         if (row && (!cap || (row.capabilities || []).includes(cap))) return id;
       }
-      const mock = models.find((m) => m.provider === "mock" && (!cap || (m.capabilities || []).includes(cap)));
-      return (mock && mock.id) || fallbackId;
+      const match = models.find((m) => !cap || (m.capabilities || []).includes(cap));
+      return (match && match.id) || fallbackId;
     }
     function usable(model) {
       if (!model) return false;
       if (model.provider === "mock") return true;
       return !!model.available && !!doctor.live_spend;
+    }
+    function hasCap(model, cap) {
+      return ((model && model.capabilities) || []).includes(cap);
+    }
+    function imageAssetId(id) {
+      if (!id) return null;
+      const row = assets.find((item) => item.id === id);
+      return row && String(row.mime || "").startsWith("image/") ? id : null;
+    }
+    function chosenStill() {
+      return imageAssetId(state.uploadId) || imageAssetId(state.firstFrameId) || null;
+    }
+    function animateStill(model) {
+      if (!hasCap(model, "i2v")) return false;
+      if (!hasCap(model, "t2v")) return true;
+      return Boolean(chosenStill());
     }
     function pillRow(el, values, current, onPick) {
       if (!el) return;
@@ -768,16 +785,80 @@
       const blob = ((model?.id || "") + " " + (model?.display_name || "")).toLowerCase();
       return blob.includes("flf") || blob.includes("first-last") || blob.includes("first_last");
     }
+    function panelMode(model) {
+      const caps = (model && model.capabilities) || [];
+      const blob = (((model && model.id) || "") + " " + ((model && model.display_name) || "")).toLowerCase();
+      const t2v = caps.includes("t2v");
+      const i2v = caps.includes("i2v");
+      const t2i = caps.includes("t2i");
+      const i2i = caps.includes("i2i");
+      const upscale = caps.includes("upscale");
+      const videoJob = t2v || i2v;
+      const tts = caps.includes("tts") && !videoJob && !t2i;
+      const lipsync = caps.includes("lipsync") && !videoJob;
+      const voice = (caps.includes("voice_clone") || caps.includes("sts")) && !videoJob && !t2i;
+      const clip = upscale && !i2i && !videoJob && blob.includes("video");
+      const imageUpscale = upscale && !videoJob && !clip;
+      let stillAccept = "image/*";
+      let stillLabel = "Still";
+      let stillHint = "Optional.";
+      if (clip) {
+        stillAccept = "video/*";
+        stillLabel = "Clip";
+        stillHint = "Required.";
+      } else if (lipsync) {
+        stillAccept = "video/*,audio/*";
+        stillLabel = "Video and audio";
+        stillHint = "Required.";
+      } else if (voice) {
+        stillAccept = "audio/*";
+        stillLabel = "Reference audio";
+        stillHint = "Required.";
+      } else if (imageUpscale || (i2v && !t2v) || (i2i && !t2i) || blob.includes("r2v")) {
+        stillHint = "Required.";
+      } else if (i2v && t2v) {
+        stillHint = "Optional. A still runs image-to-video.";
+      } else if (i2i && t2i) {
+        stillHint = "Optional. A still edits this image.";
+      }
+      return {
+        showStill: Boolean(i2v || (i2i && !videoJob) || clip || imageUpscale || lipsync || voice || blob.includes("r2v")),
+        showFrames: wantsFrames(model),
+        showOptical: Boolean((t2i || i2i || videoJob) && !tts && !lipsync && !voice),
+        showMotion: videoJob,
+        showScale: Boolean(upscale && i2i && !videoJob),
+        showMagnific: Boolean(model && model.provider === "magnific" && upscale && !blob.includes("precision") && !videoJob),
+        showScene: state.page === "speak" && Boolean((t2i || i2v) && !tts && !lipsync && !voice),
+        showCast: Boolean(t2i || i2i || i2v),
+        stillAccept,
+        stillLabel,
+        stillHint
+      };
+    }
     function fillShotControls() {
       const model = selectedModel();
       const caps = model?.capabilities || [];
+      const promptEl = $("prompt");
+      const promptField = promptEl && promptEl.parentElement;
+      const mode = panelMode(model);
+      const hidePrompt = state.page === "upscale" && !mode.showMagnific;
+      if (promptField) promptField.classList.toggle("hidden", hidePrompt);
+      if (promptEl) {
+        promptEl.disabled = false;
+        promptEl.placeholder = state.page === "upscale"
+          ? "Optional. Leave blank to upscale the still as-is."
+          : animateStill(model)
+            ? "How the still should move."
+            : "north-light oak cube, 50mm cinema still.";
+        const promptLabel = promptField && promptField.querySelector("label");
+        if (promptLabel) promptLabel.textContent = animateStill(model) ? "Motion" : "Prompt";
+      }
       const constraints = model?.constraints || {};
       const ratios = constraints.aspect_ratios || [];
       const resolutions = (constraints.resolutions || []).filter((r) => r && r !== "1x1");
       const durs = durationOptions(model);
-      const graphVideo = (state.graph.nodes || []).some((n) => n.capability === "t2v" || n.capability === "i2v");
-      const videoish = caps.includes("t2v") || caps.includes("i2v") || caps.includes("lipsync") || graphVideo || state.page === "video";
-      const upscalePage = state.page === "upscale";
+      const videoish = mode.showMotion;
+      const upscalePage = mode.showScale;
       const aspectField = $("aspect-field");
       const durationField = $("duration-field");
       const resolutionField = $("resolution-field");
@@ -821,15 +902,23 @@
           pillRow($("scale-pills"), scales, state.scale, (v) => { state.scale = v; });
         }
       }
-      if (framesField) framesField.classList.toggle("hidden", !(wantsFrames(model) || videoish));
-      const optical = ["image", "video", "speak", "canvas"].includes(state.page);
+      if (framesField) framesField.classList.toggle("hidden", !mode.showFrames);
+      const stillField = $("still-field");
+      if (stillField) stillField.classList.toggle("hidden", !mode.showStill);
+      const stillLabel = $("still-label");
+      if (stillLabel) stillLabel.textContent = mode.stillLabel;
+      const stillInput = $("still");
+      if (stillInput) stillInput.accept = mode.stillAccept;
+      if ($("still-name") && !state.uploadId) $("still-name").textContent = mode.stillHint;
+      const optical = mode.showOptical;
       ["camera-field", "lens-field", "look-field", "lighting-field", "palette-field", "aperture-field", "genre-field", "cast-field"].forEach((id) => {
         $(id)?.classList.toggle("hidden", !optical);
       });
       const motionField = $("motion-field");
       if (motionField) motionField.classList.toggle("hidden", !optical || !videoish);
-      $("scene-field")?.classList.toggle("hidden", state.page !== "speak");
-      $("magnific-field")?.classList.toggle("hidden", !upscalePage);
+      $("scene-field")?.classList.toggle("hidden", !mode.showScene);
+      $("magnific-field")?.classList.toggle("hidden", !mode.showMagnific);
+      $("cast-field")?.classList.toggle("hidden", !mode.showCast);
       if (optical) {
         if (!CAMERAS.includes(state.camera)) state.camera = "locked-off";
         if (!LENSES.includes(state.lens)) state.lens = "50mm";
@@ -957,23 +1046,26 @@
       if (state.scale && $("scale-field") && !$("scale-field").classList.contains("hidden")) {
         inputs.scale = state.scale;
       }
-      if (state.firstFrameId) {
+      const shown = (id) => { const el = $(id); return !!(el && !el.classList.contains("hidden")); };
+      if (state.firstFrameId && shown("frames-field")) {
         inputs.first_frame_url = state.firstFrameId;
         inputs.start_image_url = state.firstFrameId;
         inputs.image = state.firstFrameId;
       }
-      if (state.lastFrameId) {
+      if (state.lastFrameId && shown("frames-field")) {
         inputs.last_frame_url = state.lastFrameId;
         inputs.tail_image_url = state.lastFrameId;
       }
-      if (state.camera) inputs.camera = state.camera;
-      if (state.lens) inputs.lens = state.lens;
-      if (state.look) inputs.look = state.look;
-      if (state.aperture) inputs.aperture = state.aperture;
-      if (state.genre) inputs.genre = state.genre;
-      if (state.lighting) inputs.lighting = state.lighting;
-      if (state.palette) inputs.palette = state.palette;
-      if (state.scene && (state.page === "speak" || state.scene !== "general")) {
+      if (shown("camera-field")) {
+        if (state.camera) inputs.camera = state.camera;
+        if (state.lens) inputs.lens = state.lens;
+        if (state.look) inputs.look = state.look;
+        if (state.aperture) inputs.aperture = state.aperture;
+        if (state.genre) inputs.genre = state.genre;
+        if (state.lighting) inputs.lighting = state.lighting;
+        if (state.palette) inputs.palette = state.palette;
+      }
+      if (state.scene && shown("scene-field")) {
         inputs.scene = state.scene;
       }
       if (state.motion && $("motion-field") && !$("motion-field").classList.contains("hidden")) {
@@ -987,12 +1079,14 @@
         inputs.optimized_for = state.optimizedFor || "standard";
         inputs.engine = state.engine || "automatic";
       }
-      if (state.page !== "upscale") {
+      if (shown("cast-field") || shown("still-field")) {
         const urls = [];
         if (typeof inputs.image === "string" && inputs.image) urls.push(inputs.image);
-        if (state.uploadId && !urls.includes(state.uploadId)) urls.push(state.uploadId);
-        for (const row of (state.cast || [])) {
-          if (row.assetId && !urls.includes(row.assetId)) urls.push(row.assetId);
+        if (shown("still-field") && state.uploadId && !urls.includes(state.uploadId)) urls.push(state.uploadId);
+        if (shown("cast-field")) {
+          for (const row of (state.cast || [])) {
+            if (row.assetId && !urls.includes(row.assetId)) urls.push(row.assetId);
+          }
         }
         if (urls.length) {
           inputs.image_urls = urls.slice(0, 8);
@@ -1138,7 +1232,7 @@
         image: { eyebrow: "Create", title: "Image", copy: "Stills from a prompt. Write what you want, then generate.", primary: "Write a prompt", hint: "Price sits on Generate." },
         video: { eyebrow: "Create", title: "Video", copy: "Motion from a prompt. Describe the shot, then generate.", primary: "Write a prompt", hint: "Price sits on Generate." },
         upscale: { eyebrow: "Enhance", title: "Upscale <em class=\"serif\">still</em>", copy: "Increase resolution on a still you upload or generate.", primary: "Upload a still", hint: "PNG, JPEG, or WebP." },
-        speak: { eyebrow: "Create", title: "Speak", copy: "Talking photo from an image and a spoken line.", primary: "Upload a still", hint: "Price sits on Generate." },
+        speak: { eyebrow: "Create", title: "Speak", copy: "Speech from a line of text. Add a still only when the model animates a photo.", primary: "Write a line", hint: "Price sits on Generate." },
       };
       const offer = offers[kind] || offers.image;
       const digest = composeDigest();
@@ -1185,7 +1279,7 @@
       };
       const primary = $("offer-primary");
       if (primary) primary.onclick = () => {
-        if (kind === "upscale" || kind === "speak") offerFile && offerFile.click();
+        if (kind === "upscale") offerFile && offerFile.click();
         else $("prompt") && $("prompt").focus();
       };
       const secondaryBtn = $("offer-secondary");
@@ -1268,25 +1362,36 @@
       renderAdapts($("page"));
     }
     async function runAdapt() {
-      if (!state.adaptSourceId) { log("Upload a source creative first."); return; }
+      if (!state.adaptSourceId) { state.adaptStatus = "Upload a source creative first."; renderAdapts($("page")); return; }
       const presetIds = (state.adaptTargets || []).map((t) => t.preset_id).filter(Boolean);
-      if (!presetIds.length) { log("Pick at least one preset."); return; }
-      await estimateAdapt();
-      const created = await j("/adapts/batch", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          items: [{ asset_id: state.adaptSourceId, preset_ids: presetIds }],
-          fit_mode: state.adaptFit || "pad",
-          layout: state.adaptLayout || "fit_pad_crop",
-        }),
-      });
-      state.adaptBatch = await j("/adapts/batch/" + created.batch_id);
-      state.adaptOutputs = (state.adaptBatch.items || []).flatMap((item) => item.output_asset_ids || []);
-      saveState();
-      await loadMedia();
-      log("Adapts complete: " + state.adaptOutputs.length + " outputs.");
+      if (!presetIds.length) { state.adaptStatus = "Pick at least one preset."; renderAdapts($("page")); return; }
+      state.adaptBusy = true;
+      state.adaptStatus = "Running…";
       renderAdapts($("page"));
+      try {
+        await estimateAdapt();
+        const created = await j("/adapts/batch", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            items: [{ asset_id: state.adaptSourceId, preset_ids: presetIds }],
+            fit_mode: state.adaptFit || "pad",
+            layout: state.adaptLayout || "fit_pad_crop",
+          }),
+        });
+        state.adaptBatch = await j("/adapts/batch/" + created.batch_id);
+        state.adaptOutputs = (state.adaptBatch.items || []).flatMap((item) => item.output_asset_ids || []);
+        state.adaptStatus = "Adapts complete: " + state.adaptOutputs.length + " outputs.";
+        saveState();
+        await loadMedia();
+      } catch (err) {
+        state.adaptStatus = String(err.message || err);
+      } finally {
+        state.adaptBusy = false;
+        renderAdapts($("page"));
+        const landed = document.querySelector(".adapt-outputs") || $("adapt-status");
+        if (landed) landed.scrollIntoView({ block: "nearest" });
+      }
     }
     async function saveCustomPreset() {
       const kb = $("adapt-kb").value.trim();
@@ -1404,12 +1509,13 @@
             <p class="muted" id="adapt-safe">${state.adaptNote || "Safe-area overlay and export byte caps validate on run."}</p>
             <div class="adapt-run-row">
               <button class="ghost" id="adapt-estimate" type="button">Estimate</button>
-              <button class="run" id="adapt-run" type="button"><span>Run Adapts</span><span id="adapt-est-btn">${state.adaptEstimateUsd == null ? "$—" : money(state.adaptEstimateUsd)}</span></button>
+              <button class="run" id="adapt-run" type="button" ${state.adaptBusy ? "disabled" : ""}><span>${state.adaptBusy ? "Running…" : "Run Adapts"}</span><span id="adapt-est-btn">${state.adaptEstimateUsd == null ? "$—" : money(state.adaptEstimateUsd)}</span></button>
             </div>
+            <p class="adapt-status" id="adapt-status">${state.adaptStatus || ""}</p>
+            ${state.adaptBatch ? `<section class="adapt-batch" id="adapt-batch"><header><h3>Batch</h3>${bundle}</header><ul>${batchRows}</ul></section>` : ""}
+            ${results ? `<section class="adapt-outputs" id="adapt-results"><header><h3>Results</h3><button class="ghost" id="adapt-safe-toggle" type="button">${state.showSafe === false ? "Show safe area" : "Hide safe area"}</button></header><div>${results}</div></section>` : ""}
           </section>
         </div>
-        ${state.adaptBatch ? `<section class="adapt-batch" id="adapt-batch"><header><h3>Batch</h3>${bundle}</header><ul>${batchRows}</ul></section>` : ""}
-        ${results ? `<section class="adapt-outputs"><header><h3>Results</h3><button class="ghost" id="adapt-safe-toggle" type="button">${state.showSafe === false ? "Show safe area" : "Hide safe area"}</button></header><div>${results}</div></section>` : ""}
       </div>`;
       $("adapt-partner-scope").value = state.adaptPartnerOnly ? "axis_partner" : "all";
       $("adapt-partner-scope").onchange = () => {
@@ -1872,8 +1978,18 @@
       setPage("canvas");
     }
 
+    function freshId() {
+      if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      bytes[6] = (bytes[6] & 15) | 64;
+      bytes[8] = (bytes[8] & 63) | 128;
+      const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+      return hex.slice(0, 8) + "-" + hex.slice(8, 12) + "-" + hex.slice(12, 16) + "-" + hex.slice(16, 20) + "-" + hex.slice(20);
+    }
+
     function newProject(name, prompt) {
-      const project = { id: crypto.randomUUID(), name: name || "Untitled canvas", createdAt: new Date().toISOString(), runIds: [], coverId: null, graph: { nodes: [], edges: [] } };
+      const project = { id: freshId(), name: name || "Untitled canvas", createdAt: new Date().toISOString(), runIds: [], coverId: null, graph: { nodes: [], edges: [] } };
       state.projects.push(project);
       state.currentId = project.id;
       state.graph = project.graph;
@@ -2125,7 +2241,7 @@
         let useful = caps.includes("t2i") || caps.includes("t2v") || caps.includes("i2i") || caps.includes("i2v") || caps.includes("upscale") || caps.includes("tts");
         if (state.page === "image") useful = caps.includes("t2i");
         else if (state.page === "video") useful = caps.includes("t2v") || caps.includes("i2v");
-        else if (state.page === "upscale") useful = caps.includes("upscale") || caps.includes("i2i");
+        else if (state.page === "upscale") useful = caps.includes("upscale");
         else if (state.page === "speak") useful = caps.includes("tts") || caps.includes("lipsync") || caps.includes("i2v") || caps.includes("t2i");
         return useful && arr.findIndex((x) => x.id === m.id) === i;
       });
@@ -2135,8 +2251,6 @@
         return useful && arr.findIndex((x) => x.id === m.id) === i;
       });
       return (list.length ? list : fallback).slice().sort((a, b) => {
-        if (a.provider === "mock" && b.provider !== "mock") return -1;
-        if (b.provider === "mock" && a.provider !== "mock") return 1;
         return (a.provider || "").localeCompare(b.provider || "") || (a.display_name || "").localeCompare(b.display_name || "");
       });
     }
@@ -2146,10 +2260,7 @@
       if (!select) return;
       const prev = select.value;
       const rows = composeModels();
-      const preferred = rows.find((m) => m.provider === "mock" && (m.capabilities || []).includes("t2i"))
-        || rows.find((m) => m.provider === "mock")
-        || rows.find((m) => usable(m))
-        || rows[0];
+      const preferred = rows.find((m) => usable(m)) || rows[0];
       select.innerHTML = rows.map((m) => {
         const mark = usable(m) || m.provider === "mock" ? "" : " (needs key)";
         return `<option value="${m.id}">${m.display_name} · ${m.provider === "mock" ? "Local" : m.provider} · ${money(m.pricing?.amount)}${mark}</option>`;
@@ -2177,15 +2288,16 @@
     }
 
     function skillFor(model) {
-      if (state.page === "upscale") return "@tryvinci/image-upscale";
-      if (state.page === "speak") return "@tryvinci/still-to-talk";
-      if (state.page === "video") return "@tryvinci/video-generate";
-      if (state.page === "image") return "@tryvinci/image-generate";
-      if (state.skillRef && !state.graphEdited) return state.skillRef;
-      const caps = model.capabilities || [];
-      if (caps.includes("t2v") || caps.includes("i2v")) return "@tryvinci/video-generate";
-      if (caps.includes("upscale") && !(caps.includes("t2i") || caps.includes("i2i"))) return "@tryvinci/video-upscale";
-      if (caps.includes("i2i") && !caps.includes("t2i")) return "@tryvinci/image-upscale";
+      const caps = (model && model.capabilities) || [];
+      const videoJob = caps.includes("t2v") || caps.includes("i2v");
+      if (state.page === "canvas" && state.skillRef && !state.graphEdited) return state.skillRef;
+      if (caps.includes("voice_clone") && !videoJob && !caps.includes("t2i")) return "@tryvinci/voice-clone";
+      if (caps.includes("tts") && !videoJob && !caps.includes("t2i")) return "@tryvinci/tts";
+      if (caps.includes("lipsync") && !videoJob) return "@tryvinci/lipsync";
+      if (caps.includes("upscale") && !caps.includes("i2i") && !caps.includes("t2i") && !videoJob) return "@tryvinci/video-upscale";
+      if ((caps.includes("i2i") || caps.includes("upscale")) && !videoJob && !caps.includes("t2i")) return "@tryvinci/image-upscale";
+      if (caps.includes("i2i") && caps.includes("t2i") && chosenStill() && !videoJob) return "@tryvinci/image-upscale";
+      if (videoJob) return "@tryvinci/video-generate";
       return "@tryvinci/image-generate";
     }
 
@@ -2317,18 +2429,32 @@
       if (generateInFlight) return;
       log("Running…");
       const model = selectedModel();
-      const prompt = ($("prompt").value.trim() || ($("prompt").placeholder || "").trim());
+      const animating = animateStill(model) && (!$("still-field") || !$("still-field").classList.contains("hidden"));
+      const upscaling = state.page === "upscale";
+      const typed = ($("prompt") && $("prompt").value.trim()) || "";
+      const prompt = animating || upscaling
+        ? typed
+        : (typed || (($("prompt") && $("prompt").placeholder) || "").trim());
       if (!model) { log(models.length ? "No model." : "Studio is still loading models."); return; }
       if (model.provider !== "mock" && !usable(model)) { setPage("keys"); log("Paste a key under Connect, or keep using local models."); return; }
       if (!current()) newProject("Untitled canvas", prompt);
       const skill = skillFor(model);
       const inputs = shotInputs({ prompt });
-      const media = state.uploadId || ((projectRuns().at(-1) || {}).outputs || [])[0] || null;
-      if (skill === "@tryvinci/image-upscale" || skill === "@tryvinci/video-upscale") {
+      const outputs = ((projectRuns().at(-1) || {}).outputs || []).slice().reverse();
+      const lastImage = outputs.map(imageAssetId).find(Boolean) || null;
+      const raw = state.uploadId || state.firstFrameId || null;
+      const media = skill === "@tryvinci/video-upscale"
+        ? (raw || outputs[0] || null)
+        : (chosenStill() || (!hasCap(model, "t2v") ? lastImage : null));
+      if (animating) {
+        if (!media) { log("Add a still, then describe how it should move."); return; }
+        inputs.media = media;
+        inputs.image = media;
+      } else if (upscaling || skill === "@tryvinci/image-upscale" || skill === "@tryvinci/video-upscale") {
         if (!media) { log("Generate or drop a still first, then upscale."); return; }
         inputs.media = media;
-        inputs.prompt = prompt || "upscale";
-      } else if (!prompt && skill !== "@tryvinci/image-upscale") {
+        inputs.prompt = typed || "upscale";
+      } else if (!prompt) {
         log("Describe the shot first.");
         return;
       } else if (media && ((model.capabilities || []).includes("i2v") || skill.includes("talking") || skill.includes("cinema"))) {
@@ -2350,6 +2476,39 @@
       if (["image", "video", "upscale", "speak"].includes(state.page)) renderPage();
       try {
         const payload = { inputs, preference: ($("pref") && $("pref").value) || doctor.preference };
+        if (animating) {
+          payload.workflow = {
+            id: "image-to-video",
+            version: "1.0.0",
+            preference: payload.preference || "cheapest",
+            nodes: [{
+              id: "generate",
+              type: "generate",
+              capability: "i2v",
+              model_id: model.id,
+              params: {
+                prompt: "{{inputs.prompt}}",
+                image: "{{inputs.image}}",
+                media: "{{inputs.media}}",
+                aspect_ratio: "{{inputs.aspect_ratio}}",
+                duration: "{{inputs.duration}}",
+                resolution: "{{inputs.resolution}}",
+                camera: "{{inputs.camera}}",
+                lens: "{{inputs.lens}}",
+                look: "{{inputs.look}}",
+                lighting: "{{inputs.lighting}}",
+                palette: "{{inputs.palette}}",
+                motion: "{{inputs.motion}}",
+                aperture: "{{inputs.aperture}}",
+                genre: "{{inputs.genre}}",
+                first_frame_url: "{{inputs.first_frame_url}}",
+                last_frame_url: "{{inputs.last_frame_url}}",
+                image_urls: "{{inputs.image_urls}}",
+              },
+            }],
+            edges: [],
+          };
+        }
         const cap = Number(state.maxCost);
         if (state.maxCost !== "" && !Number.isNaN(cap)) payload.max_cost = cap;
         const generateNodes = (state.graph.nodes || []).filter((n) => n.type === "generate");
@@ -2376,7 +2535,7 @@
             )),
             edges: sub.edges,
           };
-        } else if ((state.graphEdited || (opts && opts.graph)) && generateNodes.length) {
+        } else if (!payload.workflow && (state.graphEdited || (opts && opts.graph)) && generateNodes.length) {
           payload.workflow = {
             id: "canvas",
             version: "1.0.0",
@@ -2384,7 +2543,7 @@
             nodes: withShotParams(state.graph.nodes.map(({ x, y, ...n }) => n)),
             edges: state.graph.edges,
           };
-        } else {
+        } else if (!payload.workflow) {
           payload.skill = skill;
           if (skillNodes.length <= 1) payload.model_id = model.id;
         }
@@ -2503,7 +2662,7 @@
         doctor = await j("/doctor");
         await j("/init", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ demo: true }) });
         const [modelBody, skillBody, tplBody, presetBody] = await Promise.all([j("/models"), j("/skills"), j("/templates"), j("/presets")]);
-        models = modelBody.models || [];
+        models = (modelBody.models || []).filter((m) => m.provider !== "mock");
         skills = skillBody.skills || [];
         templates = tplBody.templates || [];
         adaptPresets = presetBody.presets || [];
@@ -2619,6 +2778,8 @@
     $("compose-new").onclick = () => {
       state.composeReset = true;
       state.uploadId = null;
+      state.firstFrameId = null;
+      state.lastFrameId = null;
       state.modelsOpen = false;
       renderPage();
     };
@@ -2660,8 +2821,15 @@
       drag = null;
     });
     $("add-image").onclick = () => addNode("t2i");
-    $("add-video").onclick = () => addNode("t2v");
-    $("add-upscale").onclick = () => addNode("i2i");
+    $("add-video").onclick = () => {
+      const caps = (selectedModel() && selectedModel().capabilities) || [];
+      addNode(caps.includes("i2v") && !caps.includes("t2v") ? "i2v" : "t2v");
+    };
+    $("add-upscale").onclick = () => {
+      const caps = (selectedModel() && selectedModel().capabilities) || [];
+      const videoJob = caps.includes("t2v") || caps.includes("i2v");
+      addNode(caps.includes("upscale") && !caps.includes("i2i") && !videoJob ? "upscale" : "i2i");
+    };
     $("add-shot").onclick = () => addShot();
     ["creativity", "resemblance", "hdr", "fractality"].forEach((id) => {
       $(id)?.addEventListener("input", () => {
@@ -2686,6 +2854,8 @@
       const res = await fetch("/assets", { method: "POST", body: data });
       if (!res.ok) throw new Error(await res.text());
       const asset = await res.json();
+      if (!asset.mime || asset.mime === "application/octet-stream") asset.mime = file.type || asset.mime;
+      if (!assets.some((item) => item.id === asset.id)) assets.unshift(asset);
       if (nameEl) nameEl.textContent = file.name + " · " + (asset.uri || asset.id);
       return asset.id;
     }
