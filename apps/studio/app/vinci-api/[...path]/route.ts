@@ -8,7 +8,8 @@ const bridgeToken = () => process.env.VINCI_BRIDGE_TOKEN || "";
 
 async function proxy(req: NextRequest, pathSegments: string[]): Promise<NextResponse> {
   try {
-  const denied = denyProxy(req);
+  const rewrite = process.env.VINCI_STUDIO_USE_REWRITE === "1";
+  const denied = rewrite ? null : denyProxy(req);
   if (denied) {
     return NextResponse.json({ detail: denied.detail }, { status: denied.status });
   }
@@ -21,10 +22,10 @@ async function proxy(req: NextRequest, pathSegments: string[]): Promise<NextResp
     headers.set(key, value);
   });
   const token = bridgeToken();
-  if (!token) {
+  if (!token && !rewrite) {
     return NextResponse.json({ detail: "daemon bridge not configured" }, { status: 503 });
   }
-  headers.set("authorization", `Bearer ${token}`);
+  if (token) headers.set("authorization", `Bearer ${token}`);
   const init: RequestInit & { duplex?: "half" } = {
     method: req.method,
     headers,

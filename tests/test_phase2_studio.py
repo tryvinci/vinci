@@ -79,6 +79,9 @@ def test_studio_smoke(client: TestClient) -> None:
     assert "Skills" in body
     assert "Cost report" in body
     assert "Speak" in body
+    assert "Speech from a line of text. Add a still only when the model animates a photo." in body
+    assert 'm.provider !== "mock"' in body
+    assert 'state.page === "upscale" && !mode.showMagnific' in body
     skills = client.get("/skills").json()["skills"]
     ids = {s["id"] for s in skills}
     assert "@tryvinci/podcast-to-shorts" in ids

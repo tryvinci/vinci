@@ -409,6 +409,7 @@ input[type="range"] { accent-color: var(--teal); width: 100%; padding: 0; border
 }
 .adapt-source-frame img { width: 100%; max-height: 360px; object-fit: contain; display: block; }
 .adapt-source-actions, .adapt-run-row, .adapt-outputs header, .adapt-batch header { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.adapt-status { margin: 8px 0 0; min-height: 1.2em; }
 .adapt-target-list { display: grid; gap: 10px; }
 .adapt-target-card, .adapt-preset-form, .adapt-batch, .adapt-output-card {
   border: 1px solid var(--line); background: var(--raised); border-radius: 1rem; padding: 12px;

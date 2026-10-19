@@ -14,7 +14,7 @@
     "wavespeed:hailuo-2.3-t2v:2026-09": "minimax/hailuo-2.3/t2v-standard",
     "wavespeed:hailuo-2.3-fast-pro:2026-09": "minimax/hailuo-2.3/fast-pro",
     "wavespeed:infinitetalk:2026-08": "wavespeed-ai/infinitetalk",
-    "wavespeed:seedvr2:2026-08": "wavespeed-ai/seedvr2/upscale"
+    "wavespeed:seedvr2:2026-08": "wavespeed-ai/seedvr2/image"
   },
   "models": [
     {

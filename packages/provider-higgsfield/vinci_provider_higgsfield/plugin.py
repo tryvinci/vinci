@@ -39,11 +39,14 @@ class HiggsfieldProvider(CatalogBackedProvider):
         docs_url="https://docs.higgsfield.ai",
     )
 
-    def __init__(self, api_key: str | None = None, api_secret: str | None = None) -> None:
+    def __init__(
+        self, api_key: str | None = None, api_secret: str | None = None, *, cas: Any | None = None
+    ) -> None:
         super().__init__(api_key=api_key)
         if api_secret:
             self._extra_secrets[self.extra_secret_name] = api_secret
         self._api_secret = api_secret
+        self._cas = cas
 
     def submit(self, req: JobRequest) -> ProviderJobRef:
         if not self._api_secret:
@@ -66,6 +69,14 @@ class HiggsfieldProvider(CatalogBackedProvider):
         url = f"{self._base()}{endpoint}"
         payload: dict[str, Any] = {"prompt": self.prompt_text(req)}
         image = _image_input(req)
+        from vinci_provider_sdk.local_image import as_data_uri
+
+        def resolve(value: Any) -> Any:
+            if isinstance(value, str):
+                return as_data_uri(value, getattr(self, "_cas", None))
+            return value
+
+        image = resolve(image)
         caps = {cap.value for cap in spec.capabilities}
         duration = req.inputs.get("duration")
         if duration and ("t2v" in caps or "i2v" in caps):
@@ -84,12 +95,16 @@ class HiggsfieldProvider(CatalogBackedProvider):
                 payload["num_images"] = 4
             urls = req.inputs.get("image_urls")
             if isinstance(urls, list) and urls:
-                payload["image_urls"] = [str(item) for item in urls if item][:8]
+                payload["image_urls"] = [resolve(item) for item in urls if item][:8]
             elif image:
                 payload["image_urls"] = [image]
         elif "first-last-frame" in endpoint:
-            first = req.inputs.get("first_frame_url") or req.inputs.get("start_image_url") or image
-            last = req.inputs.get("last_frame_url") or req.inputs.get("tail_image_url") or image
+            first = resolve(
+                req.inputs.get("first_frame_url") or req.inputs.get("start_image_url") or image
+            )
+            last = resolve(
+                req.inputs.get("last_frame_url") or req.inputs.get("tail_image_url") or image
+            )
             payload["first_frame_url"] = str(first or "")
             payload["last_frame_url"] = str(last or "")
         elif image and ("i2i" in caps or "i2v" in caps or "edit_multi" in caps):

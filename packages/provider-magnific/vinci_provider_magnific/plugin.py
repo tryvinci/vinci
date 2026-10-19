@@ -48,6 +48,10 @@ class MagnificProvider(CatalogBackedProvider):
         docs_url="https://docs.magnific.com/introduction",
     )
 
+    def __init__(self, api_key: str | None = None, *, cas: Any | None = None) -> None:
+        super().__init__(api_key=api_key)
+        self._cas = cas
+
     def _headers(self) -> dict[str, str]:
         return {
             "x-magnific-api-key": str(self._api_key),
@@ -64,6 +68,10 @@ class MagnificProvider(CatalogBackedProvider):
         url = f"{self._base()}{endpoint}"
         prompt = self.prompt_text(req)
         image = _image_input(req)
+        if image:
+            from vinci_provider_sdk.local_image import as_data_uri
+
+            image = as_data_uri(image, getattr(self, "_cas", None))
         payload: dict[str, Any] = {"prompt": prompt}
         aspect = req.inputs.get("aspect_ratio")
         if aspect:

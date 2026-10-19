@@ -3,126 +3,126 @@
     {
       "license": "MIT",
       "name": "apps/daemon",
-      "sha256": "2cb5ecbe72ef2cc83c89a060b710b61dc0e2de57d53b6c60f67509832cac8e5c",
+      "sha256": "044514db4a1e37494c908d4c11f689baf9f3e3504c8b4c53215bd8a6d0eab335",
       "source": "monorepo",
       "version": "workspace"
     },
     {
       "license": "MIT",
       "name": "packages/core",
-      "sha256": "0d94eca1fef4532470445a1d841f4895fd2b620b6a62e328979bdf3d88469c52",
+      "sha256": "ee50136e394e524e07d9236494f6f59c1e686dcdcf858a6fb85e28e06c146ffc",
       "source": "monorepo",
       "version": "workspace"
     },
     {
       "license": "MIT",
       "name": "packages/index",
-      "sha256": "aa19dfcfa392b99f985b1319b7892cdb5701332aa1e98c8d287a829906b38b34",
+      "sha256": "546585a7af98a81b56c235506a37086f77d8aaa8e1a7ce6cd0d187db8e2ddd5a",
       "source": "monorepo",
       "version": "workspace"
     },
     {
       "license": "MIT",
       "name": "packages/mcp",
-      "sha256": "8159690b611e57191e11774c7fee3ec34c2558a508b40aabc44e0fd9075f8214",
+      "sha256": "8ad11cf7804c32bab0b5dfde20bcb49f28d0f46857096f1ee3f0c8cf8a11bebf",
       "source": "monorepo",
       "version": "workspace"
     },
     {
       "license": "MIT",
       "name": "packages/media",
-      "sha256": "0c9adcca8a24b0ebe263072cb492d02fe8c6d8b76115c32de4638ca09a8005c3",
+      "sha256": "8aea20d72b3d3989c69162554f813ab3a314a1717752ee5d1b5d26c7874e8fc7",
       "source": "monorepo",
       "version": "workspace"
     },
     {
       "license": "MIT",
       "name": "packages/protocol",
-      "sha256": "7b118521ad4d40f5830dff1014cc24a32ef726692ffac7aee4fdd098ce7e358b",
+      "sha256": "8f1d70085a540aeef409f13a9d7d9940439664dc599b0977475ec5fd49e93551",
       "source": "monorepo",
       "version": "workspace"
     },
     {
       "license": "MIT",
       "name": "packages/provider-cloudflare",
-      "sha256": "49ab6355b5f1e9702ef84e19caddcd006c33e4facb00baa231cd753c9acb2b37",
+      "sha256": "eedf3776632225f7f06dce34238dbef6ce5df81179e975a10c9a35e1f19abd79",
       "source": "monorepo",
       "version": "workspace"
     },
     {
       "license": "MIT",
       "name": "packages/provider-elevenlabs",
-      "sha256": "6bc33585e02d5f25f30e2f0060c5fdc0a3c90978c4cb03140f64b7ead485933d",
+      "sha256": "548386c54ee26c3be93aa48b76834541d2ea82da45cff220f6f95dd8269f2036",
       "source": "monorepo",
       "version": "workspace"
     },
     {
       "license": "MIT",
       "name": "packages/provider-fal",
-      "sha256": "710f8b2554fb18ab019d59812432b131f476a600c76bc7f81ce08dca060b5538",
+      "sha256": "acaacff2daa12d8b9bd2665910502e7efe1ac5c2343d88d20cdc14c36eb13c9e",
       "source": "monorepo",
       "version": "workspace"
     },
     {
       "license": "MIT",
       "name": "packages/provider-google",
-      "sha256": "f67909f84d100f934b07ded687e304cfa6c101d8517f4868595784e2bbd4a098",
+      "sha256": "9a6a9230f643b34e54a34612a407250937df7eb182364d82aa9267f86542ce00",
       "source": "monorepo",
       "version": "workspace"
     },
     {
       "license": "MIT",
       "name": "packages/provider-higgsfield",
-      "sha256": "3bd9eacbb63d668de3eae5ab1a91ee3d34f85b77ab936bfcbb99d8e24977d20d",
+      "sha256": "2175b75264a2d7c8b4ff45351bf30c03556bc912f6b01f29d8fa7138bdae5e19",
       "source": "monorepo",
       "version": "workspace"
     },
     {
       "license": "MIT",
       "name": "packages/provider-magnific",
-      "sha256": "b8be7b7a4a04d33c41fc60106fa50753b0a7b122d166053e8b3cccc1e1e57095",
+      "sha256": "cdb409d4935e04c122b829c654f5483feed3ca64375b0361a04232e5192ccb48",
       "source": "monorepo",
       "version": "workspace"
     },
     {
       "license": "MIT",
       "name": "packages/provider-openai",
-      "sha256": "dbaa040f8697d2757399af937a83ee63d46928c23c422322989f49b9fc8be912",
+      "sha256": "04f42ed28048490c5e3bef4803fc3c1fcebc9fb2edb1e02a779a39f250320644",
       "source": "monorepo",
       "version": "workspace"
     },
     {
       "license": "MIT",
       "name": "packages/provider-sdk",
-      "sha256": "a7a3beb167eb5505241d0e43d19d8de9748fdd2d9df9353eed043577b3d2b406",
+      "sha256": "23aabf9666740881bea441f7a7b05babfc5c60dc696a5e16a543089d6dadfa7b",
       "source": "monorepo",
       "version": "workspace"
     },
     {
       "license": "MIT",
       "name": "packages/provider-wavespeed",
-      "sha256": "bbcb29db707cf4db55bb2d0ae96d04009103a232dc924310fa2edd401ae47048",
+      "sha256": "4b8d3deca180e93a218707f61edd02c2117844e02e8d17bba632aa8a83ad79eb",
       "source": "monorepo",
       "version": "workspace"
     },
     {
       "license": "MIT",
       "name": "packages/runtime",
-      "sha256": "1ae80ec3234d7a4e2bcf5e2db9416e814eb5454cba40fb1b63ea0b1ccec6a57f",
+      "sha256": "9d448aa2cb1befdbb05c3921ec41da0a2b99b757dbec9b00647cd55a91a9a656",
       "source": "monorepo",
       "version": "workspace"
     },
     {
       "license": "MIT",
       "name": "packages/skills",
-      "sha256": "85970397184c54460f77d5bdafa37d1cb0642545d4bfdf2e362df6487118cc47",
+      "sha256": "09f45f397ee5009f7da9fa5c2c37e71d329305e8f349c9c68091d96e3bf83e46",
       "source": "monorepo",
       "version": "workspace"
     },
     {
       "license": "MIT",
       "name": "packages/storage",
-      "sha256": "6a2ddaf8e2ae0011ddd3a36b14bb9cdf67129791fda9826ad929b5ef4f3edb07",
+      "sha256": "f58cfb451a5727c42dae19f6a809cdf257920ccb212460aa475c8306c1237e7a",
       "source": "monorepo",
       "version": "workspace"
     }

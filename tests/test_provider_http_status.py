@@ -114,7 +114,34 @@ def test_wavespeed_catalog_matches_public_api_paths() -> None:
         endpoints["wavespeed:seedance-2.0-i2v:2026-09"]
         == "bytedance/seedance-2.0/image-to-video"
     )
+    assert endpoints["wavespeed:seedvr2:2026-08"] == "wavespeed-ai/seedvr2/image"
     assert not any("sora" in model.id.lower() for model in catalog.models)
+
+
+def test_wavespeed_seedvr2_image_uses_target_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
+    png = b"\x89PNG\r\n\x1a\n" + b"still"
+    provider = WavespeedProvider(api_key="ws-key", cas=_mem_cas({"still": png}))
+    seen: dict[str, Any] = {}
+
+    def fake_urlopen(request: Any, timeout: int = 30) -> _FakeResp:
+        if request.full_url.endswith("/media/upload/binary"):
+            return _FakeResp({"data": {"download_url": "https://cdn.example/still.png"}})
+        seen["url"] = request.full_url
+        seen["body"] = json.loads(request.data.decode("utf-8"))
+        return _FakeResp({"data": {"id": "up-1"}})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    req = JobRequest(
+        capability=Capability.UPSCALE,
+        model_id="wavespeed:seedvr2:2026-08",
+        inputs={"media": "still", "resolution": "4k"},
+    )
+    provider.estimate(req)
+    ref = provider.submit(req)
+    assert ref.ref == "up-1"
+    assert seen["url"].endswith("/wavespeed-ai/seedvr2/image")
+    assert seen["body"] == {"image": "https://cdn.example/still.png", "target_resolution": "4k"}
 
 
 def test_higgsfield_status_live_completed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -418,6 +445,216 @@ def test_wavespeed_i2v_submit_sends_duration_and_image(monkeypatch: pytest.Monke
     assert seen["body"]["size"] == "1920*1080"
 
 
+def test_wavespeed_i2v_uploads_local_asset_before_submit(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
+    png = b"\x89PNG\r\n\x1a\n" + b"still"
+    cas = type(
+        "Cas",
+        (),
+        {
+            "exists": lambda self, digest: digest == "abc",
+            "get": lambda self, digest: png,
+        },
+    )()
+    provider = WavespeedProvider(api_key="ws-key", cas=cas)
+    seen: list[dict[str, Any]] = []
+
+    def fake_urlopen(request: Any, timeout: int = 30) -> _FakeResp:
+        seen.append({"url": request.full_url, "content_type": request.get_header("Content-type")})
+        if request.full_url.endswith("/media/upload/binary"):
+            return _FakeResp({"data": {"download_url": "https://cdn.example/uploaded.png"}})
+        seen[-1]["body"] = json.loads(request.data.decode("utf-8"))
+        return _FakeResp({"data": {"id": "pred-local"}})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    req = JobRequest(
+        capability=Capability.I2V,
+        model_id="wavespeed:kling-3-turbo-pro-i2v:2026-09",
+        inputs={"prompt": "gentle breeze", "image": "abc"},
+    )
+    provider.estimate(req)
+    ref = provider.submit(req)
+    assert ref.ref == "pred-local"
+    assert seen[0]["url"].endswith("/media/upload/binary")
+    assert seen[0]["content_type"] == "image/png"
+    assert seen[1]["body"]["image"] == "https://cdn.example/uploaded.png"
+    assert seen[1]["body"]["prompt"] == "gentle breeze"
+
+
+def _mem_cas(blobs: dict[str, bytes]) -> Any:
+    return type(
+        "Cas",
+        (),
+        {
+            "exists": lambda self, digest: digest in blobs,
+            "get": lambda self, digest: blobs[digest],
+        },
+    )()
+
+
+def test_local_media_preserves_gif_and_video_and_rejects_unknown() -> None:
+    from vinci_provider_sdk.local_image import as_data_uri, local_image_bytes
+
+    png = b"\x89PNG\r\n\x1a\n" + b"png"
+    gif = b"GIF89a" + b"gif"
+    mp4 = b"\x00\x00\x00\x18ftypmp42" + b"mp4"
+    heic = b"\x00\x00\x00\x18ftypheic" + b"\x00\x00\x00\x00mif1"
+    avif = b"\x00\x00\x00\x14ftypavif" + b"\x00\x00\x00\x00"
+    unknown = b"\x00\x00\x00\x0cftypXXXX"
+    cas = _mem_cas(
+        {
+            "png": png,
+            "gif": gif,
+            "mp4": mp4,
+            "heic": heic,
+            "avif": avif,
+            "bad": b"not-media",
+            "ftyp": unknown,
+        }
+    )
+    assert as_data_uri("gif", cas).startswith("data:image/gif;base64,")
+    assert as_data_uri("mp4", cas).startswith("data:video/mp4;base64,")
+    assert as_data_uri("heic", cas).startswith("data:image/heic;base64,")
+    assert as_data_uri("avif", cas).startswith("data:image/avif;base64,")
+    assert local_image_bytes("heic", cas)[1] == "image/heic"
+    assert local_image_bytes("png", cas)[1] == "image/png"
+    with pytest.raises(ValueError, match="unsupported local image"):
+        local_image_bytes("mp4", cas)
+    with pytest.raises(ValueError, match="unsupported local media"):
+        as_data_uri("bad", cas)
+    with pytest.raises(ValueError, match="unsupported local media"):
+        as_data_uri("ftyp", cas)
+
+
+def test_wavespeed_upload_keeps_gif_mime(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
+    gif = b"GIF89a" + b"still"
+    provider = WavespeedProvider(api_key="ws-key", cas=_mem_cas({"gif": gif}))
+    seen: list[dict[str, Any]] = []
+
+    def fake_urlopen(request: Any, timeout: int = 30) -> _FakeResp:
+        seen.append({"url": request.full_url, "content_type": request.get_header("Content-type")})
+        if request.full_url.endswith("/media/upload/binary"):
+            return _FakeResp({"data": {"download_url": "https://cdn.example/uploaded.gif"}})
+        return _FakeResp({"data": {"id": "pred-gif"}})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    req = JobRequest(
+        capability=Capability.I2V,
+        model_id="wavespeed:kling-3-turbo-pro-i2v:2026-09",
+        inputs={"prompt": "loop", "image": "gif"},
+    )
+    provider.estimate(req)
+    provider.submit(req)
+    assert seen[0]["content_type"] == "image/gif"
+
+
+def test_wavespeed_rejects_unknown_local_media() -> None:
+    provider = WavespeedProvider(api_key="ws-key", cas=_mem_cas({"bad": b"not-media"}))
+    with pytest.raises(ValueError, match="unsupported local media"):
+        provider._provider_image("bad")
+
+
+def test_higgsfield_flf_resolves_local_frames(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
+    first = b"\x89PNG\r\n\x1a\n" + b"first"
+    last = b"GIF89a" + b"last"
+    provider = HiggsfieldProvider(
+        api_key="key-id",
+        api_secret="key-secret",
+        cas=_mem_cas({"first": first, "last": last}),
+    )
+    seen: dict[str, Any] = {}
+
+    def fake_urlopen(request: Any, timeout: int = 30) -> _FakeResp:
+        seen["body"] = json.loads(request.data.decode("utf-8"))
+        return _FakeResp({"request_id": "req-local-flf"})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    req = JobRequest(
+        capability=Capability.I2V,
+        model_id="higgsfield:veo-3.1-fast-flf:2026-09",
+        inputs={"prompt": "cut", "first_frame_url": "first", "last_frame_url": "last"},
+    )
+    provider.estimate(req)
+    provider.submit(req)
+    assert seen["body"]["first_frame_url"].startswith("data:image/png;base64,")
+    assert seen["body"]["last_frame_url"].startswith("data:image/gif;base64,")
+
+
+def test_higgsfield_popcorn_resolves_local_image_urls(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
+    png = b"\x89PNG\r\n\x1a\n" + b"ref"
+    provider = HiggsfieldProvider(
+        api_key="key-id", api_secret="key-secret", cas=_mem_cas({"ref": png})
+    )
+    seen: dict[str, Any] = {}
+
+    def fake_urlopen(request: Any, timeout: int = 30) -> _FakeResp:
+        seen["body"] = json.loads(request.data.decode("utf-8"))
+        return _FakeResp({"request_id": "req-local-pop"})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    req = JobRequest(
+        capability=Capability.T2I,
+        model_id="higgsfield:popcorn-auto:2026-09",
+        inputs={"prompt": "beats", "image_urls": ["ref"]},
+    )
+    provider.estimate(req)
+    provider.submit(req)
+    assert seen["body"]["image_urls"][0].startswith("data:image/png;base64,")
+
+
+def test_fal_i2v_resolves_local_tail_frame(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
+    start = b"\x89PNG\r\n\x1a\n" + b"start"
+    tail = b"\xff\xd8\xff" + b"tail"
+    provider = FalProvider(api_key="fal-key", cas=_mem_cas({"start": start, "tail": tail}))
+    seen: dict[str, Any] = {}
+
+    def fake_urlopen(request: Any, timeout: int = 30) -> _FakeResp:
+        if request.get_method() == "POST":
+            seen["body"] = json.loads(request.data.decode("utf-8"))
+            return _FakeResp({"request_id": "req-tail"})
+        return _FakeResp({"status": "IN_QUEUE"})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    req = JobRequest(
+        capability=Capability.I2V,
+        model_id="fal:seedance-1.5-pro-i2v:2026-09",
+        inputs={"prompt": "walk", "image": "start", "tail_image_url": "tail"},
+    )
+    provider.estimate(req)
+    provider.submit(req)
+    assert seen["body"]["image_url"].startswith("data:image/png;base64,")
+    assert seen["body"]["tail_image_url"].startswith("data:image/jpeg;base64,")
+
+
+def test_google_veo_local_image_uses_inline_data(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
+    png = b"\x89PNG\r\n\x1a\n" + b"still"
+    provider = GoogleProvider(api_key="gem-key", cas=_mem_cas({"still": png}))
+    seen: dict[str, Any] = {}
+
+    def fake_urlopen(request: Any, timeout: int = 30) -> _FakeResp:
+        seen["body"] = json.loads(request.data.decode("utf-8"))
+        return _FakeResp({"name": "models/veo-3.1-lite/operations/op-local"})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    req = JobRequest(
+        capability=Capability.I2V,
+        model_id="google:veo-3.1-lite:2026-08",
+        inputs={"prompt": "turn", "image": "still"},
+    )
+    provider.estimate(req)
+    ref = provider.submit(req)
+    image = seen["body"]["instances"][0]["image"]
+    assert ref.ref.endswith("/operations/op-local")
+    assert image["inlineData"]["mimeType"] == "image/png"
+    assert image["inlineData"]["data"] == base64.b64encode(png).decode("ascii")
+    assert "bytesBase64Encoded" not in image
+
+
 def test_higgsfield_t2v_submit_sends_aspect_and_duration(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
     provider = HiggsfieldProvider(api_key="key-id", api_secret="key-secret")
@@ -663,6 +900,54 @@ def test_elevenlabs_submit_caches_mpeg_data_uri(monkeypatch: pytest.MonkeyPatch)
     assert status.outputs[0].startswith("data:audio/mpeg;base64,")
     blob = base64.b64decode(status.outputs[0].split(",", 1)[1])
     assert blob.startswith(b"ID3")
+
+
+def test_wait_status_retries_dns_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import urllib.error
+
+    monkeypatch.setenv("VINCI_JOB_POLL_INTERVAL", "0")
+    monkeypatch.setenv("VINCI_JOB_POLL_TIMEOUT", "2")
+    engine = Engine(tmp_path)
+    calls = {"n": 0}
+
+    class _Provider:
+        def status(self, ref: ProviderJobRef) -> JobStatus:
+            del ref
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise urllib.error.URLError(OSError(5, "No address associated with hostname"))
+            return JobStatus(state=JobState.COMPLETED, outputs=["ok"])
+
+    status = engine._wait_status(_Provider(), ProviderJobRef(provider="wavespeed", ref="x"))
+    assert status.state == JobState.COMPLETED
+    assert calls["n"] == 2
+
+
+def test_wait_status_propagates_http_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import io
+    import urllib.error
+    from email.message import Message
+
+    monkeypatch.setenv("VINCI_JOB_POLL_INTERVAL", "0")
+    monkeypatch.setenv("VINCI_JOB_POLL_TIMEOUT", "2")
+    engine = Engine(tmp_path)
+    calls = {"n": 0}
+
+    class _Provider:
+        def status(self, ref: ProviderJobRef) -> JobStatus:
+            del ref
+            calls["n"] += 1
+            raise urllib.error.HTTPError(
+                "https://api.example/status",
+                401,
+                "Unauthorized",
+                Message(),
+                io.BytesIO(b"no"),
+            )
+
+    with pytest.raises(urllib.error.HTTPError):
+        engine._wait_status(_Provider(), ProviderJobRef(provider="wavespeed", ref="x"))
+    assert calls["n"] == 1
 
 
 def test_ingest_data_uri_without_live_spend(

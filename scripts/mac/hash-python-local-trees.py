@@ -24,7 +24,7 @@ def tree_sha256(root: Path) -> str:
         if not path.is_file():
             continue
         rel = path.relative_to(root).as_posix()
-        if any(part in SKIP for part in path.parts):
+        if any(part in SKIP or part.endswith(".egg-info") for part in path.parts):
             continue
         digest.update(rel.encode())
         digest.update(path.read_bytes())
