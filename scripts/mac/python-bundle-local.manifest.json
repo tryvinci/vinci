@@ -1,7 +1,7 @@
 {
   "packages": {
     "apps/daemon": {
-      "sha256": "6bb996c42f09a70cfb8aefd555f5827617ababacffbca9cf850e97a1d5f07855"
+      "sha256": "b37390c4b270c6fb46d7d847b0958ec55e46c4e1871504d568ce079d3849d4f5"
     },
     "packages/core": {
       "sha256": "ee50136e394e524e07d9236494f6f59c1e686dcdcf858a6fb85e28e06c146ffc"
@@ -13,7 +13,7 @@
       "sha256": "8ad11cf7804c32bab0b5dfde20bcb49f28d0f46857096f1ee3f0c8cf8a11bebf"
     },
     "packages/media": {
-      "sha256": "8aea20d72b3d3989c69162554f813ab3a314a1717752ee5d1b5d26c7874e8fc7"
+      "sha256": "a014c6774b18e5e0a03243a2379ca06b8831452cf6dc873139bb5cd7bdb657cc"
     },
     "packages/protocol": {
       "sha256": "8f1d70085a540aeef409f13a9d7d9940439664dc599b0977475ec5fd49e93551"
@@ -46,7 +46,7 @@
       "sha256": "4b8d3deca180e93a218707f61edd02c2117844e02e8d17bba632aa8a83ad79eb"
     },
     "packages/runtime": {
-      "sha256": "9d448aa2cb1befdbb05c3921ec41da0a2b99b757dbec9b00647cd55a91a9a656"
+      "sha256": "7851379032d1d7ef0161f59d1cdbeea849b6662941b0c251c1acc99d45627cef"
     },
     "packages/skills": {
       "sha256": "09f45f397ee5009f7da9fa5c2c37e71d329305e8f349c9c68091d96e3bf83e46"

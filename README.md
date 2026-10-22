@@ -1,93 +1,61 @@
 # Vinci
 
-**Vinci** is the MIT-licensed open-source generative media runtime. Bring your own API keys, use any supported model/provider, and run portable generation/editing/clipping workflows with transparent cost and routing.
+**The open-source generative media runtime.** Bring your own keys, pick any provider, and run real image, video, upscale, and clipping workflows - with a receipt for every dollar.
 
-The proprietary hosted product is **Vinci Platform**. It is a separate codebase and will consume versioned packages from this repo.
+![Vinci Studio tour](docs/assets/studio-tour.gif)
 
-> Cost honesty: Magnific sometimes undercuts direct API prices. Vinci markets **transparency, choice, and a $0 monthly floor**, never "always cheaper."
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](docs/quickstart.md)
+[![Self-host on Cloudflare](https://img.shields.io/badge/self--host-Cloudflare-orange.svg)](docs/SELF_HOST_CLOUDFLARE.md)
 
-## Status
+Runs at **$0** in mock mode. Live spend stays off until you set `VINCI_ALLOW_LIVE_SPEND=1`.
 
-Phases 0–3 are in this tree: protocol v0, local CAS+SQLite, daemon `:4310`, cost engine, Wavespeed/Google/fal/ElevenLabs/Cloudflare/Higgsfield/Magnific HTTP plugins from public API docs (live HTTP off unless `VINCI_ALLOW_LIVE_SPEND=1`; MCP is a *custom* provider type, not the only one), first-party skills including image/video generate, still-to-4K, cinema-still canvas graphs, clips DAG, `vinci find`, Studio with Explore/templates/canvas, Higgsfield-style model cards, and BYOK key paste, Mac and Android WebView shells, skill registry, timeline, and authored `vinci.*` MCP.
+## Why Vinci
 
-This repository is **private** until a human opens it. Do not publish to npm or PyPI yet. npm `vinci` and PyPI `vinci` are taken — packages use `@tryvinci/*` and `vinci-core` / `vinci-runtime` / `vinci-media` / `vinci-harness` / `vinci-provider-*`. See `NAMESPACE.md`.
+- **Any provider, one runtime.** Wavespeed, Google, fal, ElevenLabs, Cloudflare, Higgsfield, Magnific - swap models without rewriting your workflow. MCP is one provider type, not the only one.
+- **Cost transparency.** Every run writes a receipt (`vinci://receipts/{id}`) and the daemon prices a job before you fire it. No black-box billing.
+- **Workflows, not demos.** Canvas shot graphs with camera/lens/look controls, clips DAG, batch generation from a Google Sheet, installable skills, `vinci find` across your assets.
+- **$0 monthly floor.** The full Studio UI, mock providers, and the demo path run with no keys and no spend. Pay only when you point it at a live model.
 
-Canonical OSS git tree: [`tryvinci/vinci`](https://github.com/tryvinci/vinci) (split-sync from `apps/vinci-oss/` in `tryvinci/vinci-monorepo`). For monorepo contributors: `cd apps/vinci-oss` and run the same `make` gates. Link plan: `docs/VINCI_OSS_PUBLIC_LINK.md` at repo root.
+> Cost honesty: some providers (e.g. Magnific) sometimes undercut direct API prices. Vinci promises transparency, choice, and a $0 floor - not "always cheapest."
 
-**Self-host on your Cloudflare account** (single-tenant, not Vinci Platform): see [`docs/SELF_HOST_CLOUDFLARE.md`](docs/SELF_HOST_CLOUDFLARE.md). Local `make install` / `./scripts/vinci studio` behavior is unchanged.
+## Quickstart (5 minutes, $0)
 
-## Quick start (demo, no provider spend)
-
-`@tryvinci/cli` is unpublished. From a clone, use the repo wrapper (it builds the CLI on first use and prefers `.venv` so the daemon spawn works). Needs Python 3.12+, Node 20+, and `ffmpeg`/`ffprobe` on PATH (`make test` runs media fixtures):
+Needs Python 3.12+, Node 20+, and `ffmpeg`/`ffprobe` on PATH.
 
 ```bash
-sudo apt-get install -y ffmpeg   # or brew install ffmpeg
 python3 -m venv .venv && source .venv/bin/activate
 make install
-make test && make conformance && make lint
 ./scripts/vinci init --demo
 ./scripts/vinci studio
 ```
 
-Studio opens at `http://127.0.0.1:4310/studio`. Paste any supported provider key under **Keys**, or stay on mock at $0. Live HTTP stays off until `VINCI_ALLOW_LIVE_SPEND=1`.
+Studio opens at `http://127.0.0.1:4310/studio`. Stay on mock providers at $0, or paste a provider key under **Connect**. Higgsfield and Magnific also work over OAuth - no API key needed.
 
-Higgsfield and Magnific can also sign in with OAuth (no API key) via their MCP servers: `./scripts/vinci providers connect higgsfield` or `magnific`. That spends the account's plan credits, which are not USD and are not picked by cheapest routing unless you pin the model. Higgsfield's MCP tool names are provisional until a live `tools/list` capture.
+`make demo` runs an end-to-end image + video generation at $0 and prints the receipts.
 
-`make demo` runs `python -m vinci_harness demo` (in-process skill + $0 receipt) then `./scripts/vinci init --demo` and `./scripts/vinci run @tryvinci/image-generate`. The CLI starts `vinci-daemon` on `:4310` if it is not already up.
+**Self-host on your own Cloudflare account:** see [`docs/SELF_HOST_CLOUDFLARE.md`](docs/SELF_HOST_CLOUDFLARE.md).
 
-Mac / Android: `apps/mac` and `apps/android` wrap the same `/studio` page. For a phone on the LAN: `./scripts/vinci studio --lan`.
+## What you get
 
-`make clone-smoke` git-archives this subtree (`HEAD:apps/vinci-oss/` in the monorepo) into a temp dir and proves the stranger path at `$0`: harness demo, `vinci init --demo`, CLI image+video (64×64 PNG + playable MP4), receipt fetch, `POST /runs`, MCP `vinci.image_generate` + `vinci.video_generate`, fixture `podcast-to-shorts` (5 jobs), two `vinci skills add` installs, HTML Studio `/studio`, `vinci find pricing`, and loopback `vinci providers add mcp` → `mcp:png:v1` + `mcp:mp4:v1`. Monorepo CI is `.github/workflows/vinci-oss.yml`. Do not set `VINCI_ALLOW_LIVE_SPEND`.
+- **Studio** - web UI (also wrapped by Mac and Android shells): Explore templates, Cinema Stack canvas, timeline, library, cost report.
+- **CLI + daemon** - `./scripts/vinci run @tryvinci/image-generate`, `POST /runs`, [`vinci sheets sync`](docs/google-sheets.md) for batch work.
+- **MCP** - authored `vinci.*` tools (`vinci.image_generate`, `vinci.video_generate`, ...) for agent clients.
+- **Providers** - HTTP plugins built from public API docs; add your own over MCP.
+- **Skills** - portable, installable workflow graphs (`vinci skills add`).
 
-`make github` creates or pushes the private `tryvinci/vinci` repo (`scripts/create-github-repo.sh`, refuses `--public`). Org create is a human gate if this token 403s.
+Architecture: Python owns protocol/core/runtime/providers/media/MCP; TypeScript owns the CLI and Studio. Details in [`docs/VINCI_OSS_RUNTIME.md`](docs/VINCI_OSS_RUNTIME.md) and [`docs/quickstart.md`](docs/quickstart.md).
 
-Equivalent by hand:
+## Package names
 
-```bash
-python3 -m vinci_daemon --host 127.0.0.1 --port 4310
-./scripts/vinci init --demo
-./scripts/vinci run @tryvinci/image-generate --input '{"prompt":"a red cube"}'
-```
+npm `vinci` and PyPI `vinci` are taken, so packages publish as `@tryvinci/*` and `vinci-core` / `vinci-runtime` / `vinci-media` / `vinci-harness` / `vinci-provider-*`. Nothing is published to npm or PyPI yet - run from a clone. See `NAMESPACE.md`.
 
-Do not `npx @tryvinci/cli` from the npm registry until a human publishes.
+The proprietary hosted product, **Vinci Platform**, is a separate codebase and consumes versioned packages from this repo. Canonical source tree: `apps/vinci-oss/` in `tryvinci/vinci-monorepo`, split-synced here.
 
-## Layout
+## Contributing
 
-See `docs/VINCI_OSS_RUNTIME.md`. Python owns protocol/core/runtime/providers/media/index/MCP. TypeScript owns CLI and Studio talking to the daemon over HTTP.
-
-Config lives in `~/.vinci/` (config.toml, `keys/` at mode 0600, sqlite, cas/). Asset URIs: `vinci://assets/{id}`, `vinci://jobs/{id}`, `vinci://receipts/{id}`.
-
-## Google Sheets (Axis export driver)
-
-`vinci sheets sync` reads a Google Sheet and runs the same batch path as `POST /integrations/gsheet/sync`.
-
-1. Install the optional extra (the daemon boots without it):
-
-```bash
-pip install 'vinci-daemon[gsheet]'
-```
-
-2. Create a service account, download its JSON key, and point `GOOGLE_APPLICATION_CREDENTIALS` at that file.
-
-3. Share the spreadsheet with the service-account email (Viewer is not enough — the sync writes status back).
-
-4. Put this header row on the tab you want to sync:
-
-```text
-source_url	presets	status	output_links	error
-```
-
-`presets` is a comma-separated list of preset ids (`amazon_828x300,inuxu_728x90`). Leave `status` blank for rows that should run. Rows already `processing` or `done` are skipped. The sync writes `processing` before enqueue, then `done` plus asset file URLs, or `error` plus the message.
-
-5. Save the sheet id and tab name:
-
-```bash
-curl -X PATCH http://127.0.0.1:4310/settings \
-  -H 'content-type: application/json' \
-  -d '{"gsheet_id":"SPREADSHEET_ID","gsheet_tab":"Sheet1"}'
-./scripts/vinci sheets sync
-```
+MIT-licensed, contributions welcome. See `CONTRIBUTING.md`. `vinci-clips` is AGPL and **must not** enter this tree - see `legal/AGPL_CLEAN_ROOM.md`.
 
 ## License
 
-MIT. `vinci-clips` is AGPL and **must not** enter this tree. See `legal/AGPL_CLEAN_ROOM.md`.
+MIT

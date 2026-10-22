@@ -1,4 +1,4 @@
-"""Axis Max Life pipeline: custom presets, batch exports, bundle, MCP, sheet sync."""
+"""Partner export pipeline: custom presets, batch exports, bundle, MCP, sheet sync."""
 
 from __future__ import annotations
 
@@ -93,7 +93,7 @@ def client(
     return TestClient(create_app(engine, sheets_client=sheet)), engine, sheet
 
 
-def test_axis_pipeline_e2e(
+def test_partner_pipeline_e2e(
     client: tuple[TestClient, Engine, _MemorySheet], tmp_path: Path
 ) -> None:
     http, engine, sheet = client
@@ -104,8 +104,8 @@ def test_axis_pipeline_e2e(
     created = http.post(
         "/presets",
         json={
-            "label": "Axis lobby 320",
-            "platform": "axis",
+            "label": "Lobby 320",
+            "platform": "lobby",
             "width": 320,
             "height": 100,
             "byte_cap": {"max_bytes": 80 * 1024, "op": "lte"},
@@ -121,8 +121,8 @@ def test_axis_pipeline_e2e(
         "/presets",
         json={
             "id": custom_id,
-            "label": "Axis lobby 320",
-            "platform": "axis",
+            "label": "Lobby 320",
+            "platform": "lobby",
             "width": 320,
             "height": 100,
             "byte_cap": {"max_bytes": 80 * 1024, "op": "lte"},
@@ -156,7 +156,7 @@ def test_axis_pipeline_e2e(
 
     preset_ids = [*PRESETS, custom_id]
     asset_ids: list[str] = []
-    for seed in ("axis-a", "axis-b", "axis-c"):
+    for seed in ("row-a", "row-b", "row-c"):
         upload = http.post("/assets", files={"file": (f"{seed}.png", png_scene(seed), "image/png")})
         assert upload.status_code == 200, upload.text
         asset_ids.append(upload.json()["id"])

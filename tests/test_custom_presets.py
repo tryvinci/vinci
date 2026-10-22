@@ -12,7 +12,7 @@ def test_custom_preset_round_trip(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     created = create_custom_preset(
         {
             "label": "Lobby strip",
-            "partner": "axis",
+            "partner": "lobby",
             "width": 640,
             "height": 100,
             "byte_cap": {"max_bytes": 20 * 1024, "op": "lt"},
@@ -29,7 +29,7 @@ def test_custom_preset_round_trip(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
 
 def test_duplicate_id_rejected(tmp_path: Path) -> None:
-    body = {"id": "axis_strip", "label": "Strip", "platform": "axis", "width": 100, "height": 40}
+    body = {"id": "lobby_strip", "label": "Strip", "platform": "lobby", "width": 100, "height": 40}
     create_custom_preset(body, tmp_path)
     with pytest.raises(ValueError, match="already exists"):
         create_custom_preset(body, tmp_path)

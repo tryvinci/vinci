@@ -2068,7 +2068,7 @@ class Engine:
                 stored.append(record)
                 continue
             spec = WorkflowSpec(
-                id=f"axis-adapt-{item['index']}",
+                id=f"adapt-{item['index']}",
                 version="1",
                 nodes=[
                     WorkflowNode(

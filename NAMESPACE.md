@@ -1,7 +1,7 @@
 # Namespace notes
 
 Verified 2026-08-27. **Do not publish to npm or PyPI until a human says so.**
-**Do not announce publicly.** This repository stays private until a human opens it.
+**Do not announce publicly.** The repository is public.
 
 ## npm
 
@@ -34,7 +34,7 @@ The pip meta-install will be `pip install vinci-harness` when a human publishes.
 | Name | Status |
 | --- | --- |
 | `tryvinci` org | Ours |
-| `tryvinci/vinci` | Target. **Not created yet** — org repo create 403s for Cursor App / PAT. Local `main` is ready to `git push` once a human creates the empty private repo. Keep **private** until a human opens it. |
+| `tryvinci/vinci` | Public OSS repository. |
 
 ## Trademark
 

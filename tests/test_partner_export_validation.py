@@ -14,12 +14,21 @@ from vinci_runtime.engine import Engine
 
 
 def test_partner_presets_in_catalog() -> None:
-    ids = {row["id"] for row in presets_document()}
+    rows = presets_document()
+    ids = {row["id"] for row in rows}
     assert "amazon_828x300" in ids
     assert "inuxu_1200x720" in ids
     assert "jio_1200x627" in ids
     assert "bpn_360x180" in ids
     assert "meta_google_1200x1200" in ids
+    labels = " ".join(str(row["label"]) for row in rows)
+    for name in ("Axis", "Amazon", "Inuxu", "Jio", "Paytm", "Indixital", "CHASE", "CRED", "AMLI"):
+        assert name not in labels
+    advisories = " ".join(
+        line for row in rows for line in row.get("human_review_advisories") or []
+    )
+    assert "Axis" not in advisories
+    assert "AMLI" not in advisories
 
 
 def test_inclusive_byte_cap_boundary() -> None:
