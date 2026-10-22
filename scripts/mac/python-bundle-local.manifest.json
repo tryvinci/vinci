@@ -1,7 +1,7 @@
 {
   "packages": {
     "apps/daemon": {
-      "sha256": "044514db4a1e37494c908d4c11f689baf9f3e3504c8b4c53215bd8a6d0eab335"
+      "sha256": "6bb996c42f09a70cfb8aefd555f5827617ababacffbca9cf850e97a1d5f07855"
     },
     "packages/core": {
       "sha256": "ee50136e394e524e07d9236494f6f59c1e686dcdcf858a6fb85e28e06c146ffc"

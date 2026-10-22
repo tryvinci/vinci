@@ -36,6 +36,9 @@ def test_studio_smoke(client: TestClient) -> None:
     assert "nodeDigest" in body
     assert "generateInFlight" in body
     assert "compose-gallery" in body
+    assert "gallery-query" in body
+    assert "rankModels" in body
+    assert "No models match" in body
     assert "composeModels" in body
     assert "model-card" in body
     assert "aspect-pills" in body
