@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, ty
 import { AdaptFlowCanvas } from "./adapt-flow-canvas";
 import { AdaptsPanel, EMPTY_PRESET_DRAFT, type PresetDraft } from "./adapts-panel";
 import type { AdaptPresetRow, AdaptTarget, BatchStatus } from "./adapt-ui-shared";
+import { ModelCombo, type ComboModel } from "./model-combo";
+import { availabilityRank, modelAvailability, rankModels } from "../lib/model-search";
 
 const API = "/vinci-api";
 const CAMERAS = ["locked-off", "handheld", "tracking", "crane", "aerial"];
@@ -251,6 +253,15 @@ function money(n: number | undefined): string {
   if (v === 0) return "$0";
   if (v < 0.01) return "$" + v.toFixed(5).replace(/0+$/, "").replace(/\.$/, "");
   return "$" + v.toFixed(3);
+}
+
+function comboModels(rows: Model[], withPrice: boolean, suffix: (row: Model) => string): ComboModel[] {
+  return rows.map((row) => {
+    const who = withPrice && row.provider === "mock" ? "Local" : row.provider;
+    const price = withPrice ? ` · ${money(row.pricing?.amount)}` : "";
+    const label = `${row.display_name} · ${who}${price}${suffix(row)}`;
+    return { id: row.id, display_name: row.display_name, provider: row.provider, label };
+  });
 }
 
 function MagRange({
@@ -501,6 +512,7 @@ export function StudioClient() {
   const [onboardStep, setOnboardStep] = useState(0);
   const [stageReset, setStageReset] = useState(false);
   const [modelsOpen, setModelsOpen] = useState(false);
+  const [galleryQuery, setGalleryQuery] = useState("");
   const [pref, setPref] = useState("cheapest");
   const [maxCost, setMaxCost] = useState("");
   const [monthlyCap, setMonthlyCap] = useState("");
@@ -551,10 +563,32 @@ export function StudioClient() {
         const stillB = (b.capabilities || []).includes("i2i") ? 0 : 1;
         if (stillA !== stillB) return stillA - stillB;
       }
+      const live = !!doctor.live_spend;
+      const rank =
+        availabilityRank(modelAvailability(a, doctor.providers?.[a.provider], live)) -
+        availabilityRank(modelAvailability(b, doctor.providers?.[b.provider], live));
+      if (rank) return rank;
       return (a.display_name || "").localeCompare(b.display_name || "");
     });
     return rows;
-  }, [models, page]);
+  }, [models, page, doctor]);
+
+  function statusSuffix(row: Model): string {
+    const status = modelAvailability(row, doctor.providers?.[row.provider], !!doctor.live_spend);
+    if (status === "spend_off") return " · spend off";
+    if (status === "not_enabled") return " · not enabled";
+    if (status === "needs_key") return " · needs key";
+    return "";
+  }
+
+  const galleryModels = useMemo(
+    () => rankModels(composeModels, galleryQuery),
+    [composeModels, galleryQuery],
+  );
+
+  useEffect(() => {
+    setGalleryQuery("");
+  }, [page]);
 
   useEffect(() => {
     if (!composeModels.length) return;
@@ -1005,8 +1039,17 @@ export function StudioClient() {
       return;
     }
     if (model.provider !== "mock" && !usable(model)) {
+      const status = modelAvailability(model, doctor.providers?.[model.provider], !!doctor.live_spend);
+      if (status === "spend_off") {
+        setLog("This model has a key, but live spend is off. Set VINCI_ALLOW_LIVE_SPEND=1 to call it.");
+        return;
+      }
       setPage("keys");
-      setLog("Paste a key under Connect, or keep using local models.");
+      setLog(
+        status === "not_enabled"
+          ? "This provider has a saved key but is not enabled. Open Connect."
+          : "This model needs a key. Open Connect.",
+      );
       return;
     }
     const inputs = shotInputs({ prompt: text });
@@ -1675,8 +1718,21 @@ export function StudioClient() {
           onToggle={(ev) => setModelsOpen((ev.target as HTMLDetailsElement).open)}
         >
           <summary>Choose a model</summary>
+          <input
+            id="gallery-query"
+            className="gallery-query"
+            type="text"
+            placeholder="Search models"
+            aria-label="Search models"
+            autoComplete="off"
+            value={galleryQuery}
+            onChange={(ev) => setGalleryQuery(ev.target.value)}
+          />
+          {galleryQuery.trim() && galleryModels.length === 0 ? (
+            <p className="muted gallery-empty">No models match</p>
+          ) : null}
           <div className="compose-gallery">
-            {composeModels.map((m) => (
+            {galleryModels.map((m) => (
               <button
                 key={m.id}
                 className={"model-card" + (m.id === selected?.id ? " on" : "")}
@@ -1686,7 +1742,8 @@ export function StudioClient() {
                 <span className="who">{m.provider === "magnific" ? "Magnific / Freepik" : m.provider === "mock" ? "Local" : m.provider}</span>
                 <strong>{m.display_name}</strong>
                 <span className="meta">
-                  {usable(m) || m.provider === "mock" ? money(m.pricing?.amount) : "needs key"} · {(m.capabilities || []).slice(0, 3).join(" · ")}
+                  {money(m.pricing?.amount)}
+                  {statusSuffix(m)} · {(m.capabilities || []).slice(0, 3).join(" · ")}
                 </span>
               </button>
             ))}
@@ -1914,27 +1971,23 @@ export function StudioClient() {
                 <p className="muted">No output on this node yet.</p>
               )}
               <label htmlFor="node-model">Node model</label>
-              <select
-                id="node-model"
+              <ModelCombo
+                inputId="node-model"
+                blankLabel="inherit skill default"
                 value={selectedRow.model_id || ""}
-                onChange={(ev) => {
-                  const value = ev.target.value;
+                models={comboModels(
+                  models.filter((m) => (m.capabilities || []).includes(selectedRow.capability || "t2i")),
+                  false,
+                  statusSuffix,
+                )}
+                onChange={(value) => {
                   setGraph((g) => ({
                     ...g,
                     nodes: g.nodes.map((n) => (n.id === selectedRow.id ? { ...n, model_id: value || undefined } : n)),
                   }));
                   setGraphEdited(true);
                 }}
-              >
-                <option value="">inherit skill default</option>
-                {models
-                  .filter((m) => (m.capabilities || []).includes(selectedRow.capability || "t2i"))
-                  .map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.display_name} · {m.provider}
-                    </option>
-                  ))}
-              </select>
+              />
               <div className="file-row" style={{ marginTop: 10 }}>
                 <button className="run" type="button" onClick={() => void generate({ nodeId: selectedRow.id })}>
                   Generate this node
@@ -2539,7 +2592,9 @@ export function StudioClient() {
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <span className="muted">≈ {money(spent)}</span>
             <button className="chip" type="button" onClick={() => setPage("keys")}>
-              {live.length ? live.map(([id, row]) => row.display_name || id).join(" · ") : "Local"}
+              {live.length
+                ? live.map(([id, row]) => row.display_name || id).join(" · ") + (doctor.live_spend ? "" : " · spend off")
+                : "Local"}
             </button>
           </div>
         </div>
@@ -2559,13 +2614,12 @@ export function StudioClient() {
           <div className="fields">
             <div>
               <label htmlFor="model">Model</label>
-              <select id="model" value={selected?.id || ""} onChange={(ev) => setModelId(ev.target.value)}>
-                {composeModels.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.display_name} · {m.provider === "mock" ? "Local" : m.provider} · {money(m.pricing?.amount)}
-                  </option>
-                ))}
-              </select>
+              <ModelCombo
+                inputId="model"
+                value={selected?.id || ""}
+                models={comboModels(composeModels, true, statusSuffix)}
+                onChange={setModelId}
+              />
             </div>
             <div className={page === "upscale" && !mode.showMagnific ? "hidden" : ""}>
               <label htmlFor="prompt">{animateStill(selected) ? "Motion" : "Prompt"}</label>

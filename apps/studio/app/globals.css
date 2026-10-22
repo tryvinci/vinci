@@ -190,6 +190,20 @@ a { color: var(--ink); }
 .model-card .who { font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--mute); }
 .model-card strong { display: block; margin: 6px 0 4px; font-weight: 500; font-size: 13px; }
 .model-card .meta { font-size: 11px; color: var(--mute); }
+.gallery-query { margin: 0 0 8px; }
+.gallery-empty { margin: 0 0 8px; }
+.model-combo-list {
+  position: fixed; z-index: 50; max-height: 240px; overflow: auto;
+  margin: 0; padding: 4px; list-style: none;
+  background: var(--raised); border: 1px solid var(--line);
+  border-radius: 0.85rem; box-shadow: var(--card-shadow);
+}
+.model-combo-list[hidden] { display: none; }
+.model-combo-list li { padding: 10px 12px; border-radius: 0.65rem; cursor: pointer; }
+.model-combo-list li.on,
+.model-combo-list li:hover { background: hsl(177 40% 94%); }
+.model-combo-empty { color: var(--mute); cursor: default; }
+.model-combo-list li.model-combo-empty:hover { background: transparent; }
 select, input, textarea {
   width: 100%; border: 1px solid var(--line); background: var(--raised); border-radius: 0.85rem; padding: 8px 10px;
 }
