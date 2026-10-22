@@ -1,4 +1,4 @@
-"""Google Sheet sync for Axis export batches.
+"""Google Sheet sync for export batches.
 
 Reads a tab with columns source_url, presets, status, output_links, error.
 Rows already processing or done are skipped. A row is claimed by writing

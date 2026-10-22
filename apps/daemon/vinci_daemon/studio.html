@@ -1448,16 +1448,20 @@
       });
       return groups;
     }
+    function groupTitle(group, index) {
+      const clientPartner = group.rows.some((row) => row.source === "partner" || row.spec_kind === "client_partner");
+      return clientPartner ? "Presets " + (index + 1) : group.partner;
+    }
     function renderAdapts(page) {
       if (state.adaptView === "flow") { renderAdaptFlow(page); return; }
       const groups = presetGroups();
-      const groupHtml = groups.map((g) => `<div class="adapt-group"><h4>${g.partner}</h4><ul>${g.rows.map((p) => {
+      const groupHtml = groups.map((g, index) => `<div class="adapt-group"><h4>${groupTitle(g, index)}</h4><ul>${g.rows.map((p) => {
         const source = sourceOf(p);
         const cap = byteCapText(p);
         const del = source === "custom" ? `<button class="ghost" type="button" data-del="${p.id}">Delete</button>` : "";
         return `<li><span>${p.label} <em class="adapt-source">${source}</em> ${cap ? `<em>${cap}</em>` : ""}</span>${del}</li>`;
       }).join("")}</ul></div>`).join("");
-      const options = groups.map((g) => `<optgroup label="${g.partner}">${g.rows.map((p) => `<option value="${p.id}">${p.label}${byteCapText(p) ? " · " + byteCapText(p) : ""} · ${sourceOf(p)}</option>`).join("")}</optgroup>`).join("");
+      const options = groups.map((g, index) => `<optgroup label="${groupTitle(g, index)}">${g.rows.map((p) => `<option value="${p.id}">${p.label}${byteCapText(p) ? " · " + byteCapText(p) : ""} · ${sourceOf(p)}</option>`).join("")}</optgroup>`).join("");
       const targets = (state.adaptTargets || []).map((t, i) => {
         const preset = adaptPresetChoices().find((p) => p.id === t.preset_id);
         const meta = preset ? `${preset.width}×${preset.height} ${byteCapText(preset)} · ${sourceOf(preset)}` : "";
@@ -1469,7 +1473,9 @@
         const bytes = cap ? `<span class="adapt-bytes ${cap.pass ? "ok" : "bad"}">${formatBytes(cap.actual_bytes)} / ${formatBytes(cap.max_bytes)}</span>` : "";
         const m = check.safe_area && check.safe_area.margins_px;
         const overlay = state.showSafe !== false && m ? `<span class="adapt-safe-overlay" style="left:${m.left}px;top:${m.top}px;width:${Math.max(0, check.width - m.left - m.right)}px;height:${Math.max(0, check.height - m.top - m.bottom)}px"></span>` : "";
-        return `<article class="adapt-output-card"><header><strong>${check.preset_id}</strong>${bytes}</header><div class="adapt-pixel-frame"><div class="adapt-pixel-stage" style="width:${check.width}px;height:${check.height}px"><img alt="" width="${check.width}" height="${check.height}" src="/assets/${check.asset_id}/file" />${overlay}</div></div></article>`;
+        const named = adaptPresetChoices().find((row) => row.id === check.preset_id);
+        const title = named && named.label ? named.label : check.preset_id;
+        return `<article class="adapt-output-card"><header><strong>${title}</strong>${bytes}</header><div class="adapt-pixel-frame"><div class="adapt-pixel-stage" style="width:${check.width}px;height:${check.height}px"><img alt="" width="${check.width}" height="${check.height}" src="/assets/${check.asset_id}/file" />${overlay}</div></div></article>`;
       }).join("");
       const batchRows = state.adaptBatch ? (state.adaptBatch.items || []).map((item) => `<li class="adapt-batch-row is-${item.status}"><span>Item ${item.index + 1}</span><strong>${item.status}</strong>${item.error ? `<em>${item.error}</em>` : ""}</li>`).join("") : "";
       const bundle = state.adaptBatch ? `<a class="ghost" id="adapt-bundle" href="/adapts/batch/${state.adaptBatch.batch_id}/bundle.zip">bundle.zip</a>` : "";
@@ -1478,7 +1484,7 @@
           <div>
             <p class="eyebrow">Image › Adapts</p>
             <h2>Exports</h2>
-            <p class="muted">Axis Max Life partner presets (client-partner spec). Fit/pad/crop is local ffmpeg. Human-review advisories are guidance only.</p>
+            <p class="muted">Partner presets. Fit/pad/crop is local ffmpeg. Human-review advisories are guidance only.</p>
           </div>
           <div class="adapt-head-actions">
             <span class="adapt-pill">ffmpeg · $0</span>
@@ -1512,7 +1518,7 @@
             <h3>Settings</h3>
             <label>Presets</label>
             <select id="adapt-partner-scope">
-              <option value="axis_partner">Axis partner</option>
+              <option value="partner">Partner presets</option>
               <option value="all">All</option>
             </select>
             <label>Layout</label>
@@ -1540,9 +1546,9 @@
           </section>
         </div>
       </div>`;
-      $("adapt-partner-scope").value = state.adaptPartnerOnly ? "axis_partner" : "all";
+      $("adapt-partner-scope").value = state.adaptPartnerOnly ? "partner" : "all";
       $("adapt-partner-scope").onchange = () => {
-        state.adaptPartnerOnly = $("adapt-partner-scope").value === "axis_partner";
+        state.adaptPartnerOnly = $("adapt-partner-scope").value === "partner";
         saveState();
         renderAdapts($("page"));
       };
@@ -1612,7 +1618,7 @@
     function renderCanvas(page) {
       page.innerHTML = `<div class="stage">
         <main class="board" id="board">
-          <div id="canvas-empty" class="empty"><div class="box"><h2>Empty canvas.</h2><p>Open a template, or add image / video / upscale nodes. Camera, lens, and look sit on each shot.</p><button class="ghost" type="button" id="canvas-open-adapts">Image › Adapts (Axis partner presets)</button></div></div>
+          <div id="canvas-empty" class="empty"><div class="box"><h2>Empty canvas.</h2><p>Open a template, or add image / video / upscale nodes. Camera, lens, and look sit on each shot.</p><button class="ghost" type="button" id="canvas-open-adapts">Image › Adapts presets</button></div></div>
           <svg class="wires" id="wires"></svg>
           <div class="graph" id="graph"></div>
           <div id="results" class="results"></div>

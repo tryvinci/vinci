@@ -41,10 +41,12 @@ def test_clone_tree_has_north_star_files() -> None:
     assert "MIT" in license_text
     assert "GNU Affero" not in license_text
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert "Do not `npx @tryvinci/cli`" in readme
-    assert "mcp:png:v1" in readme
-    assert "mcp:mp4:v1" in readme
-    assert "make github" in readme
+    assert "docs/assets/studio-tour.gif" in readme
+    assert "Why Vinci" in readme
+    assert "VINCI_ALLOW_LIVE_SPEND=1" in readme
+    assert "docs/google-sheets.md" in readme
+    assert "make github" not in readme
+    assert "private until" not in readme.lower()
     wrapper = ROOT / "scripts" / "vinci"
     assert wrapper.stat().st_mode & stat.S_IXUSR
     smoke = ROOT / "scripts" / "clone-smoke.sh"

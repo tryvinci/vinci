@@ -24,8 +24,10 @@ def test_studio_adapts_ui_strings(client: TestClient) -> None:
     body = page.text
     assert "adapt-panel" in body
     assert "Adapts" in body
-    assert "Axis Max Life partner" in body
-    assert "client-partner" in body
+    assert "Image › Adapts presets" in body
+    assert "Partner presets" in body
+    assert "Axis" not in body
+    assert "axis" not in body.lower()
     assert "fit_pad_crop" in body or "fit / pad / crop" in body.lower()
     assert "adapt/presets" in body or "/adapt/estimate" in body
     assert "Image › Adapts" in body

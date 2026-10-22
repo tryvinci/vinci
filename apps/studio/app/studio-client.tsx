@@ -1830,7 +1830,7 @@ export function StudioClient() {
                 <h2>Empty canvas.</h2>
                 <p>Open a template, or add image / video / upscale nodes.</p>
                 <button className="ghost" type="button" onClick={() => setPage("adapts")}>
-                  Image › Adapts (Axis partner presets)
+                  Image › Adapts presets
                 </button>
               </div>
             </div>

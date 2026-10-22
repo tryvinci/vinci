@@ -1,7 +1,6 @@
-"""Client-partner export specs (Axis Max Life PDF pages 3, 4, 6, 7).
+"""Partner export specs.
 
-These are client_partner specs, not general platform rules. Human-review advisories
-are labeled and are not treated as automated compliance checks.
+Human-review advisories are labeled and are not treated as automated compliance checks.
 """
 
 from __future__ import annotations
@@ -43,20 +42,19 @@ class PartnerAdaptPreset:
 
 
 META_DISCLAIMER = (
-    "Company Name Axis Max Life Insurance Limited | Axis Max Life Smart Term Plan Plus "
-    "UIN 104N127V04 | IRDAI Reg No 104 | ARN | total premium ... | Brand Ambassador "
-    "endorses only Axis Max Life products, not Axis Bank | *T&C Apply."
+    "Company legal name | product name | regulator registration | ARN | "
+    "total premium ... | Brand Ambassador endorsement scope | *T&C Apply."
 )
 
 AMAZON_DISCLAIMER = ("Disclaimer 8-11pt, white background good.",)
 
-BPN_SHORT_DISCLAIMER = "IRDAI Regn No. 104 | ARN | *T&C Apply"
+BPN_SHORT_DISCLAIMER = "IRDAI registration | ARN | *T&C Apply"
 
 
 PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     PartnerAdaptPreset(
         id="amazon_828x300",
-        label="Amazon 828×300",
+        label="828×300",
         partner="amazon",
         width=828,
         height=300,
@@ -66,7 +64,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="amazon_828x250",
-        label="Amazon 828×250",
+        label="828×250",
         partner="amazon",
         width=828,
         height=250,
@@ -76,7 +74,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="amazon_600x500",
-        label="Amazon 600×500",
+        label="600×500",
         partner="amazon",
         width=600,
         height=500,
@@ -85,7 +83,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="amazon_640x100",
-        label="Amazon 640×100",
+        label="640×100",
         partner="amazon",
         width=640,
         height=100,
@@ -94,7 +92,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="inuxu_1200x720",
-        label="Inuxu 1200×720",
+        label="1200×720",
         partner="inuxu",
         width=1200,
         height=720,
@@ -103,7 +101,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="inuxu_728x90",
-        label="Inuxu 728×90",
+        label="728×90",
         partner="inuxu",
         width=728,
         height=90,
@@ -111,7 +109,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="inuxu_320x50",
-        label="Inuxu 320×50",
+        label="320×50",
         partner="inuxu",
         width=320,
         height=50,
@@ -119,7 +117,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="jio_ldpi_216x117",
-        label="Jio LDPI 216×117",
+        label="LDPI 216×117",
         partner="jio",
         width=216,
         height=117,
@@ -127,7 +125,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="jio_mdpi_288x156",
-        label="Jio MDPI 288×156",
+        label="MDPI 288×156",
         partner="jio",
         width=288,
         height=156,
@@ -135,7 +133,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="jio_hdpi_432x234",
-        label="Jio HDPI 432×234",
+        label="HDPI 432×234",
         partner="jio",
         width=432,
         height=234,
@@ -143,7 +141,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="jio_xhdpi_576x312",
-        label="Jio XHDPI 576×312",
+        label="XHDPI 576×312",
         partner="jio",
         width=576,
         height=312,
@@ -151,7 +149,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="jio_xxhdpi_864x468",
-        label="Jio XXHDPI 864×468",
+        label="XXHDPI 864×468",
         partner="jio",
         width=864,
         height=468,
@@ -159,7 +157,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="jio_xxxhdpi_1152x624",
-        label="Jio XXXHDPI 1152×624",
+        label="XXXHDPI 1152×624",
         partner="jio",
         width=1152,
         height=624,
@@ -167,7 +165,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="jio_1200x627",
-        label="Jio 1200×627 (JPEG/PNG)",
+        label="1200×627 (JPEG/PNG)",
         partner="jio",
         width=1200,
         height=627,
@@ -176,7 +174,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="jio_320x50",
-        label="Jio 320×50",
+        label="320×50 (2)",
         partner="jio",
         width=320,
         height=50,
@@ -184,7 +182,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="jio_1274x546",
-        label="Jio 1274×546",
+        label="1274×546",
         partner="jio",
         width=1274,
         height=546,
@@ -192,7 +190,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="jio_1440x448",
-        label="Jio 1440×448",
+        label="1440×448",
         partner="jio",
         width=1440,
         height=448,
@@ -200,7 +198,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="meta_google_1200x1200",
-        label="Meta Google 1200×1200",
+        label="1200×1200",
         partner="meta",
         width=1200,
         height=1200,
@@ -209,7 +207,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="meta_1080x1920",
-        label="Meta 1080×1920",
+        label="1080×1920",
         partner="meta",
         width=1080,
         height=1920,
@@ -218,7 +216,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="meta_1200x630",
-        label="Meta 1200×630",
+        label="1200×630",
         partner="meta",
         width=1200,
         height=630,
@@ -227,7 +225,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="meta_960x1200",
-        label="Meta 960×1200",
+        label="960×1200",
         partner="meta",
         width=960,
         height=1200,
@@ -236,7 +234,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="paytm_1440x720",
-        label="Paytm 1440×720",
+        label="1440×720",
         partner="paytm",
         width=1440,
         height=720,
@@ -244,7 +242,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="paytm_1440x480",
-        label="Paytm 1440×480",
+        label="1440×480",
         partner="paytm",
         width=1440,
         height=480,
@@ -252,7 +250,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="paytm_1440x864",
-        label="Paytm 1440×864",
+        label="1440×864",
         partner="paytm",
         width=1440,
         height=864,
@@ -260,7 +258,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="paytm_1440x404",
-        label="Paytm 1440×404",
+        label="1440×404",
         partner="paytm",
         width=1440,
         height=404,
@@ -268,7 +266,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="paytm_1440x448",
-        label="Paytm 1440×448",
+        label="1440×448 (2)",
         partner="paytm",
         width=1440,
         height=448,
@@ -276,7 +274,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="paytm_1274x546",
-        label="Paytm 1274×546",
+        label="1274×546 (2)",
         partner="paytm",
         width=1274,
         height=546,
@@ -284,7 +282,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="paytm_logo_640x640",
-        label="Paytm logo 640×640",
+        label="Logo 640×640",
         partner="paytm",
         width=640,
         height=640,
@@ -292,7 +290,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="indixital_300x250",
-        label="Indixital 300×250",
+        label="300×250",
         partner="indixital",
         width=300,
         height=250,
@@ -300,7 +298,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="indixital_728x90",
-        label="Indixital 728×90",
+        label="728×90 (2)",
         partner="indixital",
         width=728,
         height=90,
@@ -308,7 +306,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="indixital_320x100",
-        label="Indixital 320×100",
+        label="320×100",
         partner="indixital",
         width=320,
         height=100,
@@ -316,7 +314,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="indixital_300x100",
-        label="Indixital 300×100",
+        label="300×100",
         partner="indixital",
         width=300,
         height=100,
@@ -324,7 +322,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="indixital_300x50",
-        label="Indixital 300×50",
+        label="300×50",
         partner="indixital",
         width=300,
         height=50,
@@ -332,7 +330,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="indixital_320x50",
-        label="Indixital 320×50",
+        label="320×50 (3)",
         partner="indixital",
         width=320,
         height=50,
@@ -340,7 +338,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="indixital_1200x720",
-        label="Indixital 1200×720",
+        label="1200×720 (2)",
         partner="indixital",
         width=1200,
         height=720,
@@ -348,7 +346,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="indixital_1500x750",
-        label="Indixital 1500×750",
+        label="1500×750",
         partner="indixital",
         width=1500,
         height=750,
@@ -356,7 +354,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="indixital_360x180",
-        label="Indixital 360×180",
+        label="360×180",
         partner="indixital",
         width=360,
         height=180,
@@ -364,7 +362,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="indixital_logo_100x100",
-        label="Indixital logo 100×100",
+        label="Logo 100×100",
         partner="indixital",
         width=100,
         height=100,
@@ -372,7 +370,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="chase_whatsapp_1080x566",
-        label="CHASE WhatsApp 1080×566",
+        label="WhatsApp 1080×566",
         partner="chase",
         width=1080,
         height=566,
@@ -381,7 +379,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="bpn_360x180",
-        label="CHASE BPN 360×180",
+        label="360×180 (2)",
         partner="bpn",
         width=360,
         height=180,
@@ -394,7 +392,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="meta_1440x480",
-        label="CHASE RCS 1440×480",
+        label="RCS 1440×480",
         partner="chase",
         width=1440,
         height=480,
@@ -403,14 +401,14 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
             "Ratio 3:4.",
             "IN UNIT LINKED POLICIES THE INVESTMENT RISK IN THE INVESTMENT PORTFOLIO IS "
             "BORNE BY THE POLICYHOLDER",
-            "IRDAI Regn No. 104 | ARN | *T&C Apply",
-            "No AMLI logo.",
+            "IRDAI registration | ARN | *T&C Apply",
+            "No brand logo.",
             "No CTA.",
         ),
     ),
     PartnerAdaptPreset(
         id="cred_1000x1000",
-        label="CRED 1000×1000",
+        label="1000×1000",
         partner="cred",
         width=1000,
         height=1000,
@@ -418,7 +416,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="cred_cheque_121x327",
-        label="CRED cheque 121×327",
+        label="Cheque 121×327",
         partner="cred",
         width=121,
         height=327,
@@ -426,7 +424,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="cred_cheque_396x375",
-        label="CRED cheque 396×375",
+        label="Cheque 396×375",
         partner="cred",
         width=396,
         height=375,
@@ -434,7 +432,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="chase_cs_homepage_960x1080",
-        label="CHASE CS homepage 960×1080",
+        label="Homepage 960×1080",
         partner="chase",
         width=960,
         height=1080,
@@ -443,7 +441,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="chase_cs_dashboard_mobile_1312x726",
-        label="CHASE CS dashboard mobile 1312×726",
+        label="Dashboard mobile 1312×726",
         partner="chase",
         width=1312,
         height=726,
@@ -452,7 +450,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="chase_cs_dashboard_desktop_688x224",
-        label="CHASE CS dashboard desktop 688×224",
+        label="Dashboard desktop 688×224",
         partner="chase",
         width=688,
         height=224,
@@ -461,7 +459,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="chase_pay_online_web_528x513",
-        label="CHASE pay online web 528×513",
+        label="Pay online web 528×513",
         partner="chase",
         width=528,
         height=513,
@@ -470,7 +468,7 @@ PARTNER_ADAPT_PRESETS: tuple[PartnerAdaptPreset, ...] = (
     ),
     PartnerAdaptPreset(
         id="chase_pay_online_mobile_360x244",
-        label="CHASE pay online mobile 360×244",
+        label="Pay online mobile 360×244",
         partner="chase",
         width=360,
         height=244,

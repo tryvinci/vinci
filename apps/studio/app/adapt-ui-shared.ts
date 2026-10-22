@@ -72,6 +72,13 @@ export function byteCapLabel(preset: AdaptPresetRow): string | null {
   return `${cap.op === "lt" ? "<" : "≤"} ${shown} KB`;
 }
 
+export function groupTitle(group: { partner: string; rows: AdaptPresetRow[] }, index: number): string {
+  const clientPartner = group.rows.some(
+    (row) => row.source === "partner" || row.spec_kind === "client_partner",
+  );
+  return clientPartner ? `Presets ${index + 1}` : group.partner;
+}
+
 export function groupPresets(rows: AdaptPresetRow[]): { partner: string; rows: AdaptPresetRow[] }[] {
   const order: string[] = [];
   const map = new Map<string, AdaptPresetRow[]>();

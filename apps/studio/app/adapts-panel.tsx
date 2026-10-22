@@ -2,7 +2,7 @@
 
 import type { RefObject } from "react";
 import type { AdaptPresetRow, AdaptTarget, BatchStatus } from "./adapt-ui-shared";
-import { byteCapLabel, engineLabel, formatBytes, groupPresets, sourceOf } from "./adapt-ui-shared";
+import { byteCapLabel, engineLabel, formatBytes, groupPresets, groupTitle, sourceOf } from "./adapt-ui-shared";
 
 type PresetDraft = {
   label: string;
@@ -34,7 +34,7 @@ type Props = {
   presetFormOpen: boolean;
   presetDraft: PresetDraft;
   money: (n: number | undefined) => string;
-  onPartnerOnlyChange: (axisOnly: boolean) => void;
+  onPartnerOnlyChange: (partnerOnly: boolean) => void;
   onLayoutChange: (layout: "fit_pad_crop" | "ai_extend") => void;
   onFitChange: (fit: "fit" | "pad" | "crop") => void;
   onTargetsChange: (rows: AdaptTarget[]) => void;
@@ -65,7 +65,7 @@ export function AdaptsPanel(props: Props) {
           <p className="eyebrow">Image › Adapts</p>
           <h2>Exports</h2>
           <p className="muted adapt-note">
-            Axis Max Life partner presets. Fit/pad/crop is local ffmpeg. Human-review advisories are guidance, not automatic compliance.
+            Partner presets. Fit/pad/crop is local ffmpeg. Human-review advisories are guidance, not automatic compliance.
           </p>
         </div>
         <div className="adapt-head-actions">
@@ -102,9 +102,9 @@ export function AdaptsPanel(props: Props) {
           </div>
           <h3 className="adapt-subhead">Presets</h3>
           <div className="adapt-groups" id="adapt-preset-groups">
-            {groups.map((group) => (
+            {groups.map((group, index) => (
               <div key={group.partner} className="adapt-group">
-                <h4>{group.partner}</h4>
+                <h4>{groupTitle(group, index)}</h4>
                 <ul>
                   {group.rows.map((preset) => {
                     const source = sourceOf(preset);
@@ -205,10 +205,10 @@ export function AdaptsPanel(props: Props) {
           <h3>Settings</h3>
           <label>Presets</label>
           <select
-            value={props.adaptPartnerOnly ? "axis_partner" : "all"}
-            onChange={(ev) => props.onPartnerOnlyChange(ev.target.value === "axis_partner")}
+            value={props.adaptPartnerOnly ? "partner" : "all"}
+            onChange={(ev) => props.onPartnerOnlyChange(ev.target.value === "partner")}
           >
-            <option value="axis_partner">Axis partner</option>
+            <option value="partner">Partner presets</option>
             <option value="all">All</option>
           </select>
 
@@ -253,8 +253,8 @@ export function AdaptsPanel(props: Props) {
                     }}
                   >
                     <option value="">Custom…</option>
-                    {groups.map((group) => (
-                      <optgroup key={group.partner} label={group.partner}>
+                    {groups.map((group, index) => (
+                      <optgroup key={group.partner} label={groupTitle(group, index)}>
                         {group.rows.map((item) => (
                           <option key={item.id} value={item.id}>
                             {item.label}
