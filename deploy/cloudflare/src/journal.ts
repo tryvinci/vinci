@@ -1,8 +1,18 @@
 /** Durable operation journal on VinciHost SQLite (sole cloud metadata authority). */
 
 import type { DurableObjectState } from "@cloudflare/workers-types";
+import type { Env } from "./auth";
 import { committedNextCursor, offsetRejected, parseCommittedLimit } from "./journal-cursor";
 import { allowProviderSubmitRefUpgrade } from "./journal-submit-intent";
+import {
+  applyReviewExpiry,
+  estimateR2CommitDebit,
+  getReviewStatus,
+  parseReviewConfig,
+  recordReviewR2DebitBytes,
+  reviewDenyResponse,
+  reviewR2CommitGate,
+} from "./review-budget";
 
 const LEASE_SECONDS = 120;
 
@@ -104,11 +114,26 @@ function journalSubpath(pathname: string): string {
   return pathname;
 }
 
+async function reviewJournalGate(
+  state: DurableObjectState,
+  env: Env,
+): Promise<Response | null> {
+  const config = parseReviewConfig(env);
+  if (!config) return null;
+  if (await applyReviewExpiry(state, config, undefined)) {
+    return reviewDenyResponse("review_expired", null);
+  }
+  return null;
+}
+
 export async function handleJournal(
   request: Request,
   state: DurableObjectState,
+  env: Env,
 ): Promise<Response> {
   await ensureSchema(state);
+  const gate = await reviewJournalGate(state, env);
+  if (gate) return gate;
   const url = new URL(request.url);
   const path = journalSubpath(url.pathname);
 
@@ -195,6 +220,15 @@ export async function handleJournal(
     for (const key of blobs) {
       if (!key) return Response.json({ error: "missing_blob_key" }, { status: 400 });
     }
+    const reviewCfg = parseReviewConfig(env);
+    if (reviewCfg) {
+      const payloadJson = JSON.stringify(body.payload ?? {});
+      const gate = reviewR2CommitGate(reviewCfg, blobs, payloadJson, "{}");
+      if (gate) {
+        const status = await getReviewStatus(state, reviewCfg);
+        return reviewDenyResponse(gate, status);
+      }
+    }
     const existing = await state.storage.sql.exec<OperationRow>(
       "SELECT op_id, payload_digest, payload_json, response_json, status FROM operations WHERE op_id = ?",
       opId,
@@ -250,6 +284,15 @@ export async function handleJournal(
     const digest = await payloadDigest(body.payload ?? {});
     const blobs = body.blob_keys ?? [];
     const responseJson = JSON.stringify(body.response ?? {});
+    const reviewCfg = parseReviewConfig(env);
+    if (reviewCfg) {
+      const payloadJson = JSON.stringify(body.payload ?? {});
+      const gate = reviewR2CommitGate(reviewCfg, blobs, payloadJson, responseJson);
+      if (gate) {
+        const status = await getReviewStatus(state, reviewCfg);
+        return reviewDenyResponse(gate, status);
+      }
+    }
     const created = nowIso();
     const result = await state.storage.transaction(async () => {
       const cur = await state.storage.sql.exec<WriterRow>(
@@ -345,6 +388,20 @@ export async function handleJournal(
       );
       return { ok: true as const, op_id: opId, response: body.response ?? {} };
     });
+    if (result.ok) {
+      const config = parseReviewConfig(env);
+      if (config) {
+        const payloadJson = JSON.stringify(body.payload ?? {});
+        const debit = estimateR2CommitDebit(
+          blobs,
+          payloadJson,
+          responseJson,
+          config.limits.maxAssumedBytesPerBlob,
+        );
+        const storageDeny = await recordReviewR2DebitBytes(state, config, debit, undefined);
+        if (storageDeny) return storageDeny;
+      }
+    }
     if (!result.ok) {
       const status = result.code === "payload_conflict" ? 409 : 409;
       return Response.json({ error: result.code ?? "commit_conflict" }, { status });
