@@ -50,6 +50,18 @@ export function modelAvailability(
   return "needs_key";
 }
 
+
+export type StudioVisibleRow = { provider?: string; available?: boolean };
+
+/**
+ * Studio catalog visibility. Demo mode marks the mock practice models available so
+ * Studio works at $0; hide mock rows only when they are unavailable. HTML Studio
+ * copies this function because studio.html cannot import this module.
+ */
+export function studioVisible<T extends StudioVisibleRow>(m: T): boolean {
+  return m.provider !== "mock" || m.available === true;
+}
+
 export function availabilityRank(status: ModelAvailability): number {
   if (status === "ready") return 0;
   if (status === "spend_off") return 1;

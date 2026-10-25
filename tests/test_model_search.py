@@ -23,7 +23,7 @@ const js = ts.transpileModule(src, {{
   compilerOptions: {{ module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 }},
 }}).outputText;
 const mod = await import("data:text/javascript," + encodeURIComponent(js));
-const {{ rankModels, modelAvailability }} = mod;
+const {{ rankModels, modelAvailability, studioVisible }} = mod;
 {body}
 """
     return subprocess.run(
@@ -90,9 +90,49 @@ def test_html_ranker_matches_ts_source() -> None:
     assert "function rankModels(rows, query)" in html
     assert "function inheritQueryMatches(query)" in html
     assert "function modelAvailability(model, provider, liveSpend)" in html
+    assert "function studioVisible(m)" in html
+    assert "studioVisible" in ts
     assert "spend off" in html
     assert "not enabled" in html
     assert "apps/studio/lib/model-search.ts" in html
     for needle in ("display_name", "provider", "inherit skill default"):
         assert needle in ts
         assert needle in html
+
+
+def test_studio_visible_keeps_demo_mock_models() -> None:
+    """Demo mode: /models marks mock practice models available; Studio must keep them."""
+    script = """
+const demoCatalog = [
+  { id: "mock:png:v1", provider: "mock", available: true },
+  { id: "mock:mp4:v1", provider: "mock", available: true },
+  { id: "wavespeed:kling-2.6-pro:2026-08", provider: "wavespeed", available: false },
+  { id: "fal:flux-dev:2026-01", provider: "fal", available: true },
+];
+const visible = demoCatalog.filter(studioVisible).map((m) => m.id);
+if (visible.length !== 4) throw new Error("demo mode lost mock models: " + visible.join());
+if (visible[0] !== "mock:png:v1") throw new Error("mock models stay first in demo");
+const normalCatalog = [
+  { id: "mock:png:v1", provider: "mock", available: false },
+  { id: "fal:flux-dev:2026-01", provider: "fal", available: true },
+];
+const normalVisible = normalCatalog.filter(studioVisible).map((m) => m.id);
+if (normalVisible.length !== 1 || normalVisible[0] !== "fal:flux-dev:2026-01") {
+  throw new Error("non-demo mode should still hide unavailable mock models");
+}
+"""
+    result = _run_module(script)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_studio_filter_sites_use_studio_visible() -> None:
+    """Both Studio UIs must route catalog filtering through studioVisible."""
+    ts = RANKER.read_text(encoding="utf-8")
+    html = STUDIO.read_text(encoding="utf-8")
+    client = (ROOT / "apps" / "studio" / "app" / "studio-client.tsx").read_text(encoding="utf-8")
+    assert "export function studioVisible" in ts
+    assert html.count(".filter(studioVisible)") == 1
+    assert client.count(".filter(studioVisible)") == 2
+    assert client.count(".find(studioVisible)") == 1
+    assert 'provider !== "mock")' not in html
+    assert 'provider !== "mock")' not in client
