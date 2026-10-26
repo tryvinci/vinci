@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -299,6 +300,139 @@ def mock_transcribe(path: Path) -> dict[str, Any]:
         ],
         "duration": duration,
     }
+
+
+def transcribe_media(path: Path) -> dict[str, Any]:
+    """Real local STT when whisper.cpp is configured, else the mock.
+
+    $0 by construction: whisper.cpp runs fully local. Set VINCI_WHISPER to the
+    whisper-cli binary and VINCI_WHISPER_MODEL to a ggml model file. Without
+    them we fall back to the deterministic mock and say so in the payload.
+    """
+    whisper = os.environ.get("VINCI_WHISPER", "").strip()
+    model = os.environ.get("VINCI_WHISPER_MODEL", "").strip()
+    if whisper and model and Path(whisper).is_file() and Path(model).is_file():
+        try:
+            return _whisper_transcribe(Path(whisper), Path(model), path)
+        except MediaError:
+            pass
+    fallback = mock_transcribe(path)
+    fallback["engine"] = "mock"
+    return fallback
+
+
+def _whisper_transcribe(whisper: Path, model: Path, media: Path) -> dict[str, Any]:
+    """Run whisper.cpp CLI on the media and normalize to our transcript shape."""
+    require_ffmpeg()
+    with tempfile.TemporaryDirectory() as tmp:
+        wav = Path(tmp) / "audio.wav"
+        proc = subprocess.run(
+            [
+                FFMPEG, "-y", "-i", str(media), "-vn",
+                "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", str(wav),
+            ],
+            check=False, capture_output=True, text=True,
+        )
+        if proc.returncode != 0:
+            raise MediaError(proc.stderr.strip() or "ffmpeg audio extract failed")
+        out_base = Path(tmp) / "out"
+        proc = subprocess.run(
+            [str(whisper), "-m", str(model), "-f", str(wav), "-oj", "-of", str(out_base), "-nt"],
+            check=False, capture_output=True, text=True,
+        )
+        if proc.returncode != 0:
+            raise MediaError(proc.stderr.strip() or "whisper-cli failed")
+        raw = json.loads((Path(str(out_base) + ".json")).read_text(encoding="utf-8"))
+    words: list[dict[str, Any]] = []
+    full: list[str] = []
+    duration = 0.0
+    for seg in raw.get("transcription") or []:
+        offsets = seg.get("offsets") or {}
+        start = float(offsets.get("from") or 0) / 1000.0
+        end = float(offsets.get("to") or 0) / 1000.0
+        text = str(seg.get("text") or "").strip()
+        if not text:
+            continue
+        words.append({"start": round(start, 3), "end": round(end, 3), "text": text})
+        full.append(text)
+        duration = max(duration, end)
+    if duration <= 0:
+        duration = float(probe(media).get("duration") or 0)
+    return {
+        "text": " ".join(full).strip(),
+        "words": words,
+        "duration": duration,
+        "engine": "whisper.cpp",
+    }
+
+
+def tts_voiceover(script: dict[str, Any], dst: Path, voice: str | None = None) -> Path:
+    """Real local TTS when piper is configured, else the tone mock.
+
+    $0 by construction: piper runs fully local. Set VINCI_PIPER to the piper
+    binary and VINCI_PIPER_MODEL to a voice .onnx file. Without them we fall
+    back to the deterministic tone track.
+    """
+    piper = os.environ.get("VINCI_PIPER", "").strip()
+    model = os.environ.get("VINCI_PIPER_MODEL", "").strip()
+    if piper and model and Path(piper).is_file() and Path(model).is_file():
+        try:
+            return _piper_voiceover(Path(piper), Path(model), script, dst)
+        except MediaError:
+            pass
+    return synth_voiceover(script, dst, voice=voice)
+
+
+def _piper_voiceover(piper: Path, model: Path, script: dict[str, Any], dst: Path) -> Path:
+    """Synthesize each script line with piper and place them on the timeline."""
+    require_ffmpeg()
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    lines = [line for line in (script.get("lines") or []) if isinstance(line, dict)]
+    duration = float(script.get("duration") or 0)
+    if duration <= 0 and lines:
+        duration = max(float(line.get("end") or 0) for line in lines)
+    if duration <= 0:
+        duration = 1.0
+    if not lines:
+        return synth_voiceover(script, dst)
+    with tempfile.TemporaryDirectory() as tmp:
+        clips: list[tuple[float, Path]] = []
+        for index, line in enumerate(lines):
+            text = str(line.get("line") or "").strip()
+            if not text:
+                continue
+            clip = Path(tmp) / f"line-{index:03d}.wav"
+            proc = subprocess.run(
+                [str(piper), "-m", str(model), "-f", str(clip), "--"],
+                input=text, check=False, capture_output=True, text=True,
+            )
+            if proc.returncode != 0:
+                raise MediaError(proc.stderr.strip() or "piper failed")
+            clips.append((max(float(line.get("start") or 0), 0.0), clip))
+        if not clips:
+            return synth_voiceover(script, dst)
+        inputs: list[str] = []
+        filters: list[str] = []
+        mix_labels: list[str] = []
+        for index, (start, clip) in enumerate(clips):
+            inputs += ["-i", str(clip)]
+            delay_ms = int(start * 1000)
+            filters.append(f"[{index}:a]adelay={delay_ms}|{delay_ms}[d{index}]")
+            mix_labels.append(f"[d{index}]")
+        filters.append(
+            "".join(mix_labels)
+            + f"amix=inputs={len(clips)}:normalize=0,volume=1.0,"
+            + f"atrim=0:{duration:.3f},apad=whole_dur={duration:.3f}[out]"
+        )
+        cmd = [
+            FFMPEG, "-y", *inputs,
+            "-filter_complex", ";".join(filters),
+            "-map", "[out]", str(dst),
+        ]
+        proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise MediaError(proc.stderr.strip() or "ffmpeg piper mix failed")
+    return dst
 
 
 def split_fixed(duration: float, count: int = 3) -> list[dict[str, Any]]:

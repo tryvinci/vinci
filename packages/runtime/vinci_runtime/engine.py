@@ -60,7 +60,6 @@ from vinci_media.ops import (
     burn_captions,
     concat,
     cut,
-    mock_transcribe,
     mux_audio,
     plan_effects,
     polish_script,
@@ -69,7 +68,8 @@ from vinci_media.ops import (
     render_timeline,
     select_windows,
     split_fixed,
-    synth_voiceover,
+    transcribe_media,
+    tts_voiceover,
 )
 from vinci_media.partner_presets import check_export_bytes
 from vinci_protocol.constants import PROTOCOL_VERSION
@@ -2418,7 +2418,7 @@ class Engine:
         outputs: list[str] = []
         if op == "transcribe":
             src = self._materialize(params.get("media"))
-            extra = mock_transcribe(src)
+            extra = transcribe_media(src)
             dest = work / "transcript.json"
             dest.write_text(json.dumps(extra), encoding="utf-8")
             outputs = [
@@ -2538,7 +2538,7 @@ class Engine:
                 raise ValueError("synth_voiceover needs a script object")
             voice = params.get("voice")
             dest = work / "voiceover.wav"
-            synth_voiceover(script, dest, voice=str(voice) if voice else None)
+            tts_voiceover(script, dest, voice=str(voice) if voice else None)
             outputs = [self._put_path(dest, kind=AssetKind.AUDIO, mime="audio/wav", run_id=run_id)]
         elif op == "mux_audio":
             video = self._materialize(params.get("media"))

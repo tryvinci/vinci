@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -126,3 +127,97 @@ def test_screen_to_demo_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     receipt = engine.store.get_job(run["job_ids"][-1])
     assert receipt is not None and receipt.receipt is not None
     assert receipt.receipt.computed_cost == 0
+
+def test_transcribe_media_uses_whisper_when_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    media = make_fixture_video(tmp_path / "recording.mp4", duration=2.0)
+    payload = tmp_path / "payload.json"
+    payload.write_text(json.dumps({
+        "transcription": [
+            {"offsets": {"from": 0, "to": 1500}, "text": " Hello world"},
+            {"offsets": {"from": 1500, "to": 2000}, "text": " again"},
+        ]
+    }))
+    fake_whisper = tmp_path / "whisper-cli"
+    fake_whisper.write_text(
+        "#!/bin/sh\n"
+        "while [ $# -gt 0 ]; do\n"
+        "  if [ \"$1\" = \"-of\" ]; then shift; OUT=\"$1\"; fi\n"
+        "  shift\n"
+        "done\n"
+        f"cp {payload} \"${{OUT}}.json\"\n"
+    )
+    fake_whisper.chmod(0o755)
+    fake_model = tmp_path / "ggml-tiny.bin"
+    fake_model.write_bytes(b"fake")
+    monkeypatch.setenv("VINCI_WHISPER", str(fake_whisper))
+    monkeypatch.setenv("VINCI_WHISPER_MODEL", str(fake_model))
+    from vinci_media.ops import transcribe_media
+    result = transcribe_media(media)
+    assert result["engine"] == "whisper.cpp"
+    assert result["text"] == "Hello world again"
+    assert result["words"][0]["end"] == 1.5
+    assert result["duration"] == 2.0
+
+
+def test_transcribe_media_falls_back_to_mock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    media = make_fixture_video(tmp_path / "recording.mp4", duration=2.0)
+    monkeypatch.setenv("VINCI_WHISPER", str(tmp_path / "missing"))
+    monkeypatch.setenv("VINCI_WHISPER_MODEL", str(tmp_path / "missing.bin"))
+    from vinci_media.ops import transcribe_media
+    result = transcribe_media(media)
+    assert result["engine"] == "mock"
+
+
+def test_tts_voiceover_uses_piper_when_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from vinci_media.ops import tts_voiceover
+    # pre-make a real wav the fake piper "synthesizes"
+    clip = tmp_path / "clip.wav"
+    subprocess.run(
+        ["ffmpeg", "-y", "-f", "lavfi", "-i", "sine=frequency=520:duration=0.5", str(clip)],
+        check=True, capture_output=True,
+    )
+    fake_piper = tmp_path / "piper"
+    fake_piper.write_text(
+        "#!/bin/sh\n"
+        "while [ $# -gt 0 ]; do\n"
+        "  if [ \"$1\" = \"-f\" ]; then shift; OUT=\"$1\"; fi\n"
+        "  shift\n"
+        "done\n"
+        f"cp {clip} \"$OUT\"\n"
+    )
+    fake_piper.chmod(0o755)
+    fake_model = tmp_path / "voice.onnx"
+    fake_model.write_bytes(b"fake")
+    monkeypatch.setenv("VINCI_PIPER", str(fake_piper))
+    monkeypatch.setenv("VINCI_PIPER_MODEL", str(fake_model))
+    script = {
+        "lines": [
+            {"line": "first line", "start": 0.0, "end": 0.5},
+            {"line": "second line", "start": 1.0, "end": 1.5},
+        ],
+        "duration": 2.0,
+    }
+    from vinci_media.ops import probe as media_probe
+    out = tts_voiceover(script, tmp_path / "vo.wav")
+    assert out.is_file()
+    assert abs(media_probe(out)["duration"] - 2.0) < 0.1
+
+
+def test_tts_voiceover_falls_back_to_tones(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from vinci_media.ops import synth_voiceover, tts_voiceover
+    monkeypatch.setenv("VINCI_PIPER", str(tmp_path / "missing"))
+    monkeypatch.setenv("VINCI_PIPER_MODEL", str(tmp_path / "missing.onnx"))
+    script = {
+        "lines": [{"line": "hello there", "start": 0.0, "end": 1.0}],
+        "duration": 1.5,
+    }
+    via_fallback = tts_voiceover(script, tmp_path / "a.wav")
+    direct = synth_voiceover(script, tmp_path / "b.wav")
+    assert via_fallback.read_bytes() == direct.read_bytes()
+
