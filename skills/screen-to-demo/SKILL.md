@@ -23,15 +23,21 @@ FFmpeg is the only required tool.
   [rhasspy/piper](https://github.com/rhasspy/piper) (MIT; archived at
   v1.2.0, prebuilt binaries on its releases page) and point `VINCI_PIPER`
   at the piper binary and `VINCI_PIPER_MODEL` at a voice `.onnx` file from
-  [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices)
-  (dataset card: MIT). Each script line is synthesized and placed at its
-  timed offset. Do not substitute the actively maintained continuation
+  [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices).
+  Each script line is synthesized and placed at its timed offset. Do not
+  substitute the actively maintained continuation
   [OHF-Voice/piper1-gpl](https://github.com/OHF-Voice/piper1-gpl): it is
-  GPL-3.0, which does not combine with Vinci's MIT licensing for bundling.
+  GPL-3.0, which carries different redistribution obligations than MIT and
+  would need legal review before use, so it is excluded from this skill's
+  scope.
 
 The pinned tools above are MIT-licensed, run fully offline after the
-one-time model download, and never send media anywhere. Free download is
-not blanket redistribution rights: bundling or shipping binaries or voice
-models with Vinci artifacts needs its own license check first. A hosted
-voice (e.g. ElevenLabs, already a provider package) only enters when a key
-is set, deliberately outside this DAG.
+one-time model download, and never send media anywhere. Voice models are
+licensed per voice, not per repo: the piper-voices dataset card's MIT tag
+does not cover individual voices, and each voice's `MODEL_CARD` names its
+own training-data provenance and license (observed range: research-only
+agreements, CC BY-NC-SA, CC BY). Local testing with any voice is fine, but
+recommending a default voice or bundling one with Vinci artifacts requires
+checking that voice's model card first. A hosted voice (e.g. ElevenLabs,
+already a provider package) only enters when a key is set, deliberately
+outside this DAG.
