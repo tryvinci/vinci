@@ -1,0 +1,59 @@
+id: "@tryvinci/screen-to-demo"
+version: "1.0.0"
+preference: cheapest
+nodes:
+  - id: transcribe
+    type: media
+    params:
+      op: transcribe
+      media: "{{inputs.media}}"
+  - id: polish
+    type: media
+    params:
+      op: polish_script
+      transcript: "{{nodes.transcribe.data}}"
+      style: "{{inputs.style}}"
+  - id: plan
+    type: media
+    params:
+      op: plan_effects
+      script: "{{nodes.polish.data}}"
+  - id: effects
+    type: media
+    params:
+      op: apply_effects
+      media: "{{inputs.media}}"
+      plan: "{{nodes.plan.data}}"
+  - id: voiceover
+    type: media
+    params:
+      op: synth_voiceover
+      script: "{{nodes.polish.data}}"
+  - id: mux
+    type: media
+    params:
+      op: mux_audio
+      media: "{{nodes.effects.output}}"
+      audio: "{{nodes.voiceover.output}}"
+  - id: captions
+    type: media
+    params:
+      op: burn_captions
+      media: "{{nodes.mux.output}}"
+      text: "{{nodes.polish.data.text}}"
+      lines: "{{nodes.polish.data.lines}}"
+edges:
+  - src: transcribe
+    dst: polish
+  - src: polish
+    dst: plan
+  - src: plan
+    dst: effects
+  - src: effects
+    dst: mux
+  - src: polish
+    dst: voiceover
+  - src: voiceover
+    dst: mux
+  - src: mux
+    dst: captions

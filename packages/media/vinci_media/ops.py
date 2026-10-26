@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -160,37 +162,102 @@ def reframe_9x16(src: Path, dst: Path) -> Path:
     return dst
 
 
-def burn_captions(src: Path, dst: Path, text: str) -> Path:
+def _ass_time(seconds: float) -> str:
+    seconds = max(0.0, float(seconds))
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = seconds % 60
+    return f"{hours}:{minutes:02d}:{secs:05.2f}"
+
+
+def _ass_escape(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("{", " ").replace("}", " ").replace("\n", " ").strip()
+
+
+def _captions_ass(
+    text: str,
+    lines: list[dict[str, Any]] | None,
+    width: int,
+    height: int,
+    duration: float,
+) -> str:
+    """ASS subtitle document: wrapped within safe insets, timed per line.
+
+    libass wraps text inside the left/right margins, so captions can never
+    run off the frame the way a raw drawtext line could. PlayRes matches
+    the real video dimensions so fontsize and margins scale with it.
+    """
+    play_x = max(int(width), 320)
+    play_y = max(int(height), 240)
+    margin_h = max(int(play_x * 0.06), 20)
+    margin_v = max(int(play_y * 0.06), 16)
+    fontsize = max(int(play_y / 30), 14)
+    style = (
+        f"Style: Caption,Sans,{fontsize},&H00FFFFFF,&H00FFFFFF,&H00000000,"
+        f"&H96000000,0,0,0,0,100,100,0,0,3,2,0,2,{margin_h},{margin_h},{margin_v},1"
+    )
+    events: list[str] = []
+    timed = [
+        line for line in (lines or [])
+        if isinstance(line, dict) and str(line.get("line") or "").strip()
+    ]
+    if timed:
+        for line in timed:
+            start = float(line.get("start") or 0)
+            end = float(line.get("end") or 0)
+            if end <= start:
+                end = start + 1.0
+            body = _ass_escape(str(line.get("line")))
+            events.append(
+                f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Caption,,0,0,0,,{body}"
+            )
+    else:
+        body = _ass_escape(text)
+        end = duration if duration > 0 else 1.0
+        events.append(
+            f"Dialogue: 0,0:00:00.00,{_ass_time(end)},Caption,,0,0,0,,{body}"
+        )
+    return (
+        "[Script Info]\n"
+        "ScriptType: v4.00+\n"
+        f"PlayResX: {play_x}\n"
+        f"PlayResY: {play_y}\n"
+        "WrapStyle: 0\n\n"
+        "[V4+ Styles]\n"
+        "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,"
+        "OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,"
+        "ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,"
+        "MarginL,MarginR,MarginV,Encoding\n"
+        f"{style}\n\n"
+        "[Events]\n"
+        "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n"
+        + "\n".join(events)
+        + "\n"
+    )
+
+
+def _subtitles_filter_arg(path: Path) -> str:
+    escaped = str(path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+    return f"subtitles='{escaped}'"
+
+
+def burn_captions(
+    src: Path,
+    dst: Path,
+    text: str,
+    lines: list[dict[str, Any]] | None = None,
+) -> Path:
     require_ffmpeg()
     dst.parent.mkdir(parents=True, exist_ok=True)
-    safe = text.replace("\\", "\\\\").replace(":", "\\:").replace("'", "")[:80]
-    font = _fontfile()
-    font_opt = f":fontfile='{font}'" if font else ""
-    vf = (
-        f"drawtext=text='{safe}'{font_opt}:fontcolor=white:fontsize=24:"
-        "x=(w-text_w)/2:y=h-80:box=1:boxcolor=black@0.5"
-    )
-    proc = subprocess.run(
-        [
-            FFMPEG,
-            "-y",
-            "-i",
-            str(src),
-            "-vf",
-            vf,
-            "-c:v",
-            pick_video_encoder(),
-            "-c:a",
-            "copy",
-            "-pix_fmt",
-            "yuv420p",
-            str(dst),
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if proc.returncode != 0:
+    info = probe(src)
+    width = int(info.get("width") or 1280)
+    height = int(info.get("height") or 720)
+    duration = float(info.get("duration") or 0)
+    ass = _captions_ass(text, lines, width, height, duration)
+    with tempfile.TemporaryDirectory() as tmp:
+        ass_path = Path(tmp) / "captions.ass"
+        ass_path.write_text(ass, encoding="utf-8")
+        vf = _subtitles_filter_arg(ass_path)
         proc = subprocess.run(
             [
                 FFMPEG,
@@ -202,7 +269,7 @@ def burn_captions(src: Path, dst: Path, text: str) -> Path:
                 "-c:v",
                 pick_video_encoder(),
                 "-c:a",
-                "aac",
+                "copy",
                 "-pix_fmt",
                 "yuv420p",
                 str(dst),
@@ -211,6 +278,27 @@ def burn_captions(src: Path, dst: Path, text: str) -> Path:
             capture_output=True,
             text=True,
         )
+        if proc.returncode != 0:
+            proc = subprocess.run(
+                [
+                    FFMPEG,
+                    "-y",
+                    "-i",
+                    str(src),
+                    "-vf",
+                    vf,
+                    "-c:v",
+                    pick_video_encoder(),
+                    "-c:a",
+                    "aac",
+                    "-pix_fmt",
+                    "yuv420p",
+                    str(dst),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
     if proc.returncode != 0:
         raise MediaError(proc.stderr.strip() or "ffmpeg caption failed")
     return dst
@@ -281,11 +369,12 @@ def render_timeline(paths: list[Path], dst: Path) -> Path:
 
 def mock_transcribe(path: Path) -> dict[str, Any]:
     """Deterministic local transcript. Not copied from any AGPL source."""
-    info = (
-        probe(path)
-        if path.suffix in {".mp4", ".mov", ".mkv", ".webm", ".wav", ".mp3"}
-        else {"duration": 3.0}
-    )
+    try:
+        # Probe regardless of extension: engine-materialized CAS blobs have no
+        # suffix, and ffprobe sniffs the container anyway.
+        info = probe(path)
+    except MediaError:
+        info = {"duration": 3.0}
     duration = max(float(info.get("duration") or 3.0), 1.0)
     mid = duration / 2
     return {
@@ -297,6 +386,144 @@ def mock_transcribe(path: Path) -> dict[str, Any]:
         ],
         "duration": duration,
     }
+
+
+def transcribe_media(path: Path) -> dict[str, Any]:
+    """Real local STT when whisper.cpp is configured, else the mock.
+
+    $0 by construction: whisper.cpp runs fully local. Set VINCI_WHISPER to the
+    whisper-cli binary and VINCI_WHISPER_MODEL to a ggml model file. Without
+    them we fall back to the deterministic mock and say so in the payload.
+    """
+    whisper = os.environ.get("VINCI_WHISPER", "").strip()
+    model = os.environ.get("VINCI_WHISPER_MODEL", "").strip()
+    if whisper and model and Path(whisper).is_file() and Path(model).is_file():
+        try:
+            return _whisper_transcribe(Path(whisper), Path(model), path)
+        except MediaError:
+            pass
+    fallback = mock_transcribe(path)
+    fallback["engine"] = "mock"
+    return fallback
+
+
+def _whisper_transcribe(whisper: Path, model: Path, media: Path) -> dict[str, Any]:
+    """Run whisper.cpp CLI on the media and normalize to our transcript shape."""
+    require_ffmpeg()
+    with tempfile.TemporaryDirectory() as tmp:
+        wav = Path(tmp) / "audio.wav"
+        proc = subprocess.run(
+            [
+                FFMPEG, "-y", "-i", str(media), "-vn",
+                "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", str(wav),
+            ],
+            check=False, capture_output=True, text=True,
+        )
+        if proc.returncode != 0:
+            raise MediaError(proc.stderr.strip() or "ffmpeg audio extract failed")
+        out_base = Path(tmp) / "out"
+        proc = subprocess.run(
+            [str(whisper), "-m", str(model), "-f", str(wav), "-oj", "-of", str(out_base), "-nt"],
+            check=False, capture_output=True, text=True,
+        )
+        if proc.returncode != 0:
+            raise MediaError(proc.stderr.strip() or "whisper-cli failed")
+        raw = json.loads((Path(str(out_base) + ".json")).read_text(encoding="utf-8"))
+    # whisper.cpp pads short audio to its 30s analysis window and reports
+    # segment offsets against that window, so offsets alone overstate the
+    # real duration. Clamp every timestamp to the probed media duration.
+    probed = float(probe(media).get("duration") or 0)
+    limit = probed if probed > 0 else float("inf")
+    words: list[dict[str, Any]] = []
+    full: list[str] = []
+    duration = 0.0
+    for seg in raw.get("transcription") or []:
+        offsets = seg.get("offsets") or {}
+        start = min(float(offsets.get("from") or 0) / 1000.0, limit)
+        end = min(float(offsets.get("to") or 0) / 1000.0, limit)
+        text = str(seg.get("text") or "").strip()
+        if not text:
+            continue
+        words.append({"start": round(start, 3), "end": round(end, 3), "text": text})
+        full.append(text)
+        duration = max(duration, end)
+    if duration <= 0 or (probed > 0 and duration > probed):
+        duration = probed
+    return {
+        "text": " ".join(full).strip(),
+        "words": words,
+        "duration": duration,
+        "engine": "whisper.cpp",
+    }
+
+
+def tts_voiceover(script: dict[str, Any], dst: Path, voice: str | None = None) -> Path:
+    """Real local TTS when piper is configured, else the tone mock.
+
+    $0 by construction: piper runs fully local. Set VINCI_PIPER to the piper
+    binary and VINCI_PIPER_MODEL to a voice .onnx file. Without them we fall
+    back to the deterministic tone track.
+    """
+    piper = os.environ.get("VINCI_PIPER", "").strip()
+    model = os.environ.get("VINCI_PIPER_MODEL", "").strip()
+    if piper and model and Path(piper).is_file() and Path(model).is_file():
+        try:
+            return _piper_voiceover(Path(piper), Path(model), script, dst)
+        except MediaError:
+            pass
+    return synth_voiceover(script, dst, voice=voice)
+
+
+def _piper_voiceover(piper: Path, model: Path, script: dict[str, Any], dst: Path) -> Path:
+    """Synthesize each script line with piper and place them on the timeline."""
+    require_ffmpeg()
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    lines = [line for line in (script.get("lines") or []) if isinstance(line, dict)]
+    duration = float(script.get("duration") or 0)
+    if duration <= 0 and lines:
+        duration = max(float(line.get("end") or 0) for line in lines)
+    if duration <= 0:
+        duration = 1.0
+    if not lines:
+        return synth_voiceover(script, dst)
+    with tempfile.TemporaryDirectory() as tmp:
+        clips: list[tuple[float, Path]] = []
+        for index, line in enumerate(lines):
+            text = str(line.get("line") or "").strip()
+            if not text:
+                continue
+            clip = Path(tmp) / f"line-{index:03d}.wav"
+            proc = subprocess.run(
+                [str(piper), "-m", str(model), "-f", str(clip), "--"],
+                input=text, check=False, capture_output=True, text=True,
+            )
+            if proc.returncode != 0:
+                raise MediaError(proc.stderr.strip() or "piper failed")
+            clips.append((max(float(line.get("start") or 0), 0.0), clip))
+        if not clips:
+            return synth_voiceover(script, dst)
+        inputs: list[str] = []
+        filters: list[str] = []
+        mix_labels: list[str] = []
+        for index, (start, clip) in enumerate(clips):
+            inputs += ["-i", str(clip)]
+            delay_ms = int(start * 1000)
+            filters.append(f"[{index}:a]adelay={delay_ms}|{delay_ms}[d{index}]")
+            mix_labels.append(f"[d{index}]")
+        filters.append(
+            "".join(mix_labels)
+            + f"amix=inputs={len(clips)}:normalize=0,volume=1.0,"
+            + f"atrim=0:{duration:.3f},apad=whole_dur={duration:.3f}[out]"
+        )
+        cmd = [
+            FFMPEG, "-y", *inputs,
+            "-filter_complex", ";".join(filters),
+            "-map", "[out]", str(dst),
+        ]
+        proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise MediaError(proc.stderr.strip() or "ffmpeg piper mix failed")
+    return dst
 
 
 def split_fixed(duration: float, count: int = 3) -> list[dict[str, Any]]:
@@ -355,3 +582,270 @@ def select_windows(
         end = float(word.get("end") or start + 1.5) + 0.2
         windows.append({"start": start, "end": end, "reason": word.get("text")})
     return windows
+
+
+FILLER_WORDS = frozenset(
+    {"um", "uh", "erm", "like", "basically", "actually", "literally"}
+)
+
+EFFECT_KINDS = ("zoom_in", "spotlight", "callout")
+
+
+def polish_script(transcript: dict[str, Any], style: str = "product-demo") -> dict[str, Any]:
+    """Deterministic script polish: drop filler words, split into timed lines.
+
+    $0 by construction - no LLM call; real polish can layer on later behind a key.
+    """
+    text = str(transcript.get("text") or "")
+    words = [w for w in text.split() if w.lower().strip(",.;:!?") not in FILLER_WORDS]
+    clean = " ".join(words).strip()
+    parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+", clean) if p.strip()]
+    if not parts and clean:
+        parts = [clean]
+    segments = transcript.get("segments") or []
+    duration = 0.0
+    if segments and isinstance(segments[-1], dict):
+        duration = float(segments[-1].get("end") or 0)
+    if duration <= 0:
+        duration = float(transcript.get("duration") or 0)
+    count = max(len(parts), 1)
+    step = duration / count if duration > 0 else 0.0
+    lines = [
+        {
+            "line": part,
+            "start": round(index * step, 3),
+            "end": round((index + 1) * step, 3),
+        }
+        for index, part in enumerate(parts)
+    ]
+    return {
+        "style": style,
+        "text": " ".join(parts),
+        "lines": lines,
+        "duration": duration,
+    }
+
+
+def plan_effects(script: dict[str, Any], width: int = 1920, height: int = 1080) -> dict[str, Any]:
+    """Deterministic effect plan: one effect per script line, kinds rotate."""
+    lines = script.get("lines") or []
+    effects: list[dict[str, Any]] = []
+    for index, line in enumerate(lines):
+        if not isinstance(line, dict):
+            continue
+        kind = EFFECT_KINDS[index % len(EFFECT_KINDS)]
+        effect: dict[str, Any] = {
+            "type": kind,
+            "start": float(line.get("start") or 0),
+            "end": float(line.get("end") or 0),
+        }
+        if kind == "zoom_in":
+            effect["params"] = {"scale": 1.15, "anchor": "center"}
+        elif kind == "spotlight":
+            effect["params"] = {
+                "x": width // 4,
+                "y": height // 4,
+                "w": width // 2,
+                "h": height // 2,
+            }
+        else:
+            effect["params"] = {
+                "text": str(line.get("line") or "")[:48],
+                "position": "lower-third",
+            }
+        effects.append(effect)
+    return {
+        "effects": effects,
+        "duration": float(script.get("duration") or 0),
+        "width": width,
+        "height": height,
+    }
+
+
+def _effect_filter(effect: dict[str, Any] | None, width: int, height: int) -> str | None:
+    if not effect:
+        return None
+    kind = effect.get("type")
+    params = effect.get("params") or {}
+    if kind == "zoom_in":
+        scale = float(params.get("scale") or 1.15)
+        if scale <= 1.0:
+            return None
+        return f"crop=iw/{scale}:ih/{scale},scale={width}:{height}"
+    if kind == "spotlight":
+        x = int(params.get("x") or 0)
+        y = int(params.get("y") or 0)
+        w = int(params.get("w") or width // 2)
+        h = int(params.get("h") or height // 2)
+        return f"drawbox={x}:{y}:{w}:{h}:color=yellow@0.9:t=8"
+    if kind == "callout":
+        text = str(params.get("text") or "").replace(":", "\\:").replace("'", "")
+        if not text:
+            return None
+        font = _fontfile()
+        if font:
+            return (
+                f"drawtext=fontfile='{font}':text='{text}'"
+                ":x=(w-text_w)/2:y=h-120:fontsize=42:fontcolor=white"
+                ":box=1:boxcolor=black@0.6:boxborderw=12"
+            )
+        return f"drawbox=0:{height - 120}:{width}:80:color=black@0.6:t=fill"
+    return None
+
+
+def apply_effects(src: Path, dst: Path, plan: dict[str, Any]) -> Path:
+    """Render the effect plan onto the recording. FFmpeg only, $0."""
+    require_ffmpeg()
+    effects = plan.get("effects") or []
+    if not effects:
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src, dst)
+        return dst
+    info = probe(src)
+    duration = float(info.get("duration") or 0)
+    width = int(info.get("width") or plan.get("width") or 1920)
+    height = int(info.get("height") or plan.get("height") or 1080)
+    work = dst.parent / (dst.stem + "-segments")
+    work.mkdir(parents=True, exist_ok=True)
+    timeline: list[tuple[float, float, dict[str, Any] | None]] = []
+    cursor = 0.0
+    for effect in sorted(effects, key=lambda item: float(item.get("start") or 0)):
+        start = float(effect.get("start") or 0)
+        end = float(effect.get("end") or 0)
+        if end <= start:
+            continue
+        if start > cursor:
+            timeline.append((cursor, start, None))
+        timeline.append((start, end, effect))
+        cursor = end
+    if duration > cursor:
+        timeline.append((cursor, duration, None))
+    parts: list[Path] = []
+    for index, (start, end, effect) in enumerate(timeline):
+        if end - start < 0.05:
+            continue
+        part = work / f"seg-{index:03d}.mp4"
+        cmd = [
+            FFMPEG,
+            "-y",
+            "-i",
+            str(src),
+            "-ss",
+            f"{start:.3f}",
+            "-to",
+            f"{end:.3f}",
+        ]
+        vf = _effect_filter(effect, width, height)
+        if vf:
+            cmd += ["-vf", vf]
+        cmd += [
+            "-c:v",
+            pick_video_encoder(),
+            "-c:a",
+            "aac",
+            "-pix_fmt",
+            "yuv420p",
+            str(part),
+        ]
+        proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise MediaError(proc.stderr.strip() or "ffmpeg apply_effects segment failed")
+        parts.append(part)
+    if not parts:
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src, dst)
+        return dst
+    concat(parts, dst)
+    return dst
+
+
+def synth_voiceover(script: dict[str, Any], dst: Path, voice: str | None = None) -> Path:
+    """Mock narration track: one soft tone per script line, silence elsewhere.
+
+    $0 and deterministic; a real TTS provider only enters when a key is set,
+    which is outside this op.
+    """
+    require_ffmpeg()
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    lines = [line for line in (script.get("lines") or []) if isinstance(line, dict)]
+    duration = float(script.get("duration") or 0)
+    if duration <= 0 and lines:
+        duration = max(float(line.get("end") or 0) for line in lines)
+    if duration <= 0:
+        duration = 1.0
+    if not lines:
+        cmd = [
+            FFMPEG,
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            f"anullsrc=r=44100:cl=mono:d={duration:.3f}",
+            str(dst),
+        ]
+        proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise MediaError(proc.stderr.strip() or "ffmpeg synth_voiceover failed")
+        return dst
+    filters: list[str] = []
+    mix_inputs: list[str] = []
+    for index, line in enumerate(lines):
+        start = max(float(line.get("start") or 0), 0.0)
+        end = max(float(line.get("end") or 0), start + 0.1)
+        length = end - start
+        freq = 360 + (index % 5) * 60
+        delay_ms = int(start * 1000)
+        filters.append(
+            f"sine=frequency={freq}:duration={length:.3f}[tone{index}]"
+        )
+        filters.append(
+            f"[tone{index}]adelay={delay_ms}|{delay_ms},volume=0.08[d{index}]"
+        )
+        mix_inputs.append(f"[d{index}]")
+    filters.append(
+        "".join(mix_inputs)
+        + f"amix=inputs={len(mix_inputs)}:normalize=0,apad,atrim=0:{duration:.3f}[out]"
+    )
+    cmd = [
+        FFMPEG,
+        "-y",
+        "-filter_complex",
+        ";".join(filters),
+        "-map",
+        "[out]",
+        "-t",
+        f"{duration:.3f}",
+        str(dst),
+    ]
+    proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise MediaError(proc.stderr.strip() or "ffmpeg synth_voiceover failed")
+    return dst
+
+
+def mux_audio(video: Path, audio: Path, dst: Path) -> Path:
+    """Mux a narration track under the rendered video."""
+    require_ffmpeg()
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        FFMPEG,
+        "-y",
+        "-i",
+        str(video),
+        "-i",
+        str(audio),
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
+        "-c:v",
+        "copy",
+        "-c:a",
+        "aac",
+        "-shortest",
+        str(dst),
+    ]
+    proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise MediaError(proc.stderr.strip() or "ffmpeg mux_audio failed")
+    return dst
