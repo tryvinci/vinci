@@ -282,11 +282,12 @@ def render_timeline(paths: list[Path], dst: Path) -> Path:
 
 def mock_transcribe(path: Path) -> dict[str, Any]:
     """Deterministic local transcript. Not copied from any AGPL source."""
-    info = (
-        probe(path)
-        if path.suffix in {".mp4", ".mov", ".mkv", ".webm", ".wav", ".mp3"}
-        else {"duration": 3.0}
-    )
+    try:
+        # Probe regardless of extension: engine-materialized CAS blobs have no
+        # suffix, and ffprobe sniffs the container anyway.
+        info = probe(path)
+    except MediaError:
+        info = {"duration": 3.0}
     duration = max(float(info.get("duration") or 3.0), 1.0)
     mid = duration / 2
     return {

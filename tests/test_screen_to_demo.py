@@ -110,7 +110,9 @@ def test_screen_to_demo_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     monkeypatch.setenv("VINCI_HOME", str(tmp_path))
     engine = Engine(tmp_path)
     engine.init_home(demo=True)
-    media = make_fixture_video(tmp_path / "recording.mp4", duration=3.0)
+    # Non-3s duration catches mock_transcribe falling back to its 3.0s default
+    # (engine-materialized CAS blobs carry no extension - regression guard).
+    media = make_fixture_video(tmp_path / "recording.mp4", duration=5.0)
     run = engine.start_run("@tryvinci/screen-to-demo", {"media": str(media)})
     assert run["state"] == "completed", json.dumps(run, default=str)[:800]
     assert run["estimate"]["total"] == 0
@@ -119,6 +121,8 @@ def test_screen_to_demo_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     asset = engine.store.get_asset(run["outputs"][-1])
     assert asset is not None
     assert asset.kind.value == "video"
+    out = engine._materialize(asset.uri)
+    assert probe(out)["duration"] > 4.0
     receipt = engine.store.get_job(run["job_ids"][-1])
     assert receipt is not None and receipt.receipt is not None
     assert receipt.receipt.computed_cost == 0
