@@ -343,21 +343,26 @@ def _whisper_transcribe(whisper: Path, model: Path, media: Path) -> dict[str, An
         if proc.returncode != 0:
             raise MediaError(proc.stderr.strip() or "whisper-cli failed")
         raw = json.loads((Path(str(out_base) + ".json")).read_text(encoding="utf-8"))
+    # whisper.cpp pads short audio to its 30s analysis window and reports
+    # segment offsets against that window, so offsets alone overstate the
+    # real duration. Clamp every timestamp to the probed media duration.
+    probed = float(probe(media).get("duration") or 0)
+    limit = probed if probed > 0 else float("inf")
     words: list[dict[str, Any]] = []
     full: list[str] = []
     duration = 0.0
     for seg in raw.get("transcription") or []:
         offsets = seg.get("offsets") or {}
-        start = float(offsets.get("from") or 0) / 1000.0
-        end = float(offsets.get("to") or 0) / 1000.0
+        start = min(float(offsets.get("from") or 0) / 1000.0, limit)
+        end = min(float(offsets.get("to") or 0) / 1000.0, limit)
         text = str(seg.get("text") or "").strip()
         if not text:
             continue
         words.append({"start": round(start, 3), "end": round(end, 3), "text": text})
         full.append(text)
         duration = max(duration, end)
-    if duration <= 0:
-        duration = float(probe(media).get("duration") or 0)
+    if duration <= 0 or (probed > 0 and duration > probed):
+        duration = probed
     return {
         "text": " ".join(full).strip(),
         "words": words,

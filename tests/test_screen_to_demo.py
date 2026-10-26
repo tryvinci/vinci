@@ -161,6 +161,39 @@ def test_transcribe_media_uses_whisper_when_configured(
     assert result["duration"] == 2.0
 
 
+def test_transcribe_media_clamps_whisper_padding_to_media_duration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """whisper.cpp pads short audio to a 30s window and reports offsets
+    against it; the transcript must be clamped to the probed duration."""
+    media = make_fixture_video(tmp_path / "recording.mp4", duration=2.0)
+    payload = tmp_path / "payload.json"
+    payload.write_text(json.dumps({
+        "transcription": [
+            {"offsets": {"from": 0, "to": 30000}, "text": " padded window"},
+        ]
+    }))
+    fake_whisper = tmp_path / "whisper-cli"
+    fake_whisper.write_text(
+        "#!/bin/sh\n"
+        "while [ $# -gt 0 ]; do\n"
+        "  if [ \"$1\" = \"-of\" ]; then shift; OUT=\"$1\"; fi\n"
+        "  shift\n"
+        "done\n"
+        f"cp {payload} \"${{OUT}}.json\"\n"
+    )
+    fake_whisper.chmod(0o755)
+    fake_model = tmp_path / "ggml-tiny.bin"
+    fake_model.write_bytes(b"fake")
+    monkeypatch.setenv("VINCI_WHISPER", str(fake_whisper))
+    monkeypatch.setenv("VINCI_WHISPER_MODEL", str(fake_model))
+    from vinci_media.ops import transcribe_media
+    result = transcribe_media(media)
+    assert result["engine"] == "whisper.cpp"
+    assert result["duration"] == 2.0
+    assert result["words"][0]["end"] == 2.0
+
+
 def test_transcribe_media_falls_back_to_mock(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
