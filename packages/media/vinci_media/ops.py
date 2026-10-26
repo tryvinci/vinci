@@ -162,37 +162,102 @@ def reframe_9x16(src: Path, dst: Path) -> Path:
     return dst
 
 
-def burn_captions(src: Path, dst: Path, text: str) -> Path:
+def _ass_time(seconds: float) -> str:
+    seconds = max(0.0, float(seconds))
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = seconds % 60
+    return f"{hours}:{minutes:02d}:{secs:05.2f}"
+
+
+def _ass_escape(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("{", " ").replace("}", " ").replace("\n", " ").strip()
+
+
+def _captions_ass(
+    text: str,
+    lines: list[dict[str, Any]] | None,
+    width: int,
+    height: int,
+    duration: float,
+) -> str:
+    """ASS subtitle document: wrapped within safe insets, timed per line.
+
+    libass wraps text inside the left/right margins, so captions can never
+    run off the frame the way a raw drawtext line could. PlayRes matches
+    the real video dimensions so fontsize and margins scale with it.
+    """
+    play_x = max(int(width), 320)
+    play_y = max(int(height), 240)
+    margin_h = max(int(play_x * 0.06), 20)
+    margin_v = max(int(play_y * 0.06), 16)
+    fontsize = max(int(play_y / 30), 14)
+    style = (
+        f"Style: Caption,Sans,{fontsize},&H00FFFFFF,&H00FFFFFF,&H00000000,"
+        f"&H96000000,0,0,0,0,100,100,0,0,3,2,0,2,{margin_h},{margin_h},{margin_v},1"
+    )
+    events: list[str] = []
+    timed = [
+        line for line in (lines or [])
+        if isinstance(line, dict) and str(line.get("line") or "").strip()
+    ]
+    if timed:
+        for line in timed:
+            start = float(line.get("start") or 0)
+            end = float(line.get("end") or 0)
+            if end <= start:
+                end = start + 1.0
+            body = _ass_escape(str(line.get("line")))
+            events.append(
+                f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Caption,,0,0,0,,{body}"
+            )
+    else:
+        body = _ass_escape(text)
+        end = duration if duration > 0 else 1.0
+        events.append(
+            f"Dialogue: 0,0:00:00.00,{_ass_time(end)},Caption,,0,0,0,,{body}"
+        )
+    return (
+        "[Script Info]\n"
+        "ScriptType: v4.00+\n"
+        f"PlayResX: {play_x}\n"
+        f"PlayResY: {play_y}\n"
+        "WrapStyle: 0\n\n"
+        "[V4+ Styles]\n"
+        "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,"
+        "OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,"
+        "ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,"
+        "MarginL,MarginR,MarginV,Encoding\n"
+        f"{style}\n\n"
+        "[Events]\n"
+        "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n"
+        + "\n".join(events)
+        + "\n"
+    )
+
+
+def _subtitles_filter_arg(path: Path) -> str:
+    escaped = str(path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+    return f"subtitles='{escaped}'"
+
+
+def burn_captions(
+    src: Path,
+    dst: Path,
+    text: str,
+    lines: list[dict[str, Any]] | None = None,
+) -> Path:
     require_ffmpeg()
     dst.parent.mkdir(parents=True, exist_ok=True)
-    safe = text.replace("\\", "\\\\").replace(":", "\\:").replace("'", "")[:80]
-    font = _fontfile()
-    font_opt = f":fontfile='{font}'" if font else ""
-    vf = (
-        f"drawtext=text='{safe}'{font_opt}:fontcolor=white:fontsize=24:"
-        "x=(w-text_w)/2:y=h-80:box=1:boxcolor=black@0.5"
-    )
-    proc = subprocess.run(
-        [
-            FFMPEG,
-            "-y",
-            "-i",
-            str(src),
-            "-vf",
-            vf,
-            "-c:v",
-            pick_video_encoder(),
-            "-c:a",
-            "copy",
-            "-pix_fmt",
-            "yuv420p",
-            str(dst),
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if proc.returncode != 0:
+    info = probe(src)
+    width = int(info.get("width") or 1280)
+    height = int(info.get("height") or 720)
+    duration = float(info.get("duration") or 0)
+    ass = _captions_ass(text, lines, width, height, duration)
+    with tempfile.TemporaryDirectory() as tmp:
+        ass_path = Path(tmp) / "captions.ass"
+        ass_path.write_text(ass, encoding="utf-8")
+        vf = _subtitles_filter_arg(ass_path)
         proc = subprocess.run(
             [
                 FFMPEG,
@@ -204,7 +269,7 @@ def burn_captions(src: Path, dst: Path, text: str) -> Path:
                 "-c:v",
                 pick_video_encoder(),
                 "-c:a",
-                "aac",
+                "copy",
                 "-pix_fmt",
                 "yuv420p",
                 str(dst),
@@ -213,6 +278,27 @@ def burn_captions(src: Path, dst: Path, text: str) -> Path:
             capture_output=True,
             text=True,
         )
+        if proc.returncode != 0:
+            proc = subprocess.run(
+                [
+                    FFMPEG,
+                    "-y",
+                    "-i",
+                    str(src),
+                    "-vf",
+                    vf,
+                    "-c:v",
+                    pick_video_encoder(),
+                    "-c:a",
+                    "aac",
+                    "-pix_fmt",
+                    "yuv420p",
+                    str(dst),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
     if proc.returncode != 0:
         raise MediaError(proc.stderr.strip() or "ffmpeg caption failed")
     return dst

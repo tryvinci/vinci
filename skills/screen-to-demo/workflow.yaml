@@ -41,6 +41,7 @@ nodes:
       op: burn_captions
       media: "{{nodes.mux.output}}"
       text: "{{nodes.polish.data.text}}"
+      lines: "{{nodes.polish.data.lines}}"
 edges:
   - src: transcribe
     dst: polish

@@ -98,6 +98,42 @@ def test_mux_audio_adds_audio_stream(tmp_path: Path) -> None:
     assert info["duration"] == pytest.approx(3.0, abs=0.5)
 
 
+def test_captions_ass_wraps_and_times_lines() -> None:
+    from vinci_media.ops import _captions_ass
+    lines = [
+        {"line": "first line of the demo", "start": 0.0, "end": 2.5},
+        {"line": "second line {with} braces", "start": 2.5, "end": 5.0},
+    ]
+    ass = _captions_ass("fallback text", lines, 1280, 720, 5.0)
+    assert "PlayResX: 1280" in ass and "PlayResY: 720" in ass
+    # safe insets: left/right margins are at least 6% of width
+    assert "MarginL" in ass
+    style = [ln for ln in ass.splitlines() if ln.startswith("Style:")][0]
+    parts = style.split(",")
+    margin_l, margin_r = int(parts[-4]), int(parts[-3])
+    assert margin_l >= 76 and margin_r >= 76
+    events = [ln for ln in ass.splitlines() if ln.startswith("Dialogue:")]
+    assert len(events) == 2
+    assert "0:00:00.00" in events[0] and "0:00:02.50" in events[0]
+    assert "0:00:02.50" in events[1] and "0:00:05.00" in events[1]
+    # braces escaped so libass cannot read them as override tags
+    assert "{" not in events[1].split(",,")[1]
+
+
+def test_burn_captions_long_text_stays_in_frame(tmp_path: Path) -> None:
+    from vinci_media.ops import burn_captions, probe
+    media = make_fixture_video(tmp_path / "recording.mp4", duration=3.0)
+    long_text = (
+        "this caption is deliberately far longer than the frame is wide so "
+        "wrapping inside the safe inset is the only correct outcome "
+        "supercalifragilisticexpialidociouslongwordtail"
+    )
+    out = burn_captions(media, tmp_path / "captioned.mp4", long_text)
+    info = probe(out)
+    assert info["duration"] > 2.0
+    assert info["width"] > 0
+
+
 def test_screen_to_demo_registered_and_free() -> None:
     loader = SkillLoader()
     skills = {s.id: s for s in loader.list_skills()}

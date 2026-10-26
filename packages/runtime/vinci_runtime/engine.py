@@ -2479,8 +2479,11 @@ class Engine:
             text = params.get("text") or "pricing"
             if not isinstance(text, str):
                 text = json.dumps(text)
+            lines = params.get("lines")
+            if not isinstance(lines, list):
+                lines = None
             dest = work / "captioned.mp4"
-            burn_captions(src, dest, str(text))
+            burn_captions(src, dest, str(text), lines=lines)
             outputs = [self._put_path(dest, kind=AssetKind.VIDEO, mime="video/mp4", run_id=run_id)]
         elif op == "polish_script":
             transcript = params.get("transcript")
