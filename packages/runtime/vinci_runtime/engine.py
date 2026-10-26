@@ -56,15 +56,20 @@ from vinci_media.adapt import (
 )
 from vinci_media.custom_presets import create_custom_preset, delete_custom_preset
 from vinci_media.ops import (
+    apply_effects,
     burn_captions,
     concat,
     cut,
     mock_transcribe,
+    mux_audio,
+    plan_effects,
+    polish_script,
     probe,
     reframe_9x16,
     render_timeline,
     select_windows,
     split_fixed,
+    synth_voiceover,
 )
 from vinci_media.partner_presets import check_export_bytes
 from vinci_protocol.constants import PROTOCOL_VERSION
@@ -2476,6 +2481,70 @@ class Engine:
                 text = json.dumps(text)
             dest = work / "captioned.mp4"
             burn_captions(src, dest, str(text))
+            outputs = [self._put_path(dest, kind=AssetKind.VIDEO, mime="video/mp4", run_id=run_id)]
+        elif op == "polish_script":
+            transcript = params.get("transcript")
+            if not isinstance(transcript, dict):
+                transcript = self._load_jsonish(transcript)
+            if not isinstance(transcript, dict):
+                raise ValueError("polish_script needs a transcript object")
+            extra = polish_script(
+                transcript, style=str(params.get("style") or "product-demo")
+            )
+            dest = work / "script.json"
+            dest.write_text(json.dumps(extra), encoding="utf-8")
+            outputs = [
+                self._put_path(
+                    dest,
+                    kind=AssetKind.TEXT,
+                    mime="application/json",
+                    run_id=run_id,
+                    extra_text=str(extra.get("text") or ""),
+                )
+            ]
+        elif op == "plan_effects":
+            script = params.get("script")
+            if not isinstance(script, dict):
+                script = self._load_jsonish(script)
+            if not isinstance(script, dict):
+                raise ValueError("plan_effects needs a script object")
+            extra = plan_effects(script)
+            dest = work / "effects.json"
+            dest.write_text(json.dumps(extra), encoding="utf-8")
+            outputs = [
+                self._put_path(
+                    dest,
+                    kind=AssetKind.TEXT,
+                    mime="application/json",
+                    run_id=run_id,
+                    extra_text=json.dumps(extra),
+                )
+            ]
+        elif op == "apply_effects":
+            src = self._materialize(params.get("media"))
+            plan = params.get("plan")
+            if not isinstance(plan, dict):
+                plan = self._load_jsonish(plan)
+            if not isinstance(plan, dict):
+                raise ValueError("apply_effects needs a plan object")
+            dest = work / "effected.mp4"
+            apply_effects(src, dest, plan)
+            outputs = [self._put_path(dest, kind=AssetKind.VIDEO, mime="video/mp4", run_id=run_id)]
+        elif op == "synth_voiceover":
+            script = params.get("script")
+            if not isinstance(script, dict):
+                script = self._load_jsonish(script)
+            if not isinstance(script, dict):
+                raise ValueError("synth_voiceover needs a script object")
+            voice = params.get("voice")
+            dest = work / "voiceover.wav"
+            synth_voiceover(script, dest, voice=str(voice) if voice else None)
+            outputs = [self._put_path(dest, kind=AssetKind.AUDIO, mime="audio/wav", run_id=run_id)]
+        elif op == "mux_audio":
+            video = self._materialize(params.get("media"))
+            audio = self._materialize(params.get("audio"))
+            dest = work / "muxed.mp4"
+            mux_audio(video, audio, dest)
             outputs = [self._put_path(dest, kind=AssetKind.VIDEO, mime="video/mp4", run_id=run_id)]
         elif op == "concat":
             paths = [self._materialize(item) for item in (params.get("media") or [])]
