@@ -19,6 +19,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 def test_studio_smoke(client: TestClient) -> None:
+    """The daemon HTML Studio still serves its key surfaces and shows the deprecation note."""
     page = client.get("/studio")
     assert page.status_code == 200
     assert "text/html" in page.headers.get("content-type", "")
@@ -38,6 +39,9 @@ def test_studio_smoke(client: TestClient) -> None:
     assert "compose-gallery" in body
     assert "gallery-query" in body
     assert "rankModels" in body
+    assert 'id="deprecated-note"' in body
+    assert "This HTML Studio is deprecated" in body
+    assert "vinci-html-deprecated-dismissed" in body
     assert "No models match" in body
     assert "composeModels" in body
     assert "model-card" in body

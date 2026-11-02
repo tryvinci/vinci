@@ -58,7 +58,7 @@ make install
 ./scripts/vinci studio
 ```
 
-Your studio opens at `http://127.0.0.1:4310/studio`, running in free demo mode. No account, no key, no cost. When you are ready for real models, open **Connect** (pictured above) and add a provider.
+Your studio opens at `http://127.0.0.1:4311`, running in free demo mode. No account, no key, no cost. When you are ready for real models, open **Connect** (pictured above) and add a provider.
 
 Then pick your path:
 

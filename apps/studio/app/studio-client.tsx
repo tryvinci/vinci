@@ -6,6 +6,60 @@ import { AdaptsPanel, EMPTY_PRESET_DRAFT, type PresetDraft } from "./adapts-pane
 import type { AdaptPresetRow, AdaptTarget, BatchStatus } from "./adapt-ui-shared";
 import { ModelCombo, type ComboModel } from "./model-combo";
 import { availabilityRank, modelAvailability, rankModels } from "../lib/model-search";
+import {
+  EMPTY_GRAPH,
+  HOME_VIEW,
+  NODE_H,
+  NODE_W,
+  SHORTCUTS,
+  NODE_CATALOG,
+  addNode as addGraphNode,
+  blockedReason,
+  commit,
+  connect,
+  curve,
+  defaultsFor,
+  disconnect,
+  duplicateNode,
+  estimateRun,
+  fitView,
+  GROUP_COLORS,
+  groupBounds,
+  groupNodes,
+  groupOf,
+  moveNodes,
+  nodesInRect,
+  freeSpot,
+  outputOf,
+  portY,
+  portsFor,
+  isEdited,
+  preview,
+  redo,
+  removeNodes,
+  searchCatalog,
+  setParams,
+  settle,
+  shortcutFor,
+  startHistory,
+  startParams,
+  toWorkflowNodes,
+  undo,
+  ungroupNodes,
+  updateGroup,
+  updateNode,
+  wheelZoomFactor,
+  wirePath,
+  withAncestors,
+  withKeys,
+  zoomAt,
+  type Graph,
+  type GraphEdge,
+  type GraphNode,
+  type MediaKind,
+  type ShortcutId,
+  type Viewport,
+} from "../lib/canvas-graph";
 
 const API = "/vinci-api";
 const CAMERAS = ["locked-off", "handheld", "tracking", "crane", "aerial"];
@@ -152,16 +206,6 @@ type Model = {
   pricing?: { amount?: number };
   constraints?: { aspect_ratios?: string[]; max_duration?: number; resolutions?: string[] };
 };
-type GraphNode = {
-  id: string;
-  type: string;
-  capability?: string;
-  model_id?: string;
-  params?: Record<string, unknown>;
-  x?: number;
-  y?: number;
-};
-type GraphEdge = { src: string; dst: string; input_key?: string };
 type Skill = { id: string; tags?: string[]; workflow?: { nodes?: GraphNode[]; edges?: GraphEdge[] } };
 type Run = {
   id: string;
@@ -404,14 +448,6 @@ function panelFor(model: Model | undefined, page: string) {
   };
 }
 
-function wirePath(a: GraphNode, b: GraphNode): string {
-  const x1 = (a.x || 0) + 196;
-  const y1 = (a.y || 0) + 44;
-  const x2 = b.x || 0;
-  const y2 = (b.y || 0) + 44;
-  return `M${x1} ${y1} C${x1 + 40} ${y1}, ${x2 - 40} ${y2}, ${x2} ${y2}`;
-}
-
 function modelIdForNode(node: GraphNode, fallbackId: string, catalog: Model[]): string {
   const cap = node.capability;
   for (const id of [node.model_id, fallbackId]) {
@@ -457,6 +493,7 @@ function RailIcon({ d, title }: { d: string; title: string }) {
 
 export function StudioClient() {
   const [page, setPage] = useState<PageId>("explore");
+  const [navOpen, setNavOpen] = useState(false);
   const [view, setView] = useState<"canvas" | "timeline">("canvas");
   const [category, setCategory] = useState("all");
   const [models, setModels] = useState<Model[]>([]);
@@ -487,10 +524,59 @@ export function StudioClient() {
   const [duration, setDuration] = useState("");
   const [scale, setScale] = useState("4x");
   const [uploadId, setUploadId] = useState<string | null>(null);
-  const [graph, setGraph] = useState<{ nodes: GraphNode[]; edges: GraphEdge[] }>({ nodes: [], edges: [] });
-  const [graphEdited, setGraphEdited] = useState(false);
+  const [graphHistory, setGraphHistory] = useState(() => startHistory(EMPTY_GRAPH));
+  const graph = graphHistory.present;
+  /** Every canvas edit goes through here so it can be undone. */
+  const setGraph = useCallback((next: Graph | ((g: Graph) => Graph)) => {
+    setGraphHistory((h) => commit(h, typeof next === "function" ? next(h.present) : next));
+  }, []);
+  const [selectedEdge, setSelectedEdge] = useState<GraphEdge | null>(null);
+  const [viewport, setViewport] = useState<Viewport>(HOME_VIEW);
+  const [canvasTool, setCanvasTool] = useState<"select" | "pan">("select");
+  const [panning, setPanning] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  /** Add menu at board coords; `from` set when opened from a node's output port. */
+  const [addMenu, setAddMenu] = useState<{ x: number; y: number; from?: string; kind?: MediaKind | null } | null>(null);
+  const [addQuery, setAddQuery] = useState("");
+  const [addIndex, setAddIndex] = useState(0);
+  /** Graph before the current prompt edit; the whole edit lands as one undo step on blur. */
+  const promptBaseRef = useRef<Graph | null>(null);
+  // Removing a focused textarea need not fire blur (Firefox), and it unmounts on node switch (keyed),
+  // page change, or leaving the canvas; settle the edit then too. Stable, since settlePrompt reads refs.
+  const settleOnUnmount = useCallback((el: HTMLTextAreaElement | null) => {
+    if (!el) settlePrompt();
+  }, []);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const spaceRef = useRef(false);
+  const panRef = useRef<{ x: number; y: number; vx: number; vy: number } | null>(null);
+  const viewportRef = useRef(viewport);
+  viewportRef.current = viewport;
+  /** A run-affecting canvas edit since load; Generate then sends the canvas instead of the template skill. */
+  const graphEdited = useMemo(() => isEdited(graphHistory), [graphHistory]);
   const [skillRef, setSkillRef] = useState<string | null>(null);
-  const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const [selection, setSelection] = useState<string[]>([]);
+  /** The one selected node (drawer, per-node actions); null when none or several are selected. */
+  const selectedNode = selection.length === 1 ? selection[0] : null;
+  const setSelectedNode = useCallback((id: string | null) => setSelection(id ? [id] : []), []);
+  /** Marquee rectangle in board coords while dragging on empty canvas. */
+  const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const marqueeRef = useRef<{ x: number; y: number; add: boolean } | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  const [renamingGroup, setRenamingGroup] = useState<string | null>(null);
+  /** Last run state per canvas node, shown on its card. */
+  const [nodeRuns, setNodeRuns] = useState<Record<string, { state: "running" | "done" | "cached" | "error"; error?: string }>>({});
+  /** Bumped per loaded graph, so a run that finishes after a reset cannot badge the new graph's nodes. */
+  const graphEpochRef = useRef(0);
+  /** Loading a template, skill, or collab snapshot starts a fresh history and drops stale selection or drags. */
+  const resetGraph = useCallback((next: Graph) => {
+    setGraphHistory(startHistory(next));
+    setViewport(HOME_VIEW);
+    setSelection([]);
+    setSelectedEdge(null);
+    setNodeRuns({}); // states are keyed by node id; a new graph may reuse ids
+    graphEpochRef.current += 1;
+    dragRef.current = null;
+  }, []);
   const [runIds, setRunIds] = useState<string[]>([]);
   const [log, setLog] = useState("");
   const [busy, setBusy] = useState(false);
@@ -522,7 +608,18 @@ export function StudioClient() {
   const [cast, setCast] = useState<CastRow[]>([]);
   const [castName, setCastName] = useState("");
   const [linkFrom, setLinkFrom] = useState<string | null>(null);
-  const dragRef = useRef<{ id: string; dx: number; dy: number; x: number; y: number; moved: boolean } | null>(null);
+  /** Node or frame drag: pointer start (screen), node starts (graph units), selection on a plain click. */
+  const dragRef = useRef<{
+    starts: Record<string, { x: number; y: number }>;
+    click: string[];
+    x: number;
+    y: number;
+    moved: boolean;
+    base: Graph;
+  } | null>(null);
+  const graphRef = useRef<Graph>(EMPTY_GRAPH);
+  const trackedRef = useRef<string[]>([]);
+  graphRef.current = graph;
   const linkFromRef = useRef<string | null>(null);
   const castFileRef = useRef<HTMLInputElement>(null);
   const composeStillRef = useRef<HTMLInputElement>(null);
@@ -818,21 +915,62 @@ export function StudioClient() {
 
   useEffect(() => {
     function move(ev: PointerEvent) {
+      const pan = panRef.current;
+      if (pan) {
+        setViewport((v) => ({ ...v, x: pan.vx + ev.clientX - pan.x, y: pan.vy + ev.clientY - pan.y }));
+        return;
+      }
+      const box = marqueeRef.current;
+      const rect = boardRef.current?.getBoundingClientRect();
+      if (box && rect) {
+        const px = ev.clientX - rect.left;
+        const py = ev.clientY - rect.top;
+        setMarquee({ x: Math.min(box.x, px), y: Math.min(box.y, py), w: Math.abs(px - box.x), h: Math.abs(py - box.y) });
+        return;
+      }
       const drag = dragRef.current;
       if (!drag) return;
       if (!drag.moved && Math.hypot(ev.clientX - drag.x, ev.clientY - drag.y) < 4) return;
+      if (!drag.moved) {
+        // What moves becomes the selection, so Delete acts on the node just dragged.
+        setSelection(Object.keys(drag.starts));
+        setSelectedEdge(null);
+      }
       drag.moved = true;
-      const x = Math.max(8, ev.clientX - drag.dx);
-      const y = Math.max(8, ev.clientY - drag.dy);
-      setGraph((g) => ({
-        ...g,
-        nodes: g.nodes.map((n) => (n.id === drag.id ? { ...n, x, y } : n)),
-      }));
+      const zoom = viewportRef.current.zoom;
+      const dx = (ev.clientX - drag.x) / zoom;
+      const dy = (ev.clientY - drag.y) / zoom;
+      setGraphHistory((h) => preview(h, moveNodes(h.present, drag.starts, dx, dy)));
     }
     function up() {
+      if (panRef.current) {
+        panRef.current = null;
+        setPanning(false);
+      }
+      const box = marqueeRef.current;
+      if (box) {
+        marqueeRef.current = null;
+        setMarquee((m) => {
+          if (m && m.w > 4 && m.h > 4) {
+            const v = viewportRef.current;
+            const hit = nodesInRect(graphRef.current, {
+              x: (m.x - v.x) / v.zoom,
+              y: (m.y - v.y) / v.zoom,
+              w: m.w / v.zoom,
+              h: m.h / v.zoom,
+            });
+            setSelection((sel) => (box.add ? [...new Set([...sel, ...hit])] : hit));
+          }
+          return null;
+        });
+      }
       const drag = dragRef.current;
-      if (drag && !drag.moved) setSelectedNode(drag.id);
-      else if (drag) setGraphEdited(true);
+      if (drag && !drag.moved) {
+        setSelection(drag.click);
+        setSelectedEdge(null);
+      } else if (drag) {
+        setGraphHistory((h) => settle(h, drag.base));
+      }
       dragRef.current = null;
     }
     window.addEventListener("pointermove", move);
@@ -969,13 +1107,164 @@ export function StudioClient() {
 
   function stampSelected(patch: Record<string, unknown>) {
     if (!selectedNode) return;
-    setGraph((g) => ({
-      ...g,
-      nodes: g.nodes.map((n) =>
-        n.id !== selectedNode ? n : { ...n, params: { ...(n.params || {}), ...patch } },
-      ),
-    }));
-    setGraphEdited(true);
+    setGraph((g) => setParams(g, selectedNode, patch));
+  }
+
+  function stepHistory(dir: "undo" | "redo") {
+    const next = dir === "undo" ? undo(graphHistory) : redo(graphHistory);
+    if (next === graphHistory) return;
+    setGraphHistory(next);
+    // Undoing an insert or duplicate must not leave its id selected (Delete and the drawer would point at nothing).
+    const ids = new Set(next.present.nodes.map((n) => n.id));
+    setSelection((sel) => sel.filter((id) => ids.has(id)));
+    setSelectedEdge(null);
+  }
+
+  function boardSize(): { w: number; h: number } {
+    const r = boardRef.current?.getBoundingClientRect();
+    return { w: r?.width || 0, h: r?.height || 0 };
+  }
+
+  /** Zoom by `factor` around the board centre. */
+  function zoomBy(factor: number) {
+    const { w, h } = boardSize();
+    setViewport((v) => zoomAt(v, v.zoom * factor, w / 2, h / 2));
+  }
+
+  function fitTo(nodes: GraphNode[]) {
+    const { w, h } = boardSize();
+    // offsetHeight ignores the board's zoom transform, so these are graph units.
+    const heights = new Map<string, number>();
+    boardRef.current?.querySelectorAll<HTMLElement>(".node[data-id]").forEach((el) => {
+      if (el.dataset.id) heights.set(el.dataset.id, el.offsetHeight);
+    });
+    setViewport(fitView(nodes, w, h, undefined, heights));
+  }
+
+  function runShortcut(id: ShortcutId) {
+    switch (id) {
+      case "undo":
+        return stepHistory("undo");
+      case "redo":
+        return stepHistory("redo");
+      case "delete":
+        return deleteSelection();
+      case "addNode":
+        return openAddMenu();
+      case "clear":
+        closeAddMenu();
+        setCtxMenu(null);
+        setRenamingGroup(null);
+        setSheetOpen(false);
+        setSelectedNode(null);
+        setSelectedEdge(null);
+        return;
+      case "duplicate": {
+        if (!selection.length) return;
+        const copies = selection.map((id) => {
+          const src = graph.nodes.find((n) => n.id === id);
+          return [id, (src?.capability || "node") + "-" + Math.random().toString(16).slice(2, 6)] as const;
+        });
+        setGraph((g) => copies.reduce((acc, [id, copyId]) => duplicateNode(acc, id, copyId), g));
+        setSelection(copies.map(([, copyId]) => copyId));
+        setLog(copies.length === 1 ? `Duplicated ${copies[0][0]} as ${copies[0][1]}.` : `Duplicated ${copies.length} nodes.`);
+        return;
+      }
+      case "selectAll":
+        setSelection(graph.nodes.map((n) => n.id));
+        setSelectedEdge(null);
+        return;
+      case "runSelection":
+        return runNodes(selection);
+      case "runAll": {
+        const blocker = graph.nodes.length ? runBlocker(graph.nodes.map((n) => n.id)) : "Canvas is empty.";
+        if (blocker) return setLog(blocker);
+        return void generate({ graph: true });
+      }
+      case "group":
+        return groupSelection();
+      case "ungroup":
+        return ungroupSelection();
+      case "fit":
+        return fitTo(graph.nodes);
+      case "fitSelection": {
+        const rows = graph.nodes.filter((n) => selection.includes(n.id));
+        return fitTo(rows.length ? rows : graph.nodes);
+      }
+      case "resetView": {
+        const { w, h } = boardSize();
+        return setViewport((v) => zoomAt(v, 1, w / 2, h / 2));
+      }
+      case "zoomIn":
+        return zoomBy(1.2);
+      case "zoomOut":
+        return zoomBy(1 / 1.2);
+      case "panMode":
+        return setCanvasTool("pan");
+      case "selectMode":
+        return setCanvasTool("select");
+      case "help":
+        return setSheetOpen((open) => !open);
+    }
+  }
+
+  function groupSelection() {
+    if (selection.length < 2) {
+      setLog("Select two or more nodes to group (shift-click or drag a box).");
+      return;
+    }
+    if (groupOf(graph, selection)) {
+      setLog("Already a group. Double-click the title to rename.");
+      return;
+    }
+    const id = "group-" + Math.random().toString(16).slice(2, 6);
+    setGraph((g) => groupNodes(g, selection, id));
+    setLog(`Grouped ${selection.length} nodes. Double-click the title to rename.`);
+  }
+
+  function ungroupSelection() {
+    const next = ungroupNodes(graph, selection);
+    if (next === graph) {
+      setLog("Nothing selected is in a group.");
+      return;
+    }
+    setGraph(next);
+    setLog("Ungrouped.");
+  }
+
+  /** Start a drag of `ids` (a node, a selection, or a frame's members); a plain click selects `click`. */
+  function startDrag(ev: { clientX: number; clientY: number }, ids: string[], click: string[]) {
+    dragRef.current = {
+      starts: Object.fromEntries(graph.nodes.filter((n) => ids.includes(n.id)).map((n) => [n.id, { x: n.x ?? 0, y: n.y ?? 0 }])),
+      click,
+      x: ev.clientX,
+      y: ev.clientY,
+      moved: false,
+      base: graph,
+    };
+  }
+
+  /** Right-click menu at the pointer, in board coords. */
+  function openCtxMenu(ev: { clientX: number; clientY: number; preventDefault: () => void }) {
+    ev.preventDefault();
+    const r = boardRef.current?.getBoundingClientRect();
+    if (!r) return;
+    closeAddMenu();
+    setCtxMenu({ x: Math.min(ev.clientX - r.left, r.width - 200), y: Math.min(ev.clientY - r.top, r.height - 220) });
+  }
+
+  /** Delete the selected wire, or else the selected nodes and their wires. */
+  function deleteSelection() {
+    if (selectedEdge) {
+      setGraph((g) => disconnect(g, selectedEdge.src, selectedEdge.dst));
+      setLog(`Removed the wire ${selectedEdge.src} → ${selectedEdge.dst}.`);
+      setSelectedEdge(null);
+    } else if (selection.length) {
+      const gone = selection;
+      setGraph((g) => removeNodes(g, gone));
+      setLog(`Deleted ${gone.length === 1 ? gone[0] : gone.length + " nodes"}. Undo with ⌘Z.`);
+      setSelection([]);
+    } else return;
   }
 
   async function ingest(file: File): Promise<Asset> {
@@ -999,46 +1288,27 @@ export function StudioClient() {
     return null;
   }
 
-  function withShotParams(nodes: GraphNode[]): GraphNode[] {
-    return nodes.map((n) => {
-      const params = { ...(n.params || {}) };
-      if (!params.aspect_ratio) params.aspect_ratio = "{{inputs.aspect_ratio}}";
-      if ((n.capability === "t2v" || n.capability === "i2v") && params.duration == null) {
-        params.duration = "{{inputs.duration}}";
-      }
-      if (!params.camera) params.camera = "{{inputs.camera}}";
-      if (!params.lens) params.lens = "{{inputs.lens}}";
-      if (!params.look) params.look = "{{inputs.look}}";
-      if (!params.aperture) params.aperture = "{{inputs.aperture}}";
-      if (!params.genre) params.genre = "{{inputs.genre}}";
-      if (!params.lighting) params.lighting = "{{inputs.lighting}}";
-      if (!params.palette) params.palette = "{{inputs.palette}}";
-      if ((n.capability === "t2v" || n.capability === "i2v") && !params.motion) {
-        params.motion = "{{inputs.motion}}";
-      }
-      const { x, y, ...rest } = n;
-      void x;
-      void y;
-      return { ...rest, params };
-    });
-  }
-
-  async function generate(opts?: { nodeId?: string; graph?: boolean }) {
+  async function generate(opts?: { nodeIds?: string[]; graph?: boolean }) {
     if (busy) return;
+    const epoch = graphEpochRef.current;
     const model = selected;
-    const animating = animateStill(model) && mode.showStill;
+    // Generate graph and node runs always send the canvas; animating a still is a page run.
+    const animating = animateStill(model) && mode.showStill && !opts?.nodeIds?.length && !opts?.graph;
     const skill = skillFor(model);
-    const upscaling = page === "upscale";
-    const text = upscaling
-      ? prompt.trim() || "upscale"
-      : animating
-        ? prompt.trim()
-        : prompt.trim() || "north-light oak cube, 50mm cinema still.";
     if (!model) {
       setLog("Studio is still loading models.");
       return;
     }
-    if (model.provider !== "mock" && !usable(model)) {
+    const generateNodes = graph.nodes.filter((n) => n.type === "generate");
+    // A canvas run can get its image from an upstream node, so only page runs need one up front.
+    const canvasRun = !animating && (!!opts?.nodeIds?.length || ((graphEdited || !!opts?.graph) && generateNodes.length > 0));
+    // Canvas nodes run on their pinned model or one the runtime picks: only page runs, targets that fall
+    // back to the page model, and nodes pinned to it need it to be usable.
+    const targets = new Set(opts?.nodeIds || []);
+    const sent = targets.size ? graph.nodes.filter((n) => withAncestors(graph, targets).has(n.id)) : generateNodes;
+    const pageModelUsed =
+      !canvasRun || sent.some((n) => (targets.has(n.id) ? modelIdForNode(n, model.id, models) : n.model_id) === model.id);
+    if (pageModelUsed && model.provider !== "mock" && !usable(model)) {
       const status = modelAvailability(model, doctor.providers?.[model.provider], !!doctor.live_spend);
       if (status === "spend_off") {
         setLog("This model has a key, but live spend is off. Set VINCI_ALLOW_LIVE_SPEND=1 to call it.");
@@ -1052,23 +1322,16 @@ export function StudioClient() {
       );
       return;
     }
-    const inputs = shotInputs({ prompt: text });
-    const previousImage =
-      [...projectRuns]
-        .reverse()
-        .flatMap((run) => [...(run.outputs || [])].reverse())
-        .map((id) => imageAssetId(id))
-        .find((id) => id) || null;
-    const fallback = !model.capabilities?.includes("t2v") ? previousImage : null;
-    const mediaId = imageAssetId(uploadId) || imageAssetId(firstFrameId) || fallback;
+    const inputs = runInputs(model);
+    const skillNodes = (skills.find((s) => s.id === skill)?.workflow?.nodes || []).filter((n) => n.type === "generate");
+    // Skills like still-to-upscale generate their own media first; only a bare upscale needs a page image.
+    const makesMedia = skillNodes.some((n) => n.capability === "t2i" || n.capability === "t2v");
     if (animating) {
-      if (!mediaId) {
+      if (!inputs.media) {
         setLog("Add a still, then describe how it should move.");
         return;
       }
-      inputs.media = mediaId;
-      inputs.image = mediaId;
-    } else if ((skill.includes("upscale") || page === "upscale") && !uploadId && !lastDigest) {
+    } else if (!canvasRun && ((skill.includes("upscale") && !makesMedia) || page === "upscale") && !uploadId && !lastDigest) {
       setLog("Generate or drop a still first, then upscale.");
       return;
     }
@@ -1115,48 +1378,47 @@ export function StudioClient() {
       }
       const cap = Number(maxCost);
       if (maxCost !== "" && !Number.isNaN(cap)) payload.max_cost = cap;
-      const generateNodes = graph.nodes.filter((n) => n.type === "generate");
-      const skillNodes = (skills.find((s) => s.id === skill)?.workflow?.nodes || []).filter((n) => n.type === "generate");
-      const onlyId = opts?.nodeId;
-      if (onlyId) {
-        const keep = new Set([onlyId]);
-        let added = true;
-        while (added) {
-          added = false;
-          for (const e of graph.edges) {
-            if (keep.has(e.dst) && !keep.has(e.src)) {
-              keep.add(e.src);
-              added = true;
-            }
-          }
-        }
+      // Canvas nodes this run will show state on.
+      let tracked: string[] = [];
+      if (targets.size) {
+        const keep = withAncestors(graph, targets);
+        tracked = [...keep];
         payload.workflow = {
           id: "canvas-node",
           version: "1.0.0",
           preference: pref,
-          nodes: withShotParams(graph.nodes.filter((n) => keep.has(n.id))).map((n) =>
-            n.id === onlyId ? { ...n, model_id: modelIdForNode(n, model.id, models) } : n,
+          nodes: toWorkflowNodes(graph.nodes.filter((n) => keep.has(n.id))).map((n) =>
+            targets.has(n.id) ? { ...n, model_id: modelIdForNode(n, model.id, models) } : n,
           ),
           edges: graph.edges.filter((e) => keep.has(e.src) && keep.has(e.dst)),
         };
       } else if (!payload.workflow && (graphEdited || opts?.graph) && generateNodes.length) {
+        tracked = generateNodes.map((n) => n.id);
         payload.workflow = {
           id: "canvas",
           version: "1.0.0",
           preference: pref,
-          nodes: withShotParams(graph.nodes),
+          nodes: toWorkflowNodes(graph.nodes),
           edges: graph.edges,
         };
       } else if (!payload.workflow) {
         payload.skill = skill;
         if (skillNodes.length <= 1) payload.model_id = model.id;
       }
+      trackedRef.current = tracked;
+      if (tracked.length) setNodeRuns((prev) => ({ ...prev, ...Object.fromEntries(tracked.map((id) => [id, { state: "running" as const }])) }));
       const body = await api<Run>("/runs", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
       setRunIds((ids) => [...ids, body.id]);
+      if (tracked.length) {
+        const results = await nodeRunStates(body, tracked);
+        if (epoch === graphEpochRef.current) setNodeRuns((prev) => ({ ...prev, ...results }));
+        // Recorded: a later failure (media refresh) is logged but must not mark these nodes as errors.
+        trackedRef.current = [];
+      }
       await loadMedia();
       const digest = body.outputs?.[0];
       setLog(
@@ -1165,10 +1427,68 @@ export function StudioClient() {
           : JSON.stringify(body.error || body),
       );
     } catch (err) {
-      setLog(String(err instanceof Error ? err.message : err));
+      const message = String(err instanceof Error ? err.message : err);
+      setLog(message);
+      const failed = trackedRef.current;
+      if (failed.length && epoch === graphEpochRef.current) setNodeRuns((prev) => ({ ...prev, ...Object.fromEntries(failed.map((id) => [id, { state: "error" as const, error: message }])) }));
     } finally {
+      trackedRef.current = [];
       setBusy(false);
     }
+  }
+
+  /** Per-node states after a run: output present (cached when the job hit the runtime cache) or error. */
+  async function nodeRunStates(body: Run, ids: string[]) {
+    const next: typeof nodeRuns = {};
+    const error = body.state === "completed" ? "" : JSON.stringify(body.error || body.state || "failed");
+    await Promise.all(
+      ids.map(async (id) => {
+        const row = body.nodes?.[id];
+        if (!row?.output && !row?.outputs?.length) {
+          next[id] = { state: "error", error: error || "No output." };
+          return;
+        }
+        const job = row.job_id ? await api<{ estimate?: { cached?: boolean } }>(`/jobs/${row.job_id}`).catch(() => null) : null;
+        next[id] = { state: job?.estimate?.cached ? "cached" : "done" };
+      }),
+    );
+    return next;
+  }
+
+  /**
+   * Price of the model a node runs on, for the pre-run estimate. A run pins its targets (and ancestors
+   * that set `model_id`); other ancestors are resolved by the runtime, so they count as unpriced.
+   */
+  function nodePrice(n: GraphNode, targets: Set<string>): number | null {
+    if (!targets.has(n.id) && !n.model_id) return null;
+    const id = modelIdForNode(n, selected?.id || "", models);
+    return models.find((m) => m.id === id)?.pricing?.amount ?? null;
+  }
+
+  /** Short pre-run cost of `ids` and what feeds them; `pinned` are the nodes the run pins to a model. */
+  function runCost(ids: string[], pinned = new Set(ids)): { nodes: number; text: string } {
+    const e = estimateRun(graph, ids, (n) => nodePrice(n, pinned));
+    const parts = [e.nodes > e.unpriced ? `up to ${money(e.total)}` : "", e.unpriced ? `${e.unpriced} not estimated` : ""];
+    return { nodes: e.nodes, text: parts.filter(Boolean).join(" + ") };
+  }
+
+  function runLabel(ids: string[], pinned?: Set<string>): string {
+    const { nodes, text } = runCost(ids, pinned);
+    return `Run ${nodes} node${nodes === 1 ? "" : "s"} · ${text}. Unchanged nodes reuse the cache at $0.`;
+  }
+
+  /** Run `ids` and what feeds them, unless something required is missing. */
+  function runNodes(ids: string[]) {
+    if (!ids.length) {
+      setLog("Select nodes to run.");
+      return;
+    }
+    const blocker = runBlocker(ids);
+    if (blocker) {
+      setLog(blocker);
+      return;
+    }
+    void generate({ nodeIds: ids });
   }
 
   function openTemplate(t: Template) {
@@ -1198,26 +1518,24 @@ export function StudioClient() {
     if (defaults.duration != null) setDuration(String(defaults.duration));
     if (defaults.resolution) setResolution(String(defaults.resolution));
     setSkillRef(skill?.id || null);
-    setGraph(
+    resetGraph(
       skill
         ? graphFromSkill(skill, nextCamera, nextLens, nextLook, nextMotion, nextAperture, nextGenre, nextLighting, nextPalette)
         : { nodes: [], edges: [] },
     );
-    setGraphEdited(false);
     setSelectedNode(null);
     if (nextPage === "canvas") setView("canvas");
     setPage(nextPage);
   }
 
-  function addNode(capability: string) {
-    const id = capability + "-" + Math.random().toString(16).slice(2, 6);
-    const n: GraphNode = {
-      id,
+  /** A fresh node: its own prompt seeded from the page, the cinema stack, and capability defaults. */
+  function buildNode(capability: string, x: number, y: number): GraphNode {
+    const video = capability === "t2v" || capability === "i2v";
+    return {
+      id: capability + "-" + Math.random().toString(16).slice(2, 6),
       type: "generate",
       capability,
       params: {
-        prompt: "{{inputs.prompt}}",
-        aspect_ratio: "{{inputs.aspect_ratio}}",
         camera,
         lens,
         look,
@@ -1225,28 +1543,110 @@ export function StudioClient() {
         palette,
         aperture,
         genre,
+        ...(video ? { motion } : {}),
+        ...startParams(capability, { prompt, aspect_ratio: aspectRatio, duration }),
       },
-      x: 60 + (graph.nodes.length % 3) * 210,
-      y: 80,
+      x,
+      y,
     };
-    if (capability === "i2i" || capability === "i2v") {
-      n.params = { ...n.params, media: "{{inputs.media}}" };
+  }
+
+  /** The page prompt a run sends: animating a still may leave it empty; other runs get a default. */
+  function runPrompt(model?: Model): string {
+    const text = prompt.trim();
+    if (page === "upscale") return text || "upscale";
+    return animateStill(model) && mode.showStill ? text : text || "north-light oak cube, 50mm cinema still.";
+  }
+
+  /** Page inputs a run sends: the shot stack, plus the still as media and image when animating one. */
+  function runInputs(model?: Model): Record<string, unknown> {
+    const inputs = shotInputs({ prompt: runPrompt(model) });
+    if (!(animateStill(model) && mode.showStill)) return inputs;
+    const previous = model?.capabilities?.includes("t2v")
+      ? null
+      : [...projectRuns]
+          .reverse()
+          .flatMap((run) => [...(run.outputs || [])].reverse())
+          .map((id) => imageAssetId(id))
+          .find((id) => id) || null;
+    const still = imageAssetId(uploadId) || imageAssetId(firstFrameId) || previous;
+    return still ? { ...inputs, media: still, image: still } : inputs;
+  }
+
+  /** Page inputs a canvas run would send, as has-a-value flags (for `blockedReason`). */
+  function pageInputFlags(): Record<string, boolean> {
+    const sent = runInputs(selected);
+    return Object.fromEntries(Object.entries(sent).map(([k, v]) => [k, v != null && v !== ""]));
+  }
+
+  /** First reason the given nodes (and what feeds them) cannot run, or null. */
+  function runBlocker(ids: Iterable<string>): string | null {
+    const page = pageInputFlags();
+    for (const id of withAncestors(graph, ids)) {
+      const node = graph.nodes.find((n) => n.id === id);
+      const reason = node && node.type === "generate" ? blockedReason(node, page) : null;
+      if (reason) return `${id}: ${reason}`;
     }
-    if (capability === "t2v" || capability === "i2v") {
-      n.params = { ...n.params, duration: "{{inputs.duration}}", motion };
-    }
-    if (capability === "i2v") {
-      n.params = { ...n.params, image: "{{inputs.image}}" };
-    }
-    const prev = graph.nodes.at(-1);
-    const edges = prev
-      ? [...graph.edges, { src: prev.id, dst: id, input_key: capability === "i2v" ? "image" : "media" }]
-      : graph.edges;
-    setGraph({ nodes: [...graph.nodes, n], edges });
-    setGraphEdited(true);
+    return null;
+  }
+
+  /** Insert a node: beside `from` (and wired to it when the types fit), else at the board centre. */
+  function insertNode(capability: string, from?: string) {
+    const src = from ? graph.nodes.find((n) => n.id === from) : undefined;
+    const { w, h } = boardSize();
+    const want = src
+      ? { x: (src.x || 0) + NODE_W + 80, y: src.y || 0 }
+      : w
+        ? { x: (w / 2 - viewport.x) / viewport.zoom - NODE_W / 2, y: (h / 2 - viewport.y) / viewport.zoom - 80 }
+        : { x: 60 + (graph.nodes.length % 3) * 210, y: 80 }; // board not mounted (inspector on another page)
+    const at = freeSpot(graph, want.x, want.y);
+    const n = buildNode(capability, at.x, at.y);
+    const next = addGraphNode(graph, n, src?.id);
+    setGraph(next);
+    setSelectedNode(n.id);
+    setSelectedEdge(null);
+    const wired = next.edges.length > graph.edges.length;
+    setLog(wired ? `Added ${n.id}, wired from ${src?.id}.` : `Added ${n.id}.`);
+    return n.id;
+  }
+
+  function addNode(capability: string) {
+    insertNode(capability);
     setSkillRef(null);
     setView("canvas");
     setPage("canvas");
+  }
+
+  /** Open the add menu at the board centre, or beside `from`'s output port filtered to what fits. */
+  function openAddMenu(from?: string) {
+    const { w, h } = boardSize();
+    const src = from ? graph.nodes.find((n) => n.id === from) : undefined;
+    let x = w / 2 - 150;
+    let y = h / 2 - 150;
+    if (src) {
+      const right = ((src.x || 0) + NODE_W) * viewport.zoom + viewport.x;
+      x = right + 96;
+      y = ((src.y || 0) + portY(0)) * viewport.zoom + viewport.y - 22;
+      if (x + 300 > w - 8) {
+        // No room on the right: open under the node so the ghost wire stays visible.
+        x = right - 280;
+        y = ((src.y || 0) + NODE_H) * viewport.zoom + viewport.y + 32;
+      }
+    }
+    setAddMenu({
+      x: Math.max(8, Math.min(x, w - 312)),
+      y: Math.max(56, Math.min(y, h - 300)),
+      from: src?.id,
+      kind: src ? portsFor(src).output : null,
+    });
+    setAddQuery("");
+    setAddIndex(0);
+  }
+
+  function closeAddMenu() {
+    setAddMenu(null);
+    linkFromRef.current = null;
+    setLinkFrom(null);
   }
 
   function addShot() {
@@ -1494,7 +1894,7 @@ export function StudioClient() {
       if (body.name) setCollabName(body.name);
       const snap = body.snapshot || {};
       if (snap.prompt) setPrompt(snap.prompt);
-      if (snap.graph) setGraph(snap.graph);
+      if (snap.graph) resetGraph(snap.graph);
       if (snap.cast) setCast(snap.cast);
       if (snap.page) setPage(snap.page);
       setLog("Opened collab " + body.id);
@@ -1541,19 +1941,60 @@ export function StudioClient() {
 
   const live = Object.entries(doctor.providers || {}).filter(([id, row]) => id !== "mock" && row && row.available);
   const spent = projectRuns.reduce((sum, r) => sum + Number(r.estimate?.total || 0), 0);
-  const rail: { id: PageId; title: string; d: string }[] = [
-    { id: "explore", title: "Explore", d: "M9 2a7 7 0 1 1 0 14A7 7 0 0 1 9 2zm0 2v5l3 2" },
-    { id: "image", title: "Image", d: "M3 4h12v10H3zM3 12l3-3 2 2 2-2 4 4" },
-    { id: "adapts", title: "Adapts", d: "M3 3h5v5H3zM10 3h5v5h-5zM5.5 10h5v5h-5z" },
-    { id: "video", title: "Video", d: "M2.5 5h9v8h-9zM11.5 8l4-2v6l-4-2z" },
-    { id: "speak", title: "Speak", d: "M4 8v2c0 2.8 2.2 5 5 5s5-2.2 5-5V8M7 3h4v8H7z" },
-    { id: "upscale", title: "Upscale still", d: "M3 7h6v6H3zM8 3h7v7H8z" },
-    { id: "canvas", title: "Canvas", d: "M3 4h5v4H3zM10 10h5v4h-5zM8 6h3v4" },
-    { id: "library", title: "Library", d: "M3 4h4v11H3zM8 4h3v11H8zM12.5 4.5L15 15" },
-    { id: "agent", title: "Supercomputer", d: "M4 5h10v8H4zM7 14h4M6 3v2M12 3v2" },
-    { id: "space", title: "3D", d: "M9 2l7 4v8l-7 4-7-4V6zM9 10V18M2 6l7 4 7-4" },
-    { id: "collab", title: "Collab", d: "M6 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zm6 0a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM3 16c0-2 2-3.5 3.5-3.5S10 14 10 16M8 16c0-2 2-3.5 4-3.5s4 1.5 4 3.5" },
+  const railGroups: {
+    label?: string;
+    items: { id: PageId; title: string; d: string; flyout?: "image" | "video" }[];
+  }[] = [
+    {
+      items: [{ id: "explore", title: "Explore", d: "M9 2a7 7 0 1 1 0 14A7 7 0 0 1 9 2zm0 2v5l3 2" }],
+    },
+    {
+      label: "Formats",
+      items: [
+        { id: "image", title: "Image", d: "M3 4h12v10H3zM3 12l3-3 2 2 2-2 4 4", flyout: "image" },
+        { id: "video", title: "Video", d: "M2.5 5h9v8h-9zM11.5 8l4-2v6l-4-2z", flyout: "video" },
+      ],
+    },
+    {
+      label: "Workflows",
+      items: [
+        { id: "canvas", title: "Canvas", d: "M3 4h5v4H3zM10 10h5v4h-5zM8 6h3v4" },
+        { id: "library", title: "Library", d: "M3 4h4v11H3zM8 4h3v11H8zM12.5 4.5L15 15" },
+      ],
+    },
   ];
+  const imageOn = page === "image" || page === "upscale" || page === "adapts";
+  const videoOn = page === "video" || page === "speak";
+  const liveSpend = !!doctor.live_spend;
+  const flyoutModels = (kind: "image" | "video") => {
+    const rows = models.filter((row) => {
+      if (row.provider === "mock") return false;
+      const caps = row.capabilities || [];
+      if (kind === "image") return caps.includes("t2i") || caps.includes("upscale");
+      return caps.includes("t2v") || caps.includes("i2v") || caps.includes("lipsync") || caps.includes("tts");
+    });
+    rows.sort(
+      (a, b) =>
+        availabilityRank(modelAvailability(a, doctor.providers?.[a.provider], liveSpend)) -
+        availabilityRank(modelAvailability(b, doctor.providers?.[b.provider], liveSpend)),
+    );
+    return rows.slice(0, 8);
+  };
+  function openFlyoutPage(next: PageId) {
+    setPage(next);
+    setModelsOpen(false);
+    setNavOpen(false);
+  }
+  function pickFlyoutModel(row: Model, kind: "image" | "video") {
+    const caps = row.capabilities || [];
+    setModelId(row.id);
+    if (kind === "image") {
+      openFlyoutPage(caps.includes("t2i") ? "image" : "upscale");
+      return;
+    }
+    const talk = (caps.includes("lipsync") || caps.includes("tts")) && !caps.includes("t2v") && !caps.includes("i2v");
+    openFlyoutPage(talk ? "speak" : "video");
+  }
 
   let main: ReactNode = null;
   if (page === "explore") {
@@ -1821,9 +2262,25 @@ export function StudioClient() {
     );
   } else if (page === "canvas") {
     const selectedRow = graph.nodes.find((n) => n.id === selectedNode);
+    const pageHas = pageInputFlags();
+    const graphIds = graph.nodes.map((n) => n.id);
+    const graphBlocker = graph.nodes.length ? runBlocker(graphIds) : null;
+    // Generate graph pins nothing: only nodes with their own model_id are priced.
+    const graphCost = graph.nodes.length ? runCost(graphIds, new Set()).text : "";
+    const nodeBlocker = selectedRow ? runBlocker([selectedRow.id]) : null;
     main = (
       <div className="stage">
-        <main className="board">
+        <main
+          className="board"
+          style={
+            view === "canvas"
+              ? {
+                  backgroundPosition: `${viewport.x}px ${viewport.y}px`,
+                  backgroundSize: `${20 * viewport.zoom}px ${20 * viewport.zoom}px`,
+                }
+              : undefined
+          }
+        >
           {graph.nodes.length === 0 && view === "canvas" ? (
             <div className="empty">
               <div>
@@ -1836,97 +2293,295 @@ export function StudioClient() {
             </div>
           ) : null}
           {view === "canvas" ? (
-            <div className="graph">
-              <svg className="wires" aria-hidden="true">
-                {graph.edges.map((e) => {
-                  const a = graph.nodes.find((n) => n.id === e.src);
-                  const b = graph.nodes.find((n) => n.id === e.dst);
-                  if (!a || !b) return null;
+            <div
+              ref={boardRef}
+              className={"graph" + (canvasTool === "pan" ? " pan" : "") + (panning ? " panning" : "")}
+              onPointerDown={(ev) => {
+                if (canvasTool === "pan" || spaceRef.current || ev.button === 1) {
+                  ev.preventDefault();
+                  panRef.current = { x: ev.clientX, y: ev.clientY, vx: viewport.x, vy: viewport.y };
+                  setPanning(true);
+                  return;
+                }
+                setCtxMenu(null);
+                if (ev.target !== ev.currentTarget || ev.button !== 0) return;
+                const r = ev.currentTarget.getBoundingClientRect();
+                marqueeRef.current = { x: ev.clientX - r.left, y: ev.clientY - r.top, add: ev.shiftKey };
+                if (!ev.shiftKey) setSelection([]);
+                setSelectedEdge(null);
+                if (addMenu) closeAddMenu();
+              }}
+              onContextMenu={(ev) => {
+                if (ev.target === ev.currentTarget) openCtxMenu(ev);
+              }}
+            >
+              <div
+                className="graph-layer"
+                style={{ transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})` }}
+              >
+                {(graph.groups || []).map((grp) => {
+                  const b = groupBounds(graph, grp);
+                  if (!b) return null;
+                  const active = groupOf(graph, selection)?.id === grp.id;
                   return (
-                    <path
-                      key={e.src + "->" + e.dst}
-                      d={wirePath(a, b)}
-                      fill="none"
-                      stroke="#3f3f46"
-                      strokeWidth="1.4"
-                    />
+                    <div
+                      key={grp.id}
+                      className={"group-frame c-" + grp.color + (active ? " on" : "")}
+                      data-group={grp.id}
+                      style={{ left: b.x, top: b.y, width: b.w, height: b.h }}
+                      onPointerDown={(ev) => {
+                        if (canvasTool === "pan" || spaceRef.current || ev.button !== 0) return;
+                        ev.stopPropagation();
+                        setCtxMenu(null);
+                        setSelection(grp.nodeIds);
+                        setSelectedEdge(null);
+                        startDrag(ev, grp.nodeIds, grp.nodeIds);
+                      }}
+                      onContextMenu={(ev) => {
+                        setSelection(grp.nodeIds);
+                        setSelectedEdge(null);
+                        openCtxMenu(ev);
+                      }}
+                    >
+                      <div className="group-head">
+                        {renamingGroup === grp.id ? (
+                          <input
+                            autoFocus
+                            aria-label="Group name"
+                            defaultValue={grp.name}
+                            onPointerDown={(ev) => ev.stopPropagation()}
+                            onKeyDown={(ev) => {
+                              if (ev.key === "Enter") (ev.target as HTMLInputElement).blur();
+                              if (ev.key === "Escape") setRenamingGroup(null);
+                            }}
+                            onBlur={(ev) => {
+                              const name = ev.target.value.trim();
+                              if (renamingGroup === grp.id && name && name !== grp.name) {
+                                setGraph((g) => updateGroup(g, grp.id, { name }));
+                              }
+                              setRenamingGroup(null);
+                            }}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            className="group-name"
+                            title="Double-click or press Enter to rename"
+                            onFocus={() => {
+                              // Tabbing to a frame selects it, which also shows its colour and Ungroup tools.
+                              setSelection(grp.nodeIds);
+                              setSelectedEdge(null);
+                            }}
+                            onDoubleClick={() => setRenamingGroup(grp.id)}
+                            onKeyDown={(ev) => {
+                              if (ev.key !== "Enter" && ev.key !== " ") return;
+                              ev.preventDefault();
+                              setRenamingGroup(grp.id);
+                            }}
+                          >
+                            {grp.name}
+                          </button>
+                        )}
+                        {active ? (
+                          <span className="group-tools" onPointerDown={(ev) => ev.stopPropagation()}>
+                            {GROUP_COLORS.map((c) => (
+                              <button
+                                key={c}
+                                type="button"
+                                className={"swatch c-" + c + (grp.color === c ? " on" : "")}
+                                aria-label={`Colour ${c}`}
+                                onClick={() => setGraph((g) => updateGroup(g, grp.id, { color: c }))}
+                              />
+                            ))}
+                            <span className="group-cost">{runCost(grp.nodeIds).text}</span>
+                            <button type="button" className="ghost" title={runLabel(grp.nodeIds)} onClick={() => runNodes(grp.nodeIds)}>
+                              Run
+                            </button>
+                            <button type="button" className="ghost" title={withKeys("ungroup")} onClick={ungroupSelection}>
+                              Ungroup
+                            </button>
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
                   );
                 })}
-              </svg>
-              {graph.nodes.map((n) => {
-                const digest = nodeDigest(n.id);
-                const cap = n.capability || n.type;
-                const asset = assets.find((a) => a.id === digest);
-                const stack = opticalLabel(n, camera, lens, look, motion, aperture, genre, lighting, palette);
-                return (
-                  <div
-                    key={n.id}
-                    data-id={n.id}
-                    className={"node" + (selectedNode === n.id ? " on" : "")}
-                    style={{ left: n.x || 40, top: n.y || 40 }}
-                    onPointerDown={(ev) => {
-                      if ((ev.target as HTMLElement).classList.contains("port")) return;
-                      dragRef.current = {
-                        id: n.id,
-                        dx: ev.clientX - (n.x || 40),
-                        dy: ev.clientY - (n.y || 40),
-                        x: ev.clientX,
-                        y: ev.clientY,
-                        moved: false,
-                      };
-                    }}
-                  >
+                <svg className="wires" aria-hidden="true">
+                  {graph.edges.map((e) => {
+                    const a = graph.nodes.find((n) => n.id === e.src);
+                    const b = graph.nodes.find((n) => n.id === e.dst);
+                    if (!a || !b) return null;
+                    const d = wirePath(a, b, e.input_key);
+                    const on = selectedEdge?.src === e.src && selectedEdge?.dst === e.dst;
+                    return (
+                      <g key={e.src + "->" + e.dst}>
+                        <path className={"wire" + (on ? " on" : "")} d={d} />
+                        <path
+                          className="wire-hit"
+                          d={d}
+                          data-edge={e.src + "->" + e.dst}
+                          onPointerDown={(ev) => {
+                            if (canvasTool === "pan" || spaceRef.current || ev.button === 1) return;
+                            ev.stopPropagation();
+                            setSelectedEdge(e);
+                            setSelectedNode(null);
+                          }}
+                        />
+                      </g>
+                    );
+                  })}
+                  {addMenu?.from
+                    ? (() => {
+                        const src = graph.nodes.find((n) => n.id === addMenu.from);
+                        if (!src) return null;
+                        const x1 = (src.x || 0) + NODE_W;
+                        const y1 = (src.y || 0) + portY(0);
+                        const g = (sx: number, sy: number) => [(sx - viewport.x) / viewport.zoom, (sy - viewport.y) / viewport.zoom];
+                        const [tx, ty] = g(addMenu.x, addMenu.y + 22);
+                        if (tx > x1) return <path className="wire ghost" d={curve(x1, y1, tx, ty)} />;
+                        // Menu opened under the node: leave the port rightwards, drop into the menu's top edge.
+                        const [bx, by] = g(addMenu.x + 290, addMenu.y);
+                        return <path className="wire ghost" d={`M${x1} ${y1} C${x1 + 60} ${y1}, ${bx} ${by - 60}, ${bx} ${by}`} />;
+                      })()
+                    : null}
+                </svg>
+                {graph.nodes.map((n) => {
+                  const digest = nodeDigest(n.id);
+                  const cap = n.capability || n.type;
+                  const asset = assets.find((a) => a.id === digest);
+                  const label = NODE_CATALOG.find((row) => row.capability === n.capability)?.label || cap;
+                  const aspect = typeof n.params?.aspect_ratio === "string" && !n.params.aspect_ratio.startsWith("{{") ? n.params.aspect_ratio : "";
+                  const ask = n.params?.prompt;
+                  const promptLine =
+                    typeof ask !== "string" ? "" : ask.startsWith("{{") ? "Page prompt" : ask.trim();
+                  const needs = n.type === "generate" ? blockedReason(n, pageHas) : null;
+                  return (
                     <div
-                      className="port in"
-                      data-port="in"
+                      key={n.id}
                       data-id={n.id}
-                      onPointerDown={(ev) => ev.stopPropagation()}
-                      onClick={(ev) => {
+                      className={"node" + (selection.includes(n.id) ? " on" : "") + (nodeRuns[n.id] ? " run-" + nodeRuns[n.id].state : "")}
+                      style={{ left: n.x ?? 0, top: n.y ?? 0 }}
+                      onPointerDown={(ev) => {
+                        if ((ev.target as HTMLElement).classList.contains("port")) return;
+                        if (canvasTool === "pan" || spaceRef.current || ev.button !== 0) return;
                         ev.stopPropagation();
-                        const from = linkFromRef.current;
-                        if (!from || from === n.id) return;
-                        setGraph((g) => {
-                          if (g.edges.some((edge) => edge.src === from && edge.dst === n.id)) return g;
-                          return { ...g, edges: [...g.edges, { src: from, dst: n.id, input_key: "media" }] };
-                        });
-                        setGraphEdited(true);
-                        linkFromRef.current = null;
-                        setLinkFrom(null);
+                        setCtxMenu(null);
+                        if (ev.shiftKey) {
+                          setSelection((sel) => (sel.includes(n.id) ? sel.filter((id) => id !== n.id) : [...sel, n.id]));
+                          setSelectedEdge(null);
+                          return;
+                        }
+                        const ids = selection.includes(n.id) && selection.length > 1 ? selection : [n.id];
+                        startDrag(ev, ids, [n.id]);
                       }}
-                    />
-                    <div
-                      className={"port out" + (linkFrom === n.id ? " on" : "")}
-                      data-port="out"
-                      data-id={n.id}
-                      onPointerDown={(ev) => ev.stopPropagation()}
-                      onClick={(ev) => {
+                      onContextMenu={(ev) => {
                         ev.stopPropagation();
-                        linkFromRef.current = n.id;
-                        setLinkFrom(n.id);
-                        setLog("Click an input port to connect.");
+                        if (!selection.includes(n.id)) setSelectedNode(n.id);
+                        setSelectedEdge(null);
+                        openCtxMenu(ev);
                       }}
-                    />
-                    <div className="thumb">
-                      {digest && asset?.mime?.startsWith("video/") ? (
-                        <video src={`${API}/assets/${digest}/file`} muted />
-                      ) : digest ? (
-                        <img alt="" src={`${API}/assets/${digest}/file`} />
+                    >
+                      {portsFor(n).inputs.map((port, i) => (
+                        <div
+                          key={port.key}
+                          className={"port in kind-" + port.kind}
+                          data-port="in"
+                          data-id={n.id}
+                          data-key={port.key}
+                          data-kind={port.kind}
+                          style={{ top: portY(i) - 5 }}
+                          title={`${port.kind} input (${port.key})`}
+                          onPointerDown={(ev) => ev.stopPropagation()}
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            const from = linkFromRef.current;
+                            if (!from) return;
+                            closeAddMenu();
+                            const wired = connect(graph, from, n.id, port.key);
+                            if (!wired.ok) {
+                              setLog(wired.error);
+                              return;
+                            }
+                            setGraph(wired.graph);
+                            setLog(`Wired ${from} into ${n.id}.`);
+                          }}
+                        />
+                      ))}
+                      {portsFor(n).output ? (
+                        <div
+                          className={"port out kind-" + portsFor(n).output + (linkFrom === n.id ? " on" : "")}
+                          data-port="out"
+                          data-id={n.id}
+                          data-kind={portsFor(n).output || ""}
+                          style={{ top: portY(0) - 5 }}
+                          title={`${portsFor(n).output} output: click to add or connect`}
+                          onPointerDown={(ev) => ev.stopPropagation()}
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            linkFromRef.current = n.id;
+                            setLinkFrom(n.id);
+                            openAddMenu(n.id);
+                            setLog(`Pick a node that takes ${portsFor(n).output}, or click an input port.`);
+                          }}
+                        />
                       ) : null}
+                      <div className="thumb">
+                        {digest && asset?.mime?.startsWith("video/") ? (
+                          <video src={`${API}/assets/${digest}/file`} muted />
+                        ) : digest ? (
+                          <img alt="" src={`${API}/assets/${digest}/file`} />
+                        ) : null}
+                        {nodeRuns[n.id]?.state === "running" ? <span className="spinner" aria-label="Running" /> : null}
+                        {nodeRuns[n.id]?.state === "cached" ? <span className="chip-cached">cached</span> : null}
+                        {n.type === "generate" ? (
+                          <button
+                            type="button"
+                            className="node-run"
+                            aria-label={`Run ${n.id}`}
+                            disabled={Boolean(needs) || busy}
+                            title={needs || runLabel([n.id])}
+                            onPointerDown={(ev) => ev.stopPropagation()}
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              runNodes([n.id]);
+                            }}
+                          >
+                            ▶
+                          </button>
+                        ) : null}
+                      </div>
+                      <div className="meta">
+                        <div className="k">{label}{aspect ? " · " + aspect : ""}</div>
+                        <strong>{n.id}</strong>
+                        {defaultsFor(n.capability).prompt !== "none" ? (
+                          <p className={"prompt-line" + (promptLine ? "" : " is-empty")}>
+                            {promptLine || defaultsFor(n.capability).placeholder || "No prompt"}
+                          </p>
+                        ) : null}
+                        {needs ? <p className="needs">{needs}</p> : null}
+                        {!needs && nodeRuns[n.id]?.state === "error" ? (
+                          <p className="needs" title={nodeRuns[n.id].error}>Run failed. Hover for details.</p>
+                        ) : null}
+                      </div>
                     </div>
-                    <div className="meta">
-                      <div className="k">{cap}{stack ? " · " + stack : ""}</div>
-                      <strong>{n.id}</strong>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
               <div className={"results" + (view === "canvas" ? "" : " hidden")} id="results">
                 {graph.nodes.map((n) => {
                   const digest = nodeDigest(n.id);
                   if (!digest) return null;
                   const asset = assets.find((a) => a.id === digest);
                   return (
-                    <button key={n.id} className="shot" type="button" onClick={() => setSelectedNode(n.id)}>
+                    <button
+                      key={n.id}
+                      className="shot"
+                      type="button"
+                      onClick={() => {
+                        setSelectedNode(n.id);
+                        setSelectedEdge(null);
+                      }}
+                    >
                       <span className="muted">{n.id}</span>
                       <span className="frame">
                         {asset?.mime?.startsWith("video/") ? (
@@ -1950,17 +2605,237 @@ export function StudioClient() {
               </div>
             </>
           )}
-          <div className="canvas-tools">
-            <button className="ghost" type="button" onClick={() => setPage("adapts")}>
-              Image › Adapts
-            </button>
-            <button className="ghost" type="button" onClick={() => void generate({ graph: true })}>
-              Generate graph
-            </button>
-            <button className="ghost" type="button" id="tl-play" onClick={() => void playTimeline()}>
-              Play timeline
-            </button>
+          <div className="canvas-bar">
+            {view === "canvas" ? (
+              <div className="canvas-view" role="toolbar" aria-label="Canvas view">
+                <button type="button" className="ghost" title={withKeys("addNode")} onClick={() => openAddMenu()}>
+                  + Add
+                </button>
+                <div className="views">
+                  <button
+                    type="button"
+                    className={canvasTool === "select" ? "on" : ""}
+                    title={withKeys("selectMode")}
+                    aria-pressed={canvasTool === "select"}
+                    onClick={() => setCanvasTool("select")}
+                  >
+                    Select
+                  </button>
+                  <button
+                    type="button"
+                    className={canvasTool === "pan" ? "on" : ""}
+                    title={withKeys("panMode")}
+                    aria-pressed={canvasTool === "pan"}
+                    onClick={() => setCanvasTool("pan")}
+                  >
+                    Pan
+                  </button>
+                </div>
+                <div className="views">
+                  <button type="button" title={withKeys("zoomOut")} aria-label="Zoom out" onClick={() => zoomBy(1 / 1.2)}>
+                    −
+                  </button>
+                  <button type="button" className="zoom-pct" title={withKeys("resetView")} onClick={() => runShortcut("resetView")}>
+                    {Math.round(viewport.zoom * 100)}%
+                  </button>
+                  <button type="button" title={withKeys("zoomIn")} aria-label="Zoom in" onClick={() => zoomBy(1.2)}>
+                    +
+                  </button>
+                  <button type="button" title={withKeys("fit")} onClick={() => runShortcut("fit")}>
+                    Fit
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className={"ghost help" + (sheetOpen ? " on" : "")}
+                  title={withKeys("help")}
+                  aria-expanded={sheetOpen}
+                  onClick={() => setSheetOpen((open) => !open)}
+                >
+                  ?
+                </button>
+              </div>
+            ) : null}
+            <div className="canvas-tools">
+              <button
+                className="ghost"
+                type="button"
+                title={withKeys("undo")}
+                disabled={!graphHistory.past.length}
+                onClick={() => stepHistory("undo")}
+              >
+                Undo
+              </button>
+              <button
+                className="ghost"
+                type="button"
+                title={withKeys("redo")}
+                disabled={!graphHistory.future.length}
+                onClick={() => stepHistory("redo")}
+              >
+                Redo
+              </button>
+              {selection.length > 1 ? (
+                <button className="ghost" type="button" title={withKeys("group")} onClick={groupSelection}>
+                  Group
+                </button>
+              ) : null}
+              {selectedEdge || selection.length ? (
+                <button className="ghost" type="button" title={withKeys("delete")} onClick={deleteSelection}>
+                  {selectedEdge ? "Delete wire" : selection.length > 1 ? `Delete ${selection.length}` : "Delete node"}
+                </button>
+              ) : null}
+              <button className="ghost" type="button" onClick={() => setPage("adapts")}>
+                Image › Adapts
+              </button>
+              <button
+                className="ghost"
+                type="button"
+                disabled={Boolean(graphBlocker)}
+                title={graphBlocker || runLabel(graphIds, new Set())}
+                onClick={() => void generate({ graph: true })}
+              >
+                Generate graph{graphCost ? <span className="tool-cost"> · {graphCost}</span> : null}
+              </button>
+              <button className="ghost" type="button" id="tl-play" onClick={() => void playTimeline()}>
+                Play timeline
+              </button>
+            </div>
           </div>
+          {addMenu && view === "canvas"
+            ? (() => {
+                const rows = searchCatalog(addQuery, addMenu.kind);
+                const pick = rows[Math.min(addIndex, rows.length - 1)];
+                const choose = (capability: string) => {
+                  insertNode(capability, addMenu.from);
+                  closeAddMenu();
+                };
+                return (
+                  <div
+                    className="add-menu"
+                    role="dialog"
+                    aria-label="Add node"
+                    style={{ left: addMenu.x, top: addMenu.y }}
+                    onPointerDown={(ev) => ev.stopPropagation()}
+                  >
+                    <input
+                      autoFocus
+                      placeholder={addMenu.kind ? `Nodes that take ${addMenu.kind}` : "Search nodes"}
+                      value={addQuery}
+                      aria-controls="add-menu-list"
+                      onChange={(ev) => {
+                        setAddQuery(ev.target.value);
+                        setAddIndex(0);
+                      }}
+                      onKeyDown={(ev) => {
+                        if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+                          ev.preventDefault();
+                          const step = ev.key === "ArrowDown" ? 1 : -1;
+                          const at = Math.min(addIndex, rows.length - 1);
+                          const next = rows.length ? (at + step + rows.length) % rows.length : 0;
+                          setAddIndex(next);
+                          // The list scrolls (max-height); keep the keyboard pick visible, not the hovered one.
+                          document.getElementById("add-menu-list")?.children[next]?.scrollIntoView({ block: "nearest" });
+                        } else if (ev.key === "Enter" && pick && !ev.nativeEvent.isComposing) {
+                          ev.preventDefault();
+                          choose(pick.capability);
+                        } else if (ev.key === "Escape") {
+                          ev.preventDefault();
+                          closeAddMenu();
+                        }
+                      }}
+                    />
+                    <div className="add-list" id="add-menu-list" role="listbox">
+                      {rows.map((row) => {
+                        const ready = models.filter(
+                          (m) =>
+                            (m.capabilities || []).includes(row.capability) &&
+                            modelAvailability(m, doctor.providers?.[m.provider], !!doctor.live_spend) === "ready",
+                        ).length;
+                        return (
+                          <button
+                            key={row.capability}
+                            type="button"
+                            role="option"
+                            aria-selected={row === pick}
+                            className={row === pick ? "on" : ""}
+                            onMouseMove={(ev) => {
+                              // Only real pointer motion: a keyboard scroll can slide rows under a still cursor.
+                              if (ev.movementX || ev.movementY) setAddIndex(rows.indexOf(row));
+                            }}
+                            onClick={() => choose(row.capability)}
+                          >
+                            <span className={"kind-dot kind-" + (outputOf(row.capability) || "none")} />
+                            <span className="what">
+                              <strong>{row.label}</strong>
+                              <span>{row.blurb}</span>
+                            </span>
+                            <span className="ready">{ready ? `${ready} ready` : "needs a key"}</span>
+                          </button>
+                        );
+                      })}
+                      {!rows.length ? <p className="muted">No node matches.</p> : null}
+                    </div>
+                    <p className="add-hint">
+                      <kbd>↑↓</kbd> move <kbd>⏎</kbd> insert <kbd>Esc</kbd> close
+                    </p>
+                  </div>
+                );
+              })()
+            : null}
+          {marquee ? (
+            <div className="marquee" style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }} />
+          ) : null}
+          {ctxMenu && view === "canvas"
+            ? (() => {
+                const inGroup = (graph.groups || []).some((grp) => grp.nodeIds.some((id) => selection.includes(id)));
+                const item = (id: ShortcutId, label: string, enabled: boolean) => (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={!enabled}
+                    onClick={() => {
+                      setCtxMenu(null);
+                      runShortcut(id);
+                    }}
+                  >
+                    <span>{label}</span>
+                    <kbd>{SHORTCUTS.find((row) => row.id === id)?.keys}</kbd>
+                  </button>
+                );
+                return (
+                  <div
+                    className="ctx-menu"
+                    role="menu"
+                    style={{ left: ctxMenu.x, top: ctxMenu.y }}
+                    onPointerDown={(ev) => ev.stopPropagation()}
+                  >
+                    {item("addNode", "Add node", true)}
+                    {item("group", "Group", selection.length > 1)}
+                    {item("ungroup", "Ungroup", inGroup)}
+                    {item("duplicate", "Duplicate", selection.length > 0)}
+                    {item("selectAll", "Select all", graph.nodes.length > 0)}
+                    {item("delete", "Delete", selection.length > 0 || Boolean(selectedEdge))}
+                  </div>
+                );
+              })()
+            : null}
+          {sheetOpen && view === "canvas" ? (
+            <div className="shortcut-sheet" role="dialog" aria-label="Keyboard shortcuts">
+              {(["Edit", "View"] as const).map((group) => (
+                <section key={group}>
+                  <p className="eyebrow">{group}</p>
+                  {SHORTCUTS.filter((s) => s.group === group).map((s) => (
+                    <div className="row" key={s.id}>
+                      <span>{s.label}</span>
+                      <kbd>{s.keys}</kbd>
+                    </div>
+                  ))}
+                </section>
+              ))}
+              <p className="muted">Scroll to pan. Pinch or ⌘ + scroll to zoom.</p>
+            </div>
+          ) : null}
           {selectedRow ? (
             <aside className="drawer">
               <h3>{selectedRow.id}</h3>
@@ -1970,6 +2845,31 @@ export function StudioClient() {
               ) : (
                 <p className="muted">No output on this node yet.</p>
               )}
+              {defaultsFor(selectedRow.capability).prompt !== "none" ? (
+                <>
+                  <label htmlFor="node-prompt">Prompt</label>
+                  <textarea
+                    key={selectedRow.id}
+                    ref={settleOnUnmount}
+                    id="node-prompt"
+                    className="prompt"
+                    value={typeof selectedRow.params?.prompt === "string" && !selectedRow.params.prompt.startsWith("{{") ? selectedRow.params.prompt : ""}
+                    placeholder={
+                      typeof selectedRow.params?.prompt === "string" && selectedRow.params.prompt.startsWith("{{")
+                        ? "Uses the page prompt. Type to give this node its own."
+                        : defaultsFor(selectedRow.capability).placeholder
+                    }
+                    onFocus={() => {
+                      promptBaseRef.current = graph;
+                    }}
+                    onChange={(ev) => {
+                      const text = ev.target.value;
+                      setGraphHistory((h) => preview(h, setParams(h.present, selectedRow.id, { prompt: text })));
+                    }}
+                    onBlur={settlePrompt}
+                  />
+                </>
+              ) : null}
               <label htmlFor="node-model">Node model</label>
               <ModelCombo
                 inputId="node-model"
@@ -1981,21 +2881,31 @@ export function StudioClient() {
                   statusSuffix,
                 )}
                 onChange={(value) => {
-                  setGraph((g) => ({
-                    ...g,
-                    nodes: g.nodes.map((n) => (n.id === selectedRow.id ? { ...n, model_id: value || undefined } : n)),
-                  }));
-                  setGraphEdited(true);
+                  setGraph((g) => updateNode(g, selectedRow.id, { model_id: value || undefined }));
                 }}
               />
               <div className="file-row" style={{ marginTop: 10 }}>
-                <button className="run" type="button" onClick={() => void generate({ nodeId: selectedRow.id })}>
+                <button
+                  className="run"
+                  type="button"
+                  disabled={Boolean(nodeBlocker)}
+                  title={nodeBlocker || runLabel([selectedRow.id])}
+                  onClick={() => runNodes([selectedRow.id])}
+                >
                   Generate this node
+                </button>
+                <button className="ghost" type="button" title={withKeys("delete")} onClick={deleteSelection}>
+                  Delete
                 </button>
                 <button className="ghost" type="button" onClick={() => setSelectedNode(null)}>
                   Close
                 </button>
               </div>
+              {nodeBlocker ? (
+                <p className="run-blocker">{nodeBlocker}</p>
+              ) : (
+                <p className="muted run-estimate">{runLabel([selectedRow.id])}</p>
+              )}
             </aside>
           ) : null}
         </main>
@@ -2459,8 +3369,7 @@ export function StudioClient() {
         {skills.map((s) => (
           <div className="hit" key={s.id} data-skill={s.id} onClick={() => {
             setSkillRef(s.id);
-            setGraph(graphFromSkill(s, camera, lens, look, motion, aperture, genre, lighting, palette));
-            setGraphEdited(false);
+            resetGraph(graphFromSkill(s, camera, lens, look, motion, aperture, genre, lighting, palette));
             setSelectedNode(null);
             setView("canvas");
             setPage("canvas");
@@ -2527,42 +3436,193 @@ export function StudioClient() {
     );
   }
 
+  /**
+   * End a node-prompt edit as one undo step. Reads a ref and a stable setter, so a stale closure is safe.
+   */
+  function settlePrompt() {
+    const base = promptBaseRef.current;
+    if (!base) return;
+    promptBaseRef.current = null;
+    setGraphHistory((h) => settle(h, base));
+  }
+
+  /** Canvas keys; reassigned each render so it sees current selection. */
+  const canvasKeyRef = useRef<(ev: KeyboardEvent) => void>(() => {});
+  canvasKeyRef.current = (ev) => {
+    const el = ev.target as HTMLElement | null;
+    if (el?.closest("input, textarea, select, [contenteditable='true']")) return;
+    if (ev.key === " ") {
+      if (el?.closest("button")) return; // let a focused toolbar button activate
+      ev.preventDefault();
+      spaceRef.current = true;
+      return;
+    }
+    const id = shortcutFor(ev);
+    if (!id) return;
+    ev.preventDefault();
+    runShortcut(id);
+  };
+  useEffect(() => {
+    if (page !== "canvas" || view !== "canvas") return;
+    const onKey = (ev: KeyboardEvent) => canvasKeyRef.current(ev);
+    const onKeyUp = (ev: KeyboardEvent) => {
+      if (ev.key === " ") spaceRef.current = false;
+    };
+    // A held Space loses its keyup when the window blurs or this effect unmounts.
+    const releaseSpace = () => {
+      spaceRef.current = false;
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", releaseSpace);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", releaseSpace);
+      releaseSpace();
+    };
+  }, [page, view]);
+
+  // Wheel pans; pinch or ⌘/Ctrl+wheel zooms around the cursor. Non-passive so the page does not scroll.
+  useEffect(() => {
+    const el = boardRef.current;
+    if (!el) return;
+    function onWheel(ev: WheelEvent) {
+      ev.preventDefault();
+      const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+      if (ev.ctrlKey || ev.metaKey) {
+        const factor = wheelZoomFactor(ev.deltaY, ev.deltaMode, ev.ctrlKey);
+        setViewport((v) => zoomAt(v, v.zoom * factor, ev.clientX - r.left, ev.clientY - r.top));
+      } else {
+        // Some mice report notches in lines (deltaMode 1) or pages (2); pan in pixels.
+        const unit = ev.deltaMode === 1 ? 16 : ev.deltaMode === 2 ? r.height : 1;
+        setViewport((v) => ({ ...v, x: v.x - ev.deltaX * unit, y: v.y - ev.deltaY * unit }));
+      }
+    }
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [page, view]);
+
+  useEffect(() => {
+    if (!navOpen) return;
+    function onKey(ev: KeyboardEvent) {
+      if (ev.key === "Escape") setNavOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navOpen]);
+
   return (
     <div className={"shell" + (wantsInsp ? " with-insp" : "")} data-testid="vinci-studio-root">
-      <nav className="rail" aria-label="Studio">
+      {navOpen ? (
+        <button type="button" className="rail-scrim" aria-label="Close menu" onClick={() => setNavOpen(false)} />
+      ) : null}
+      <nav id="studio-rail" className={"rail" + (navOpen ? " open" : "")} aria-label="Studio">
         <svg className="mark" viewBox="0 0 32 32" aria-hidden="true">
           <rect width="32" height="32" rx="8" fill="#34c6c0" />
           <path d="M9 7h5l2 11 2-11h5L18 25h-4L9 7z" fill="#06262a" />
         </svg>
-        {rail.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={page === item.id ? "on" : ""}
-            title={item.title}
-            aria-label={item.title}
-            onClick={() => setPage(item.id)}
-          >
-            <RailIcon d={item.d} title={item.title} />
-          </button>
-        ))}
+        {railGroups.flatMap((group) => {
+          const items = group.items.map((item) => {
+            const on =
+              item.flyout === "image" ? imageOn : item.flyout === "video" ? videoOn : page === item.id;
+            const button = (
+              <button
+                key={item.id}
+                type="button"
+                className={on ? "on" : ""}
+                title={item.title}
+                aria-label={item.title}
+                onClick={() => openFlyoutPage(item.id)}
+              >
+                <RailIcon d={item.d} title={item.title} />
+                <span className="rail-label">{item.title}</span>
+              </button>
+            );
+            if (!item.flyout) return button;
+            const kind = item.flyout;
+            const features: { id: PageId; name: string; blurb: string }[] =
+              kind === "image"
+                ? [
+                    { id: "image", name: "Create Image", blurb: "Stills from a prompt or reference" },
+                    { id: "upscale", name: "Upscale Still", blurb: "Increase resolution on a still" },
+                    { id: "adapts", name: "Adapts", blurb: "Partner and multi-ratio ad presets" },
+                  ]
+                : [
+                    { id: "video", name: "Create Video", blurb: "Motion from a prompt or still" },
+                    { id: "speak", name: "Talking Head", blurb: "Avatar video from a still and a line" },
+                  ];
+            return (
+              <div className="rail-entry" key={item.id}>
+                {button}
+                <div className="rail-flyout">
+                  <div>
+                    <p className="rail-flyout-h">Features</p>
+                    {features.map((row) => (
+                      <button key={row.id} className="flyout-row" type="button" onClick={() => openFlyoutPage(row.id)}>
+                        <strong>{row.name}</strong>
+                        <span>{row.blurb}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div>
+                    <p className="rail-flyout-h">Models</p>
+                    {flyoutModels(kind).length ? (
+                      flyoutModels(kind).map((row) => (
+                        <button
+                          key={row.id}
+                          className="flyout-row"
+                          type="button"
+                          onClick={() => pickFlyoutModel(row, kind)}
+                        >
+                          <strong>{row.display_name || row.id}</strong>
+                          <span>{row.provider || "model"}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <p className="rail-flyout-empty">No models yet</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          });
+          return group.label
+            ? [<span key={group.label} className="rail-section">{group.label}</span>, ...items]
+            : items;
+        })}
         <span className="spacer" />
-        <button type="button" className={page === "skills" ? "on" : ""} title="Skills" onClick={() => setPage("skills")}>
-          Skills
+        <button type="button" className={page === "skills" ? "on rail-text" : "rail-text"} title="Skills" aria-label="Skills" onClick={() => openFlyoutPage("skills")}>
+          <span className="rail-label">Skills</span>
         </button>
-        <button type="button" className={page === "find" ? "on" : ""} title="Find" onClick={() => setPage("find")}>
-          Find
+        <button type="button" className={page === "find" ? "on rail-text" : "rail-text"} title="Find" aria-label="Find" onClick={() => openFlyoutPage("find")}>
+          <span className="rail-label">Find</span>
         </button>
-        <button type="button" className={page === "cost" ? "on" : ""} title="Cost report" onClick={() => setPage("cost")}>
-          $
+        <button type="button" className={page === "cost" ? "on rail-text has-mini" : "rail-text has-mini"} title="Cost report" aria-label="Cost report" onClick={() => openFlyoutPage("cost")}>
+          <span className="rail-mini" aria-hidden="true">$</span>
+          <span className="rail-label">Cost report</span>
         </button>
-        <button type="button" className={page === "keys" ? "on" : ""} title="Connect" onClick={() => setPage("keys")}>
-          Connect
+        <button type="button" className={page === "keys" ? "on rail-text" : "rail-text"} title="Connect" aria-label="Connect" onClick={() => openFlyoutPage("keys")}>
+          <span className="rail-label">Connect</span>
         </button>
       </nav>
       <section className="main">
         <div className="top">
-          <h1>{titles[page]}</h1>
+          <div className="top-lead">
+            <button
+              type="button"
+              className="rail-menu"
+              aria-label={navOpen ? "Close studio menu" : "Open studio menu"}
+              aria-expanded={navOpen}
+              aria-controls="studio-rail"
+              onClick={() => setNavOpen((open) => !open)}
+            >
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                <path d="M3 5h12M3 9h12M3 13h12" stroke="currentColor" />
+              </svg>
+            </button>
+            <h1>{titles[page]}</h1>
+          </div>
           {page === "image" || page === "video" || page === "upscale" || page === "speak" ? (
             <button
               className="ghost"

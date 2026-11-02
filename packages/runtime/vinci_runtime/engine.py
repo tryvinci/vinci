@@ -498,10 +498,50 @@ class Engine:
         )
         self.store.append_event(event, secret_values=secrets)
 
+    def _credentials_present(self, name: str) -> bool:
+        """True when the provider's secret resolves. Ignores the enabled flag."""
+        if name == "mock":
+            return False
+        if name == "cloudflare":
+            return bool(self.resolver.resolve("CLOUDFLARE_API_TOKEN")) and bool(
+                self._cloudflare_account_id()
+            )
+        if is_mcp_name(name):
+            cfg = self.config.providers.get(name) or {}
+            url = cfg.get("url") if isinstance(cfg, dict) else None
+            return bool(url)
+        secret = PROVIDER_SECRETS.get(name)
+        if not secret:
+            return False
+        extra = PROVIDER_EXTRA_SECRETS.get(name, ())
+        return bool(self.resolver.resolve(secret)) and all(
+            self.resolver.resolve(item) for item in extra
+        )
+
+    def _enable_resolved_providers(self) -> list[str]:
+        """Turn on providers whose keys are already in the environment.
+
+        A provider left as enabled=false stays off. Missing rows with a
+        resolved secret become enabled so their models sort as ready.
+        """
+        enabled: list[str] = []
+        for name in PROVIDER_SECRETS:
+            current = self.config.providers.get(name)
+            if isinstance(current, dict) and "enabled" in current:
+                continue
+            if not self._credentials_present(name):
+                continue
+            body = dict(current) if isinstance(current, dict) else {}
+            body["enabled"] = True
+            self.config.providers[name] = body
+            enabled.append(name)
+        return enabled
+
     def init_home(self, *, demo: bool = False) -> dict[str, Any]:
         self.config.demo = demo
         if demo:
             self.config.providers["mock"] = {"enabled": True}
+        self._enable_resolved_providers()
         write_config(self.config)
         self.config = load_config(self.config.home)
         self._rebuild_providers()

@@ -312,3 +312,26 @@ def test_update_settings_preference(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert updated["preference"] == "quality"
     assert updated["budget"]["monthly_cap_usd"] == 12.5
     assert engine.doctor()["preference"] == "quality"
+
+
+def test_init_enables_provider_when_env_key_resolves(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("VINCI_HOME", str(tmp_path))
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
+    monkeypatch.delenv("FAL_KEY", raising=False)
+    engine = Engine(tmp_path)
+    engine.init_home(demo=True)
+    assert engine.provider_available("openai") is True
+    assert engine.provider_available("fal") is False
+
+
+def test_init_keeps_an_explicit_provider_disable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("VINCI_HOME", str(tmp_path))
+    monkeypatch.setenv("WAVESPEED_API_KEY", "test-wavespeed-key")
+    engine = Engine(tmp_path)
+    engine.config.providers["wavespeed"] = {"enabled": False}
+    engine.init_home(demo=True)
+    assert engine.provider_available("wavespeed") is False

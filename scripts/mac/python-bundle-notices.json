@@ -3,7 +3,7 @@
     {
       "license": "MIT",
       "name": "apps/daemon",
-      "sha256": "b37390c4b270c6fb46d7d847b0958ec55e46c4e1871504d568ce079d3849d4f5",
+      "sha256": "39362fa255e1a229a12bd260ee21e5ff798806ccd00a56aea304a79ee084dfdd",
       "source": "monorepo",
       "version": "workspace"
     },
@@ -108,7 +108,7 @@
     {
       "license": "MIT",
       "name": "packages/runtime",
-      "sha256": "7851379032d1d7ef0161f59d1cdbeea849b6662941b0c251c1acc99d45627cef",
+      "sha256": "35a10c83b3a5e98537ec2b5830d619284c69983837ece470b0afe1a7a005a137",
       "source": "monorepo",
       "version": "workspace"
     },

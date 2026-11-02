@@ -3,36 +3,15 @@
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+from ts_module import ROOT, run_ts
+
 RANKER = ROOT / "apps" / "studio" / "lib" / "model-search.ts"
 STUDIO = ROOT / "apps" / "daemon" / "vinci_daemon" / "studio.html"
 
 
 def _run_module(body: str) -> subprocess.CompletedProcess[str]:
-    """Run assertions against the TS module using the repo TypeScript compiler.
-
-    Node 20 is the OSS CI runtime and cannot import .ts via --experimental-strip-types.
-    """
-    script = f"""
-import ts from "typescript";
-import {{ readFileSync }} from "node:fs";
-const src = readFileSync("apps/studio/lib/model-search.ts", "utf8");
-const js = ts.transpileModule(src, {{
-  compilerOptions: {{ module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 }},
-}}).outputText;
-const mod = await import("data:text/javascript," + encodeURIComponent(js));
-const {{ rankModels, modelAvailability }} = mod;
-{body}
-"""
-    return subprocess.run(
-        ["node", "--input-type=module", "-e", script],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    return run_ts("apps/studio/lib/model-search.ts", ["rankModels", "modelAvailability"], body)
 
 
 def test_rank_models() -> None:
