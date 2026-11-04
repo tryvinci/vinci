@@ -13,7 +13,7 @@ NORTH_STAR_FILES = (
     "README.md",
     "legal/AGPL_CLEAN_ROOM.md",
     "docs/VINCI_OSS_RUNTIME.md",
-    "docs/VINCI_OSS_E2E_ACHIEVEMENT.md",
+    "docs/internal/VINCI_OSS_E2E_ACHIEVEMENT.md",
     "scripts/vinci",
     "scripts/clone-smoke.sh",
     "scripts/create-github-repo.sh",
@@ -42,7 +42,7 @@ def test_clone_tree_has_north_star_files() -> None:
     assert "GNU Affero" not in license_text
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "docs/assets/studio-tour.gif" in readme
-    assert "Why Vinci" in readme
+    assert "Quick start" in readme
     assert "VINCI_ALLOW_LIVE_SPEND=1" in readme
     assert "docs/google-sheets.md" in readme
     assert "make github" not in readme

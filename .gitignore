@@ -27,3 +27,4 @@ deploy/cloudflare/.deploy-state.json
 deploy/cloudflare/.deploy-state.json.fixture
 apps/cli/dist/
 packages/protocol/dist/
+ci-artifacts/

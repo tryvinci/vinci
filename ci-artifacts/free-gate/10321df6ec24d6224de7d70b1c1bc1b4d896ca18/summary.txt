@@ -1,2 +1,0 @@
-ruff-baseline exit=127
-pytest-gates exit=0

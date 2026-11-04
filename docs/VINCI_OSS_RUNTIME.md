@@ -3,7 +3,7 @@
 > **Vinci** — the open-source generative media runtime. Bring your own API keys, use any supported model/provider, and run portable generation/editing/clipping workflows with transparent cost and routing.
 
 This file is the architecture contract. Do not invent a second architecture.
-Executable gates live in `VINCI_OSS_E2E_ACHIEVEMENT.md`.
+Executable gates live in [`docs/internal/VINCI_OSS_E2E_ACHIEVEMENT.md`](internal/VINCI_OSS_E2E_ACHIEVEMENT.md).
 
 **Meeting anchor:** Aug 26 L'Oreal/Shiva sync — Engram/Vinci as open-source workflow layer; users bring Google/etc. API keys; Magnific/Higgsfield compete on workflow, not unique models. Cost transparency is the wedge.
 
@@ -73,7 +73,7 @@ Authored MCP tools: `vinci.models_list`, `vinci.skills_search`, `vinci.image_gen
 
 ## 8. Phased delivery
 
-Phase 0–3 as in `VINCI_OSS_E2E_ACHIEVEMENT.md`. Extraction seams from Vinci Platform are **semantics, not file dumps**: capability router, image plugins, storage adapters, catalog decisions. `vinci_ai_service` is split, not ported.
+Phase 0–3 as in [`docs/internal/VINCI_OSS_E2E_ACHIEVEMENT.md`](internal/VINCI_OSS_E2E_ACHIEVEMENT.md). Extraction seams from Vinci Platform are **semantics, not file dumps**: capability router, image plugins, storage adapters, catalog decisions. `vinci_ai_service` is split, not ported.
 
 ## 9. Quality
 
