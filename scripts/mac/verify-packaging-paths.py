@@ -43,6 +43,7 @@ def required_app_paths(app: Path) -> list[Path]:
         app / "Contents/Resources/bin/ffmpeg",
         app / "Contents/Resources/bin/ffprobe",
         app / "Contents/Resources/legal/THIRD_PARTY_NOTICES.md",
+        app / "Contents/Resources/skills/index.json",
     ]
 
 

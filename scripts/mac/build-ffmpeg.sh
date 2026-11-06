@@ -15,7 +15,8 @@ WORK="$CACHE/ffmpeg-build"
 rm -rf "$WORK"
 mkdir -p "$WORK"
 tar -xJf "$CACHE/$SRC_TAR" -C "$WORK"
-SRC_DIR="$(find "$WORK" -maxdepth 1 -type d -name 'ffmpeg-*' | head -1)"
+# -mindepth 1: $WORK is named ffmpeg-build, so without it find returns $WORK itself (COREPRODUC-519).
+SRC_DIR="$(find "$WORK" -mindepth 1 -maxdepth 1 -type d -name 'ffmpeg-*' | head -1)"
 cd "$SRC_DIR"
 ./configure \
   --prefix="$OUT" \

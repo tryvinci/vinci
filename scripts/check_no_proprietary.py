@@ -46,12 +46,17 @@ def _is_allowed_doc(path: Path) -> bool:
 
 
 def _iter_files() -> list[Path]:
-    skip_parts = {".git", "node_modules", ".venv", "venv", ".mypy_cache", ".ruff_cache", "dist"}
+    # .mac-bundle-cache: third-party Mac build inputs (scan_bundle.py checks what ships).
+    skip_parts = {
+        ".git", "node_modules", ".venv", "venv", ".mypy_cache", ".ruff_cache", "dist",
+        ".mac-bundle-cache",
+    }
     files: list[Path] = []
     for path in ROOT.rglob("*"):
         if not path.is_file():
             continue
-        if any(part in skip_parts for part in path.parts):
+        # Relative parts only: a checkout under a dir named like a skip entry must still scan.
+        if any(part in skip_parts for part in path.relative_to(ROOT).parts):
             continue
         files.append(path)
     return files
