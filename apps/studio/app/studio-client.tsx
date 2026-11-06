@@ -5,7 +5,7 @@ import { AdaptFlowCanvas } from "./adapt-flow-canvas";
 import { AdaptsPanel, EMPTY_PRESET_DRAFT, type PresetDraft } from "./adapts-panel";
 import type { AdaptPresetRow, AdaptTarget, BatchStatus } from "./adapt-ui-shared";
 import { ModelCombo, type ComboModel } from "./model-combo";
-import { availabilityRank, modelAvailability, rankModels } from "../lib/model-search";
+import { availabilityRank, modelAvailability, rankModels, studioVisible } from "../lib/model-search";
 
 const API = "/vinci-api";
 const CAMERAS = ["locked-off", "handheld", "tracking", "crane", "aerial"];
@@ -556,7 +556,7 @@ export function StudioClient() {
       if (page === "speak") return caps.includes("tts") || caps.includes("lipsync") || caps.includes("i2v");
       return caps.includes("t2i") || caps.includes("t2v") || caps.includes("i2i");
     });
-    const rows = (list.length ? list : models).filter((m) => m.provider !== "mock").slice();
+    const rows = (list.length ? list : models).filter(studioVisible).slice();
     rows.sort((a, b) => {
       if (page === "upscale") {
         const stillA = (a.capabilities || []).includes("i2i") ? 0 : 1;
@@ -774,11 +774,11 @@ export function StudioClient() {
       setDoctor(doc);
       setPref(doc.preference || "cheapest");
       setMonthlyCap(doc.budget?.monthly_cap_usd != null ? String(doc.budget.monthly_cap_usd) : "");
-      setModels((modelBody.models || []).filter((m) => m.provider !== "mock"));
+      setModels((modelBody.models || []).filter(studioVisible));
       setSkills(skillBody.skills || []);
       setTemplates(tplBody.templates || []);
       setAdaptPresets(presetBody.presets || []);
-      const first = (modelBody.models || []).find((m) => m.provider !== "mock");
+      const first = (modelBody.models || []).find(studioVisible);
       setModelId((prev) => prev || first?.id || "");
       await loadMedia();
     } catch (err) {

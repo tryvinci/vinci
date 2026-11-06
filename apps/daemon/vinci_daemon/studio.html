@@ -2093,6 +2093,10 @@
       return scored.map((item) => item.row);
     }
     // Keep in sync with apps/studio/lib/model-search.ts (modelAvailability).
+    // Mirrors studioVisible in apps/studio/lib/model-search.ts: keep demo-mode mock practice
+    // models (marked available) so Studio works at $0; hide mock only when unavailable.
+    function studioVisible(m) { return m.provider !== "mock" || m.available === true; }
+
     function modelAvailability(model, provider, liveSpend) {
       if (!model || model.provider === "mock") return "ready";
       if (model.available && liveSpend) return "ready";
@@ -2986,7 +2990,7 @@
         doctor = await j("/doctor");
         await j("/init", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ demo: true }) });
         const [modelBody, skillBody, tplBody, presetBody] = await Promise.all([j("/models"), j("/skills"), j("/templates"), j("/presets")]);
-        models = (modelBody.models || []).filter((m) => m.provider !== "mock");
+        models = (modelBody.models || []).filter(studioVisible);
         skills = skillBody.skills || [];
         templates = tplBody.templates || [];
         adaptPresets = presetBody.presets || [];
