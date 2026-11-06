@@ -1,0 +1,128 @@
+make[1]: Entering directory '/workspace/apps/vinci-oss'
+DRY_RUN=1 FIXTURE_MODE=1 ROOT=deploy/cloudflare ./deploy/cloudflare/scripts/deploy.sh
+DRY_RUN=1 — validation only (no Cloudflare resources created).
+
+> vinci-oss-selfhost@0.1.0 typecheck
+> tsc --noEmit
+
+
+> vinci-oss-selfhost@0.1.0 test
+> node --import tsx --test test/*.test.ts
+
+TAP version 13
+# Subtest: authConfigured requires 16+ char secret
+ok 1 - authConfigured requires 16+ char secret
+  ---
+  duration_ms: 0.637684
+  ...
+# Subtest: session mint and verify with expiry
+ok 2 - session mint and verify with expiry
+  ---
+  duration_ms: 4.586817
+  ...
+# Subtest: bearer authorization
+ok 3 - bearer authorization
+  ---
+  duration_ms: 12.011591
+  ...
+# Subtest: bridge journal authorization
+ok 4 - bridge journal authorization
+  ---
+  duration_ms: 0.316048
+  ...
+# Subtest: normalizeDoJournalBase appends journal suffix to worker origin
+ok 5 - normalizeDoJournalBase appends journal suffix to worker origin
+  ---
+  duration_ms: 0.582199
+  ...
+# Subtest: normalizeDoJournalBase is idempotent when suffix present
+ok 6 - normalizeDoJournalBase is idempotent when suffix present
+  ---
+  duration_ms: 0.131184
+  ...
+# Subtest: commit allows pending submit_intent to upgrade provider_job_ref
+ok 7 - commit allows pending submit_intent to upgrade provider_job_ref
+  ---
+  duration_ms: 20.597351
+  ...
+# Subtest: commit rejects digest change without submit_intent upgrade
+ok 8 - commit rejects digest change without submit_intent upgrade
+  ---
+  duration_ms: 1.342969
+  ...
+# Subtest: commit rejects submit_intent upgrade when run_id mutates
+ok 9 - commit rejects submit_intent upgrade when run_id mutates
+  ---
+  duration_ms: 1.742315
+  ...
+# Subtest: commit rejects submit_intent upgrade when node_id mutates
+ok 10 - commit rejects submit_intent upgrade when node_id mutates
+  ---
+  duration_ms: 1.083183
+  ...
+# Subtest: commit rejects submit_intent upgrade when job_id mutates
+ok 11 - commit rejects submit_intent upgrade when job_id mutates
+  ---
+  duration_ms: 1.333216
+  ...
+# Subtest: commit rejects submit_intent upgrade when model_id mutates
+ok 12 - commit rejects submit_intent upgrade when model_id mutates
+  ---
+  duration_ms: 0.903077
+  ...
+# Subtest: commit rejects submit_intent upgrade when provider mutates
+ok 13 - commit rejects submit_intent upgrade when provider mutates
+  ---
+  duration_ms: 2.005358
+  ...
+# Subtest: commit rejects submit_intent upgrade when idempotency_key mutates
+ok 14 - commit rejects submit_intent upgrade when idempotency_key mutates
+  ---
+  duration_ms: 0.68647
+  ...
+# Subtest: commit rejects submit_intent upgrade when kind mutates
+ok 15 - commit rejects submit_intent upgrade when kind mutates
+  ---
+  duration_ms: 1.269829
+  ...
+# Subtest: commit rejects submit_intent upgrade when path mutates
+ok 16 - commit rejects submit_intent upgrade when path mutates
+  ---
+  duration_ms: 1.029958
+  ...
+# Subtest: offset query param is rejected
+ok 17 - offset query param is rejected
+  ---
+  duration_ms: 0.527906
+  ...
+# Subtest: committed limit is bounded 1..500
+ok 18 - committed limit is bounded 1..500
+  ---
+  duration_ms: 0.114141
+  ...
+# Subtest: next cursor only when page is full
+ok 19 - next cursor only when page is full
+  ---
+  duration_ms: 0.445171
+  ...
+# Subtest: in-memory paging walks more than 10000 committed rows without repeat
+ok 20 - in-memory paging walks more than 10000 committed rows without repeat
+  ---
+  duration_ms: 16.948648
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 20
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 337.653938
+note: docker not installed (required for real deploy image build)
+FIXTURE_MODE=1 — validating deploy CLI wiring (no remote mutation).
+4.40.2
+fixture ok vinci-oss-selfhost vinci-oss-data
+dry-run ok: worker=vinci-oss-selfhost bucket=vinci-oss-data
+To deploy: VINCI_INSTANCE_SECRET=$(openssl rand -hex 24) ./deploy/cloudflare/scripts/deploy.sh
+make[1]: Leaving directory '/workspace/apps/vinci-oss'

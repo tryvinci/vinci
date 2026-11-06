@@ -1,0 +1,521 @@
+/* Brand layer. Import after globals.css.
+   Page PRs append rules to globals.css. This file wins for the classes below
+   so Image, Video, Canvas, Assets, Effects, and the shell pick up the theme
+   without each branch re-tuning hex values. */
+
+.vinci-logo {
+  display: grid;
+  width: 100%;
+  height: 32px;
+  margin: 4px 0 12px;
+  place-items: center;
+  flex: none;
+}
+.vinci-logo-mark,
+.vinci-logo-mark-only img {
+  width: 28px;
+  height: 28px;
+  display: block;
+  object-fit: contain;
+}
+.vinci-logo-word { display: none; height: 28px; width: auto; object-fit: contain; }
+.vinci-logo-mark-only { width: 28px; margin: 0; }
+.top-logo { display: none; }
+.rail { container-type: inline-size; container-name: studio-rail; }
+@container studio-rail (min-width: 140px) {
+  .vinci-logo { place-items: start; padding-left: 8px; }
+  .vinci-logo-mark { display: none; }
+  .vinci-logo-word { display: block; }
+}
+
+.surface,
+.model-card,
+.connect-sheet,
+.agent-log,
+.collab-card {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  box-shadow: var(--card-shadow);
+}
+
+.empty-state { text-align: center; display: grid; gap: 10px; justify-items: center; max-width: 36rem; }
+.empty-state .eyebrow,
+.compose-offer .eyebrow { color: var(--mute); letter-spacing: 0.18em; }
+.empty-state h2,
+.compose-offer h2,
+.explore h2,
+.keys.connect h2,
+.lib-page > h2,
+.onboard-card h2,
+.empty h2,
+.first-node-inner h2,
+.assets-empty h3,
+.apps-empty h2,
+.effects-history-empty h2 {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+.empty-state h2 { margin: 0; font-size: 2.75rem; line-height: 1.05; }
+.empty-state-copy { margin: 0; color: var(--dim); max-width: 28rem; line-height: 1.5; }
+.empty-state-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 4px; }
+.empty-state-hint { margin: 0; font-size: 12px; color: var(--mute); }
+.empty { color: var(--dim); pointer-events: none; }
+.empty .empty-state,
+.empty button,
+.empty a { pointer-events: auto; }
+.empty h2 { font-size: 2.4rem; margin: 0 0 8px; }
+
+.prompt-bar,
+.image-bar {
+  background: var(--glass-fallback);
+  border: 1px solid var(--glass-line);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+.image-how-n {
+  background: var(--chip);
+  color: var(--dim);
+}
+.image-card-thumb,
+.image-ref-chip,
+.assets-thumb,
+.node .thumb { background: var(--media); }
+.image-card.pending .image-card-thumb {
+  color: var(--ink);
+  background: var(--raised);
+}
+.image-card-hover {
+  background: linear-gradient(180deg, transparent 28%, rgb(8 10 10 / 0.88));
+}
+.image-card-hover button,
+.image-card-hover a,
+.assets-hover button,
+.assets-hover a {
+  background: var(--raised);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.image-card-hover button:hover,
+.image-card-hover a:hover,
+.assets-hover button:hover,
+.assets-hover a:hover {
+  border-color: rgb(255 255 255 / 0.2);
+  color: var(--ink);
+}
+.image-mention button:hover,
+.image-chip-menu button.on,
+.image-chip-menu button:hover,
+.image-picker-row.on,
+.image-picker-row:hover,
+.model-combo-list li.on,
+.model-combo-list li:hover {
+  background: var(--hover);
+}
+.image-picker-chips span,
+.image-badge {
+  background: var(--chip);
+  color: var(--dim);
+}
+.image-badge { background: var(--chip); color: var(--dim); }
+.image-card { transition: transform 160ms ease; }
+.image-card:hover { transform: translateY(-2px); }
+.image-how-step,
+.assets-card,
+.apps-card,
+.effects-preset-card {
+  transition: transform 160ms ease, border-color 160ms ease;
+}
+.image-how-step:hover,
+.assets-card:hover,
+.apps-card:hover .apps-thumb,
+.effects-preset-card:hover {
+  transform: translateY(-2px);
+}
+
+.video-tabs,
+.video-mode {
+  background: var(--bg);
+  border-color: var(--line);
+}
+.video-tabs button,
+.video-mode button,
+.video-tile {
+  background: transparent;
+  color: var(--dim);
+}
+.video-tabs button.on,
+.video-mode button.on,
+.video-tile.on,
+.video-tile:hover,
+.video-overlay-tabs button.on,
+.video-preset-card.on,
+.video-preset-card:hover {
+  background: var(--hover);
+  color: var(--ink);
+  border-color: var(--line);
+}
+.video-tabs button.on,
+.video-mode button.on,
+.video-tile.on {
+  background: var(--hover);
+  color: var(--teal);
+}
+.video-overlay,
+.video-overlay-bar,
+.effects-overlay-panel {
+  background: var(--bar);
+  color: var(--ink);
+  border-color: var(--line);
+}
+.video-prompt,
+.video-drop,
+.node-prompt {
+  background: var(--bg);
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+.node,
+.first-node-card {
+  background: var(--raised);
+  color: var(--ink);
+  border-color: var(--line);
+  box-shadow: var(--card-shadow);
+}
+.first-node-card span,
+.node .k,
+.node-ref-count,
+.node-ref-add:disabled,
+.node-stepper button:disabled { color: var(--dim); }
+.node-ref-add,
+.node-chip select,
+.node-gear,
+.node-stepper button {
+  background: var(--panel);
+  color: var(--ink);
+  border-color: var(--line);
+}
+.node:hover,
+.node.on,
+.first-node-card:hover {
+  border-color: rgb(255 255 255 / 0.18);
+  box-shadow: var(--card-shadow);
+}
+.canvas-view .views button:not(.on):hover { color: var(--ink); }
+.add-chips button.on { background: var(--hover); color: var(--teal); border-color: var(--line); }
+
+.assets-empty,
+.apps-empty,
+.effects-history-empty { color: var(--dim); }
+.assets-nav button.on { background: var(--hover); color: var(--ink); }
+.effects-error,
+.apps-stage.is-error { color: var(--danger); }
+.apps-search:focus,
+.effects-overlay input:focus { outline-color: rgb(255 255 255 / 0.28); }
+
+.rail button.on {
+  background: var(--hover);
+  color: var(--teal);
+}
+.rail button:hover:not(.rail-create) {
+  background: var(--hover);
+  color: var(--ink);
+}
+.rail button.rail-create {
+  background: var(--teal);
+  color: var(--btn-ink);
+  font-weight: 600;
+}
+.rail button.rail-create.on,
+.rail button.rail-create:hover {
+  background: #1bb8b1;
+  color: var(--btn-ink);
+}
+.command-list button.on,
+.command-list button:hover,
+.all-tools-tabs button.on,
+.all-tools-open:hover,
+.avatar-menu button:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.all-tools,
+.command-box,
+.avatar-menu {
+  background: var(--glass-fallback);
+  color: var(--ink);
+  border-color: var(--glass-line);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
+}
+
+.card { transition: transform 160ms ease; }
+.card:hover { transform: translateY(-3px); }
+.card:hover img { box-shadow: 0 18px 36px -22px rgb(0 0 0 / 0.7); }
+.model-card { transition: border-color 140ms ease, transform 140ms ease; }
+.model-card:hover,
+.model-card.on { transform: translateY(-2px); }
+
+@media (max-width: 960px) {
+  .top-logo { display: inline-flex; }
+  .shell:has(.rail.open) .top-logo { display: none; }
+  .top {
+    height: auto;
+    min-height: 56px;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 8px 12px 10px;
+    row-gap: 8px;
+  }
+  .top-lead { flex: 1 1 140px; }
+  .top .views { order: 3; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .model-card,
+  .image-card,
+  .image-how-step,
+  .assets-card,
+  .effects-preset-card { transition: none; }
+  .card:hover,
+  .model-card:hover,
+  .image-card:hover,
+  .image-how-step:hover,
+  .assets-card:hover { transform: none; }
+  .image-card.pending .image-card-thumb,
+  .node.run-running .thumb,
+  .command-box,
+  .add-menu,
+  .ctx-menu,
+  .avatar-menu,
+  .image-picker,
+  .rail-flyout { animation: none; transition: none; }
+}
+
+/* Glass is the surface. Solid fill is the fallback when blur is unavailable. */
+.command-box,
+.add-menu,
+.ctx-menu,
+.avatar-menu,
+.image-picker,
+.image-chip-menu,
+.rail-flyout,
+.model-combo-list,
+.onboard-card {
+  background: var(--glass-fallback);
+  border-color: var(--glass-line);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+.command-box,
+.add-menu,
+.ctx-menu,
+.avatar-menu,
+.image-picker {
+  animation: vinci-pop 160ms ease;
+}
+.rail button.on {
+  background: var(--hover);
+  color: var(--teal);
+  box-shadow: none;
+}
+.node.on {
+  border-width: 1px;
+  border-color: rgb(255 255 255 / 0.22);
+  box-shadow: var(--card-shadow);
+}
+.command-list button.on,
+.add-list button.on,
+.image-picker-row.on {
+  background: var(--hover);
+  box-shadow: none;
+  color: var(--ink);
+}
+.run {
+  min-height: 42px;
+  padding: 12px 22px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.node.run-running .thumb {
+  background-image: linear-gradient(100deg, var(--media) 0%, var(--raised) 42%, rgb(255 255 255 / 0.08) 50%, var(--raised) 58%, var(--media) 100%);
+  background-size: 200% 100%;
+  animation: vinci-shimmer 1.4s ease infinite;
+}
+.node:not(.on):not(:hover):not(:focus-within) .node-ui { display: none; }
+.top h1:not(.sr-only) {
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border: 1px solid var(--glass-line);
+  border-radius: var(--pill);
+  background: var(--glass-fallback);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+.insp, .video-panel, .rail { background: var(--glass-fallback); }
+.muted { font-size: 13px; line-height: 1.45; color: var(--dim); }
+input[type="file"]::file-selector-button,
+input[type="file"]::-webkit-file-upload-button {
+  background: var(--raised);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 12px;
+  margin-right: 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Shared glass. Translucent fill only when backdrop-filter is supported. */
+.top,
+.rail,
+.video-panel,
+.insp {
+  border-color: var(--glass-line);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+.top { background: var(--glass-fallback); }
+.rail, .video-panel, .insp { background: var(--glass-fallback); }
+.space-switch,
+.access-pill,
+.dock-pop,
+.edge-btn,
+.node .node-ui,
+.assets-nav,
+.assets-toolbar,
+.assets-search,
+.assets-overlay-card,
+.assets-selection {
+  background: var(--glass-fallback);
+  border: 1px solid var(--glass-line);
+  box-shadow: var(--glass-highlight), var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .top,
+  .rail,
+  .video-panel,
+  .insp,
+  .prompt-bar,
+  .image-bar,
+  .canvas-bar,
+  .command-box,
+  .all-tools,
+  .add-menu,
+  .ctx-menu,
+  .avatar-menu,
+  .image-picker,
+  .image-chip-menu,
+  .rail-flyout,
+  .model-combo-list,
+  .onboard-card,
+  .space-switch,
+  .access-pill,
+  .dock-pop,
+  .edge-btn,
+  .node .node-ui,
+  .assets-nav,
+  .assets-toolbar,
+  .assets-search,
+  .assets-overlay-card,
+  .assets-selection,
+  .top h1:not(.sr-only) {
+    background: var(--glass);
+  }
+  .command-box,
+  .all-tools,
+  .video-panel,
+  .insp,
+  .assets-nav {
+    background: var(--glass-strong);
+  }
+}
+.space-switch {
+  display: flex; gap: 2px; padding: 3px; border-radius: 16px;
+}
+.space-switch button {
+  border: 0; background: transparent; color: var(--dim);
+  border-radius: var(--pill); padding: 5px 12px; font-size: 13px;
+}
+.space-switch button.on { color: var(--teal); background: var(--hover); }
+.access-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  border-radius: var(--pill); color: var(--dim); padding: 5px 10px; font-size: 12px;
+}
+.access-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mute); }
+.run.canvas-generate { min-height: 32px; padding: 6px 14px; font-size: 13px; }
+.canvas-view { display: flex; align-items: center; gap: 2px; }
+.dock-btn {
+  position: relative; width: 32px; height: 32px; flex: none; padding: 0;
+  border: 0; border-radius: 10px; background: transparent; color: var(--dim);
+  display: grid; place-items: center;
+}
+.dock-btn.on { color: var(--teal); background: var(--hover); }
+.dock-btn:disabled { opacity: 0.35; }
+.dock-tip {
+  position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%);
+  display: none; align-items: center; gap: 6px; white-space: nowrap;
+  padding: 4px 8px; border-radius: 8px; background: var(--glass-fallback);
+  border: 1px solid var(--glass-line); color: var(--ink); font-size: 11px;
+  box-shadow: var(--glass-shadow); pointer-events: none;
+}
+.dock-btn:hover .dock-tip,
+.dock-btn:focus-visible .dock-tip { display: flex; }
+.dock-slot { position: relative; display: flex; }
+.dock-pop {
+  position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%);
+  display: flex; gap: 4px; padding: 6px; border-radius: 14px; z-index: 5;
+}
+.dock-pop button {
+  border: 0; background: transparent; color: var(--ink);
+  border-radius: 8px; padding: 6px 8px; font-size: 12px; white-space: nowrap;
+}
+.edge-btn {
+  position: absolute; z-index: 4; width: 28px; height: 28px; padding: 0;
+  border-radius: 50%; color: var(--dim); display: grid; place-items: center;
+}
+.edge-help { top: 12px; right: 12px; }
+.edge-btn.on { color: var(--teal); }
+.node-caption { padding: 10px 12px 4px; }
+.node-title { display: block; font-size: 13px; font-weight: 600; color: var(--ink); }
+.node-sub { margin: 2px 0 0; font-size: 12px; line-height: 1.35; color: var(--mute); }
+.node .node-ui { margin: 8px 10px; border-radius: 14px; }
+.node-actions { display: flex; gap: 8px; align-items: center; padding: 8px; }
+.node .node-run { flex: 1; min-height: 34px; padding: 7px 12px; font-size: 13px; }
+.node .node-gear {
+  border-radius: var(--pill); min-height: 34px; padding: 7px 12px; font-size: 13px;
+  background: transparent; color: var(--dim);
+}
+.node .node-gear.on { color: var(--teal); }
+.assets-page { min-height: 0; }
+.assets-nav button.on,
+.assets-toolbar button.on { color: var(--teal); background: var(--hover); }
+.icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--pill);
+  background: transparent;
+  color: var(--dim);
+}
+.icon-btn:hover,
+.icon-btn:focus-visible { color: var(--ink); background: var(--hover); }
+.icon-btn .dock-tip { display: none; }
+.icon-btn:hover .dock-tip,
+.icon-btn:focus-visible .dock-tip { display: flex; }

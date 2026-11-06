@@ -72,6 +72,10 @@ def test_html_ranker_matches_ts_source() -> None:
     assert "spend off" in html
     assert "not enabled" in html
     assert "apps/studio/lib/model-search.ts" in html
-    for needle in ("display_name", "provider", "inherit skill default"):
+    for needle in ("display_name", "provider"):
         assert needle in ts
         assert needle in html
+    # The TS source dropped "inherit skill default" for "same as the page",
+    # but the frozen daemon studio.html keeps the old label.
+    assert "same as the page" in ts
+    assert "inherit skill default" in html

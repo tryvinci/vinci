@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -39,10 +40,11 @@ def test_verify_smoke_report_rejects_minimal_fake_json(tmp_path: Path) -> None:
     assert proc.returncode == 1
 
 
-def test_generate_notices_writes_provenance(tmp_path: Path) -> None:
+def test_generate_notices_writes_provenance(tmp_path: Path, npm_notice_dir: Path) -> None:
     subprocess.run(
         ["/bin/bash", "scripts/mac/generate-notices-sbom.sh", str(tmp_path)],
         cwd=ROOT,
+        env={**os.environ, "VINCI_MAC_NPM_NOTICE_DIR": str(npm_notice_dir)},
         check=True,
     )
     prov = tmp_path / "provenance.json"

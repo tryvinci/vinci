@@ -21,6 +21,7 @@ NAMES = [
     "nodeRef",
     "toWorkflowNodes",
     "withAncestors",
+    "runSet",
     "setParams",
     "removeNodes",
     "startHistory",
@@ -42,13 +43,21 @@ NAMES = [
     "withKeys",
     "wheelZoomFactor",
     "searchCatalog",
+    "buildAddMenu",
+    "flattenAddMenu",
+    "capabilityForModel",
+    "kindFromMime",
+    "nodeTypeOf",
+    "ADD_CHIPS",
     "inputDefaults",
     "freeSpot",
     "wirePath",
+    "curve",
     "portY",
     "outputOf",
     "NODE_CATALOG",
     "NODE_DEFAULTS",
+    "runtimeGraph",
     "startParams",
     "blockedReason",
     "groupNodes",
@@ -59,6 +68,9 @@ NAMES = [
     "nodesInRect",
     "moveNodes",
     "estimateRun",
+    "estimateScope",
+    "scopeNodes",
+    "instanceNodes",
     "isEdited",
 ]
 
@@ -148,9 +160,11 @@ eq(dropped, false, "first2 is not first");
 def test_connect_rejects_bad_wires() -> None:
     _check("""
 const mism = connect(base, "anim", "up");
-if (mism.ok || !/no video input/.test(mism.error)) throw new Error("video->image: " + mism.error);
+if (mism.ok || !/cannot take video/.test(mism.error)) throw new Error("video->image: " + mism.error);
+const videoToText = connect(base, "anim", "still");
+if (videoToText.ok || !/cannot take video/.test(videoToText.error)) throw new Error("video->text: " + videoToText.error);
 const noIn = connect(base, "up", "still");
-if (noIn.ok) throw new Error("t2i has no inputs");
+if (noIn.ok) throw new Error("image cannot feed a text-only input");
 const self = connect(base, "up", "up");
 if (self.ok) throw new Error("self wire");
 const up2 = { id: "up2", type: "generate", capability: "upscale", params: {} };
@@ -158,7 +172,7 @@ let g = { nodes: [still, up, up2], edges: [] };
 g = connect(g, "up", "up2").graph;
 const loop = connect(g, "up2", "up");
 if (loop.ok || !/loop/.test(loop.error)) throw new Error("cycle: " + JSON.stringify(loop));
-const unknown = { id: "x", type: "media", capability: "transcribe", params: {} };
+const unknown = { id: "x", type: "generate", capability: "transcribe", params: {} };
 eq(portsFor(unknown), { inputs: [], output: null }, "unknown capability has no ports");
 """)
 
@@ -231,6 +245,7 @@ const refs = {
   cfg: { src: "{{ nodes.still.outputs }}" },
   note: "a {{nodes.still.data}} b",
   seed: "{{nodes.still.output}}",
+  tabbed: ["{{\tnodes.still.output}}"],
 };
 const withRefs = (n) => ({ ...n, params: { ...n.params, ...refs } });
 const nested = (n) => (n.id === "up" ? withRefs(n) : n);
@@ -316,6 +331,34 @@ eq([copy.capability, copy.x, copy.y], ["upscale", 24, 24], "copy sits beside");
 eq(copy.params.media, "{{inputs.media}}", "wired input is not copied");
 eq(g.edges.length, 1, "no new wire");
 eq(duplicateNode(g, "nope", "x"), g, "unknown id is a no-op");
+const frames = {
+  first_frame_url: nodeRef("still"),
+  last_frame_url: "{{ nodes.up.output }}",
+  image_urls: [nodeRef("still")],
+  extra: ["keep", "{{\tnodes.still.output}}"],
+};
+const withFrames = (n) => (n.id === "anim" ? { ...n, params: { ...n.params, ...frames } } : n);
+const fl = { ...base, nodes: base.nodes.map(withFrames) };
+const dup = duplicateNode(fl, "anim", "anim-copy").nodes.find((n) => n.id === "anim-copy");
+const left = JSON.stringify(dup.params);
+if (left.includes("nodes.")) throw new Error("copy still names a node: " + left);
+const resets = [dup.params.first_frame_url, dup.params.last_frame_url, dup.params.image_urls];
+const pageInputs = ["{{inputs.first_frame_url}}", "{{inputs.last_frame_url}}", []];
+eq(resets, pageInputs, "every ref resets");
+eq(dup.params.extra, ["keep"], "a tab inside the braces is still a reference");
+const lone = { refs: ["{{\tnodes.still.output}}"] };
+const swap = (n) => (n.id === "anim" ? Object.assign({}, n, { params: lone }) : n);
+const tg = { ...base, nodes: base.nodes.map(swap) };
+eq(duplicateNode(tg, "anim", "c").nodes.at(-1).params.refs, [], "a lone tabbed ref is found");
+eq(param(removeNodes(tg, ["still"]), "anim", "refs"), [], "removeNodes finds it too");
+const reader = { id: "c", params: { image: "{{nodes.a b.output}}" } };
+const spaced = { nodes: [{ id: "a b" }, reader], edges: [] };
+const sc = duplicateNode(spaced, "c", "c2").nodes.at(-1);
+eq(sc.params.image, "{{inputs.image}}", "an id with a space is a reference too");
+const trail = { id: "d", params: { image: "{{nodes.a .output}}" } };
+const trailed = { nodes: [{ id: "a " }, trail], edges: [] };
+const tc = duplicateNode(trailed, "d", "d2").nodes.at(-1);
+eq(tc.params.image, "{{inputs.image}}", "a space before the dot stays in the id");
 """)
 
 
@@ -382,17 +425,23 @@ def test_add_menu_search_and_port_filter() -> None:
     _check("""
 const caps = (rows) => rows.map((r) => r.capability);
 eq(caps(searchCatalog("")), NODE_CATALOG.map((r) => r.capability), "empty query keeps menu order");
-eq(caps(searchCatalog("", "image")), ["i2i", "upscale", "i2v"], "image output: only image inputs");
+eq(caps(searchCatalog("", "image")), ["upscale", "i2i", "i2v"], "image output: only image inputs");
 eq(caps(searchCatalog("", "video")), ["lipsync"], "video output");
 eq(caps(searchCatalog("", "audio")), ["lipsync"], "audio output");
-eq(caps(searchCatalog("up")), ["upscale"], "label prefix");
+eq(caps(searchCatalog("", "text")), ["t2i", "t2v", "i2i", "tts", "i2v", "assistant"], "text output");
+eq(caps(searchCatalog("up")), ["upscale", "media"], "label prefix beats a blurb hit");
 eq(caps(searchCatalog("edit")), ["i2i"], "word prefix");
 eq(caps(searchCatalog("im"))[0], "t2i", "label prefix beats word prefix");
 eq(caps(searchCatalog("clip", "image")), ["i2v"], "query and kind combine");
+eq(caps(searchCatalog("", null, "utilities")), ["media", "text", "list", "assistant", "note"], "utilities chip");
 eq(searchCatalog("zzz"), [], "no match");
-for (const row of NODE_CATALOG) {
-  if (!outputOf(row.capability)) throw new Error("catalog row without ports: " + row.capability);
+eq(portsFor({ id: "n", type: "transform", capability: "note" }).output, null, "note has no ports");
+for (const row of NODE_CATALOG.filter((r) => r.capability !== "note")) {
+  if (outputOf(row.capability) == null && row.capability !== "media") throw new Error("catalog row without ports: " + row.capability);
 }
+eq(kindFromMime("video/mp4"), "video", "mime");
+eq(nodeTypeOf("text"), "transform", "canvas-only text");
+eq(nodeTypeOf("t2i"), "generate", "image gen");
 """)
 
 
@@ -401,14 +450,15 @@ def test_new_nodes_get_inputs_and_free_spots() -> None:
 eq(inputDefaults("upscale"), { media: "{{inputs.media}}" }, "upscale reads media");
 const two = { video: "{{inputs.video}}", audio: "{{inputs.audio}}" };
 eq(inputDefaults("lipsync"), two, "two inputs");
-eq(inputDefaults("t2i"), {}, "no inputs");
+eq(inputDefaults("t2i"), { prompt: "{{inputs.prompt}}" }, "t2i prompt is a text port");
 const g = { nodes: [{ id: "a", x: 100, y: 100 }, { id: "b", x: 124, y: 124 }], edges: [] };
-eq(freeSpot(g, 100, 100), { x: 336, y: 100 }, "next free card slot to the right");
-const cards = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({ id: "r" + i, x: i * 236, y: 0 }));
+eq(freeSpot(g, 100, 100), { x: 100 + NODE_W + 40, y: 100 }, "next free card slot to the right");
+const step = NODE_W + 40;
+const cards = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({ id: "r" + i, x: i * step, y: 0 }));
 const row = { nodes: cards, edges: [] };
 eq(freeSpot(row, 0, 0), { x: 0, y: NODE_H + 40 }, "a full row spills below");
-eq(freeSpot(g, 400, 100), { x: 400, y: 100 }, "free spot kept");
-const cell = (i) => ({ id: "c" + i, x: (i % 9) * 236, y: Math.floor(i / 9) * 200 });
+eq(freeSpot(g, 800, 100), { x: 800, y: 100 }, "free spot kept");
+const cell = (i) => ({ id: "c" + i, x: (i % 9) * step, y: Math.floor(i / 9) * (NODE_H + 40) });
 const grid = [...Array(81).keys()].map(cell);
 const spot = freeSpot({ nodes: grid, edges: [] }, 0, 0);
 const near = (n) => Math.abs(n.x - spot.x) < NODE_W + 16 && Math.abs(n.y - spot.y) < NODE_H + 16;
@@ -420,17 +470,17 @@ def test_wires_enter_the_right_input_port() -> None:
     _check("""
 const v = { id: "v", type: "generate", capability: "t2v", x: 0, y: 0 };
 const ls = { id: "ls", type: "generate", capability: "lipsync", x: 400, y: 0 };
-const end = (d) => d.trim().split(" ").slice(-2).map(Number);
-eq(end(wirePath(v, ls, "video")), [400, portY(0)], "first input");
-eq(end(wirePath(v, ls, "audio")), [400, portY(1)], "second input sits lower");
-eq(end(wirePath(v, ls)), [400, portY(0)], "unknown key falls back to the first input");
+    const end = (d) => [...d.matchAll(/-?\\d+(?:\\.\\d+)?/g)].slice(-2).map((m) => Number(m[0]));
+    eq(end(wirePath(v, ls, "video")), [400, portY(0)], "first input");
+    eq(end(wirePath(v, ls, "audio")), [400, portY(1)], "second input sits lower");
+    eq(end(wirePath(v, ls)), [400, portY(0)], "unknown key falls back to the first input");
 """)
 
 
 
 def test_new_node_params_come_from_page_and_capability_defaults() -> None:
     _check("""
-const still16 = { prompt: "oak cube", aspect_ratio: "16:9" };
+const still16 = { prompt: "oak cube", aspect_ratio: "16:9", resolution: "1K", count: 1, num_images: 1 };
 eq(startParams("t2i", { prompt: "  oak cube " }), still16, "t2i");
 eq(startParams("t2i", { aspect_ratio: "9:16" }).aspect_ratio, "9:16", "page aspect wins");
 eq(startParams("upscale", { prompt: "x" }), { media: "{{inputs.media}}" }, "upscale has no prompt");
@@ -446,19 +496,19 @@ for (const row of NODE_CATALOG) {
 def test_blocked_reason_names_what_is_missing() -> None:
     _check("""
 const t2i = gen("t2i-1", "t2i", startParams("t2i", {}));
-eq(blockedReason(t2i, {}), "Add a prompt.", "empty prompt");
+eq(blockedReason(t2i, {}), "Add a prompt, then run.", "empty prompt");
 const typed = setParams({ nodes: [t2i], edges: [] }, "t2i-1", { prompt: "cube" }).nodes[0];
 eq(blockedReason(typed, {}), null, "typed");
 const tpl = gen("tpl", "t2i", { prompt: "{{inputs.prompt}}" });
 eq(blockedReason(tpl, { prompt: true }), null, "template prompt read from the page");
-eq(blockedReason(tpl, {}), "Add a prompt.", "page prompt missing");
+eq(blockedReason(tpl, {}), "Add a prompt, then run.", "page prompt missing");
 const upN = gen("up", "upscale", startParams("upscale", {}));
-eq(blockedReason(upN, {}), "Connect an image input.", "unwired upscale");
+eq(blockedReason(upN, {}), "Connect image first.", "unwired upscale");
 eq(blockedReason(upN, { media: true }), null, "page still feeds it");
 const wired = connect({ nodes: [still, upN], edges: [] }, "still", "up").graph;
 eq(blockedReason(wired.nodes[1], {}), null, "wired upscale");
 const ls = gen("ls", "lipsync", startParams("lipsync", {}));
-eq(blockedReason(ls, { video: true }), "Connect an audio input.", "second input");
+eq(blockedReason(ls, { video: true }), "Connect audio first.", "second input");
 const animWired = gen("anim", "i2v", { image: "{{nodes.still.output}}" });
 eq(blockedReason(animWired, {}), null, "i2v prompt optional");
 """)
@@ -468,7 +518,7 @@ eq(blockedReason(animWired, {}), null, "i2v prompt optional");
 def test_group_and_ungroup_keep_one_group_per_node() -> None:
     _check("""
 let g = groupNodes(base, ["still", "up"], "g1");
-const g1 = { id: "g1", name: "Untitled group", color: "teal", nodeIds: ["still", "up"] };
+const g1 = { id: "g1", name: "Group", color: "teal", nodeIds: ["still", "up"] };
 eq(g.groups, [g1], "grouped");
 eq(groupNodes(base, ["still"], "solo"), base, "one node is not a group");
 eq(groupNodes(base, ["still", "ghost"], "x"), base, "unknown ids are ignored");
@@ -527,6 +577,9 @@ const prices = { still: 0.04, up: 0.1, anim: null };
 const price = (n) => prices[n.id];
 const upRun = estimateRun(g, ["up"], price);
 eq(upRun, { nodes: 2, total: 0.14, unpriced: 0 }, "upscale pulls in its still");
+eq(estimateRun(g, ["up"], price, true), { nodes: 1, total: 0.1, unpriced: 0 }, "solo prices only the clicked node");
+eq([...runSet(g, ["up"])].sort(), ["still", "up"], "default run includes ancestors");
+eq([...runSet(g, ["up"], true)], ["up"], "card run is this node only");
 eq(estimateRun(g, ["anim"], price).unpriced, 1, "unknown price is counted, not guessed");
 eq(estimateRun(g, ["still"], price).nodes, 1, "a root runs alone");
 const withMedia = { ...g, nodes: [...g.nodes, { id: "cut", type: "media", params: {} }] };
@@ -577,3 +630,109 @@ console.log(JSON.stringify({ nodes, edges: r.graph.edges }));
     still_out = run["nodes"]["still"]["output"]
     job = client.get(f"/jobs/{run['nodes']['edit']['job_id']}").json()
     assert job["inputs"]["media"] == still_out
+
+
+def test_click_output_inserts_a_wired_upscaler() -> None:
+    """Acceptance: Image Gen output + Upscaler creates a wired Upscaler."""
+    _check("""
+const shot = { ...gen("shot", "t2i", startParams("t2i", { prompt: "oak" })), x: 0, y: 0 };
+const upNode = { ...gen("up", "upscale", startParams("upscale", {})), x: NODE_W + 80, y: 0 };
+const g = addNode({ nodes: [shot], edges: [] }, upNode, "shot");
+eq(g.edges, [{ src: "shot", dst: "up", input_key: "media" }], "wired");
+eq(param(g, "up", "media"), nodeRef("shot"), "upscaler reads the still");
+""")
+
+
+def test_add_popover_groups_chips_and_providers() -> None:
+    """Magnific add popover: chips, Media / Nodes / providers with counts / Flows."""
+    _check("""
+eq(ADD_CHIPS.map((c) => c.id), ["image", "video", "audio", "3d", "utilities", "flows", "templates", "library"], "chips");
+const models = [
+  { id: "a", display_name: "Soul", provider: "higgsfield", capabilities: ["t2i"] },
+  { id: "b", display_name: "Kling", provider: "higgsfield", capabilities: ["t2v"] },
+  { id: "c", display_name: "Flux", provider: "fal", capabilities: ["t2i"] },
+];
+const templates = [{ id: "long-video", title: "Long video", blurb: "A storyboard" }];
+const open = buildAddMenu("", { models, templates });
+eq(open.map((s) => s.id), ["media", "nodes", "providers", "flows"], "sections");
+eq(open[0].rows.map((r) => r.pick.capability), ["media"], "media section");
+eq(open[1].rows.some((r) => r.pick.capability === "t2i"), true, "image gen in nodes");
+const vendors = open[2].rows.map((r) => `${r.vendor}:${r.vendorCount}`);
+eq(vendors, ["higgsfield:2", "higgsfield:2", "fal:1"], "vendor counts");
+eq(open[3].rows.map((r) => r.pick.templateId), ["long-video"], "flows");
+const fromImage = flattenAddMenu(buildAddMenu("", { takes: "image", models, templates }));
+eq(fromImage.map((r) => r.pick.capability || r.pick.kind), ["upscale", "i2i", "i2v"], "click image output");
+eq(flattenAddMenu(buildAddMenu("", { chip: "3d", models, templates })), [], "3d empty");
+eq(flattenAddMenu(buildAddMenu("", { chip: "library", models, templates })), [], "library empty");
+eq(capabilityForModel(["t2v", "t2i"]), "t2i", "catalog order");
+eq(capabilityForModel(["t2v"], "image"), null, "video model cannot take an image");
+eq(flattenAddMenu(buildAddMenu("upscaler")).map((r) => r.pick.capability), ["upscale"], "search");
+const textNode = { id: "copy", type: "transform", capability: "text", params: { prompt: "hi" } };
+const mixed = { nodes: [still, textNode], edges: [] };
+eq(runtimeGraph(mixed).nodes.map((n) => n.id), ["still"], "text stays off the runtime");
+""")
+
+
+def test_wires_are_orthogonal_with_rounded_corners() -> None:
+    _check("""
+const d = curve(0, 10, 200, 80);
+if (d.includes(" C") || / C[0-9]/.test(d)) throw new Error("bezier leftover: " + d);
+if (!d.includes(" Q")) throw new Error("needs rounded corners: " + d);
+    eq(d.slice(0, 2), "M0", "starts at the output");
+    const nums = (s) => [...s.matchAll(/-?\\d+(?:\\.\\d+)?/g)].map((m) => Number(m[0]));
+    eq(nums(d).slice(-2), [200, 80], "ends at the input");
+    const flat = curve(0, 10, 120, 10);
+    eq(flat, "M0 10 L120 10", "level wire is a line");
+    const a = { id: "v", type: "generate", capability: "t2v", x: 0, y: 0 };
+    const b = { id: "ls", type: "generate", capability: "lipsync", x: 400, y: 0 };
+    eq(nums(wirePath(a, b, "video")).slice(-2), [400, portY(0)], "first input");
+""")
+
+
+def test_up_to_here_excludes_downstream() -> None:
+    """Toolbar scope: up to here is the node and what feeds it, never what follows."""
+    _check("""
+let g = connect(base, "still", "up").graph;
+g = connect(g, "up", "anim").graph;
+const prices = { still: 0.04, up: 0.1, anim: 0.5 };
+const price = (n) => prices[n.id];
+eq(scopeNodes(g, ["up"], "upstream").sort(), ["still", "up"], "up to here");
+eq(estimateScope(g, ["up"], price, "upstream"), { nodes: 2, total: 0.14, unpriced: 0 }, "anim stays out of the total");
+eq(scopeNodes(g, ["up"], "node"), ["up"], "this node only");
+eq(scopeNodes(g, ["up"], "page").sort(), ["anim", "still", "up"], "whole page");
+eq([...runSet(g, ["up"])].sort(), ["still", "up"], "card run still includes ancestors");
+eq([...runSet(g, ["up"], true)], ["up"], "solo stays this node only");
+""")
+
+
+def test_instances_follow_the_source_until_it_is_deleted() -> None:
+    _check("""
+let g = instanceNodes({ nodes: [still], edges: [] }, ["still"], ["copy"]);
+eq(g.nodes.find((n) => n.id === "copy").instanceOf, "still", "linked to the source");
+g = setParams(g, "copy", { prompt: "oak" });
+eq(param(g, "still", "prompt"), "oak", "an instance edit writes through");
+g = setParams(g, "still", { prompt: "pine" });
+eq(param(g, "copy", "prompt"), "pine", "a source edit copies onto the instance");
+const dup = duplicateNode(g, "copy", "dup");
+eq(dup.nodes.find((n) => n.id === "dup").instanceOf, undefined, "duplicate is not linked");
+const gone = removeNodes(g, ["still"]);
+eq(gone.nodes.find((n) => n.id === "copy").instanceOf, undefined, "deleting the source detaches the copy");
+eq(toWorkflowNodes(g.nodes).every((n) => n.instanceOf == null), true, "instanceOf stays off /runs");
+""")
+
+
+def test_edge_style_is_canvas_only() -> None:
+    _check("""
+const curved = connect(base, "still", "up", "media", "curve");
+eq(curved.graph.edges[0].style, "curve", "curve is stored");
+const round = connect(base, "still", "up", "media", "rounded");
+eq(round.graph.edges[0].style, undefined, "rounded is omitted");
+eq(runtimeGraph(curved.graph).edges[0].style, undefined, "style is stripped before /runs");
+const a = curved.graph.nodes.find((n) => n.id === "still");
+const b = { ...curved.graph.nodes.find((n) => n.id === "up"), x: 400, y: 80 };
+if (!wirePath(a, b, "media", "curve").includes(" C")) throw new Error("curve path");
+const straight = wirePath(a, b, "media", "straight");
+if (!straight.includes("L") || straight.includes("C") || straight.includes("Q")) throw new Error("straight path " + straight);
+eq(shortcutFor({ key: "c" }), "comment", "c places a comment");
+eq(shortcutFor({ key: "d" }), "fit", "plain d still fits");
+""")

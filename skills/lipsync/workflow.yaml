@@ -9,5 +9,6 @@ nodes:
       prompt: "{{inputs.prompt}}"
       audio: "{{inputs.audio}}"
       video: "{{inputs.video}}"
+      duration: "{{inputs.duration}}"
 
 edges: []

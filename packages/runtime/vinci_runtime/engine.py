@@ -5,6 +5,7 @@ import difflib
 import hashlib
 import io
 import json
+import logging
 import os
 import re
 import shutil
@@ -103,6 +104,14 @@ from vinci_provider_sdk.mock import MockProvider
 from vinci_provider_wavespeed import WavespeedProvider
 from vinci_skills.loader import Skill, SkillLoader, install_skill_dir, interpolate
 from vinci_storage.backends import make_cas
+from vinci_storage.library import LibraryIndex, item_id_for_asset, local_file, under_roots
+from vinci_storage.output_destinations import (
+    OutputArtifact,
+    artifact_to_dict,
+    build_output_destination,
+    export_asset,
+    output_destination_public,
+)
 from vinci_storage.sqlite_store import SqliteStore
 
 from vinci_runtime.comfy import import_comfy
@@ -113,6 +122,8 @@ from vinci_runtime.provider_reconciliation import (
     supports_durable_reconciliation,
 )
 from vinci_runtime.writer_effect_trace import record_writer_effect
+
+LOG = logging.getLogger("vinci.engine")
 
 PROVIDER_DOCS = {
     "mock": "https://github.com/tryvinci/vinci",
@@ -300,6 +311,7 @@ class Engine:
         self.cas = make_cas(self.config.cas_dir)
         self.store = SqliteStore(self.config.sqlite_path)
         self.index = AssetIndex(self.config.home / "index.sqlite")
+        self.library = LibraryIndex(self.config.home / "library.sqlite")
         self.resolver = CredentialResolver(self.config)
         roots = [SkillLoader().roots[0]]
         if skills_root:
@@ -954,6 +966,9 @@ class Engine:
             "gsheet_id": self.config.gsheet_id,
             "gsheet_tab": self.config.gsheet_tab,
             "gsheet_credentials_path": os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", ""),
+            "output_destination": output_destination_public(
+                self.config.output_destination, home=self.config.home
+            ),
         }
 
     def update_settings(
@@ -964,6 +979,10 @@ class Engine:
         require_approval_over: float | None = None,
         gsheet_id: str | None = None,
         gsheet_tab: str | None = None,
+        output_destination_kind: str | None = None,
+        output_local_dir: str | None = None,
+        output_photos_album: str | None = None,
+        output_r2_prefix: str | None = None,
     ) -> dict[str, Any]:
         if preference is not None:
             self.config.preference = RoutePreference(preference).value
@@ -975,9 +994,297 @@ class Engine:
             self.config.gsheet_id = gsheet_id.strip()
         if gsheet_tab is not None:
             self.config.gsheet_tab = gsheet_tab.strip()
+        if output_destination_kind is not None:
+            kind = output_destination_kind.strip().lower()
+            if kind not in {"none", "local", "photos", "r2"}:
+                raise ValueError("output_destination kind must be none, local, photos, or r2")
+            self.config.output_destination.kind = kind
+        if output_local_dir is not None:
+            self.config.output_destination.local_dir = output_local_dir.strip()
+        if output_photos_album is not None:
+            self.config.output_destination.photos_album = output_photos_album.strip() or "Vinci"
+        if output_r2_prefix is not None:
+            self.config.output_destination.r2_prefix = output_r2_prefix.strip() or "vinci/outputs/"
         write_config(self.config)
         self.config = load_config(self.config.home)
         return self.settings()
+
+    def _export_context_for_digest(
+        self, run: dict[str, Any], digest: str
+    ) -> tuple[str | None, str | None, str | None, dict[str, Any], dict[str, Any]]:
+        nodes = run.get("nodes") or {}
+        for node_id, row in nodes.items():
+            if not isinstance(row, dict):
+                continue
+            outs = [row.get("output"), *(row.get("outputs") or [])]
+            if digest not in outs:
+                continue
+            job_id = row.get("job_id")
+            job = self.store.get_job(str(job_id)) if job_id else None
+            params: dict[str, Any] = {}
+            prompt: str | None = None
+            model_id: str | None = None
+            provider: str | None = None
+            source_ids: dict[str, Any] = {"node_id": node_id}
+            if job is not None:
+                source_ids["job_id"] = job.id
+                model_id = job.model_id
+                if job.receipt is not None:
+                    provider = job.receipt.provider
+                if isinstance(job.inputs, dict):
+                    params = dict(job.inputs)
+                    raw_prompt = job.inputs.get("prompt")
+                    if isinstance(raw_prompt, str):
+                        prompt = raw_prompt
+            capability = row.get("capability")
+            if capability:
+                source_ids["capability"] = capability
+            return prompt, model_id, provider, params, source_ids
+        return None, None, None, {}, {"asset_id": digest}
+
+    def _export_run_outputs(
+        self,
+        run_id: str,
+        run: dict[str, Any],
+        digests: list[str],
+        *,
+        extra_source: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        try:
+            destination = build_output_destination(
+                self.config.output_destination, home=self.config.home
+            )
+        except ValueError as exc:
+            LOG.warning("output destination misconfigured: %s", exc)
+            return []
+        if destination is None:
+            return []
+        saved: list[dict[str, Any]] = []
+        completed_at = now_utc()
+        for digest in digests:
+            if not digest or not self.cas.exists(str(digest)):
+                continue
+            digest_str = str(digest)
+            blob = self.cas.get(digest_str)
+            asset = self.store.get_asset(digest_str)
+            mime = asset.mime if asset is not None else _sniff_mime(
+                blob, "application/octet-stream"
+            )
+            prompt, model_id, provider, params, source_ids = self._export_context_for_digest(
+                run, digest_str
+            )
+            if extra_source:
+                source_ids = {**source_ids, **extra_source}
+            try:
+                row = export_asset(
+                    destination,
+                    blob=blob,
+                    mime=mime,
+                    asset_id=digest_str,
+                    run_id=run_id,
+                    prompt=prompt,
+                    model_id=model_id,
+                    provider=provider,
+                    params=params,
+                    source_ids=source_ids,
+                    run_completed_at=completed_at,
+                )
+                saved.append(artifact_to_dict(row))
+                self._index_exported(row)
+            except Exception as exc:  # noqa: BLE001 — export must not fail the run
+                LOG.warning("export failed for %s: %s", digest_str[:12], exc)
+        return saved
+
+    def _index_cas_outputs(
+        self, run_id: str, run: dict[str, Any], digests: list[str]
+    ) -> int:
+        """Index every completed-run digest from CAS so destination=none still appears."""
+        dest = (self.config.output_destination.kind or "none").strip().lower() or "none"
+        completed_at = now_utc()
+        indexed = 0
+        for digest in digests:
+            if not digest or not self.cas.exists(str(digest)):
+                continue
+            digest_str = str(digest)
+            if self.library.get(item_id_for_asset(digest_str)):
+                continue
+            asset = self.store.get_asset(digest_str)
+            if asset is not None:
+                mime = asset.mime
+            else:
+                blob = self.cas.get(digest_str)
+                mime = _sniff_mime(blob, "application/octet-stream")
+            prompt, model_id, provider, params, source_ids = self._export_context_for_digest(
+                run, digest_str
+            )
+            try:
+                self.library.ingest_run_asset(
+                    asset_id=digest_str,
+                    run_id=run_id,
+                    mime=mime,
+                    prompt=prompt or "",
+                    model_id=model_id or "",
+                    provider=provider or "",
+                    params=params,
+                    source_ids=source_ids,
+                    destination_kind=dest,
+                    completed_at=completed_at,
+                )
+                indexed += 1
+            except Exception as exc:  # noqa: BLE001 — library must not fail the run
+                LOG.warning("CAS library ingest failed for %s: %s", digest_str[:12], exc)
+        return indexed
+
+    def _sync_completed_runs(self) -> int:
+        """Backfill the library from completed runs already in the store."""
+        indexed = 0
+        for run in self.store.list_runs():
+            if str(run.get("state") or "") != JobState.COMPLETED.value:
+                continue
+            outputs = [str(item) for item in (run.get("outputs") or []) if item]
+            if not outputs:
+                continue
+            indexed += self._index_cas_outputs(str(run.get("id") or ""), run, outputs)
+        return indexed
+
+    def _index_exported(self, row: OutputArtifact) -> None:
+        """Overlay sidecar/export paths onto the CAS row for the same asset_id."""
+        try:
+            local = local_file(row.sidecar_path)
+            if local is not None:
+                self.library.ingest_sidecar(local, media_path=row.media_path)
+                return
+            if row.sidecar:
+                self.library.upsert_document(
+                    row.sidecar,
+                    sidecar_path=row.sidecar_path,
+                    media_path=row.media_path,
+                    photos_album=row.photos_album,
+                    origin="sidecar",
+                )
+        except Exception as exc:  # noqa: BLE001 — library must not fail the run
+            LOG.warning("library ingest failed for %s: %s", row.asset_id[:12], exc)
+
+    def library_roots(self) -> list[Path]:
+        """Folders Assets scans for `{file}.vinci.json` sidecars."""
+        home = self.config.home
+        default_exports = (home / "exports").expanduser()
+        configured = self.config.output_destination.local_dir.strip()
+        local = Path(configured).expanduser() if configured else default_exports
+        roots: list[Path] = []
+        for path in (local, default_exports, home / "exports" / "photos"):
+            resolved = path.expanduser()
+            if resolved not in roots:
+                roots.append(resolved)
+        return roots
+
+    def library_status(self, *, total: int | None = None) -> dict[str, Any]:
+        """Describe whether the local library is empty or ready.
+
+        Destination=none is no longer a missing-library state: CAS runs still index.
+        """
+        dest = (self.config.output_destination.kind or "none").strip().lower() or "none"
+        roots = [{"path": str(path), "exists": path.is_dir()} for path in self.library_roots()]
+        count = self.library.count() if total is None else total
+        return {
+            "library_exists": self.library.exists,
+            "destination_kind": dest,
+            "roots": roots,
+            "total": count,
+            "reason": "empty" if count == 0 else "ready",
+        }
+
+    def list_library(
+        self,
+        *,
+        kind: str | None = None,
+        model: str | None = None,
+        provider: str | None = None,
+        date: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        q: str | None = None,
+        tool: str | None = None,
+        section: str | None = None,
+        limit: int = 100,
+        refresh: bool = True,
+    ) -> dict[str, Any]:
+        """Sync CAS runs + sidecars (unless `refresh` is False) and return filtered items.
+
+        `tool=image|video|audio|enhanced` is the Image/Video feed filter.
+        `section` is the Assets sidebar: assets, projects, favorites, elements, trash.
+        """
+        if refresh:
+            try:
+                cas_n = self._sync_completed_runs()
+                ingested = self.library.scan(self.library_roots())
+                LOG.info("library sync cas=%s sidecars=%s", cas_n, ingested)
+            except Exception as exc:  # noqa: BLE001 — a refresh glitch must not 500 Assets
+                LOG.warning("library refresh failed: %s", exc)
+        items = self.library.query(
+            kind=kind,
+            model=model,
+            provider=provider,
+            date=date,
+            date_from=date_from,
+            date_to=date_to,
+            q=q,
+            tool=tool,
+            section=section,
+            limit=limit,
+        )
+        return {
+            "items": items,
+            "facets": self.library.facets(),
+            "status": self.library_status(),
+            "tool": (tool or "").strip().lower() or None,
+            "section": (section or "assets").strip().lower() or "assets",
+        }
+
+    def get_library_item(self, item_id: str) -> dict[str, Any] | None:
+        return self.library.get(item_id)
+
+    def delete_library_item(self, item_id: str) -> dict[str, Any]:
+        """Move a generation to Trash. Files stay so it can be restored."""
+        return self.library.trash(item_id)
+
+    def restore_library_item(self, item_id: str) -> dict[str, Any]:
+        """Return a trashed generation to Assets."""
+        return self.library.restore(item_id)
+
+    def favorite_library_item(self, item_id: str, favorite: bool) -> dict[str, Any]:
+        """Heart or un-heart a generation."""
+        return self.library.set_favorite(item_id, favorite)
+
+    def purge_library_item(self, item_id: str) -> dict[str, Any]:
+        """Permanently drop the index row and unlink local export files."""
+        return self.library.purge(item_id, roots=self.library_roots())
+
+    def library_media(self, item_id: str) -> tuple[Path | None, bytes | None, str]:
+        """Resolve preview bytes for a library item.
+
+        Returns:
+            `(local_path, None, mime)` when the export is on disk,
+            `(None, blob, mime)` when only CAS still holds the asset.
+
+        Raises:
+            KeyError: unknown id.
+            FileNotFoundError: media is gone from disk and CAS.
+        """
+        item = self.library.get(item_id)
+        if item is None:
+            raise KeyError(item_id)
+        mime = str(item.get("mime") or "application/octet-stream")
+        local = local_file(str(item.get("media_path") or ""))
+        if local is not None and local.is_file():
+            resolved = local.resolve()
+            stored = Path(str(item["media_path"])).expanduser().resolve()
+            if under_roots(local, self.library_roots()) or resolved == stored:
+                return resolved, None, mime
+        asset_id = str(item.get("asset_id") or "")
+        if asset_id and self.cas.exists(asset_id):
+            return None, self.cas.get(asset_id), mime
+        raise FileNotFoundError(item_id)
 
     def remove_provider(self, name: str) -> None:
         if is_mcp_name(name):
@@ -1348,6 +1655,10 @@ class Engine:
             run["asset_uris"] = [f"vinci://assets/{digest}" for digest in final_outputs]
             run["job_uris"] = [f"vinci://jobs/{jid}" for jid in job_ids]
             run["receipt_uris"] = [f"vinci://receipts/{jid}" for jid in job_ids]
+            self._index_cas_outputs(run_id, run, final_outputs)
+            exported = self._export_run_outputs(run_id, run, final_outputs)
+            if exported:
+                run["exported_outputs"] = exported
             hook = getattr(self, "_commit_run_receipt_hook", None)
             self._bump_test_exec_counter()
             if hook is not None and receipt_parent_op_id:
@@ -2016,11 +2327,19 @@ class Engine:
                     "safe_area": validation,
                 }
             )
+        adapt_run_id = receipt_parent_op_id or uuid.uuid4().hex[:24]
+        exported = self._export_run_outputs(
+            adapt_run_id,
+            {"nodes": {}, "skill": "adapt"},
+            digests,
+            extra_source={"source_asset": source_asset, "layout": layout},
+        )
         return {
             "source_asset": source_asset,
             "outputs": outputs,
             "digests": digests,
             "estimate": estimate,
+            "exported_outputs": exported,
         }
 
     def ingest_url(self, url: str) -> Asset:

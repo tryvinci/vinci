@@ -88,6 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
   var studioReadinessVerified = false
   var smokeExportDownloadDone = false
   var smokeExportByteCount = 0
+  let nativeBridge = VinciNativeBridge()
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     if let smokeHomeOverride, !smokeHomeOverride.isEmpty {
@@ -106,6 +107,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     ensureDirectories()
     let config = WKWebViewConfiguration()
     config.websiteDataStore = .default()
+    config.userContentController.add(nativeBridge, name: "vinciNative")
+    let macFlag = WKUserScript(
+      source: "window.__VINCI_MAC_NATIVE__=true;",
+      injectionTime: .atDocumentStart,
+      forMainFrameOnly: true
+    )
+    config.userContentController.addUserScript(macFlag)
     webView = WKWebView(frame: window.contentView?.bounds ?? .zero, configuration: config)
     webView.navigationDelegate = self
     webView.uiDelegate = self

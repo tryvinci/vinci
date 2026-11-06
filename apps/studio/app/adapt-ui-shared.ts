@@ -50,9 +50,9 @@ export function presetLabel(preset: AdaptPresetRow | undefined, target: AdaptTar
 
 export function engineLabel(layout: "fit_pad_crop" | "ai_extend", liveSpend: boolean): { text: string; real: boolean } {
   if (layout === "ai_extend") {
-    return { text: liveSpend ? "AI extend" : "AI extend · off", real: liveSpend };
+    return { text: liveSpend ? "Extend with a model" : "Extend is off", real: liveSpend };
   }
-  return { text: "ffmpeg · $0", real: true };
+  return { text: "On this computer · $0", real: true };
 }
 
 export function sourceOf(preset: AdaptPresetRow): "generic" | "partner" | "custom" {
@@ -62,6 +62,14 @@ export function sourceOf(preset: AdaptPresetRow): "generic" | "partner" | "custo
   if (preset.spec_kind === "client_partner") return "partner";
   if (preset.spec_kind === "custom") return "custom";
   return "generic";
+}
+
+/** Human label for a source kind. `sourceOf` still returns the raw key for CSS. */
+export function sourceLabel(preset: AdaptPresetRow): string {
+  const source = sourceOf(preset);
+  if (source === "partner") return "Partner";
+  if (source === "custom") return "Custom";
+  return "Standard";
 }
 
 export function byteCapLabel(preset: AdaptPresetRow): string | null {

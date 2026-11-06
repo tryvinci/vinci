@@ -4,7 +4,7 @@ WKWebView shell loads the **TypeScript Next.js Studio** from the bundled standal
 
 The Mac app does not store provider keys. Paste keys in Studio; they stay in `~/.vinci/keys` (0600) or the OS keychain on the daemon host.
 
-Alpha packaging: [docs/internal/MAC_ALPHA.md](../../docs/internal/MAC_ALPHA.md).
+Alpha packaging: [docs/MAC_ALPHA.md](../../docs/MAC_ALPHA.md).
 
 ## Run without Xcode
 
@@ -22,8 +22,8 @@ That opens the TypeScript Studio (`:4311`) in the default browser, or the deprec
 ```bash
 cd apps/mac
 swiftc -parse-as-library -O -target arm64-apple-macos13.0 \
-  -framework Cocoa -framework WebKit -framework AVFoundation \
-  VinciStudio.swift SmokeRunner.swift -o VinciStudio
+  -framework Cocoa -framework WebKit -framework AVFoundation -framework Photos \
+  VinciStudio.swift SmokeRunner.swift NativeBridge.swift -o VinciStudio
 ./VinciStudio
 ```
 

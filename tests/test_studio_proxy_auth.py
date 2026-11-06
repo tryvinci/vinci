@@ -23,6 +23,7 @@ def studio_bundle() -> Path:
             ["/bin/bash", "scripts/mac/prepare-studio-bundle.sh"],
             cwd=ROOT,
             check=True,
+            # Writes dist/studio-bundle + dist/notices (build output, not in git).
             env={**os.environ, "NODE_ENV": "production"},
         )
     return BUNDLE

@@ -71,9 +71,21 @@ def apply_committed_operation(engine: Any, op: dict[str, Any]) -> None:
             "require_approval_over",
             "gsheet_id",
             "gsheet_tab",
+            "output_destination",
         ):
             if key in response and response[key] is not None:
-                kwargs[key] = response[key]
+                if key == "output_destination" and isinstance(response[key], dict):
+                    od = response[key]
+                    if od.get("kind") is not None:
+                        kwargs["output_destination_kind"] = od.get("kind")
+                    if od.get("local_dir") is not None:
+                        kwargs["output_local_dir"] = od.get("local_dir")
+                    if od.get("photos_album") is not None:
+                        kwargs["output_photos_album"] = od.get("photos_album")
+                    if od.get("r2_prefix") is not None:
+                        kwargs["output_r2_prefix"] = od.get("r2_prefix")
+                else:
+                    kwargs[key] = response[key]
         if kwargs:
             engine.update_settings(**kwargs)
         return

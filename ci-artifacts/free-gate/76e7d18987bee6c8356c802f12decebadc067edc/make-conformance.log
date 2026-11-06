@@ -1,0 +1,4 @@
+make[1]: Entering directory '/workspace/apps/vinci-oss'
+python3 -m pytest -q packages/provider-sdk/tests/conformance
+............................                                             [100%]
+make[1]: Leaving directory '/workspace/apps/vinci-oss'

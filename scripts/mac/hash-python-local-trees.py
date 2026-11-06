@@ -1,24 +1,36 @@
 #!/usr/bin/env python3
-"""Deterministic sha256 over local -e package trees for Mac bundle manifest."""
+"""Hash the local -e package trees at build time for Mac bundle provenance.
+
+The committed manifest lists tree paths only. The digests go to a gitignored file, so
+a source edit does not make a committed file stale (COREPRODUC-508).
+"""
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
-import re
 import sys
 from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_SCRIPT_DIR))
-from notice_graph import local_editable_paths_from_in  # noqa: E402
+from notice_graph import LOCAL_DIGESTS, local_paths_from_manifest  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = ROOT / "scripts/mac/python-bundle-local.manifest.json"
+MANIFEST = ROOT / "scripts/mac/python-bundle-local.manifest.json"
 SKIP = {".pyc", "__pycache__", ".pytest_cache", ".ruff_cache", ".egg-info"}
 
 
 def tree_sha256(root: Path) -> str:
+    """Return a deterministic sha256 over the relative paths and bytes of a tree.
+
+    Args:
+        root: Package tree to hash. Caches and ``*.egg-info`` are skipped.
+
+    Returns:
+        Hex sha256 digest.
+    """
     digest = hashlib.sha256()
     for path in sorted(root.rglob("*")):
         if not path.is_file():
@@ -32,17 +44,21 @@ def tree_sha256(root: Path) -> str:
 
 
 def main() -> int:
-    out_path = Path(sys.argv[1]) if len(sys.argv) > 1 else OUT
-    entries: dict[str, dict[str, str]] = {}
-    for rel in local_editable_paths_from_in():
-        root = (ROOT / rel).resolve()
-        if not root.is_dir():
-            print(f"missing local package tree: {root}", file=sys.stderr)
-            return 1
-        entries[rel] = {"sha256": tree_sha256(root)}
-    payload = {"schema": 1, "packages": entries}
-    out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(f"wrote {out_path} ({len(entries)} trees)")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--out", type=Path, default=LOCAL_DIGESTS, help="digests JSON to write")
+    args = parser.parse_args()
+    try:
+        paths = local_paths_from_manifest(MANIFEST)
+    except ValueError as exc:
+        print(f"local manifest invalid: {exc}", file=sys.stderr)
+        return 1
+    digests = {rel: tree_sha256(ROOT / rel) for rel in paths}
+    for rel, sha in digests.items():
+        print(f"  {rel}: {sha[:12]}")
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"schema": 1, "packages": digests}
+    args.out.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"wrote {args.out} ({len(digests)} trees)")
     return 0
 
 

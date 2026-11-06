@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build PyPI notice list from hashed lock + local manifest (versions from lock only)."""
+"""Build PyPI notice list from hashed lock + local tree list (versions from lock only)."""
 
 from __future__ import annotations
 
@@ -126,21 +126,11 @@ def main() -> int:
                 "source": "pypi",
             }
         )
-    local_paths = local_paths_from_manifest(manifest)
-    local = []
-    for rel, sha in local_paths.items():
-        if not sha or len(sha) != 64:
-            print(f"bad manifest digest for {rel}", file=sys.stderr)
-            return 1
-        local.append(
-            {
-                "name": rel,
-                "version": "workspace",
-                "license": "MIT",
-                "source": "monorepo",
-                "sha256": sha,
-            }
-        )
+    # Names only: generate-notices-sbom.sh adds build-time digests (COREPRODUC-508).
+    local = [
+        {"name": rel, "version": "workspace", "license": "MIT", "source": "monorepo"}
+        for rel in local_paths_from_manifest(manifest)
+    ]
     payload = {"schema": 2, "pypi": pypi, "local": local, "lock_sha256": _lock_digest(lock)}
     out.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"wrote {out} ({len(pypi)} pypi, {len(local)} local)")

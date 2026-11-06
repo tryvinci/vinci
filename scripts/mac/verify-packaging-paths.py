@@ -26,9 +26,10 @@ def required_inputs() -> list[Path]:
         ROOT / "apps/mac/Info.plist",
         ROOT / "apps/mac/VinciStudio.swift",
         ROOT / "apps/mac/SmokeRunner.swift",
+        ROOT / "apps/mac/NativeBridge.swift",
         cache / node_tar,
-        ROOT / "legal/THIRD_PARTY_NOTICES.md",
-        ROOT / "legal/provenance.json",
+        ROOT / "dist/legal/THIRD_PARTY_NOTICES.md",
+        ROOT / "dist/legal/provenance.json",
     ]
 
 

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 
@@ -11,7 +12,18 @@ PKG_LINE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==([^\s\\]+)")
 ROOT = Path(__file__).resolve().parents[2]
 STUDIO_PKG = "apps/studio"
 REQUIREMENTS_IN = ROOT / "scripts/mac/python-bundle-requirements.in"
-NPM_GRAPH = ROOT / "scripts/mac/studio-bundle-npm-graph.json"
+# prepare-studio-bundle.sh writes the host npm graph + notices here (gitignored build
+# output, COREPRODUC-508 part B). Tests set VINCI_MAC_NPM_NOTICE_DIR to a tmp dir.
+NPM_DIR = Path(os.environ.get("VINCI_MAC_NPM_NOTICE_DIR") or ROOT / "dist/notices")
+NPM_GRAPH = NPM_DIR / "studio-bundle-npm-graph.json"
+NPM_NOTICES = NPM_DIR / "studio-bundle-npm-notices.json"
+NPM_GRAPH_HINT = "package-lock.json changed; run scripts/mac/prepare-studio-bundle.sh"
+# Build-time local tree digests (gitignored, COREPRODUC-508). build-python-runtime.sh
+# writes them; generate-notices-sbom.sh adds them to provenance. Tests use a tmp file.
+LOCAL_DIGESTS = Path(
+    os.environ.get("VINCI_MAC_LOCAL_DIGESTS")
+    or ROOT / ".mac-bundle-cache/python-bundle-local.digests.json"
+)
 
 
 def normalize_name(name: str) -> str:
@@ -42,29 +54,62 @@ def pypi_versions_from_lock(lock_path: Path) -> dict[str, str]:
     return out
 
 
-def local_paths_from_manifest(manifest_path: Path) -> dict[str, str]:
-    data = json.loads(manifest_path.read_text(encoding="utf-8"))
-    packages = data.get("packages", {})
-    if not isinstance(packages, dict) or not packages:
-        raise ValueError("local manifest empty or invalid")
-    expected = set(local_editable_paths_from_in())
-    seen = set(packages.keys())
-    if seen != expected:
-        missing = expected - seen
-        extra = seen - expected
-        msg = "local manifest incomplete"
-        if missing:
-            msg += f" missing={sorted(missing)[:5]}"
-        if extra:
-            msg += f" extra={sorted(extra)[:5]}"
-        raise ValueError(msg)
-    out: dict[str, str] = {}
-    for rel in sorted(packages):
-        sha = packages[rel].get("sha256", "")
-        if not sha or len(sha) != 64:
-            raise ValueError(f"bad digest for {rel}")
-        out[rel] = sha
-    return out
+def local_paths_from_manifest(manifest_path: Path) -> list[str]:
+    """Read the committed local tree paths and check them against requirements.in.
+
+    The manifest lists paths only, so a source edit in a tree does not make it stale.
+
+    Args:
+        manifest_path: Path to ``python-bundle-local.manifest.json``.
+
+    Returns:
+        Sorted tree paths, relative to the vinci-oss root.
+
+    Raises:
+        ValueError: The list is empty, is not equal to the ``-e`` entries, or names a
+            tree that does not exist.
+    """
+    packages = json.loads(manifest_path.read_text(encoding="utf-8")).get("packages")
+    if not (isinstance(packages, list) and packages and all(isinstance(p, str) for p in packages)):
+        raise ValueError("local manifest empty or invalid (want a list of tree paths)")
+    expected = local_editable_paths_from_in()
+    if sorted(packages) != expected:
+        missing = sorted(set(expected) - set(packages))[:5]
+        extra = sorted(set(packages) - set(expected))[:5]
+        raise ValueError(
+            f"local manifest incomplete missing={missing} extra={extra}"
+            f" (make it equal to the -e lines in {REQUIREMENTS_IN.name})"
+        )
+    absent = [rel for rel in expected if not (ROOT / rel).is_dir()]
+    if absent:
+        raise ValueError(f"missing local package tree(s): {absent}")
+    return expected
+
+
+def local_digests(digests_path: Path | None = None) -> dict[str, str]:
+    """Read the build-time local tree digests, if a build wrote them.
+
+    ``build-python-runtime.sh`` runs ``hash-python-local-trees.py`` before it installs
+    the trees, so these digests describe what the bundle ships.
+
+    Args:
+        digests_path: Digests file. Defaults to ``LOCAL_DIGESTS``.
+
+    Returns:
+        Tree path -> sha256, or an empty dict when the file does not exist.
+
+    Raises:
+        ValueError: The file exists but does not give a sha256 for each ``-e`` tree.
+    """
+    path = digests_path or LOCAL_DIGESTS
+    if not path.is_file():
+        return {}
+    packages = json.loads(path.read_text(encoding="utf-8")).get("packages")
+    if not isinstance(packages, dict) or sorted(packages) != local_editable_paths_from_in():
+        raise ValueError(f"local digests incomplete: {path} (run hash-python-local-trees.py)")
+    if any(not isinstance(sha, str) or len(sha) != 64 for sha in packages.values()):
+        raise ValueError(f"bad local digest in {path}")
+    return dict(packages)
 
 
 def _installed_package_name(rel_dir: Path) -> str | None:
@@ -156,11 +201,11 @@ def studio_npm_graph(
 ) -> dict[str, dict[str, str]]:
     path = graph_path or NPM_GRAPH
     if not path.is_file():
-        raise ValueError(f"missing committed npm graph: {path}")
+        raise ValueError(f"missing npm graph: {path} (run scripts/mac/prepare-studio-bundle.sh)")
     data = json.loads(path.read_text(encoding="utf-8"))
     rows = data.get("packages", [])
     if not rows:
-        raise ValueError("committed npm graph empty")
+        raise ValueError(f"npm graph empty: {path}")
     graph: dict[str, dict[str, str]] = {}
     for row in rows:
         name = str(row.get("name", "")).strip()
@@ -169,7 +214,9 @@ def studio_npm_graph(
             raise ValueError(f"invalid npm graph row: {row}")
         meta = lock_meta_for_package(package_lock_path, name, version)
         if not meta.get("version"):
-            raise ValueError(f"npm graph entry not in package-lock: {name}=={version}")
+            raise ValueError(
+                f"npm graph entry not in package-lock: {name}=={version} ({NPM_GRAPH_HINT})"
+            )
         lic = str(meta.get("licenses", "")).strip()
         graph[name] = {
             "version": version,

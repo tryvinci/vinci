@@ -212,9 +212,12 @@ class SqliteStore:
         row = self._conn.execute(
             "SELECT id, body, state, created_at FROM runs WHERE id=?", (run_id,)
         ).fetchone()
-        if row is None:
+        if row is None or not row["body"]:
             return None
-        body = json.loads(row["body"])
+        try:
+            body = json.loads(row["body"])
+        except json.JSONDecodeError:
+            return None
         payload: dict[str, Any] = dict(body) if isinstance(body, dict) else {}
         payload["id"] = row["id"]
         payload["state"] = row["state"]

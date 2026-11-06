@@ -26,6 +26,7 @@
   "include": [
     "app/**/*.ts",
     "app/**/*.tsx",
+    "lib/**/*.ts",
     "next-env.d.ts",
     ".next/types/**/*.ts"
   ],

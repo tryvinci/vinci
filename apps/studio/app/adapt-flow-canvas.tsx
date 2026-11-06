@@ -44,8 +44,8 @@ export function AdaptFlowCanvas({
     <div className="adapt-flow" id="adapt-flow-canvas">
       <header className="adapt-flow-head">
         <div>
-          <p className="eyebrow">Image › Adapts</p>
-          <h2>Flow</h2>
+          <p className="eyebrow">Adapts</p>
+          <h2>Preview</h2>
         </div>
         <div className="adapt-head-actions">
           <span className={engine.real ? "adapt-pill adapt-pill-real" : "adapt-pill adapt-pill-mock"}>{engine.text}</span>
@@ -53,7 +53,7 @@ export function AdaptFlowCanvas({
             {showSafe ? "Safe area on" : "Safe area off"}
           </button>
           <button className="ghost" type="button" onClick={onBack}>
-            Form
+            Back to form
           </button>
           <button className="run" type="button" disabled={busy || !sourceId} onClick={onRun}>
             Run Adapts
@@ -67,7 +67,7 @@ export function AdaptFlowCanvas({
           <div className="adapt-flow-node adapt-flow-node-lg">
             <div className="adapt-flow-thumb adapt-flow-thumb-lg">
               {sourceId ? (
-                <img alt="Source creative" src={`${apiBase}/assets/${sourceId}/file`} />
+                <img alt="Source still" src={`${apiBase}/assets/${sourceId}/file`} />
               ) : (
                 <button type="button" className="ghost adapt-flow-upload" onClick={onPickSource}>
                   Upload

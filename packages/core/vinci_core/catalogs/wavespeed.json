@@ -262,9 +262,9 @@
       "constraints": { "max_duration": 30, "resolutions": ["1280x720"] },
       "pricing": {
         "unit": "video_5s",
-        "amount": 0.20,
+        "amount": 0.30,
         "currency": "USD",
-        "snapshot_at": "2026-08-27T00:00:00+00:00"
+        "snapshot_at": "2026-11-03T00:00:00+00:00"
       },
       "quality_tier": "fast",
       "status": "active",

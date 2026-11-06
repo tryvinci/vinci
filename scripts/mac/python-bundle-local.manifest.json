@@ -1,59 +1,23 @@
 {
-  "packages": {
-    "apps/daemon": {
-      "sha256": "39362fa255e1a229a12bd260ee21e5ff798806ccd00a56aea304a79ee084dfdd"
-    },
-    "packages/core": {
-      "sha256": "ee50136e394e524e07d9236494f6f59c1e686dcdcf858a6fb85e28e06c146ffc"
-    },
-    "packages/index": {
-      "sha256": "546585a7af98a81b56c235506a37086f77d8aaa8e1a7ce6cd0d187db8e2ddd5a"
-    },
-    "packages/mcp": {
-      "sha256": "8ad11cf7804c32bab0b5dfde20bcb49f28d0f46857096f1ee3f0c8cf8a11bebf"
-    },
-    "packages/media": {
-      "sha256": "a014c6774b18e5e0a03243a2379ca06b8831452cf6dc873139bb5cd7bdb657cc"
-    },
-    "packages/protocol": {
-      "sha256": "8f1d70085a540aeef409f13a9d7d9940439664dc599b0977475ec5fd49e93551"
-    },
-    "packages/provider-cloudflare": {
-      "sha256": "eedf3776632225f7f06dce34238dbef6ce5df81179e975a10c9a35e1f19abd79"
-    },
-    "packages/provider-elevenlabs": {
-      "sha256": "548386c54ee26c3be93aa48b76834541d2ea82da45cff220f6f95dd8269f2036"
-    },
-    "packages/provider-fal": {
-      "sha256": "acaacff2daa12d8b9bd2665910502e7efe1ac5c2343d88d20cdc14c36eb13c9e"
-    },
-    "packages/provider-google": {
-      "sha256": "9a6a9230f643b34e54a34612a407250937df7eb182364d82aa9267f86542ce00"
-    },
-    "packages/provider-higgsfield": {
-      "sha256": "2175b75264a2d7c8b4ff45351bf30c03556bc912f6b01f29d8fa7138bdae5e19"
-    },
-    "packages/provider-magnific": {
-      "sha256": "cdb409d4935e04c122b829c654f5483feed3ca64375b0361a04232e5192ccb48"
-    },
-    "packages/provider-openai": {
-      "sha256": "04f42ed28048490c5e3bef4803fc3c1fcebc9fb2edb1e02a779a39f250320644"
-    },
-    "packages/provider-sdk": {
-      "sha256": "23aabf9666740881bea441f7a7b05babfc5c60dc696a5e16a543089d6dadfa7b"
-    },
-    "packages/provider-wavespeed": {
-      "sha256": "4b8d3deca180e93a218707f61edd02c2117844e02e8d17bba632aa8a83ad79eb"
-    },
-    "packages/runtime": {
-      "sha256": "35a10c83b3a5e98537ec2b5830d619284c69983837ece470b0afe1a7a005a137"
-    },
-    "packages/skills": {
-      "sha256": "09f45f397ee5009f7da9fa5c2c37e71d329305e8f349c9c68091d96e3bf83e46"
-    },
-    "packages/storage": {
-      "sha256": "f58cfb451a5727c42dae19f6a809cdf257920ccb212460aa475c8306c1237e7a"
-    }
-  },
-  "schema": 1
+  "packages": [
+    "apps/daemon",
+    "packages/core",
+    "packages/index",
+    "packages/mcp",
+    "packages/media",
+    "packages/protocol",
+    "packages/provider-cloudflare",
+    "packages/provider-elevenlabs",
+    "packages/provider-fal",
+    "packages/provider-google",
+    "packages/provider-higgsfield",
+    "packages/provider-magnific",
+    "packages/provider-openai",
+    "packages/provider-sdk",
+    "packages/provider-wavespeed",
+    "packages/runtime",
+    "packages/skills",
+    "packages/storage"
+  ],
+  "schema": 2
 }

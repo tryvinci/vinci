@@ -59,6 +59,10 @@ def sniff_media_mime(blob: bytes) -> str | None:
         return "image/webp"
     if blob[:6] in (b"GIF87a", b"GIF89a"):
         return "image/gif"
+    if blob.startswith(b"ID3") or (len(blob) >= 2 and blob[0] == 0xFF and blob[1] & 0xE0 == 0xE0):
+        return "audio/mpeg"
+    if len(blob) >= 12 and blob[:4] == b"RIFF" and blob[8:12] == b"WAVE":
+        return "audio/wav"
     return _iso_bmff_mime(blob)
 
 
