@@ -1,254 +1,271 @@
 {
-  "skills": [
-    {
-      "id": "@tryvinci/image-generate",
-      "version": "1.0.0",
-      "tags": [
-        "image",
-        "t2i",
-        "generate"
-      ],
-      "est_cost": {
-        "min": 0.0,
-        "max": 0.16,
-        "currency": "USD"
-      }
-    },
-    {
-      "id": "@tryvinci/image-upscale",
-      "version": "1.0.0",
-      "tags": [
-        "image",
-        "upscale",
-        "i2i"
-      ],
-      "est_cost": {
-        "min": 0.0,
-        "max": 0.16,
-        "currency": "USD"
-      }
-    },
-    {
-      "id": "@tryvinci/still-to-upscale",
-      "version": "1.0.0",
-      "tags": [
-        "image",
-        "upscale",
-        "workflow",
-        "canvas"
-      ],
-      "est_cost": {
-        "min": 0.0,
-        "max": 0.32,
-        "currency": "USD"
-      }
-    },
-    {
-      "id": "@tryvinci/cinema-still",
-      "version": "1.0.0",
-      "tags": [
-        "video",
-        "cinema",
-        "workflow",
-        "canvas"
-      ],
-      "est_cost": {
-        "min": 0.0,
-        "max": 1.2,
-        "currency": "USD"
-      }
-    },
-    {
-      "id": "@tryvinci/video-generate",
-      "version": "1.0.0",
-      "tags": [
-        "video",
-        "t2v",
-        "generate"
-      ],
-      "est_cost": {
-        "min": 0.0,
-        "max": 1.0,
-        "currency": "USD"
-      }
-    },
-    {
-      "id": "@tryvinci/product-reveal-5s",
-      "version": "1.0.0",
-      "tags": [
-        "video",
-        "product",
-        "marketing",
-        "recipe"
-      ],
-      "est_cost": {
-        "min": 0.0,
-        "max": 0.8,
-        "currency": "USD"
-      }
-    },
-    {
-      "id": "@tryvinci/still-to-talk",
-      "version": "1.0.0",
-      "tags": [
-        "video",
-        "speak",
-        "workflow",
-        "canvas"
-      ],
-      "est_cost": {
-        "min": 0.0,
-        "max": 0.9,
-        "currency": "USD"
-      }
-    },
-    {
-      "id": "@tryvinci/talking-photo",
-      "version": "1.0.0",
-      "tags": [
-        "video",
-        "i2v",
-        "talking"
-      ],
-      "est_cost": {
-        "min": 0.0,
-        "max": 0.8,
-        "currency": "USD"
-      }
-    },
-    {
-      "id": "@tryvinci/lipsync",
-      "version": "1.0.0",
-      "tags": [
-        "video",
-        "lipsync"
-      ],
-      "est_cost": {
-        "min": 0.0,
-        "max": 0.5,
-        "currency": "USD"
-      }
-    },
-    {
-      "id": "@tryvinci/emote-animate",
-      "version": "1.0.0",
-      "tags": [
-        "video",
-        "i2v",
-        "emote"
-      ],
-      "est_cost": {
-        "min": 0.0,
-        "max": 0.8,
-        "currency": "USD"
-      }
-    },
-    {
-      "id": "@tryvinci/video-upscale",
-      "version": "1.0.0",
-      "tags": [
-        "video",
-        "upscale"
-      ],
-      "est_cost": {
-        "min": 0.0,
-        "max": 0.4,
-        "currency": "USD"
-      }
-    },
-    {
-      "id": "@tryvinci/tts",
-      "version": "1.0.0",
-      "tags": [
-        "audio",
-        "tts"
-      ],
-      "est_cost": {
-        "min": 0.0,
-        "max": 0.12,
-        "currency": "USD"
-      }
-    },
-    {
-      "id": "@tryvinci/voice-clone",
-      "version": "1.0.0",
-      "tags": [
-        "audio",
-        "voice_clone"
-      ],
-      "est_cost": {
-        "min": 0.0,
-        "max": 0.12,
-        "currency": "USD"
-      }
-    },
-    {
-      "id": "@tryvinci/podcast-to-shorts",
-      "version": "1.0.0",
-      "tags": [
-        "video",
-        "clips",
-        "podcast",
-        "reframe",
-        "caption"
-      ],
-      "est_cost": {
-        "min": 0.0,
-        "max": 0.0,
-        "currency": "USD"
-      }
-    },
-    {
-      "id": "@tryvinci/clip-select",
-      "version": "1.0.0",
-      "tags": [
-        "video",
-        "clips"
-      ],
-      "est_cost": {
-        "min": 0.0,
-        "max": 0.0,
-        "currency": "USD"
-      }
-    },
-    {
-      "id": "@tryvinci/reframe-9x16",
-      "version": "1.0.0",
-      "tags": [
-        "video",
-        "reframe"
-      ],
-      "est_cost": {
-        "min": 0.0,
-        "max": 0.0,
-        "currency": "USD"
-      }
-    },
-    {
-      "id": "@tryvinci/captions-burn",
-      "version": "1.0.0",
-      "tags": [
-        "video",
-        "caption"
-      ],
-      "est_cost": {
-        "min": 0.0,
-        "max": 0.0,
-        "currency": "USD"
-      }
-    },
-    {
-      "id": "@tryvinci/streamer-split",
-      "version": "1.0.0",
-      "tags": [
-        "video",
-        "split"
-      ],
-      "est_cost": {
-        "min": 0.0,
-        "max": 0.0,
-        "currency": "USD"
-      }
-    }
-  ]
+ "skills": [
+  {
+   "id": "@tryvinci/image-generate",
+   "version": "1.0.0",
+   "tags": [
+    "image",
+    "t2i",
+    "generate"
+   ],
+   "est_cost": {
+    "min": 0.0,
+    "max": 0.16,
+    "currency": "USD"
+   }
+  },
+  {
+   "id": "@tryvinci/image-upscale",
+   "version": "1.0.0",
+   "tags": [
+    "image",
+    "upscale",
+    "i2i"
+   ],
+   "est_cost": {
+    "min": 0.0,
+    "max": 0.16,
+    "currency": "USD"
+   }
+  },
+  {
+   "id": "@tryvinci/still-to-upscale",
+   "version": "1.0.0",
+   "tags": [
+    "image",
+    "upscale",
+    "workflow",
+    "canvas"
+   ],
+   "est_cost": {
+    "min": 0.0,
+    "max": 0.32,
+    "currency": "USD"
+   }
+  },
+  {
+   "id": "@tryvinci/cinema-still",
+   "version": "1.0.0",
+   "tags": [
+    "video",
+    "cinema",
+    "workflow",
+    "canvas"
+   ],
+   "est_cost": {
+    "min": 0.0,
+    "max": 1.2,
+    "currency": "USD"
+   }
+  },
+  {
+   "id": "@tryvinci/video-generate",
+   "version": "1.0.0",
+   "tags": [
+    "video",
+    "t2v",
+    "generate"
+   ],
+   "est_cost": {
+    "min": 0.0,
+    "max": 1.0,
+    "currency": "USD"
+   }
+  },
+  {
+   "id": "@tryvinci/product-reveal-5s",
+   "version": "1.0.0",
+   "tags": [
+    "video",
+    "product",
+    "marketing",
+    "recipe"
+   ],
+   "est_cost": {
+    "min": 0.0,
+    "max": 0.8,
+    "currency": "USD"
+   }
+  },
+  {
+   "id": "@tryvinci/still-to-talk",
+   "version": "1.0.0",
+   "tags": [
+    "video",
+    "speak",
+    "workflow",
+    "canvas"
+   ],
+   "est_cost": {
+    "min": 0.0,
+    "max": 0.9,
+    "currency": "USD"
+   }
+  },
+  {
+   "id": "@tryvinci/talking-photo",
+   "version": "1.0.0",
+   "tags": [
+    "video",
+    "i2v",
+    "talking"
+   ],
+   "est_cost": {
+    "min": 0.0,
+    "max": 0.8,
+    "currency": "USD"
+   }
+  },
+  {
+   "id": "@tryvinci/lipsync",
+   "version": "1.0.0",
+   "tags": [
+    "video",
+    "lipsync"
+   ],
+   "est_cost": {
+    "min": 0.0,
+    "max": 0.5,
+    "currency": "USD"
+   }
+  },
+  {
+   "id": "@tryvinci/emote-animate",
+   "version": "1.0.0",
+   "tags": [
+    "video",
+    "i2v",
+    "emote"
+   ],
+   "est_cost": {
+    "min": 0.0,
+    "max": 0.8,
+    "currency": "USD"
+   }
+  },
+  {
+   "id": "@tryvinci/video-upscale",
+   "version": "1.0.0",
+   "tags": [
+    "video",
+    "upscale"
+   ],
+   "est_cost": {
+    "min": 0.0,
+    "max": 0.4,
+    "currency": "USD"
+   }
+  },
+  {
+   "id": "@tryvinci/tts",
+   "version": "1.0.0",
+   "tags": [
+    "audio",
+    "tts"
+   ],
+   "est_cost": {
+    "min": 0.0,
+    "max": 0.12,
+    "currency": "USD"
+   }
+  },
+  {
+   "id": "@tryvinci/voice-clone",
+   "version": "1.0.0",
+   "tags": [
+    "audio",
+    "voice_clone"
+   ],
+   "est_cost": {
+    "min": 0.0,
+    "max": 0.12,
+    "currency": "USD"
+   }
+  },
+  {
+   "id": "@tryvinci/podcast-to-shorts",
+   "version": "1.0.0",
+   "tags": [
+    "video",
+    "clips",
+    "podcast",
+    "reframe",
+    "caption"
+   ],
+   "est_cost": {
+    "min": 0.0,
+    "max": 0.0,
+    "currency": "USD"
+   }
+  },
+  {
+   "id": "@tryvinci/clip-select",
+   "version": "1.0.0",
+   "tags": [
+    "video",
+    "clips"
+   ],
+   "est_cost": {
+    "min": 0.0,
+    "max": 0.0,
+    "currency": "USD"
+   }
+  },
+  {
+   "id": "@tryvinci/reframe-9x16",
+   "version": "1.0.0",
+   "tags": [
+    "video",
+    "reframe"
+   ],
+   "est_cost": {
+    "min": 0.0,
+    "max": 0.0,
+    "currency": "USD"
+   }
+  },
+  {
+   "id": "@tryvinci/captions-burn",
+   "version": "1.0.0",
+   "tags": [
+    "video",
+    "caption"
+   ],
+   "est_cost": {
+    "min": 0.0,
+    "max": 0.0,
+    "currency": "USD"
+   }
+  },
+  {
+   "id": "@tryvinci/streamer-split",
+   "version": "1.0.0",
+   "tags": [
+    "video",
+    "split"
+   ],
+   "est_cost": {
+    "min": 0.0,
+    "max": 0.0,
+    "currency": "USD"
+   }
+  },
+  {
+   "id": "@tryvinci/screen-to-demo",
+   "version": "1.0.0",
+   "tags": [
+    "video",
+    "demo",
+    "screen-recording",
+    "voiceover",
+    "caption",
+    "effects"
+   ],
+   "est_cost": {
+    "min": 0.0,
+    "max": 0.0,
+    "currency": "USD"
+   }
+  }
+ ]
 }

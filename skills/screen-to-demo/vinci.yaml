@@ -1,0 +1,13 @@
+id: "@tryvinci/screen-to-demo"
+version: "1.0.0"
+tags: [video, demo, screen-recording, voiceover, caption, effects]
+inputs:
+  media: { type: path, required: true }
+  style: { type: string, required: false, default: product-demo }
+outputs:
+  video: { kind: video }
+capabilities: [transcribe, edit, voiceover, caption]
+secret_names: []
+permissions: []
+est_cost: { min: 0.0, max: 0.0, currency: USD }
+safety_tags: []
