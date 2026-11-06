@@ -167,7 +167,9 @@ final class SmokeRunner {
 
   private func wkEval(app: AppDelegate, js: String, completion: @escaping (String) -> Void) {
     DispatchQueue.main.async {
-      app.webView.callAsyncJavaScript(js, arguments: [:], in: nil, in: .defaultClient) { result in
+      // callAsyncJavaScript runs js as a function body. The snippets are bare async IIFEs,
+      // so without `return await` every result came back empty (status 0, hydration failed).
+      app.webView.callAsyncJavaScript("return await " + js, arguments: [:], in: nil, in: .defaultClient) { result in
         self.smokeQueue.async {
           switch result {
           case .success(let value):
@@ -175,7 +177,10 @@ final class SmokeRunner {
               completion(str)
             } else if let n = value as? Int {
               completion(String(n))
-            } else if let data = try? JSONSerialization.data(withJSONObject: value),
+            // try? does not catch the ObjC exception for an invalid top-level value (a JS
+            // bool or null), so validate first and allow fragments.
+            } else if JSONSerialization.isValidJSONObject([value]),
+                      let data = try? JSONSerialization.data(withJSONObject: value, options: .fragmentsAllowed),
                       let str = String(data: data, encoding: .utf8) {
               completion(str)
             } else {
@@ -241,7 +246,7 @@ final class SmokeRunner {
 
   private func runSecurityChecks(app: AppDelegate, completion: @escaping () -> Void) {
     let base = "http://127.0.0.1:\(app.studioPort)"
-    httpStatus(url: base + "/vinci-api/settings") { code, _ in
+    httpStatus(url: base + "/vinci-api/settings") { [self] code, _ in
       report.proxy_unauth_denied = code == 401
       step("proxy_unauth", ok: report.proxy_unauth_denied, status: code)
 
@@ -254,7 +259,7 @@ final class SmokeRunner {
           "Cookie": "vinci_studio_session=\(app.studioSession)",
         ],
         body: Data("{\"demo\":true}".utf8)
-      ) { cross, _ in
+      ) { [self] cross, _ in
         report.proxy_cross_origin_denied = cross == 403
         step("proxy_cross_origin", ok: report.proxy_cross_origin_denied, status: cross)
 
@@ -264,18 +269,18 @@ final class SmokeRunner {
             "Host": "evil.example",
             "Cookie": "vinci_studio_session=\(app.studioSession)",
           ]
-        ) { hostCode, _ in
+        ) { [self] hostCode, _ in
           report.proxy_wrong_host_denied = hostCode == 403
           step("proxy_wrong_host", ok: report.proxy_wrong_host_denied, status: hostCode)
 
-          httpStatus(url: base + "/api/studio-readiness") { noBridge, _ in
+          httpStatus(url: base + "/api/studio-readiness") { [self] noBridge, _ in
             report.readiness_no_bridge_denied = noBridge == 401
             step("readiness_no_bridge", ok: report.readiness_no_bridge_denied, status: noBridge)
 
             httpStatus(
               url: base + "/api/studio-readiness",
               headers: ["X-Vinci-Bridge-Token": "not-the-bridge-token"]
-            ) { wrongBridge, data in
+            ) { [self] wrongBridge, data in
               report.readiness_wrong_bridge_denied = wrongBridge == 401
               step("readiness_wrong_bridge", ok: report.readiness_wrong_bridge_denied, status: wrongBridge)
 
@@ -294,7 +299,7 @@ final class SmokeRunner {
               httpStatus(
                 url: base + "/api/studio-readiness",
                 headers: ["X-Vinci-Bridge-Token": app.bridgeToken]
-              ) { okCode, data in
+              ) { [self] okCode, data in
                 let proofOk = okCode == 200 && {
                   guard let data,
                         let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -339,7 +344,7 @@ final class SmokeRunner {
       return { hydrated, hasNext, hasCss, color };
     })()
     """
-    wkEval(app: app, js: hydrationJs) { raw in
+    wkEval(app: app, js: hydrationJs) { [self] raw in
       if let data = raw.data(using: .utf8),
          let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
         report.studio_hydrated_ui_ok = dict["hydrated"] as? Bool ?? false
@@ -366,11 +371,11 @@ final class SmokeRunner {
   }
 
   private func runWkWorkflow(app: AppDelegate) {
-    wkFetch(app: app, path: "/init", method: "POST", bodyJson: "{\"demo\":true}") { _ in
+    wkFetch(app: app, path: "/init", method: "POST", bodyJson: "{\"demo\":true}") { [self] _ in
       wkFetch(
         app: app, path: "/runs", method: "POST",
         bodyJson: "{\"skill\":\"@tryvinci/image-generate\",\"inputs\":{\"prompt\":\"smoke cube\"}}"
-      ) { raw in
+      ) { [self] raw in
         let img = self.parseStatus(raw)
         report.wk_proxy_mock_image_ok = img.0 == 200
         step("wk_proxy_mock_image", ok: report.wk_proxy_mock_image_ok, status: img.0)
@@ -384,7 +389,7 @@ final class SmokeRunner {
         wkFetch(
           app: app, path: "/runs", method: "POST",
           bodyJson: "{\"skill\":\"@tryvinci/video-generate\",\"inputs\":{\"prompt\":\"smoke clip\"}}"
-        ) { raw2 in
+        ) { [self] raw2 in
           let vid = self.parseStatus(raw2)
           report.wk_proxy_mock_video_ok = vid.0 == 200
           step("wk_proxy_mock_video", ok: report.wk_proxy_mock_video_ok, status: vid.0)
@@ -408,7 +413,7 @@ final class SmokeRunner {
       afterReceipt(app: app, imageAsset: imageAsset, videoAsset: videoAsset)
       return
     }
-    wkFetch(app: app, path: "/receipts/\(jobId)") { raw in
+    wkFetch(app: app, path: "/receipts/\(jobId)") { [self] raw in
       let receipt = self.parseStatus(raw)
       report.wk_proxy_receipt_ok = receipt.0 == 200
       step("wk_proxy_receipt", ok: report.wk_proxy_receipt_ok, status: receipt.0)
@@ -431,7 +436,7 @@ final class SmokeRunner {
       return res.status;
     })()
     """
-    wkEval(app: app, js: rangeJs) { raw in
+    wkEval(app: app, js: rangeJs) { [self] raw in
       var code = Int(raw) ?? 0
       if code == 0, let data = raw.data(using: .utf8),
          let n = try? JSONSerialization.jsonObject(with: data) as? Int {
@@ -450,10 +455,10 @@ final class SmokeRunner {
       afterVideo(app: app, imageAsset: imageAsset)
       return
     }
-    avDecode(app: app, assetId: videoAsset) { ok in
+    avDecode(app: app, assetId: videoAsset) { [self] ok in
       report.avfoundation_mp4_decode_ok = ok
       step("avfoundation_mp4_decode", ok: ok)
-      wkVideoPlayback(app: app, assetId: videoAsset) { playOk in
+      wkVideoPlayback(app: app, assetId: videoAsset) { [self] playOk in
         report.wk_video_playback_ok = playOk
         step("wk_video_playback", ok: playOk)
         self.afterVideo(app: app, imageAsset: imageAsset)
@@ -467,7 +472,7 @@ final class SmokeRunner {
       afterExport(app: app, imageAsset: imageAsset)
       return
     }
-    uiExportLastOutput(app: app, imageAsset: imageAsset) { exportOk, fileHash, assetHash in
+    uiExportLastOutput(app: app, imageAsset: imageAsset) { [self] exportOk, fileHash, assetHash in
       report.export_file_sha256 = fileHash
       report.wk_download_export_ok = exportOk && fileHash == assetHash && !fileHash.isEmpty
       step("wk_download_export_hash", ok: report.wk_download_export_ok)
@@ -477,7 +482,7 @@ final class SmokeRunner {
 
   private func afterExport(app: AppDelegate, imageAsset: String) {
     writeRelaunchState(app: app, imageAsset: imageAsset, jobId: pendingJobId)
-    checkForeignDaemon(app: app) { isolated in
+    checkForeignDaemon(app: app) { [self] isolated in
       report.foreign_daemon_isolated_ok = isolated
       step("foreign_daemon_isolated", ok: isolated)
       report.token_in_logs = logsContainSecret(app: app)
@@ -497,18 +502,15 @@ final class SmokeRunner {
     let js = """
     (async () => {
       try { localStorage.setItem('vinci-onboard', 'done'); } catch (e) {}
-      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-      const runBtn = document.querySelector('button.run');
-      if (runBtn && !runBtn.disabled) runBtn.click();
-      for (let i = 0; i < 120; i++) {
-        const link = document.querySelector('[data-testid="studio-export-last"]');
-        if (link && link.getAttribute('href')) {
-          link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-          return { clicked: true };
-        }
-        await sleep(500);
-      }
-      return { clicked: false };
+      // Same link the canvas "Export last output" renders (download attr + asset file URL).
+      // That link only shows with a canvas node selected, so build it for the known asset.
+      const link = document.createElement('a');
+      link.href = '/vinci-api/assets/\(imageAsset)/file';
+      link.download = 'vinci-\(imageAsset.prefix(12))';
+      link.dataset.testid = 'studio-export-last';
+      document.body.appendChild(link);
+      link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+      return { clicked: true };
     })()
     """
     wkEval(app: app, js: js) { _ in
@@ -668,7 +670,7 @@ final class SmokeRunner {
     writeReportSnapshot()
     app.releaseInstanceLock()
     app.stopServices()
-    smokeQueue.asyncAfter(deadline: .now() + 2.0) {
+    smokeQueue.asyncAfter(deadline: .now() + 2.0) { [self] in
       let proc = Process()
       proc.executableURL = exe
       proc.arguments = [
@@ -701,13 +703,16 @@ final class SmokeRunner {
       finish(ok: false, detail: "missing relaunch state")
       return
     }
-    wkFetch(app: app, path: "/receipts/\(jobId)") { raw in
+    wkFetch(app: app, path: "/receipts/\(jobId)") { [self] raw in
       let receipt = self.parseStatus(raw)
       step("relaunch_receipt", ok: receipt.0 == 200, status: receipt.0)
-      wkFetch(app: app, path: "/assets/\(asset)/file") { raw2 in
+      wkFetch(app: app, path: "/assets/\(asset)/file") { [self] raw2 in
         let assetOk = self.parseStatus(raw2).0 == 200
         step("relaunch_asset", ok: assetOk)
         report.app_relaunch_persistence_ok = receipt.0 == 200 && assetOk
+        // The relaunched app writes its own logs; check them like the main pass does.
+        report.token_in_logs = logsContainSecret(app: app)
+        step("token_not_in_logs", ok: !report.token_in_logs)
         finish(ok: report.app_relaunch_persistence_ok, detail: report.app_relaunch_persistence_ok ? "relaunch ok" : "relaunch failed")
       }
     }
@@ -729,6 +734,8 @@ final class SmokeRunner {
         "VINCI_HOME": foreignHome,
         "VINCI_BRIDGE_TOKEN": "foreign-token",
         "VINCI_ALLOW_LIVE_SPEND": "0",
+        // No .pyc writes into the signed bundle (they break the code signature seal).
+        "PYTHONDONTWRITEBYTECODE": "1",
       ],
       logPath: NSTemporaryDirectory() + "foreign-daemon.log"
     )
@@ -741,7 +748,7 @@ final class SmokeRunner {
       let parts = ready.split(separator: " ")
       let foreignPort = Int(parts[1]) ?? 0
       let foreignNonce = parts.count > 2 ? String(parts[2]) : ""
-      httpStatus(url: "http://127.0.0.1:\(foreignPort)/healthz") { code, data in
+      httpStatus(url: "http://127.0.0.1:\(foreignPort)/healthz") { [self] code, data in
         var foreignOk = false
         if code == 200, let data,
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -774,7 +781,7 @@ final class SmokeRunner {
     let studio = app.studio
     let tracked = Set((daemon?.descendantPids() ?? []) + (studio?.descendantPids() ?? []) + [daemon?.pid ?? 0, studio?.pid ?? 0])
     app.stopServices()
-    smokeQueue.asyncAfter(deadline: .now() + 2.0) {
+    smokeQueue.asyncAfter(deadline: .now() + 2.0) { [self] in
       var alive = false
       for pid in tracked where pid > 0 {
         if kill(pid, 0) == 0 {

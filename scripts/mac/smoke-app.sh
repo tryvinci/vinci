@@ -53,7 +53,8 @@ fi
 
 python3 "$ROOT/scripts/mac/verify-smoke-report.py" "$REPORT" "$SHOT" "$GIT_SHA" "$BIN" || exit 1
 if [[ -f "$RELAUNCH_REPORT" ]]; then
-  python3 "$ROOT/scripts/mac/verify-smoke-report.py" --relaunch "$RELAUNCH_REPORT" "$GIT_SHA" "$BIN" || exit 1
+  # Empty screenshot slot: relaunch mode does not check it, but the sha and exe are positional.
+  python3 "$ROOT/scripts/mac/verify-smoke-report.py" --relaunch "$RELAUNCH_REPORT" "" "$GIT_SHA" "$BIN" || exit 1
 fi
 if [[ "$HARNESS_EC" -ne 0 ]]; then
   echo "smoke-app.sh: harness failed ec=$HARNESS_EC (see $REPORT)" >&2
@@ -61,4 +62,6 @@ if [[ "$HARNESS_EC" -ne 0 ]]; then
 fi
 
 bash "$ROOT/scripts/mac/scan-bundle.sh" "$APP"
+# The run must not change the signed bundle (build-dmg.sh packs this same app next).
+codesign --verify --strict --deep "$APP" || { echo "smoke-app.sh: app seal broken after smoke run" >&2; exit 1; }
 echo "smoke-app ok: $REPORT"

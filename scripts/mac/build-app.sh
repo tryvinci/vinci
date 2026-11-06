@@ -52,6 +52,8 @@ tar -xzf "$CACHE/$NODE_TAR" -C "$NODE_EXTRACT" --strip-components=1
 cp "$NODE_EXTRACT/bin/node" "$APP/Contents/Resources/studio/node"
 cp "$CACHE/ffmpeg-arm64/bin/ffmpeg" "$APP/Contents/Resources/bin/ffmpeg"
 cp "$CACHE/ffmpeg-arm64/bin/ffprobe" "$APP/Contents/Resources/bin/ffprobe"
+# Built-in skills: the daemon reads them via VINCI_SKILLS_ROOT (set in VinciStudio.swift).
+cp -R "$ROOT/skills" "$APP/Contents/Resources/skills"
 # generate-notices-sbom.sh wrote these to dist/legal (build output, not in git).
 cp "$DIST/legal/THIRD_PARTY_NOTICES.md" "$APP/Contents/Resources/legal/THIRD_PARTY_NOTICES.md"
 cp "$DIST/legal/provenance.json" "$APP/Contents/Resources/legal/provenance.json"

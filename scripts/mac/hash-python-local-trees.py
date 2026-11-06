@@ -19,14 +19,15 @@ from notice_graph import LOCAL_DIGESTS, local_paths_from_manifest  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "scripts/mac/python-bundle-local.manifest.json"
-SKIP = {".pyc", "__pycache__", ".pytest_cache", ".ruff_cache", ".egg-info"}
+# build/: pip build output of the last install (build-python-runtime.sh), not source.
+SKIP = {".pyc", "__pycache__", ".pytest_cache", ".ruff_cache", ".egg-info", "build"}
 
 
 def tree_sha256(root: Path) -> str:
     """Return a deterministic sha256 over the relative paths and bytes of a tree.
 
     Args:
-        root: Package tree to hash. Caches and ``*.egg-info`` are skipped.
+        root: Package tree to hash. Caches, ``build/`` and ``*.egg-info`` are skipped.
 
     Returns:
         Hex sha256 digest.
@@ -36,7 +37,8 @@ def tree_sha256(root: Path) -> str:
         if not path.is_file():
             continue
         rel = path.relative_to(root).as_posix()
-        if any(part in SKIP or part.endswith(".egg-info") for part in path.parts):
+        # Relative parts only: a checkout under a dir named build/ must still hash.
+        if any(part in SKIP or part.endswith(".egg-info") for part in path.relative_to(root).parts):
             continue
         digest.update(rel.encode())
         digest.update(path.read_bytes())

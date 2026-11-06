@@ -290,6 +290,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
       "VINCI_BRIDGE_TOKEN": bridgeToken,
       "VINCI_FFMPEG": bundleResource("bin/ffmpeg"),
       "VINCI_FFPROBE": bundleResource("bin/ffprobe"),
+      // Built-in skills ship in the app; the default lookup is the source checkout.
+      "VINCI_SKILLS_ROOT": bundleResource("skills"),
       "PATH": bundleResource("bin"),
       "PYTHONDONTWRITEBYTECODE": "1",
     ])
@@ -385,6 +387,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
     let url = URL(string: "http://127.0.0.1:\(studioPort)/api/studio-readiness")!
     let expected = readinessProof()
+    // Copy before the URLSession callback: Swift 6 needs explicit self capture, and the
+    // callback runs off the main thread.
+    let nonce = launchNonce
     var req = URLRequest(url: url)
     req.setValue(bridgeToken, forHTTPHeaderField: "X-Vinci-Bridge-Token")
     URLSession.shared.dataTask(with: req) { data, resp, _ in
@@ -394,7 +399,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
          let data,
          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
          json["proof"] as? String == expected,
-         json["launch_nonce"] as? String == launchNonce {
+         json["launch_nonce"] as? String == nonce {
         ok = true
       }
       if ok {
@@ -598,7 +603,12 @@ final class ChildProcess {
     let cmd = ([executable] + args).map(shellQuote).joined(separator: " ")
     proc.executableURL = URL(fileURLWithPath: "/bin/bash")
     let cdPrefix = cwd.map { "cd \(shellQuote($0)) && " } ?? ""
-    proc.arguments = ["-c", "\(cdPrefix)exec setsid \(cmd)"]
+    // macOS has no setsid(1). terminateAndWait() signals the child's process group, so the child
+    // must lead one. Foundation already does that (then setsid() fails with EPERM); the bundled
+    // Python keeps the guarantee if it does not, then execs the child (COREPRODUC-520).
+    let python = Bundle.main.resourcePath!.appending("/runtime/bin/python3")
+    let newSession = "import os, sys\ntry:\n    os.setsid()\nexcept PermissionError:\n    pass\nos.execv(sys.argv[1], sys.argv[1:])"
+    proc.arguments = ["-c", "\(cdPrefix)exec \(shellQuote(python)) -I -S -B -c \(shellQuote(newSession)) \(cmd)"]
     proc.environment = env
     let outPipe = Pipe()
     let errPipe = Pipe()
@@ -717,5 +727,6 @@ func pickFreePort() -> Int {
       Darwin.getsockname(fd, sa, &len)
     }
   }
-  return Int(Darwin.ntohs(name.sin_port))
+  // ntohs is a C macro the macOS 26 SDK no longer exposes to Swift.
+  return Int(UInt16(bigEndian: name.sin_port))
 }

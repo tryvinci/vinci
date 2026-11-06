@@ -7,12 +7,16 @@ import re
 import sys
 from pathlib import Path
 
-BANNED_NAME = re.compile(r"vinci[-_]?clips|\.env$|id_rsa", re.I)
+# __editable__: an editable install points at the build checkout (COREPRODUC-520).
+BANNED_NAME = re.compile(r"vinci[-_]?clips|\.env$|id_rsa|__editable__", re.I)
 BANNED_CONTENT = (
     re.compile(r"AGPL-3\.0"),
-    re.compile(r"mongodb(\+srv)?:\/\/", re.I),
+    # Only URLs that carry credentials (user:pass@); pydantic documents bare Mongo host URLs.
+    re.compile(r"mongodb(\+srv)?:\/\/[^\s/@:]+:[^\s/@]+@", re.I),
     re.compile(r"\bClerk\b"),
 )
+# SPDX license-ID tables list every license name (AGPL included); they are data, not AGPL code.
+LICENSE_ID_TABLES = ("packaging/licenses/_spdx.py",)
 
 
 def main() -> int:
@@ -39,6 +43,8 @@ def main() -> int:
         except OSError:
             continue
         for pat in BANNED_CONTENT:
+            if pat.pattern == r"AGPL-3\.0" and rel.as_posix().endswith(LICENSE_ID_TABLES):
+                continue
             if pat.search(text):
                 print(f"banned content in {rel}: {pat.pattern}")
                 bad += 1
