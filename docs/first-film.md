@@ -4,7 +4,7 @@ A 10-minute walk from an empty canvas to a finished shot, all in free demo mode.
 
 ## 1. Open your Studio
 
-Follow the [quickstart](quickstart.md) until `./scripts/vinci studio` prints a local address, then open `http://127.0.0.1:4310/studio` in your browser.
+Follow the [quickstart](quickstart.md) until `./scripts/vinci studio` prints a local address, then open `http://127.0.0.1:4311` in your browser.
 
 ## 2. Start from a template
 

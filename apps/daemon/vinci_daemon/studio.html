@@ -69,9 +69,52 @@
     .rail button {
       width: 40px; height: 40px; border: 0; background: transparent;
       color: hsl(200 6% 64%); border-radius: var(--pill);
+      display: flex; align-items: center; justify-content: center; gap: 0;
+      padding: 0; overflow: hidden; flex: none;
     }
     .rail button.on, .rail button:hover { background: hsl(160 20% 14%); color: var(--teal); }
+    .rail button svg { flex: none; }
+    .rail-label { max-width: 0; min-width: 0; opacity: 0; overflow: hidden; white-space: nowrap; font-size: 13px; font-weight: 500; }
+    .rail-section {
+      display: none; width: 100%; margin: 10px 0 2px; padding: 0 12px;
+      font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+      color: hsl(200 6% 50%);
+    }
     .rail .spacer { flex: 1; }
+    .rail-entry { position: relative; width: 40px; flex: none; display: flex; flex-direction: column; align-items: center; }
+    .rail-flyout {
+      display: none; position: absolute; left: 100%; top: 0; z-index: 30; width: 440px;
+      margin-left: 8px; padding: 12px; gap: 8px; grid-template-columns: 1fr 1fr;
+      background: hsl(160 22% 7% / 0.98); color: var(--rail-ink);
+      border: 1px solid hsl(160 18% 3% / 0.45); border-radius: 16px;
+      box-shadow: 0 24px 48px -24px rgb(0 0 0 / 0.55);
+    }
+    .rail-flyout::before { content: ""; position: absolute; left: -12px; top: 0; bottom: 0; width: 12px; }
+    .rail-flyout-h { margin: 0 0 8px; font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: hsl(200 6% 58%); }
+    .rail-flyout button.flyout-row {
+      width: 100%; height: auto; margin: 0 0 6px; padding: 8px 10px; border: 0; border-radius: 10px;
+      background: transparent; color: var(--rail-ink); display: flex; flex-direction: column;
+      align-items: flex-start; gap: 2px; text-align: left; overflow: visible;
+    }
+    .rail-flyout button.flyout-row strong { font-size: 13px; font-weight: 600; }
+    .rail-flyout button.flyout-row span { font-size: 11px; color: hsl(200 6% 64%); white-space: normal; }
+    .rail-flyout button.flyout-row:hover { background: hsl(160 20% 14%); color: var(--teal); }
+    .rail-flyout-empty { margin: 0; font-size: 12px; color: hsl(200 6% 58%); }
+    .top-lead { display: flex; align-items: center; gap: 4px; min-width: 0; }
+    .rail-menu { display: none; width: 40px; height: 40px; flex: none; border: 0; border-radius: var(--pill); background: transparent; color: var(--ink); align-items: center; justify-content: center; padding: 0; }
+    .rail-scrim { position: fixed; inset: 0; z-index: 35; border: 0; padding: 0; background: hsl(160 22% 7% / 0.45); cursor: pointer; }
+    @media (min-width: 961px) {
+      .rail { position: relative; z-index: 4; }
+      .rail-scrim { display: none; }
+      .shell:has(.rail:hover), .shell:has(.rail button:focus-visible) { grid-template-columns: 196px 1fr; }
+      .shell.with-insp:has(.rail:hover), .shell.with-insp:has(.rail button:focus-visible) { grid-template-columns: 196px 1fr minmax(280px, 22vw); }
+      .rail:hover, .rail:has(button:focus-visible) { align-items: stretch; padding-left: 8px; padding-right: 8px; }
+      .rail:hover button:not(.flyout-row), .rail:has(button:focus-visible) button:not(.flyout-row) { width: auto; justify-content: flex-start; gap: 10px; padding: 0 12px; border-radius: 12px; }
+      .rail:hover .rail-label, .rail:has(button:focus-visible) .rail-label { max-width: 140px; opacity: 1; }
+      .rail:hover .rail-section, .rail:has(button:focus-visible) .rail-section { display: block; }
+      .rail:hover .rail-entry, .rail:has(button:focus-visible) .rail-entry { width: 100%; align-items: stretch; }
+      .rail-entry:hover .rail-flyout, .rail-entry:focus-within .rail-flyout { display: grid; }
+    }
     .main { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
     .top {
       height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -388,12 +431,30 @@
     }
     .tl-stage img, .tl-stage video { max-height: 100%; max-width: 100%; object-fit: contain; }
     @media (max-width: 960px) {
-      .shell, .shell.with-insp { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; }
-      .rail { flex-direction: row; border-right: 0; border-bottom: 1px solid hsl(160 18% 3% / 0.45); overflow-x: auto; padding: 6px 8px; }
+      /* Clear the fixed deprecation note (up to three lines) only while it is shown. */
+      body:has(#deprecated-note) .results, body:has(#deprecated-note) .zoom { bottom: 84px; }
+      .shell { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+      .shell.with-insp { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+      .rail-menu { display: inline-flex; }
+      .rail-scrim { top: 56px; }
+      .top { position: relative; z-index: 45; background: var(--bg); }
+      .rail {
+        position: fixed; inset: 56px auto 0 0; width: min(280px, 86vw); z-index: 40;
+        overflow-x: hidden; overflow-y: auto; transform: translateX(-100%); visibility: hidden;
+        align-items: stretch; padding: 10px 8px 12px; transition: transform 160ms ease;
+      }
+      .rail.open { transform: none; visibility: visible; }
+      .rail .rail-label, .rail button.rail-text .rail-label { max-width: 180px; opacity: 1; font-size: 13px; }
+      .rail .rail-section { display: block; }
+      .rail .rail-entry { width: 100%; align-items: stretch; }
+      .rail button:not(.flyout-row) { width: auto; justify-content: flex-start; gap: 10px; padding: 0 12px; border-radius: 12px; }
+      .rail-flyout { display: block; position: static; width: auto; margin: 0 0 8px; padding: 0 8px 4px; border: 0; background: transparent; box-shadow: none; }
+      .rail-flyout::before, .rail-flyout > div:nth-child(2) { display: none; }
       .insp { border-left: 0; border-top: 1px solid var(--line); max-height: 42vh; }
       .grid { grid-template-columns: 1fr; }
       .card img { height: 180px; }
     }
+    @media (prefers-reduced-motion: reduce) { .rail { transition: none; } }
     #onboard {
       position: fixed; inset: 0; z-index: 50; display: grid; place-items: center;
     }
@@ -436,60 +497,103 @@
     .adapt-safe-overlay { position: absolute; border: 2px solid var(--teal); pointer-events: none; }
     .adapt-flow-board { display: grid; grid-template-columns: 1fr 40px 0.8fr 40px 1fr; gap: 8px; background: var(--board); color: #fafafa; border-radius: 1rem; padding: 20px; overflow: auto; }
     .adapt-pill { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; border: 1px solid var(--line); border-radius: 999px; padding: 4px 8px; }
+    .deprecated-note { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 50; width: fit-content; margin: 0 auto; text-align: center; padding: 8px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--raised); box-shadow: var(--card-shadow); font-size: 12px; color: var(--mute); }
+    .deprecated-note code { color: var(--ink); }
+    .deprecated-close { margin-left: 6px; border: 0; background: transparent; color: var(--mute); font-size: 14px; line-height: 1; padding: 0 2px; cursor: pointer; }
   </style>
 </head>
 <body>
+  <!-- Deprecated fallback: frozen, no new features. TypeScript Studio (apps/studio) is the supported UI. -->
+  <p class="deprecated-note" id="deprecated-note" role="note">This HTML Studio is deprecated. From a Vinci clone with Node 20+, run <code>./scripts/vinci studio</code> for the TypeScript Studio on <code>:4311</code>. <button type="button" class="deprecated-close" aria-label="Dismiss" onclick="this.parentElement.remove(); try { localStorage.setItem('vinci-html-deprecated-dismissed', '1'); } catch (err) {}">×</button></p>
+  <script>try { if (localStorage.getItem("vinci-html-deprecated-dismissed") === "1") document.getElementById("deprecated-note").remove(); } catch (err) { /* ignore */ }</script>
   <div class="shell">
-    <nav class="rail" aria-label="Studio">
+    <button class="rail-scrim" id="rail-scrim" type="button" aria-label="Close menu" hidden></button>
+    <nav class="rail" id="studio-rail" aria-label="Studio">
       <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#34c6c0"/><path d="M9 7h5l2 11 2-11h5L18 25h-4L9 7z" fill="#06262a"/></svg>
       <button class="on" data-page="explore" type="button" title="Explore" aria-label="Explore">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="currentColor"/><path d="M9 4v5l3 2" stroke="currentColor"/></svg>
+        <span class="rail-label">Explore</span>
       </button>
-      <button data-page="image" type="button" title="Image" aria-label="Image">
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="3" y="4" width="12" height="10" stroke="currentColor"/><path d="M3 12l3-3 2 2 2-2 4 4" stroke="currentColor"/><circle cx="7" cy="7" r="1" fill="currentColor"/></svg>
-      </button>
-      <button data-page="adapts" type="button" title="Adapts" aria-label="Adapts">
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="3" y="3" width="5" height="5" stroke="currentColor"/><rect x="10" y="3" width="5" height="5" stroke="currentColor"/><rect x="6" y="10" width="6" height="5" stroke="currentColor"/></svg>
-      </button>
-      <button data-page="video" type="button" title="Video" aria-label="Video">
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2.5" y="5" width="9" height="8" stroke="currentColor"/><path d="M11.5 8l4-2v6l-4-2z" stroke="currentColor"/></svg>
-      </button>
-      <button data-page="speak" type="button" title="Speak" aria-label="Speak">
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 8v2c0 2.8 2.2 5 5 5s5-2.2 5-5V8" stroke="currentColor"/><rect x="7" y="3" width="4" height="8" rx="2" stroke="currentColor"/></svg>
-      </button>
-      <button data-page="upscale" type="button" title="Upscale still" aria-label="Upscale still">
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="3" y="7" width="6" height="6" stroke="currentColor"/><rect x="8" y="3" width="7" height="7" stroke="currentColor"/></svg>
-      </button>
+      <span class="rail-section">Formats</span>
+      <div class="rail-entry">
+        <button data-page="image" type="button" title="Image" aria-label="Image">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="3" y="4" width="12" height="10" stroke="currentColor"/><path d="M3 12l3-3 2 2 2-2 4 4" stroke="currentColor"/><circle cx="7" cy="7" r="1" fill="currentColor"/></svg>
+          <span class="rail-label">Image</span>
+        </button>
+        <div class="rail-flyout">
+          <div>
+            <p class="rail-flyout-h">Features</p>
+            <button class="flyout-row" data-page="image" type="button"><strong>Create Image</strong><span>Stills from a prompt or reference</span></button>
+            <button class="flyout-row" data-page="upscale" type="button"><strong>Upscale still</strong><span>Increase resolution on a still</span></button>
+            <button class="flyout-row" data-page="adapts" type="button"><strong>Adapts</strong><span>Partner and multi-ratio ad presets</span></button>
+          </div>
+          <div>
+            <p class="rail-flyout-h">Models</p>
+            <div id="rail-image-models"><p class="rail-flyout-empty">No models yet</p></div>
+          </div>
+        </div>
+      </div>
+      <div class="rail-entry">
+        <button data-page="video" type="button" title="Video" aria-label="Video">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2.5" y="5" width="9" height="8" stroke="currentColor"/><path d="M11.5 8l4-2v6l-4-2z" stroke="currentColor"/></svg>
+          <span class="rail-label">Video</span>
+        </button>
+        <div class="rail-flyout">
+          <div>
+            <p class="rail-flyout-h">Features</p>
+            <button class="flyout-row" data-page="video" type="button"><strong>Create Video</strong><span>Motion from a prompt or still</span></button>
+            <button class="flyout-row" data-page="speak" type="button"><strong>Talking Head</strong><span>Avatar video from a still and a line</span></button>
+          </div>
+          <div>
+            <p class="rail-flyout-h">Models</p>
+            <div id="rail-video-models"><p class="rail-flyout-empty">No models yet</p></div>
+          </div>
+        </div>
+      </div>
+      <span class="rail-section">Workflows</span>
       <button data-page="canvas" type="button" title="Canvas" aria-label="Canvas">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="3" y="4" width="5" height="4" stroke="currentColor"/><rect x="10" y="10" width="5" height="4" stroke="currentColor"/><path d="M8 6h3v4" stroke="currentColor"/></svg>
+        <span class="rail-label">Canvas</span>
       </button>
       <button data-page="library" type="button" title="Library" aria-label="Library">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="3" y="4" width="4" height="11" stroke="currentColor"/><rect x="8" y="4" width="3" height="11" stroke="currentColor"/><path d="M12.5 4.5l2.5 10.5" stroke="currentColor"/></svg>
+        <span class="rail-label">Library</span>
       </button>
-      <button data-page="agent" type="button" title="Supercomputer" aria-label="Supercomputer">
+      <button class="hidden" data-page="agent" type="button" title="Supercomputer" aria-label="Supercomputer">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="4" y="5" width="10" height="8" stroke="currentColor"/><path d="M7 14h4M6 3v2M12 3v2" stroke="currentColor"/></svg>
       </button>
-      <button data-page="space" type="button" title="3D" aria-label="3D">
+      <button class="hidden" data-page="space" type="button" title="3D" aria-label="3D">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2l7 4v8l-7 4-7-4V6zM9 10V18M2 6l7 4 7-4" stroke="currentColor"/></svg>
       </button>
-      <button data-page="collab" type="button" title="Collab" aria-label="Collab">
+      <button class="hidden" data-page="collab" type="button" title="Collab" aria-label="Collab">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="6" cy="5.5" r="2.5" stroke="currentColor"/><circle cx="12" cy="5.5" r="2.5" stroke="currentColor"/><path d="M3 16c0-2 2-3.5 3.5-3.5S10 14 10 16M8 16c0-2 2-3.5 4-3.5s4 1.5 4 3.5" stroke="currentColor"/></svg>
       </button>
       <span class="spacer"></span>
       <button data-page="skills" type="button" title="Skills" aria-label="Skills">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="3" y="4" width="12" height="10" stroke="currentColor"/><path d="M6 7h6M6 10h4" stroke="currentColor"/></svg>
+        <span class="rail-label">Skills</span>
       </button>
       <button data-page="find" type="button" title="Find" aria-label="Find">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="8" cy="8" r="4.5" stroke="currentColor"/><path d="M11.5 11.5L15 15" stroke="currentColor"/></svg>
+        <span class="rail-label">Find</span>
       </button>
-      <button data-page="cost" type="button" title="Cost report" aria-label="Cost report">$</button>
+      <button data-page="cost" type="button" title="Cost report" aria-label="Cost report">
+        <span class="rail-mini">$</span>
+        <span class="rail-label">Cost report</span>
+      </button>
       <button data-page="keys" type="button" title="Connect" aria-label="Connect">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="7" cy="10" r="3" stroke="currentColor"/><path d="M10 10h6v2M13 10v3" stroke="currentColor"/></svg>
+        <span class="rail-label">Connect</span>
       </button>
     </nav>
     <section class="main">
       <div class="top">
-        <h1 id="project-name" contenteditable="true" spellcheck="false">Explore</h1>
+        <div class="top-lead">
+          <button class="rail-menu" id="rail-menu" type="button" aria-label="Open studio menu" aria-expanded="false" aria-controls="studio-rail">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M3 5h12M3 9h12M3 13h12" stroke="currentColor"/></svg>
+          </button>
+          <h1 id="project-name" contenteditable="true" spellcheck="false">Explore</h1>
+        </div>
         <div class="views" id="view-toggle">
           <button class="on" data-view="canvas" type="button">Canvas</button>
           <button data-view="timeline" type="button">Timeline</button>
@@ -1168,9 +1272,27 @@
       saveState();
     }
 
+    function railButtonOn(btn, page) {
+      const key = btn.dataset.page;
+      if (btn.classList.contains("flyout-row")) return key === page;
+      if (key === "image") return page === "image" || page === "upscale" || page === "adapts";
+      if (key === "video") return page === "video" || page === "speak";
+      return key === page;
+    }
+    function closeNav() {
+      const rail = $("studio-rail");
+      const menu = $("rail-menu");
+      const scrim = $("rail-scrim");
+      if (rail) rail.classList.remove("open");
+      if (scrim) scrim.hidden = true;
+      if (menu) {
+        menu.setAttribute("aria-expanded", "false");
+        menu.setAttribute("aria-label", "Open studio menu");
+      }
+    }
     function setPage(page) {
       state.page = page;
-      document.querySelectorAll(".rail [data-page]").forEach((b) => b.classList.toggle("on", b.dataset.page === page));
+      document.querySelectorAll(".rail [data-page]").forEach((b) => b.classList.toggle("on", railButtonOn(b, page)));
       renderPage();
       saveState();
     }
@@ -1219,6 +1341,7 @@
       else if (state.page === "find") renderFind(page);
       else if (state.page === "cost") renderCost(page);
       fillModels();
+      fillRailModels();
       updateCost();
     }
 
@@ -2580,6 +2703,45 @@
         gallery.appendChild(btn);
       });
     }
+    function fillRailModels() {
+      const paint = (host, kind) => {
+        if (!host) return;
+        const rows = models.filter((row) => {
+          if (row.provider === "mock") return false;
+          const caps = row.capabilities || [];
+          if (kind === "image") return caps.includes("t2i") || caps.includes("upscale");
+          return caps.includes("t2v") || caps.includes("i2v") || caps.includes("lipsync") || caps.includes("tts");
+        }).sort((a, b) => availabilityRank(modelStatus(a)) - availabilityRank(modelStatus(b))).slice(0, 8);
+        host.replaceChildren();
+        if (!rows.length) {
+          const empty = document.createElement("p");
+          empty.className = "rail-flyout-empty";
+          empty.textContent = "No models yet";
+          host.appendChild(empty);
+          return;
+        }
+        rows.forEach((row) => {
+          const caps = row.capabilities || [];
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "flyout-row";
+          btn.dataset.model = row.id;
+          if (kind === "image") btn.dataset.page = caps.includes("t2i") ? "image" : "upscale";
+          else {
+            const talk = (caps.includes("lipsync") || caps.includes("tts")) && !caps.includes("t2v") && !caps.includes("i2v");
+            btn.dataset.page = talk ? "speak" : "video";
+          }
+          const name = document.createElement("strong");
+          name.textContent = row.display_name || row.id;
+          const sub = document.createElement("span");
+          sub.textContent = row.provider || "model";
+          btn.append(name, sub);
+          host.appendChild(btn);
+        });
+      };
+      paint($("rail-image-models"), "image");
+      paint($("rail-video-models"), "video");
+    }
     function fillModels() {
       const hidden = $("model");
       if (!hidden) return;
@@ -2997,6 +3159,7 @@
         console.error(err);
       }
       fillModels();
+      fillRailModels();
       const proj = current();
       if (proj && proj.graph) { state.graph = proj.graph; state.skillRef = proj.skillRef || null; }
       renderPage();
@@ -3076,28 +3239,44 @@
       setPage("keys");
     };
 
-    document.querySelectorAll(".rail [data-page]").forEach((btn) => {
-      btn.onclick = () => {
-        const next = btn.dataset.page;
-        if (
-          ["image", "video", "upscale", "speak"].includes(next)
-          && ["explore", "canvas", "library", "skills"].includes(state.page)
-        ) {
-          const names = { image: "Image", video: "Video", upscale: "Upscale still", speak: "Speak" };
-          newProject(names[next], $("prompt").value.trim());
-          if (next === "speak") {
-            const talk = templates.find((t) => t.id === "still-to-talk");
-            const skill = talk && skillById(talk.skill);
-            if (skill) {
-              state.skillRef = skill.id;
-              state.graph = graphFromSkill(skill);
-              persistGraph();
-            }
+    $("studio-rail").addEventListener("click", (ev) => {
+      const btn = ev.target.closest("[data-page]");
+      if (!btn || !btn.closest("#studio-rail")) return;
+      const next = btn.dataset.page;
+      if (
+        ["image", "video", "upscale", "speak"].includes(next)
+        && ["explore", "canvas", "library", "skills"].includes(state.page)
+      ) {
+        const names = { image: "Image", video: "Video", upscale: "Upscale still", speak: "Speak" };
+        const prompt = $("prompt");
+        newProject(names[next], prompt ? prompt.value.trim() : "");
+        if (next === "speak") {
+          const talk = templates.find((t) => t.id === "still-to-talk");
+          const skill = talk && skillById(talk.skill);
+          if (skill) {
+            state.skillRef = skill.id;
+            state.graph = graphFromSkill(skill);
+            persistGraph();
           }
         }
-        setPage(next);
-      };
+      }
+      if (btn.dataset.model) {
+        const input = $("model");
+        if (input) input.value = btn.dataset.model;
+      }
+      setPage(next);
+      closeNav();
     });
+    $("rail-menu").onclick = () => {
+      const rail = $("studio-rail");
+      const open = !rail.classList.contains("open");
+      rail.classList.toggle("open", open);
+      $("rail-scrim").hidden = !open;
+      $("rail-menu").setAttribute("aria-expanded", open ? "true" : "false");
+      $("rail-menu").setAttribute("aria-label", open ? "Close studio menu" : "Open studio menu");
+    };
+    $("rail-scrim").onclick = () => closeNav();
+    window.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeNav(); });
     $("provider-chip").onclick = () => setPage("keys");
     $("compose-new").onclick = () => {
       state.composeReset = true;

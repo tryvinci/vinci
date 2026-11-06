@@ -239,6 +239,13 @@ async function main(): Promise<void> {
   usage();
 }
 
+/**
+ * Start the daemon and open Studio: the TypeScript Studio on :4311 when it can start, else the
+ * deprecated daemon HTML page at /studio (with a warning naming the fix).
+ *
+ * Args (argv flags): --lan binds 0.0.0.0 and prints LAN URLs; --no-open skips the browser;
+ * --html forces the HTML page; --port / --host override the daemon address.
+ */
 async function runStudio(argv: string[]): Promise<void> {
   const lan = argv.includes("--lan");
   const noOpen = argv.includes("--no-open");
@@ -256,15 +263,23 @@ async function runStudio(argv: string[]): Promise<void> {
     if (tsUp) studioUrl = tsUrl;
   }
   console.log(`Vinci Studio → ${studioUrl}`);
-  console.log(`Vinci Studio (HTML) → ${htmlUrl}`);
+  console.log(`Vinci Studio (HTML, deprecated) → ${htmlUrl}`);
+  if (studioUrl === htmlUrl) {
+    const fix = htmlOnly
+      ? "Drop --html"
+      : "Install Node 20+ and run from a clone with apps/studio";
+    console.warn(
+      `Warning: the HTML Studio at /studio is deprecated and gets no new features. ${fix} to use the TypeScript Studio on :${STUDIO_PORT}.`,
+    );
+  }
   if (lan || host === "0.0.0.0") {
     for (const lanUrl of lanStudioUrls(port)) console.log(`Vinci Studio (LAN) → ${lanUrl}`);
-    if (!htmlOnly) {
+    if (studioUrl === tsUrl) {
       for (const lanUrl of lanStudioUrls(STUDIO_PORT)) {
         console.log(`Vinci Studio (LAN TS) → ${lanUrl.replace(/\/studio$/, "")}`);
       }
     }
-    console.log("Phone/Mac apps load TypeScript Studio on :4311 when it is up; HTML /studio is the fallback. Keys stay on the daemon host.");
+    console.log(`Phone/Mac apps load TypeScript Studio on :${STUDIO_PORT} when it is up; the deprecated HTML /studio is the fallback. Keys stay on the daemon host.`);
   }
   if (noOpen) return;
   openBrowser(studioUrl);
@@ -280,7 +295,12 @@ async function ensureStudioTs(daemonUrl: string, port: string): Promise<boolean>
     cwd: studioDir,
     detached: true,
     stdio: "ignore",
-    env: { ...process.env, VINCI_DAEMON_URL: daemonUrl, PORT: port },
+    env: {
+      ...process.env,
+      VINCI_DAEMON_URL: daemonUrl,
+      VINCI_STUDIO_USE_REWRITE: "1",
+      PORT: port,
+    },
   });
   child.unref();
   for (let i = 0; i < 40; i++) {
