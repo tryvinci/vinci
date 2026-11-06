@@ -4,7 +4,7 @@ WKWebView shell loads the **TypeScript Next.js Studio** from the bundled standal
 
 The Mac app does not store provider keys. Paste keys in Studio; they stay in `~/.vinci/keys` (0600) or the OS keychain on the daemon host.
 
-Alpha packaging: [docs/MAC_ALPHA.md](../../docs/MAC_ALPHA.md).
+Alpha packaging: [docs/internal/MAC_ALPHA.md](../../docs/internal/MAC_ALPHA.md).
 
 ## Run without Xcode
 

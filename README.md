@@ -121,6 +121,17 @@ Packages publish as `@tryvinci/*` on npm and `vinci-core` / `vinci-runtime` / `v
 
 The hosted product, **Vinci Platform**, is a separate codebase. Canonical source tree: `apps/vinci-oss/` in `tryvinci/vinci-monorepo`, split-synced here.
 
+## Related projects
+
+- [Vinci Clips](https://github.com/tryvinci/vinci-clips): only need to cut long videos into shorts? A smaller, self-hosted Node app that transcribes, picks clips, reframes to 9:16 and burns captions. It is a separate AGPL codebase and shares no code with this repo.
+- [Vinci Scroll](https://github.com/tryvinci/vinci-scroll): a swipe-and-react video feed for testing creative with real viewers.
+
+## Vinci for enterprises
+
+This repo is the open core. Companies that run Vinci across teams use Vinci Enterprise, which adds a brand engine (your guidelines and voice in every generation), SSO, review gates and audit, and deployment in your own cloud with our team supporting it. Our creative studio, Vinci Studios, works on the same system.
+
+[tryvinci.com](https://tryvinci.com) · [Talk to us](https://tryvinci.com/meet)
+
 ## Contributing
 
 MIT-licensed, contributions welcome. See `CONTRIBUTING.md`. `vinci-clips` is AGPL and **must not** enter this tree: see `legal/AGPL_CLEAN_ROOM.md`.
