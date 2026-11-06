@@ -10,18 +10,21 @@ from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_SCRIPT_DIR))
-from notice_graph import graph_platform_fingerprint, studio_npm_graph  # noqa: E402
+from notice_graph import (  # noqa: E402
+    NPM_GRAPH,
+    NPM_NOTICES,
+    graph_platform_fingerprint,
+    studio_npm_graph,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = ROOT / "scripts/mac/studio-bundle-npm-notices.json"
-GRAPH = ROOT / "scripts/mac/studio-bundle-npm-graph.json"
 LOCK = ROOT / "package-lock.json"
 LICENSE_BAD = re.compile(r"^(UNKNOWN|unknown|)$")
 
 
 def main() -> int:
-    out = Path(sys.argv[1]) if len(sys.argv) > 1 else OUT
-    graph_path = Path(sys.argv[2]) if len(sys.argv) > 2 else GRAPH
+    out = Path(sys.argv[1]) if len(sys.argv) > 1 else NPM_NOTICES
+    graph_path = Path(sys.argv[2]) if len(sys.argv) > 2 else NPM_GRAPH
     if not LOCK.is_file():
         print(f"missing {LOCK}", file=sys.stderr)
         return 1
@@ -53,6 +56,7 @@ def main() -> int:
         "graph_fingerprint": graph_platform_fingerprint(graph_path),
         "packages": entries,
     }
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"wrote {out} ({len(entries)} packages)")
     return 0

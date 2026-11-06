@@ -57,9 +57,9 @@ export function availabilityRank(status: ModelAvailability): number {
   return 3;
 }
 
-/** Blank "inherit skill default" row stays visible only for those words. */
+/** Blank "Same as the page" row stays visible only for those words. */
 export function inheritQueryMatches(query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
-  return ["inherit", "default", "skill", "inherit skill default"].some((word) => word.includes(q));
+  return ["same", "page", "default", "same as the page"].some((word) => word.includes(q));
 }

@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 import { Instrument_Serif, Inter_Tight } from "next/font/google";
 import "./globals.css";
+import "./theme.css";
+import "./brand.css";
+import "./tailwind.css";
 
 const interTight = Inter_Tight({
   subsets: ["latin"],
@@ -19,7 +22,7 @@ const instrumentSerif = Instrument_Serif({
 
 export const metadata = { title: "Vinci Studio" };
 
-export const viewport = { themeColor: "#f7f4ee" };
+export const viewport = { themeColor: "#0c0e0e" };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

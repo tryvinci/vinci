@@ -3,9 +3,55 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { AdaptFlowCanvas } from "./adapt-flow-canvas";
 import { AdaptsPanel, EMPTY_PRESET_DRAFT, type PresetDraft } from "./adapts-panel";
+import { EffectShell } from "./effect-shell";
+import { OutputSettingsPanel } from "./output-settings-panel";
+import { defaultAppIdForPage, getApp } from "../lib/apps-catalog";
+import { AssetsPage, type LibraryItem as AssetItem } from "./assets-page";
+import { type LibraryResponse } from "./library-types";
+import { daemonHasPath } from "../lib/daemon-routes";
 import type { AdaptPresetRow, AdaptTarget, BatchStatus } from "./adapt-ui-shared";
+import { CanvasAddMenu } from "./canvas-add-menu";
+import { CanvasEmpty } from "./canvas-empty";
+import { CanvasInspector } from "./canvas-inspector";
+import { CanvasNodeCard } from "./canvas-node-card";
+import { ImagePage } from "./image-page";
+import { LibraryPage } from "./library-page";
+import { PromptMention } from "./prompt-mention";
+import { VideoPage } from "./video-page";
 import { ModelCombo, type ComboModel } from "./model-combo";
+import { VinciLogo } from "./ui/logo";
+import { DockIcon, DOCK_ICON } from "./ui/icons";
+import { plainError } from "./ui/plain-text";
 import { availabilityRank, modelAvailability, rankModels } from "../lib/model-search";
+import {
+  classifyModel,
+  connectedProviderIds,
+  modelsFor,
+  modelsForNodeTypes,
+  surfaceForPage,
+  tieBreakAvailability,
+  withoutMockWhenConnected,
+  type Surface,
+} from "../lib/model-capabilities";
+import {
+  addRef,
+  ASPECTS,
+  countPatch,
+  countValue,
+  listedOr,
+  nextRefRole,
+  pickListed,
+  promptValue,
+  REF_LIMIT,
+  refsOf,
+  removeRef,
+  RESOLUTIONS,
+  type RefRole,
+} from "../lib/canvas-node";
+import {
+  autoImportPhotosExports,
+  type ExportedOutputRow,
+} from "../lib/mac-native";
 import {
   EMPTY_GRAPH,
   HOME_VIEW,
@@ -20,48 +66,127 @@ import {
   curve,
   defaultsFor,
   disconnect,
+  commonEdgeStyle,
   duplicateNode,
+  edgesForStyle,
   estimateRun,
   fitView,
   GROUP_COLORS,
   groupBounds,
   groupNodes,
   groupOf,
+  instanceNodes,
   moveNodes,
   nodesInRect,
+  nodeTypeOf,
   freeSpot,
-  outputOf,
   portY,
   portsFor,
   isEdited,
   preview,
   redo,
   removeNodes,
-  searchCatalog,
+  runSet,
+  RUN_SCOPES,
+  runtimeGraph,
+  setEdgeStyle,
   setParams,
   settle,
   shortcutFor,
   startHistory,
   startParams,
-  toWorkflowNodes,
   undo,
   ungroupNodes,
   updateGroup,
   updateNode,
   wheelZoomFactor,
   wirePath,
-  withAncestors,
   withKeys,
   zoomAt,
+  type AddChipId,
+  type AddPick,
+  type EdgeStyle,
   type Graph,
   type GraphEdge,
   type GraphNode,
   type MediaKind,
+  type RunScope,
   type ShortcutId,
   type Viewport,
 } from "../lib/canvas-graph";
+import { EdgeTools, HistoryPanel, MinimapZoom, PageBar, SelectionBar } from "./canvas-chrome";
+import {
+  PROJECT_STORAGE_KEY,
+  activePage,
+  addBoardPage,
+  emptyProject,
+  MINIMAP_H,
+  MINIMAP_W,
+  minimapWorld,
+  readProjectFile,
+  removeBoardPage,
+  renameBoardPage,
+  viewportFromMinimap,
+  writeActive,
+  type BoardComment,
+  type ProjectFile,
+} from "../lib/canvas-board";
+import {
+  AVATAR_MENU,
+  FLYOUT_FEATURES,
+  RAIL_FOOTER,
+  RAIL_GROUPS,
+  commandSearch,
+  editTools,
+  filterTools,
+  isCommandHotkey,
+  moveCommandIndex,
+  parsePinned,
+  pickCommandHit,
+  railItemOn,
+  serializePinned,
+  tabLabel,
+  togglePin,
+  visibleCategories,
+  PIN_STORAGE_KEY,
+  type CommandHit,
+  type CommandModel,
+  type FlyoutKind,
+  type PageId,
+} from "../lib/studio-shell";
+import {
+  LIBRARY_STORAGE_KEY,
+  asCastRow,
+  asLibraryItem,
+  createLibraryItem,
+  mentionRole,
+  mentionableItems,
+  mentionedItems,
+  parseLibraryStore,
+  providerMentionInputs,
+  serializeLibraryStore,
+  upsertLibraryItem,
+  type LibraryItem,
+  type LibraryTab,
+} from "../lib/library";
 
 const API = "/vinci-api";
+
+/** Visible label for a command row kind. The raw `hit.kind` stays for routing and scoring. */
+function kindWord(kind: CommandHit["kind"]): string {
+  if (kind === "tool") return "Tool";
+  if (kind === "asset") return "File";
+  if (kind === "project") return "Project";
+  return "Model";
+}
+
+/** Hide internal asset URIs and hashes in Find results. */
+function findHitUri(uri?: string): string {
+  const value = (uri || "").trim();
+  if (!value) return "File";
+  if (/vinci:\/\//i.test(value) || /\b[0-9a-f]{32,}\b/i.test(value)) return "File";
+  return value;
+}
 const CAMERAS = ["locked-off", "handheld", "tracking", "crane", "aerial"];
 const LENSES = ["24mm", "35mm", "50mm", "85mm", "anamorphic"];
 const LOOKS = ["commercial", "documentary", "noir", "fashion", "product"];
@@ -71,7 +196,7 @@ const MOTIONS = ["static", "pan", "orbit", "push-in", "pull-out"];
 const APERTURES = ["f/1.4", "f/2.8", "f/5.6", "f/11"];
 const GENRES = ["action", "drama", "documentary", "music-video"];
 const SCENES = ["general", "selfie", "podcast", "car-talking"];
-const ELEMENT_KINDS = ["character", "location", "prop"] as const;
+const ELEMENT_KINDS = ["character", "location", "element", "style"] as const;
 const MAG_STYLES = ["standard", "soft_portraits", "hard_portraits", "art_n_illustration", "films_n_photography", "3d_renders"];
 const MAG_ENGINES = ["automatic", "magnific_illusio", "magnific_sharpy", "magnific_sparkle"];
 const CATS = ["all", "image", "motion", "upscale", "cinema", "ads", "clips", "audio"];
@@ -81,22 +206,22 @@ const ONBOARD_KEY = "vinci-onboard-v1";
 const ONBOARD_STEPS = [
   {
     kicker: "1 / 3",
-    title: "Intelligent generative media",
-    copy: "Your Brand's Superagency — stills, video, and campaigns in one Studio. Connect a provider when you want live models.",
+    title: "Make images and video here",
+    copy: "Stills, video, and campaigns in one place. Connect a provider when you want live models.",
     next: "Continue",
     alt: "",
   },
   {
     kicker: "2 / 3",
     title: "Connect when you need live models",
-    copy: "Work locally now. Paste a Higgsfield or Magnific key under Connect, or add a custom MCP URL.",
+    copy: "Work on this computer now. When you want live models, open Connect and paste a key.",
     next: "Start generating",
     alt: "Connect a key",
   },
   {
     kicker: "3 / 3",
     title: "Make a still",
-    copy: "Open Image, pick a model, then Generate. Estimates appear on the button.",
+    copy: "Open Image, pick a model, then Generate. The price is on the button.",
     next: "Open Image",
     alt: "",
   },
@@ -203,21 +328,35 @@ type Model = {
   provider: string;
   capabilities: string[];
   available?: boolean;
-  pricing?: { amount?: number };
-  constraints?: { aspect_ratios?: string[]; max_duration?: number; resolutions?: string[] };
+  pricing?: { amount?: number; unit?: string };
+  constraints?: { aspect_ratios?: string[]; max_duration?: number; resolutions?: string[]; max_input_images?: number | null };
+  quality_tier?: string;
 };
 type Skill = { id: string; tags?: string[]; workflow?: { nodes?: GraphNode[]; edges?: GraphEdge[] } };
 type Run = {
   id: string;
   state?: string;
+  skill?: string;
   outputs?: string[];
+  created_at?: string;
+  inputs?: {
+    prompt?: unknown;
+    model_id?: unknown;
+    duration?: unknown;
+    aspect_ratio?: unknown;
+    resolution?: unknown;
+    seed?: unknown;
+    steps?: unknown;
+  };
+  exported_outputs?: ExportedOutputRow[];
   estimate?: { total?: number };
   nodes?: Record<string, { output?: string; outputs?: string[]; job_id?: string }>;
   error?: unknown;
+  workflow?: { nodes?: { model_id?: string; capability?: string }[] };
 };
-type Asset = { id: string; mime?: string; kind?: string; uri?: string };
+type Asset = { id: string; mime?: string; kind?: string; uri?: string; width?: number; height?: number };
 type PlanStep = { id: string; title: string; skill: string; blurb?: string; note?: string };
-type CastRow = { name: string; assetId: string; kind?: string };
+type CastRow = { id?: string; name: string; assetId: string; kind?: string; refs?: string[]; soulId?: string };
 type ProviderRow = {
   available?: boolean;
   configured?: boolean;
@@ -237,23 +376,6 @@ type Doctor = {
   providers?: Record<string, ProviderRow>;
   budget?: { monthly_cap_usd?: number };
 };
-type PageId =
-  | "explore"
-  | "image"
-  | "adapts"
-  | "video"
-  | "speak"
-  | "upscale"
-  | "canvas"
-  | "library"
-  | "agent"
-  | "space"
-  | "collab"
-  | "skills"
-  | "find"
-  | "cost"
-  | "keys";
-
 type AdaptEstimateBody = {
   total: number;
   note?: string;
@@ -448,15 +570,39 @@ function panelFor(model: Model | undefined, page: string) {
   };
 }
 
-function modelIdForNode(node: GraphNode, fallbackId: string, catalog: Model[]): string {
+/**
+ * modelsFor order, then hide mock when a real provider is connected,
+ * then availabilityRank only inside an equal modelsFor rank.
+ */
+function rankSurface<T extends Model>(
+  surface: Surface,
+  rows: readonly T[],
+  connectedProviders: readonly string[],
+  doctor: { providers?: Record<string, { configured?: boolean; available?: boolean } | undefined>; live_spend?: boolean },
+): T[] {
+  const listed = withoutMockWhenConnected(rows, connectedProviders);
+  return tieBreakAvailability(surface, listed, (row) =>
+    availabilityRank(modelAvailability(row, doctor.providers?.[row.provider], !!doctor.live_spend)),
+  );
+}
+
+function modelIdForNode(
+  node: GraphNode,
+  fallbackId: string,
+  catalog: Model[],
+  connected?: readonly string[],
+): string {
   const cap = node.capability;
+  const providers =
+    connected && connected.length
+      ? connected
+      : [...new Set(catalog.map((row) => row.provider).filter(Boolean))];
+  const matched = cap ? modelsFor("canvas", providers, catalog, { capability: cap }) : catalog;
+  const rows = withoutMockWhenConnected(matched, providers);
   for (const id of [node.model_id, fallbackId]) {
-    if (!id) continue;
-    const row = catalog.find((m) => m.id === id);
-    if (row && (!cap || row.capabilities.includes(cap))) return id;
+    if (id && rows.some((row) => row.id === id)) return id;
   }
-  const match = catalog.find((m) => !cap || m.capabilities.includes(cap));
-  return match?.id || fallbackId;
+  return rows[0]?.id || fallbackId;
 }
 
 function graphFromSkill(
@@ -475,8 +621,8 @@ function graphFromSkill(
     nodes: (wf.nodes || []).map((n, i) => ({
       ...n,
       params: stampOptical(n.params, camera, lens, look, motion, aperture, genre, lighting, palette),
-      x: 40 + (i % 3) * 230,
-      y: 36 + Math.floor(i / 3) * 168,
+      x: 40 + (i % 3) * (NODE_W + 40),
+      y: 36 + Math.floor(i / 3) * (NODE_H + 40),
     })),
     edges: wf.edges || [],
   };
@@ -492,9 +638,21 @@ function RailIcon({ d, title }: { d: string; title: string }) {
 }
 
 export function StudioClient() {
-  const [page, setPage] = useState<PageId>("explore");
+  const [page, setPage] = useState<PageId>("home");
+  const [effectAppId, setEffectAppId] = useState(() => defaultAppIdForPage("speak"));
   const [navOpen, setNavOpen] = useState(false);
+  const [pinnedIds, setPinnedIds] = useState<string[]>([]);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [toolsQuery, setToolsQuery] = useState("");
+  const [toolsCategory, setToolsCategory] = useState("all");
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [commandQuery, setCommandQuery] = useState("");
+  const [commandIndex, setCommandIndex] = useState(0);
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const [focusAssetId, setFocusAssetId] = useState<string | null>(null);
   const [view, setView] = useState<"canvas" | "timeline">("canvas");
+  const [showGrid, setShowGrid] = useState(true);
+  const [dockMenu, setDockMenu] = useState<null | "zoom" | "more">(null);
   const [category, setCategory] = useState("all");
   const [models, setModels] = useState<Model[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -532,11 +690,19 @@ export function StudioClient() {
   }, []);
   const [selectedEdge, setSelectedEdge] = useState<GraphEdge | null>(null);
   const [viewport, setViewport] = useState<Viewport>(HOME_VIEW);
-  const [canvasTool, setCanvasTool] = useState<"select" | "pan">("select");
+  const [canvasTool, setCanvasTool] = useState<"select" | "pan" | "note" | "comment">("select");
+  const [runScope, setRunScope] = useState<RunScope>("upstream");
+  const [project, setProject] = useState<ProjectFile>(() => emptyProject());
+  const [comments, setComments] = useState<BoardComment[]>([]);
+  const [editingComment, setEditingComment] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [menuEpoch, setMenuEpoch] = useState(0);
+  const [projectReady, setProjectReady] = useState(false);
   const [panning, setPanning] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   /** Add menu at board coords; `from` set when opened from a node's output port. */
   const [addMenu, setAddMenu] = useState<{ x: number; y: number; from?: string; kind?: MediaKind | null } | null>(null);
+  const [addChip, setAddChip] = useState<AddChipId | null>(null);
   const [addQuery, setAddQuery] = useState("");
   const [addIndex, setAddIndex] = useState(0);
   /** Graph before the current prompt edit; the whole edit lands as one undo step on blur. */
@@ -549,6 +715,8 @@ export function StudioClient() {
   const boardRef = useRef<HTMLDivElement>(null);
   const spaceRef = useRef(false);
   const panRef = useRef<{ x: number; y: number; vx: number; vy: number } | null>(null);
+  /** Pointer that started the current pan, marquee, or drag. Other pointers must not end it. */
+  const gesturePointerRef = useRef<number | null>(null);
   const viewportRef = useRef(viewport);
   viewportRef.current = viewport;
   /** A run-affecting canvas edit since load; Generate then sends the canvas instead of the template skill. */
@@ -565,6 +733,11 @@ export function StudioClient() {
   const [renamingGroup, setRenamingGroup] = useState<string | null>(null);
   /** Last run state per canvas node, shown on its card. */
   const [nodeRuns, setNodeRuns] = useState<Record<string, { state: "running" | "done" | "cached" | "error"; error?: string }>>({});
+  /** Gear on a Magnific card opens the right inspector for that node. */
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const nodeRefInput = useRef<HTMLInputElement>(null);
+  const nodeRefRole = useRef<RefRole>("style");
+  const nodeRefTarget = useRef<string | null>(null);
   /** Bumped per loaded graph, so a run that finishes after a reset cannot badge the new graph's nodes. */
   const graphEpochRef = useRef(0);
   /** Loading a template, skill, or collab snapshot starts a fresh history and drops stale selection or drags. */
@@ -574,9 +747,18 @@ export function StudioClient() {
     setSelection([]);
     setSelectedEdge(null);
     setNodeRuns({}); // states are keyed by node id; a new graph may reuse ids
+    setInspectorOpen(false);
     graphEpochRef.current += 1;
     dragRef.current = null;
+    if (!panRef.current && !marqueeRef.current) gesturePointerRef.current = null;
   }, []);
+  const applyProject = useCallback((file: ProjectFile) => {
+    const page = activePage(file);
+    setProject(page.id === file.active ? file : { ...file, active: page.id });
+    resetGraph(page.graph);
+    setComments(page.comments || []);
+    setViewport(page.viewport || HOME_VIEW);
+  }, [resetGraph]);
   const [runIds, setRunIds] = useState<string[]>([]);
   const [log, setLog] = useState("");
   const [busy, setBusy] = useState(false);
@@ -587,7 +769,7 @@ export function StudioClient() {
   const [tlMedia, setTlMedia] = useState<{ src: string; video: boolean } | null>(null);
   const [keyDraft, setKeyDraft] = useState<Record<string, string>>({});
   const [connectId, setConnectId] = useState("");
-  const [libTab, setLibTab] = useState<"all" | "elements" | "shots">("all");
+  const [libTab, setLibTab] = useState<LibraryTab>("characters");
   const [brief, setBrief] = useState("");
   const [plan, setPlan] = useState<PlanStep[]>([]);
   const [yaw, setYaw] = useState(18);
@@ -602,11 +784,28 @@ export function StudioClient() {
   const [pref, setPref] = useState("cheapest");
   const [maxCost, setMaxCost] = useState("");
   const [monthlyCap, setMonthlyCap] = useState("");
+  const [outputDestKind, setOutputDestKind] = useState("none");
+  const [outputLocalDir, setOutputLocalDir] = useState("");
+  const [outputPhotosAlbum, setOutputPhotosAlbum] = useState("Vinci");
+  const [outputR2Prefix, setOutputR2Prefix] = useState("vinci/outputs/");
+  const [outputR2Configured, setOutputR2Configured] = useState(false);
   const [resolution, setResolution] = useState("");
+  const [quality, setQuality] = useState("");
+  const [batchCount, setBatchCount] = useState(1);
   const [firstFrameId, setFirstFrameId] = useState<string | null>(null);
   const [lastFrameId, setLastFrameId] = useState<string | null>(null);
+  const [extendMode, setExtendMode] = useState(false);
+  const [extendClipId, setExtendClipId] = useState<string | null>(null);
+  const [audioId, setAudioId] = useState<string | null>(null);
+  const [videoExtraIds, setVideoExtraIds] = useState<string[]>([]);
+  const [audioOn, setAudioOn] = useState(false);
+  const [seed, setSeed] = useState("");
+  const [steps, setSteps] = useState("");
   const [cast, setCast] = useState<CastRow[]>([]);
   const [castName, setCastName] = useState("");
+  const libraryItems = useMemo(() => cast.map(asLibraryItem), [cast]);
+  const mentionItems = useMemo(() => mentionableItems(libraryItems), [libraryItems]);
+  const [libraryReady, setLibraryReady] = useState(false);
   const [linkFrom, setLinkFrom] = useState<string | null>(null);
   /** Node or frame drag: pointer start (screen), node starts (graph units), selection on a plain click. */
   const dragRef = useRef<{
@@ -644,35 +843,33 @@ export function StudioClient() {
   const [presetFormOpen, setPresetFormOpen] = useState(false);
   const [presetDraft, setPresetDraft] = useState<PresetDraft>(EMPTY_PRESET_DRAFT);
 
+  const connected = useMemo(() => connectedProviderIds(doctor.providers), [doctor]);
+  const connectedKey = connected.join("\0");
+  /** True after the user picks a model. Auto-defaults stay false so a new key can replace mock. */
+  const modelTouched = useRef(false);
+  const seenConnected = useRef(connectedKey);
+
   const composeModels = useMemo(() => {
-    const list = models.filter((m) => {
-      const caps = m.capabilities || [];
-      if (page === "image") return caps.includes("t2i");
-      if (page === "video") return caps.includes("t2v") || caps.includes("i2v");
-      if (page === "upscale") return caps.includes("upscale");
-      if (page === "speak") return caps.includes("tts") || caps.includes("lipsync") || caps.includes("i2v");
-      return caps.includes("t2i") || caps.includes("t2v") || caps.includes("i2i");
-    });
-    const rows = (list.length ? list : models).filter((m) => m.provider !== "mock").slice();
-    rows.sort((a, b) => {
-      if (page === "upscale") {
-        const stillA = (a.capabilities || []).includes("i2i") ? 0 : 1;
-        const stillB = (b.capabilities || []).includes("i2i") ? 0 : 1;
-        if (stillA !== stillB) return stillA - stillB;
+    const surface = surfaceForPage(page);
+    if (page === "image") {
+      const seen = new Set<string>();
+      const rows: Model[] = [];
+      for (const part of ["image", "image_edit"] as const) {
+        for (const row of modelsFor(part, connected, models)) {
+          if (seen.has(row.id)) continue;
+          seen.add(row.id);
+          rows.push(row);
+        }
       }
-      const live = !!doctor.live_spend;
-      const rank =
-        availabilityRank(modelAvailability(a, doctor.providers?.[a.provider], live)) -
-        availabilityRank(modelAvailability(b, doctor.providers?.[b.provider], live));
-      if (rank) return rank;
-      return (a.display_name || "").localeCompare(b.display_name || "");
-    });
-    return rows;
-  }, [models, page, doctor]);
+      return rankSurface("image", rows, connected, doctor);
+    }
+    return rankSurface(surface, modelsFor(surface, connected, models), connected, doctor);
+  }, [models, page, connected, doctor]);
+
 
   function statusSuffix(row: Model): string {
     const status = modelAvailability(row, doctor.providers?.[row.provider], !!doctor.live_spend);
-    if (status === "spend_off") return " · spend off";
+    if (status === "spend_off") return " · paid runs off";
     if (status === "not_enabled") return " · not enabled";
     if (status === "needs_key") return " · needs key";
     return "";
@@ -688,19 +885,39 @@ export function StudioClient() {
   }, [page]);
 
   useEffect(() => {
+    if (page === "speak" || page === "upscale" || page === "adapts") {
+      setEffectAppId(defaultAppIdForPage(page));
+    }
+  }, [page]);
+
+  useEffect(() => {
+    if (seenConnected.current !== connectedKey) {
+      const held = models.find((m) => m.id === modelId);
+      if (!held || held.provider === "mock") modelTouched.current = false;
+      seenConnected.current = connectedKey;
+    }
     if (!composeModels.length) return;
     const current = composeModels.find((m) => m.id === modelId);
-    if (page === "upscale") {
-      const still = composeModels.find((m) => (m.capabilities || []).includes("i2i"));
-      if (still && (!current || !(current.capabilities || []).includes("i2i"))) {
+    if (
+      page === "upscale" &&
+      current &&
+      !modelTouched.current &&
+      !classifyModel(current).functions.includes("image_upscale")
+    ) {
+      const still = composeModels.find((m) => classifyModel(m).functions.includes("image_upscale"));
+      if (still && still.id !== modelId) {
         setModelId(still.id);
         return;
       }
     }
-    if (current) return;
-    const next = composeModels[0];
-    if (next) setModelId(next.id);
-  }, [composeModels, modelId, page]);
+    const hasLive = composeModels.some((m) => m.provider !== "mock");
+    if (current && (modelTouched.current || current.provider !== "mock" || !hasLive)) return;
+    const next = composeModels.find((m) => m.provider !== "mock") || composeModels[0];
+    if (next && next.id !== modelId) {
+      modelTouched.current = false;
+      setModelId(next.id);
+    }
+  }, [composeModels, modelId, page, connectedKey, models]);
 
   const selected = composeModels.find((m) => m.id === modelId) || composeModels[0];
   const mode = panelFor(selected, page);
@@ -715,6 +932,22 @@ export function StudioClient() {
     setRuns(runBody.runs || []);
     setAssets(assetBody.assets || []);
   }, []);
+
+  const [toolFeed, setToolFeed] = useState<AssetItem[]>([]);
+  const loadToolFeed = useCallback(async (tool?: "image" | "video") => {
+    const next = tool || (page === "video" ? "video" : page === "image" ? "image" : null);
+    if (!next) return;
+    try {
+      if (!(await daemonHasPath(API, "/library"))) {
+        setToolFeed([]);
+        return;
+      }
+      const body = await api<LibraryResponse>(`/library?tool=${next}&limit=80`);
+      setToolFeed(body.items || []);
+    } catch {
+      setToolFeed([]);
+    }
+  }, [page]);
 
   const adaptPresetChoices = useMemo(() => {
     const rows = adaptPresets.slice();
@@ -740,14 +973,14 @@ export function StudioClient() {
       const asset = (await res.json()) as { id: string };
       setAdaptSourceId(asset.id);
       await loadMedia();
-      setLog(`Source uploaded · vinci://assets/${asset.id}`);
+      setLog("Source added.");
     },
     [loadMedia],
   );
 
   const estimateAdapt = useCallback(async () => {
     if (!adaptSourceId) {
-      setLog("Upload a source creative first.");
+      setLog("Upload a still first.");
       return;
     }
     const body = await api<AdaptEstimateBody>("/adapt/estimate", {
@@ -761,17 +994,17 @@ export function StudioClient() {
     });
     setAdaptEstimateUsd(body.total);
     setAdaptNote(body.note || "");
-    setLog(`Adapt estimate: ${money(body.total)} for ${adaptTargets.length} target(s).`);
+    setLog(`Estimate ${money(body.total)} for ${adaptTargets.length} sizes.`);
   }, [adaptLayout, adaptSourceId, adaptTargets]);
 
   const runAdapt = useCallback(async () => {
     if (!adaptSourceId) {
-      setLog("Upload a source creative first.");
+      setLog("Upload a still first.");
       return;
     }
     const presetIds = adaptTargets.map((row) => row.preset_id).filter((id): id is string => Boolean(id));
     if (!presetIds.length) {
-      setLog("Pick at least one preset.");
+      setLog("Pick at least one size.");
       return;
     }
     setBusy(true);
@@ -795,11 +1028,11 @@ export function StudioClient() {
       const failed = status.items.filter((item) => item.status === "failed").length;
       setLog(
         failed
-          ? `Batch ${created.batch_id}: ${failed} item(s) failed.`
-          : `Adapts complete: ${outputs.length} outputs.`,
+          ? `${failed} sizes failed. Check the results.`
+          : `Done. ${outputs.length} sizes ready.`,
       );
     } catch (err) {
-      setLog(err instanceof Error ? err.message : String(err));
+      setLog(plainError(err));
     } finally {
       setBusy(false);
     }
@@ -835,9 +1068,9 @@ export function StudioClient() {
       setPresetDraft(EMPTY_PRESET_DRAFT);
       setPresetFormOpen(false);
       await reloadPresets();
-      setLog("Custom preset saved.");
+      setLog("Preset saved.");
     } catch (err) {
-      setLog(err instanceof Error ? err.message : String(err));
+      setLog(plainError(err));
     }
   }, [presetDraft, reloadPresets]);
 
@@ -846,9 +1079,9 @@ export function StudioClient() {
       try {
         await api(`/presets/${id}`, { method: "DELETE" });
         await reloadPresets();
-        setLog(`Deleted preset ${id}.`);
+        setLog("Preset deleted.");
       } catch (err) {
-        setLog(err instanceof Error ? err.message : String(err));
+        setLog(plainError(err));
       }
     },
     [reloadPresets],
@@ -861,25 +1094,38 @@ export function StudioClient() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ demo: true }),
       });
-      const [doc, modelBody, skillBody, tplBody, presetBody] = await Promise.all([
+      const [doc, modelBody, skillBody, tplBody, presetBody, settingsBody] = await Promise.all([
         api<Doctor>("/doctor"),
         api<{ models: Model[] }>("/models"),
         api<{ skills: Skill[] }>("/skills"),
         api<{ templates: Template[] }>("/templates"),
         api<{ presets: AdaptPresetRow[] }>("/presets"),
+        api<{
+          output_destination: {
+            kind: string;
+            local_dir?: string;
+            photos_album?: string;
+            r2_prefix?: string;
+            r2_configured?: boolean;
+          };
+        }>("/settings"),
       ]);
       setDoctor(doc);
       setPref(doc.preference || "cheapest");
       setMonthlyCap(doc.budget?.monthly_cap_usd != null ? String(doc.budget.monthly_cap_usd) : "");
-      setModels((modelBody.models || []).filter((m) => m.provider !== "mock"));
+      const od = settingsBody.output_destination || { kind: "none" };
+      setOutputDestKind(od.kind || "none");
+      setOutputLocalDir(od.local_dir || "");
+      setOutputPhotosAlbum(od.photos_album || "Vinci");
+      setOutputR2Prefix(od.r2_prefix || "vinci/outputs/");
+      setOutputR2Configured(Boolean(od.r2_configured));
+      setModels(modelBody.models || []);
       setSkills(skillBody.skills || []);
       setTemplates(tplBody.templates || []);
       setAdaptPresets(presetBody.presets || []);
-      const first = (modelBody.models || []).find((m) => m.provider !== "mock");
-      setModelId((prev) => prev || first?.id || "");
       await loadMedia();
     } catch (err) {
-      setLog(err instanceof Error ? err.message : String(err));
+      setLog(plainError(err));
     }
   }, [loadMedia]);
 
@@ -896,8 +1142,34 @@ export function StudioClient() {
   }, []);
 
   useEffect(() => {
+    try {
+      const stored = parseLibraryStore(localStorage.getItem(LIBRARY_STORAGE_KEY));
+      if (stored.length) {
+        setCast(stored.map(asCastRow));
+        console.info("[library] loaded", { count: stored.length });
+      }
+    } catch {
+      /* ignore */
+    }
+    setLibraryReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!libraryReady) return;
+    try {
+      localStorage.setItem(LIBRARY_STORAGE_KEY, serializeLibraryStore(libraryItems));
+    } catch {
+      /* ignore */
+    }
+  }, [libraryItems, libraryReady]);
+
+  useEffect(() => {
     setModelsOpen(false);
   }, [page]);
+
+  useEffect(() => {
+    if (page === "image" || page === "video") void loadToolFeed(page);
+  }, [loadToolFeed, page]);
 
   useEffect(() => {
     if (page !== "cost") return;
@@ -910,39 +1182,16 @@ export function StudioClient() {
     if (page !== "collab") return;
     void api<{ sessions: { id: string; name: string }[] }>("/collab/sessions")
       .then((body) => setSessions(body.sessions || []))
-      .catch((err) => setLog(String(err)));
+      .catch((err) => setLog(plainError(err)));
   }, [page]);
 
   useEffect(() => {
-    function move(ev: PointerEvent) {
-      const pan = panRef.current;
-      if (pan) {
-        setViewport((v) => ({ ...v, x: pan.vx + ev.clientX - pan.x, y: pan.vy + ev.clientY - pan.y }));
-        return;
-      }
-      const box = marqueeRef.current;
-      const rect = boardRef.current?.getBoundingClientRect();
-      if (box && rect) {
-        const px = ev.clientX - rect.left;
-        const py = ev.clientY - rect.top;
-        setMarquee({ x: Math.min(box.x, px), y: Math.min(box.y, py), w: Math.abs(px - box.x), h: Math.abs(py - box.y) });
-        return;
-      }
-      const drag = dragRef.current;
-      if (!drag) return;
-      if (!drag.moved && Math.hypot(ev.clientX - drag.x, ev.clientY - drag.y) < 4) return;
-      if (!drag.moved) {
-        // What moves becomes the selection, so Delete acts on the node just dragged.
-        setSelection(Object.keys(drag.starts));
-        setSelectedEdge(null);
-      }
-      drag.moved = true;
-      const zoom = viewportRef.current.zoom;
-      const dx = (ev.clientX - drag.x) / zoom;
-      const dy = (ev.clientY - drag.y) / zoom;
-      setGraphHistory((h) => preview(h, moveNodes(h.present, drag.starts, dx, dy)));
+    function fromGesture(ev: PointerEvent) {
+      const id = gesturePointerRef.current;
+      return id === null || ev.pointerId === id;
     }
-    function up() {
+    function end() {
+      gesturePointerRef.current = null;
       if (panRef.current) {
         panRef.current = null;
         setPanning(false);
@@ -973,11 +1222,50 @@ export function StudioClient() {
       }
       dragRef.current = null;
     }
+    function move(ev: PointerEvent) {
+      if (!fromGesture(ev)) return;
+      // No button held: the pointerup was missed (released outside the window), so end the gesture.
+      if (ev.buttons === 0 && (panRef.current || marqueeRef.current || dragRef.current)) return end();
+      const pan = panRef.current;
+      if (pan) {
+        setViewport((v) => ({ ...v, x: pan.vx + ev.clientX - pan.x, y: pan.vy + ev.clientY - pan.y }));
+        return;
+      }
+      const box = marqueeRef.current;
+      const rect = boardRef.current?.getBoundingClientRect();
+      if (box && rect) {
+        const px = ev.clientX - rect.left;
+        const py = ev.clientY - rect.top;
+        setMarquee({ x: Math.min(box.x, px), y: Math.min(box.y, py), w: Math.abs(px - box.x), h: Math.abs(py - box.y) });
+        return;
+      }
+      const drag = dragRef.current;
+      if (!drag) return;
+      if (!drag.moved && Math.hypot(ev.clientX - drag.x, ev.clientY - drag.y) < 4) return;
+      if (!drag.moved) {
+        // What moves becomes the selection, so Delete acts on the node just dragged.
+        setSelection(Object.keys(drag.starts));
+        setSelectedEdge(null);
+      }
+      drag.moved = true;
+      const zoom = viewportRef.current.zoom;
+      const dx = (ev.clientX - drag.x) / zoom;
+      const dy = (ev.clientY - drag.y) / zoom;
+      setGraphHistory((h) => preview(h, moveNodes(h.present, drag.starts, dx, dy)));
+    }
+    function up(ev: PointerEvent) {
+      if (!fromGesture(ev)) return;
+      end();
+    }
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+    window.addEventListener("blur", end);
     return () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      window.removeEventListener("blur", end);
     };
   }, []);
 
@@ -986,6 +1274,11 @@ export function StudioClient() {
     if (model.provider === "mock") return true;
     return !!model.available && !!doctor.live_spend;
   };
+  const modelRank = useCallback(
+    (row: { provider?: string }) =>
+      availabilityRank(modelAvailability(row as Model, doctor.providers?.[row.provider || ""], !!doctor.live_spend)),
+    [doctor],
+  );
 
   const ratios = selected?.constraints?.aspect_ratios || [];
   const durs = useMemo(() => {
@@ -1002,16 +1295,8 @@ export function StudioClient() {
   }, [runIds, runs]);
   const lastRun = projectRuns.at(-1);
   const lastDigest = lastRun?.outputs?.[0];
-  const lastAsset = assets.find((a) => a.id === lastDigest);
-  const hasComposeMedia = Boolean(
-    !stageReset && (lastDigest || ((page === "upscale" || page === "speak") && uploadId)),
-  );
-  const wantsInsp =
-    page === "canvas" ||
-    page === "image" ||
-    page === "video" ||
-    page === "speak" ||
-    (page === "upscale" && (hasComposeMedia || busy));
+  const canvasSelected = page === "canvas" ? graph.nodes.find((n) => n.id === selectedNode) : undefined;
+  const wantsInsp = page === "canvas" && inspectorOpen && Boolean(canvasSelected);
   const lastStill = useMemo(() => {
     for (const run of [...projectRuns].reverse()) {
       for (const id of [...(run.outputs || [])].reverse()) {
@@ -1051,11 +1336,24 @@ export function StudioClient() {
     return "@tryvinci/image-generate";
   }
 
+  function shownResolution(): string {
+    const valid = selected?.constraints?.resolutions ?? [];
+    return valid.includes(resolution) ? resolution : valid[0] || "";
+  }
+
+  function modelListsResolution(modelId: string | undefined, value: unknown): boolean {
+    const allowed = models.find((m) => m.id === modelId)?.constraints?.resolutions;
+    return Boolean(allowed?.includes(String(value ?? "")));
+  }
+
   function shotInputs(base: Record<string, unknown>) {
     const inputs = { ...base };
     if (aspectRatio && ratios.length) inputs.aspect_ratio = aspectRatio;
     if (duration && mode.showMotion) inputs.duration = Number(duration);
-    if (resolution && (selected?.constraints?.resolutions || []).length) inputs.resolution = resolution;
+    // Send the resolution the pills show. A value from another model is not on this list.
+    const shown = shownResolution();
+    if (shown) inputs.resolution = shown;
+    if (page === "image" && quality) inputs.quality = quality;
     if (scale && mode.showScale) inputs.scale = scale;
     if (mode.showOptical) {
       if (camera) inputs.camera = camera;
@@ -1076,33 +1374,78 @@ export function StudioClient() {
       inputs.optimized_for = optimizedFor;
       inputs.engine = engine;
     }
-    if (mode.showFrames && firstFrameId) {
+    if ((mode.showFrames || page === "video") && firstFrameId) {
       inputs.first_frame_url = firstFrameId;
       inputs.start_image_url = firstFrameId;
       inputs.image = firstFrameId;
+      inputs.media = firstFrameId;
     }
-    if (mode.showFrames && lastFrameId) {
+    if ((mode.showFrames || page === "video") && lastFrameId) {
       inputs.last_frame_url = lastFrameId;
       inputs.tail_image_url = lastFrameId;
     }
-    if (mode.showStill && uploadId) {
+    if (page === "video") {
+      if (seed.trim()) inputs.seed = Number(seed) || seed;
+      if (steps.trim()) inputs.steps = Number(steps);
+      if (audioId) inputs.audio = audioId;
+      if (extendClipId) inputs.video = extendClipId;
+    }
+    if (mode.showStill && uploadId && page !== "video") {
       inputs.media = uploadId;
       if (!inputs.image) inputs.image = uploadId;
     }
-    if (mode.showCast || mode.showStill) {
+    if (mode.showCast || mode.showStill || (page === "video" && videoExtraIds.length)) {
       const urls: string[] = [];
       if (typeof inputs.image === "string" && inputs.image) urls.push(inputs.image);
-      if (mode.showCast) {
-        for (const row of cast) {
-          if (row.assetId && !urls.includes(row.assetId)) urls.push(row.assetId);
+      if (page === "video") {
+        for (const id of videoExtraIds) {
+          if (id && !urls.includes(id)) urls.push(id);
         }
       }
-      if (urls.length) {
-        inputs.image_urls = urls.slice(0, 8);
-        if (!inputs.image) inputs.image = urls[0];
+      const mapped = providerMentionInputs(String(inputs.prompt || prompt), libraryItems, selected, urls);
+      if (mapped.image_urls.length) {
+        inputs.image_urls = mapped.image_urls;
+        if (!inputs.image) inputs.image = mapped.image_urls[0];
       }
+      if (mapped.soul_id) inputs.soul_id = mapped.soul_id;
     }
     return inputs;
+  }
+
+  /**
+   * Attach @mentioned Library refs onto each generate node before /runs.
+   *
+   * Typed `@Name` (no popover click) still sends that character's stills.
+   */
+  function withMentionRefs(g: Graph, model?: Model): Graph {
+    let next = g;
+    for (const n of g.nodes) {
+      const text = promptValue(n.params) || prompt;
+      const chosen = mentionedItems(text, libraryItems);
+      if (!chosen.length) continue;
+      let params = n.params || {};
+      for (const item of chosen) {
+        for (const id of item.refs) params = addRef(params, mentionRole(item.kind), id);
+      }
+      const mapped = providerMentionInputs(
+        text,
+        libraryItems,
+        model,
+        refsOf(params).map((row) => row.assetId),
+      );
+      if (mapped.soul_id) params = { ...params, soul_id: mapped.soul_id };
+      next = setParams(next, n.id, params);
+    }
+    return next;
+  }
+
+  function applyLibraryMention(nodeId: string, item: LibraryItem) {
+    setGraph((g) => {
+      let params = g.nodes.find((n) => n.id === nodeId)?.params || {};
+      for (const id of item.refs) params = addRef(params, mentionRole(item.kind), id);
+      console.info("[library] canvas mention", { nodeId, name: item.name, refs: item.refs.length });
+      return setParams(g, nodeId, params);
+    });
   }
 
   function stampSelected(patch: Record<string, unknown>) {
@@ -1158,6 +1501,13 @@ export function StudioClient() {
         setSheetOpen(false);
         setSelectedNode(null);
         setSelectedEdge(null);
+        setInspectorOpen(false);
+        setCanvasTool("select");
+        setHistoryOpen(false);
+        setMenuEpoch((n) => n + 1);
+        return;
+      case "comment":
+        setCanvasTool((tool) => (tool === "comment" ? "select" : "comment"));
         return;
       case "duplicate": {
         if (!selection.length) return;
@@ -1167,7 +1517,7 @@ export function StudioClient() {
         });
         setGraph((g) => copies.reduce((acc, [id, copyId]) => duplicateNode(acc, id, copyId), g));
         setSelection(copies.map(([, copyId]) => copyId));
-        setLog(copies.length === 1 ? `Duplicated ${copies[0][0]} as ${copies[0][1]}.` : `Duplicated ${copies.length} nodes.`);
+        setLog(copies.length === 1 ? "Duplicated." : `Duplicated ${copies.length} steps.`);
         return;
       }
       case "selectAll":
@@ -1177,7 +1527,7 @@ export function StudioClient() {
       case "runSelection":
         return runNodes(selection);
       case "runAll": {
-        const blocker = graph.nodes.length ? runBlocker(graph.nodes.map((n) => n.id)) : "Canvas is empty.";
+        const blocker = graph.nodes.length ? runBlocker(graph.nodes.map((n) => n.id)) : "Add a step first. Press N, or pick a card.";
         if (blocker) return setLog(blocker);
         return void generate({ graph: true });
       }
@@ -1188,7 +1538,9 @@ export function StudioClient() {
       case "fit":
         return fitTo(graph.nodes);
       case "fitSelection": {
-        const rows = graph.nodes.filter((n) => selection.includes(n.id));
+        // A selected wire is the selection (Delete removes it first), so fit its two ends.
+        const ids = selectedEdge ? [selectedEdge.src, selectedEdge.dst] : selection;
+        const rows = graph.nodes.filter((n) => ids.includes(n.id));
         return fitTo(rows.length ? rows : graph.nodes);
       }
       case "resetView": {
@@ -1210,7 +1562,7 @@ export function StudioClient() {
 
   function groupSelection() {
     if (selection.length < 2) {
-      setLog("Select two or more nodes to group (shift-click or drag a box).");
+      setLog("Select two or more steps to group. Shift-click, or drag a box.");
       return;
     }
     if (groupOf(graph, selection)) {
@@ -1219,7 +1571,7 @@ export function StudioClient() {
     }
     const id = "group-" + Math.random().toString(16).slice(2, 6);
     setGraph((g) => groupNodes(g, selection, id));
-    setLog(`Grouped ${selection.length} nodes. Double-click the title to rename.`);
+    setLog(`Grouped ${selection.length} steps. Double-click the title to rename.`);
   }
 
   function ungroupSelection() {
@@ -1232,8 +1584,125 @@ export function StudioClient() {
     setLog("Ungrouped.");
   }
 
+  /** Save the live board onto the active page, then open `id`. */
+  function showPage(id: string) {
+    if (id === project.active) return;
+    const saved = writeActive(project, graph, comments, viewport);
+    const page = saved.pages.find((row) => row.id === id);
+    if (!page) return;
+    setProject({ ...saved, active: id });
+    resetGraph(page.graph);
+    setComments(page.comments || []);
+    setViewport(page.viewport || HOME_VIEW);
+    setSelection([]);
+    setSelectedEdge(null);
+  }
+
+  function createPage() {
+    const id = "page-" + Math.random().toString(16).slice(2, 6);
+    const saved = writeActive(project, graph, comments, viewport);
+    const next = addBoardPage(saved, id);
+    setProject(next);
+    resetGraph({ nodes: [], edges: [] });
+    setComments([]);
+    setViewport(HOME_VIEW);
+    setSelection([]);
+    setSelectedEdge(null);
+  }
+
+  function deletePage(id: string) {
+    const saved = writeActive(project, graph, comments, viewport);
+    const next = removeBoardPage(saved, id);
+    if (next === saved) return;
+    setProject(next);
+    if (next.active !== project.active) {
+      const page = activePage(next);
+      resetGraph(page.graph);
+      setComments(page.comments || []);
+      setViewport(page.viewport || HOME_VIEW);
+      setSelection([]);
+      setSelectedEdge(null);
+    }
+  }
+
+  function scopeCost(scope: RunScope, ids: string[]) {
+    if (scope === "page") return runCost(graph.nodes.map((n) => n.id), new Set(graph.nodes.map((n) => n.id)), true);
+    if (scope === "node") return runCost(ids, new Set(ids), true);
+    return runCost(ids);
+  }
+
+  function scopeBlocker(scope: RunScope, ids: string[]) {
+    if (scope === "page") return runBlocker(graph.nodes.map((n) => n.id), true);
+    if (scope === "node") return runBlocker(ids, true);
+    return runBlocker(ids, false);
+  }
+
+  /** Selection-toolbar run. Card Run and "Run this node only" stay on `runNodes`. */
+  function runScoped(scope: RunScope) {
+    if (scope === "page") runNodes(graph.nodes.map((n) => n.id), true);
+    else if (scope === "node") runNodes(selection, true);
+    else runNodes(selection, false);
+  }
+
+  function applyEdgeStyle(style: EdgeStyle) {
+    setProject((current) => ({ ...current, edgeStyle: style }));
+    const pairs = edgesForStyle(graph, selection, selectedEdge);
+    if (pairs.length) setGraph((g) => setEdgeStyle(g, pairs, style));
+  }
+
+  function instanceSelection() {
+    if (!selection.length) return;
+    const copies = selection.map((id) => {
+      const src = graph.nodes.find((n) => n.id === id);
+      return [id, (src?.capability || "node") + "-" + Math.random().toString(16).slice(2, 6)] as const;
+    });
+    setGraph((g) => instanceNodes(g, copies.map(([id]) => id), copies.map(([, copyId]) => copyId)));
+    setSelection(copies.map(([, copyId]) => copyId));
+    setLog(copies.length === 1 ? `Instanced ${copies[0][0]}.` : `Instanced ${copies.length} nodes.`);
+  }
+
+  function selectionAnchor(): { x: number; y: number; below: boolean } | null {
+    const nodes = graph.nodes.filter((n) => selection.includes(n.id));
+    let left = Infinity;
+    let right = -Infinity;
+    let top = Infinity;
+    let bottom = -Infinity;
+    if (nodes.length) {
+      for (const n of nodes) {
+        left = Math.min(left, n.x || 0);
+        right = Math.max(right, (n.x || 0) + NODE_W);
+        top = Math.min(top, n.y || 0);
+        bottom = Math.max(bottom, (n.y || 0) + NODE_H);
+      }
+    } else if (selectedEdge) {
+      const a = graph.nodes.find((n) => n.id === selectedEdge.src);
+      const b = graph.nodes.find((n) => n.id === selectedEdge.dst);
+      if (!a || !b) return null;
+      const x1 = (a.x || 0) + NODE_W;
+      const y1 = (a.y || 0) + portY(0);
+      const x2 = b.x || 0;
+      const y2 = (b.y || 0) + portY(0);
+      left = Math.min(x1, x2);
+      right = Math.max(x1, x2);
+      top = Math.min(y1, y2);
+      bottom = Math.max(y1, y2);
+    } else return null;
+    const screenTop = top * viewport.zoom + viewport.y;
+    const screenBottom = bottom * viewport.zoom + viewport.y;
+    const below = screenTop < 56;
+    return { x: ((left + right) / 2) * viewport.zoom + viewport.x, y: below ? screenBottom : screenTop, below };
+  }
+
+  /** True when a different pointer already owns the pan, marquee, or drag. */
+  function gestureTaken(pointerId: number): boolean {
+    const owner = gesturePointerRef.current;
+    return owner !== null && owner !== pointerId;
+  }
+
   /** Start a drag of `ids` (a node, a selection, or a frame's members); a plain click selects `click`. */
-  function startDrag(ev: { clientX: number; clientY: number }, ids: string[], click: string[]) {
+  function startDrag(ev: { clientX: number; clientY: number; pointerId: number }, ids: string[], click: string[]) {
+    if (gestureTaken(ev.pointerId)) return;
+    gesturePointerRef.current = ev.pointerId;
     dragRef.current = {
       starts: Object.fromEntries(graph.nodes.filter((n) => ids.includes(n.id)).map((n) => [n.id, { x: n.x ?? 0, y: n.y ?? 0 }])),
       click,
@@ -1250,19 +1719,19 @@ export function StudioClient() {
     const r = boardRef.current?.getBoundingClientRect();
     if (!r) return;
     closeAddMenu();
-    setCtxMenu({ x: Math.min(ev.clientX - r.left, r.width - 200), y: Math.min(ev.clientY - r.top, r.height - 220) });
+    setCtxMenu({ x: Math.min(ev.clientX - r.left, r.width - 260), y: Math.min(ev.clientY - r.top, r.height - 280) });
   }
 
   /** Delete the selected wire, or else the selected nodes and their wires. */
   function deleteSelection() {
     if (selectedEdge) {
       setGraph((g) => disconnect(g, selectedEdge.src, selectedEdge.dst));
-      setLog(`Removed the wire ${selectedEdge.src} → ${selectedEdge.dst}.`);
+      setLog("Connection removed.");
       setSelectedEdge(null);
     } else if (selection.length) {
       const gone = selection;
       setGraph((g) => removeNodes(g, gone));
-      setLog(`Deleted ${gone.length === 1 ? gone[0] : gone.length + " nodes"}. Undo with ⌘Z.`);
+      setLog(gone.length === 1 ? "Deleted. Undo with ⌘Z." : `Deleted ${gone.length} steps. Undo with ⌘Z.`);
       setSelection([]);
     } else return;
   }
@@ -1285,10 +1754,13 @@ export function StudioClient() {
       if (row?.output) return row.output;
       if (row?.outputs?.[0]) return row.outputs[0];
     }
+    const node = graph.nodes.find((n) => n.id === id);
+    const asset = node?.params?.asset;
+    if (typeof asset === "string" && asset && !asset.startsWith("{{")) return asset;
     return null;
   }
 
-  async function generate(opts?: { nodeIds?: string[]; graph?: boolean }) {
+  async function generate(opts?: { nodeIds?: string[]; graph?: boolean; solo?: boolean }) {
     if (busy) return;
     const epoch = graphEpochRef.current;
     const model = selected;
@@ -1296,7 +1768,7 @@ export function StudioClient() {
     const animating = animateStill(model) && mode.showStill && !opts?.nodeIds?.length && !opts?.graph;
     const skill = skillFor(model);
     if (!model) {
-      setLog("Studio is still loading models.");
+      setLog("Models are still loading. Wait a moment and try again.");
       return;
     }
     const generateNodes = graph.nodes.filter((n) => n.type === "generate");
@@ -1305,13 +1777,14 @@ export function StudioClient() {
     // Canvas nodes run on their pinned model or one the runtime picks: only page runs, targets that fall
     // back to the page model, and nodes pinned to it need it to be usable.
     const targets = new Set(opts?.nodeIds || []);
-    const sent = targets.size ? graph.nodes.filter((n) => withAncestors(graph, targets).has(n.id)) : generateNodes;
+    const sent = targets.size ? graph.nodes.filter((n) => runSet(graph, targets, Boolean(opts?.solo)).has(n.id)) : generateNodes;
     const pageModelUsed =
-      !canvasRun || sent.some((n) => (targets.has(n.id) ? modelIdForNode(n, model.id, models) : n.model_id) === model.id);
+      !canvasRun ||
+      sent.some((n) => (targets.has(n.id) ? modelIdForNode(n, model.id, models, connected) : n.model_id) === model.id);
     if (pageModelUsed && model.provider !== "mock" && !usable(model)) {
       const status = modelAvailability(model, doctor.providers?.[model.provider], !!doctor.live_spend);
       if (status === "spend_off") {
-        setLog("This model has a key, but live spend is off. Set VINCI_ALLOW_LIVE_SPEND=1 to call it.");
+        setLog("This model has a key, but paid runs are off. Turn on live spend, then try again.");
         return;
       }
       setPage("keys");
@@ -1338,7 +1811,7 @@ export function StudioClient() {
     setBusy(true);
     setStageReset(false);
     setModelsOpen(false);
-    setLog("Generating… " + (skillRef || skill));
+    setLog("Generating…");
     try {
       const payload: Record<string, unknown> = { inputs, preference: pref };
       if (animating) {
@@ -1381,38 +1854,63 @@ export function StudioClient() {
       // Canvas nodes this run will show state on.
       let tracked: string[] = [];
       if (targets.size) {
-        const keep = withAncestors(graph, targets);
+        const keep = runSet(graph, targets, Boolean(opts?.solo));
         tracked = [...keep];
+        const slice = {
+          ...graph,
+          nodes: graph.nodes.filter((n) => keep.has(n.id)),
+          edges: graph.edges.filter((e) => keep.has(e.src) && keep.has(e.dst)),
+        };
+        const runtime = runtimeGraph(withMentionRefs(slice, model));
         payload.workflow = {
           id: "canvas-node",
           version: "1.0.0",
           preference: pref,
-          nodes: toWorkflowNodes(graph.nodes.filter((n) => keep.has(n.id))).map((n) =>
-            targets.has(n.id) ? { ...n, model_id: modelIdForNode(n, model.id, models) } : n,
+          nodes: runtime.nodes.map((n) =>
+            targets.has(n.id) ? { ...n, model_id: modelIdForNode(n, model.id, models, connected) } : n,
           ),
-          edges: graph.edges.filter((e) => keep.has(e.src) && keep.has(e.dst)),
+          edges: runtime.edges,
         };
       } else if (!payload.workflow && (graphEdited || opts?.graph) && generateNodes.length) {
         tracked = generateNodes.map((n) => n.id);
+        const runtime = runtimeGraph(withMentionRefs(graph, model));
         payload.workflow = {
           id: "canvas",
           version: "1.0.0",
           preference: pref,
-          nodes: toWorkflowNodes(graph.nodes),
-          edges: graph.edges,
+          nodes: runtime.nodes,
+          edges: runtime.edges,
         };
       } else if (!payload.workflow) {
         payload.skill = skill;
-        if (skillNodes.length <= 1) payload.model_id = model.id;
+        const only = skillNodes.length === 1 ? skillNodes[0] : undefined;
+        const pageCanRun = Boolean(
+          only?.capability && (model.capabilities || []).includes(only.capability),
+        );
+        if (skillNodes.length > 1) {
+          // These nodes are routed later. The page resolution may not be in that model's list.
+          delete inputs.resolution;
+        } else if (only?.model_id && only.model_id !== model.id) {
+          // The skill pins its own model. Keep the page resolution only if that model lists it.
+          if (!modelListsResolution(only.model_id, inputs.resolution)) delete inputs.resolution;
+        } else if (only && !pageCanRun) {
+          delete inputs.resolution;
+        }
+        if (skillNodes.length <= 1 && (!only || pageCanRun)) payload.model_id = model.id;
       }
       trackedRef.current = tracked;
       if (tracked.length) setNodeRuns((prev) => ({ ...prev, ...Object.fromEntries(tracked.map((id) => [id, { state: "running" as const }])) }));
-      const body = await api<Run>("/runs", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      setRunIds((ids) => [...ids, body.id]);
+      const times = !canvasRun && page === "image" ? (batchCount === 4 ? 4 : 1) : 1;
+      let body: Run | null = null;
+      for (let i = 0; i < times; i += 1) {
+        body = await api<Run>("/runs", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        setRunIds((ids) => [...ids, body!.id]);
+      }
+      if (!body) throw new Error("Generate did not start a run.");
       if (tracked.length) {
         const results = await nodeRunStates(body, tracked);
         if (epoch === graphEpochRef.current) setNodeRuns((prev) => ({ ...prev, ...results }));
@@ -1420,14 +1918,21 @@ export function StudioClient() {
         trackedRef.current = [];
       }
       await loadMedia();
-      const digest = body.outputs?.[0];
+      await loadToolFeed(page === "video" ? "video" : "image");
+      if (body.exported_outputs?.length) {
+        autoImportPhotosExports(body.exported_outputs);
+      }
       setLog(
         body.state === "completed"
-          ? "Shot landed on the canvas." + (digest ? " vinci://assets/" + digest : "")
-          : JSON.stringify(body.error || body),
+          ? page === "image"
+            ? "Your still is in the feed."
+            : page === "video"
+              ? "Your clip is in History."
+              : "Done. It is on the board."
+          : plainError(typeof body.error === "string" ? body.error : ""),
       );
     } catch (err) {
-      const message = String(err instanceof Error ? err.message : err);
+      const message = plainError(err);
       setLog(message);
       const failed = trackedRef.current;
       if (failed.length && epoch === graphEpochRef.current) setNodeRuns((prev) => ({ ...prev, ...Object.fromEntries(failed.map((id) => [id, { state: "error" as const, error: message }])) }));
@@ -1437,15 +1942,84 @@ export function StudioClient() {
     }
   }
 
+  function applyLibraryParams(params: Record<string, unknown>) {
+    const asString = (key: string) => (typeof params[key] === "string" ? params[key] : "");
+    const asNumber = (key: string) => (typeof params[key] === "number" ? params[key] : null);
+    if (asString("aspect_ratio")) setAspectRatio(asString("aspect_ratio"));
+    if (params.duration != null) setDuration(String(params.duration));
+    if (asString("resolution")) setResolution(asString("resolution"));
+    if (asString("camera")) setCamera(asString("camera"));
+    if (asString("lens")) setLens(asString("lens"));
+    if (asString("look")) setLook(asString("look"));
+    if (asString("lighting")) setLighting(asString("lighting"));
+    if (asString("palette")) setPalette(asString("palette"));
+    if (asString("motion")) setMotion(asString("motion"));
+    if (asString("aperture")) setAperture(asString("aperture"));
+    if (asString("genre")) setGenre(asString("genre"));
+    if (asString("scene")) setScene(asString("scene"));
+    if (asString("optimized_for")) setOptimizedFor(asString("optimized_for"));
+    if (asString("engine")) setEngine(asString("engine"));
+    if (asString("scale")) setScale(asString("scale"));
+    const creativityN = asNumber("creativity");
+    if (creativityN != null) setCreativity(creativityN);
+    const resemblanceN = asNumber("resemblance");
+    if (resemblanceN != null) setResemblance(resemblanceN);
+    const hdrN = asNumber("hdr");
+    if (hdrN != null) setHdr(hdrN);
+    const fractalityN = asNumber("fractality");
+    if (fractalityN != null) setFractality(fractalityN);
+  }
+
+  /** Re-run an Assets item with the sidecar params, then open the matching compose page. */
+  async function rerunFromLibrary(item: AssetItem) {
+    const nextPage = (item.rerun_page as PageId) || "image";
+    const params = item.params || {};
+    const promptText = item.prompt || (typeof params.prompt === "string" ? params.prompt : "");
+    setPrompt(promptText);
+    if (item.model_id) setModelId(item.model_id);
+    applyLibraryParams(params);
+    setPage(nextPage);
+    setStageReset(false);
+    setBusy(true);
+    setLog("Running it again…");
+    try {
+      const body = await api<Run>("/runs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          skill: item.rerun_skill,
+          model_id: item.model_id || undefined,
+          inputs: { ...params, prompt: promptText },
+          preference: pref,
+        }),
+      });
+      setRunIds((ids) => [...ids, body.id]);
+      await loadMedia();
+      await loadToolFeed(item.rerun_page === "video" ? "video" : "image");
+      if (body.exported_outputs?.length) {
+        autoImportPhotosExports(body.exported_outputs);
+      }
+      setLog(
+        body.state === "completed"
+          ? "Done. Your new file is ready."
+          : plainError(typeof body.error === "string" ? body.error : ""),
+      );
+    } catch (err) {
+      setLog(plainError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   /** Per-node states after a run: output present (cached when the job hit the runtime cache) or error. */
   async function nodeRunStates(body: Run, ids: string[]) {
     const next: typeof nodeRuns = {};
-    const error = body.state === "completed" ? "" : JSON.stringify(body.error || body.state || "failed");
+    const error = body.state === "completed" ? "" : plainError(typeof body.error === "string" ? body.error : "");
     await Promise.all(
       ids.map(async (id) => {
         const row = body.nodes?.[id];
         if (!row?.output && !row?.outputs?.length) {
-          next[id] = { state: "error", error: error || "No output." };
+          next[id] = { state: "error", error: error || "No output. Try again." };
           return;
         }
         const job = row.job_id ? await api<{ estimate?: { cached?: boolean } }>(`/jobs/${row.job_id}`).catch(() => null) : null;
@@ -1461,34 +2035,34 @@ export function StudioClient() {
    */
   function nodePrice(n: GraphNode, targets: Set<string>): number | null {
     if (!targets.has(n.id) && !n.model_id) return null;
-    const id = modelIdForNode(n, selected?.id || "", models);
+    const id = modelIdForNode(n, selected?.id || "", models, connected);
     return models.find((m) => m.id === id)?.pricing?.amount ?? null;
   }
 
   /** Short pre-run cost of `ids` and what feeds them; `pinned` are the nodes the run pins to a model. */
-  function runCost(ids: string[], pinned = new Set(ids)): { nodes: number; text: string } {
-    const e = estimateRun(graph, ids, (n) => nodePrice(n, pinned));
+  function runCost(ids: string[], pinned = new Set(ids), solo = false): { nodes: number; text: string } {
+    const e = estimateRun(graph, ids, (n) => nodePrice(n, pinned), solo);
     const parts = [e.nodes > e.unpriced ? `up to ${money(e.total)}` : "", e.unpriced ? `${e.unpriced} not estimated` : ""];
     return { nodes: e.nodes, text: parts.filter(Boolean).join(" + ") };
   }
 
   function runLabel(ids: string[], pinned?: Set<string>): string {
     const { nodes, text } = runCost(ids, pinned);
-    return `Run ${nodes} node${nodes === 1 ? "" : "s"} · ${text}. Unchanged nodes reuse the cache at $0.`;
+    return `Run ${nodes} step${nodes === 1 ? "" : "s"}. ${text}`;
   }
 
-  /** Run `ids` and what feeds them, unless something required is missing. */
-  function runNodes(ids: string[]) {
+  /** Run `ids` plus what feeds them. `solo` is the context-menu item "Run this node only". */
+  function runNodes(ids: string[], solo = false) {
     if (!ids.length) {
-      setLog("Select nodes to run.");
+      setLog("Select a step to run.");
       return;
     }
-    const blocker = runBlocker(ids);
+    const blocker = runBlocker(ids, solo);
     if (blocker) {
       setLog(blocker);
       return;
     }
-    void generate({ nodeIds: ids });
+    void generate({ nodeIds: ids, solo });
   }
 
   function openTemplate(t: Template) {
@@ -1528,24 +2102,31 @@ export function StudioClient() {
     setPage(nextPage);
   }
 
-  /** A fresh node: its own prompt seeded from the page, the cinema stack, and capability defaults. */
-  function buildNode(capability: string, x: number, y: number): GraphNode {
+  /** A fresh node: generate nodes get the cinema stack; Media / Text / Note stay canvas-only. */
+  function buildNode(capability: string, x: number, y: number, modelId?: string): GraphNode {
+    const nodeType = nodeTypeOf(capability);
     const video = capability === "t2v" || capability === "i2v";
+    const started = startParams(capability, { prompt, aspect_ratio: aspectRatio, duration, resolution });
+    const params =
+      nodeType === "generate"
+        ? {
+            camera,
+            lens,
+            look,
+            lighting,
+            palette,
+            aperture,
+            genre,
+            ...(video ? { motion } : {}),
+            ...started,
+          }
+        : started;
     return {
       id: capability + "-" + Math.random().toString(16).slice(2, 6),
-      type: "generate",
+      type: nodeType,
       capability,
-      params: {
-        camera,
-        lens,
-        look,
-        lighting,
-        palette,
-        aperture,
-        genre,
-        ...(video ? { motion } : {}),
-        ...startParams(capability, { prompt, aspect_ratio: aspectRatio, duration }),
-      },
+      ...(modelId && nodeType === "generate" ? { model_id: modelId } : {}),
+      params,
       x,
       y,
     };
@@ -1579,35 +2160,46 @@ export function StudioClient() {
     return Object.fromEntries(Object.entries(sent).map(([k, v]) => [k, v != null && v !== ""]));
   }
 
-  /** First reason the given nodes (and what feeds them) cannot run, or null. */
-  function runBlocker(ids: Iterable<string>): string | null {
+  /** First reason the given nodes (and what feeds them, unless `solo`) cannot run, or null. */
+  function runBlocker(ids: Iterable<string>, solo = false): string | null {
     const page = pageInputFlags();
-    for (const id of withAncestors(graph, ids)) {
+    for (const id of runSet(graph, ids, solo)) {
       const node = graph.nodes.find((n) => n.id === id);
       const reason = node && node.type === "generate" ? blockedReason(node, page) : null;
-      if (reason) return `${id}: ${reason}`;
+      if (reason) return reason;
     }
     return null;
   }
 
   /** Insert a node: beside `from` (and wired to it when the types fit), else at the board centre. */
-  function insertNode(capability: string, from?: string) {
+  function insertNode(capability: string, from?: string, modelId?: string) {
     const src = from ? graph.nodes.find((n) => n.id === from) : undefined;
     const { w, h } = boardSize();
     const want = src
       ? { x: (src.x || 0) + NODE_W + 80, y: src.y || 0 }
       : w
         ? { x: (w / 2 - viewport.x) / viewport.zoom - NODE_W / 2, y: (h / 2 - viewport.y) / viewport.zoom - 80 }
-        : { x: 60 + (graph.nodes.length % 3) * 210, y: 80 }; // board not mounted (inspector on another page)
+        : { x: 60 + (graph.nodes.length % 3) * (NODE_W + 40), y: 80 }; // board not mounted (inspector on another page)
     const at = freeSpot(graph, want.x, want.y);
-    const n = buildNode(capability, at.x, at.y);
-    const next = addGraphNode(graph, n, src?.id);
+    const n = buildNode(capability, at.x, at.y, modelId);
+    const next = addGraphNode(graph, n, src?.id, project.edgeStyle);
     setGraph(next);
     setSelectedNode(n.id);
     setSelectedEdge(null);
     const wired = next.edges.length > graph.edges.length;
-    setLog(wired ? `Added ${n.id}, wired from ${src?.id}.` : `Added ${n.id}.`);
+    setLog(wired ? "Connected." : "Added.");
     return n.id;
+  }
+
+  function applyAddPick(pick: AddPick, from?: string) {
+    if (pick.kind === "flow") {
+      const template = templates.find((row) => row.id === pick.templateId);
+      if (template) openTemplate(template);
+      closeAddMenu();
+      return;
+    }
+    insertNode(pick.capability, from, pick.kind === "model" ? pick.modelId : undefined);
+    closeAddMenu();
   }
 
   function addNode(capability: string) {
@@ -1634,25 +2226,27 @@ export function StudioClient() {
       }
     }
     setAddMenu({
-      x: Math.max(8, Math.min(x, w - 312)),
+      x: Math.max(8, Math.min(x, w - 372)),
       y: Math.max(56, Math.min(y, h - 300)),
       from: src?.id,
       kind: src ? portsFor(src).output : null,
     });
     setAddQuery("");
     setAddIndex(0);
+    setAddChip(null);
   }
 
   function closeAddMenu() {
     setAddMenu(null);
     linkFromRef.current = null;
     setLinkFrom(null);
+    setAddChip(null);
   }
 
   function addShot() {
     const shots = graph.nodes.filter((n) => n.capability === "t2i");
     if (shots.length >= 6) {
-      setLog("Cinema sequences stay at 6 shots.");
+      setLog("This template stays at 6 shots.");
       return;
     }
     addNode("t2i");
@@ -1677,12 +2271,12 @@ export function StudioClient() {
       }
     }
     if (!ordered.length) {
-      setLog("Canvas is empty.");
+      setLog("Add a step first. Press N, or pick a card.");
       return;
     }
     for (const n of ordered) {
       const digest = nodeDigest(n.id);
-      setTlStatus(n.id);
+      setTlStatus("Playing…");
       if (!digest) {
         setTlMedia(null);
         await new Promise((r) => setTimeout(r, 700));
@@ -1716,12 +2310,12 @@ export function StudioClient() {
       await boot();
       setLog(
         body.available
-          ? id + " enabled." + (doctor.live_spend ? "" : " Live spend is off.")
-          : id + " saved. " + (body.test || "missing key"),
+          ? `${id} is on.` + (doctor.live_spend ? "" : " Paid runs are off.")
+          : `${id} is saved. Add a key in Connect if it is still off.`,
       );
       setPage("keys");
     } catch (err) {
-      setLog(String(err instanceof Error ? err.message : err));
+      setLog(plainError(err));
     }
   }
 
@@ -1746,7 +2340,7 @@ export function StudioClient() {
       setLog(body.available ? id + " enabled." : id + " saved. " + (body.test || "needs URL"));
       setPage("keys");
     } catch (err) {
-      setLog(String(err instanceof Error ? err.message : err));
+      setLog(plainError(err));
     }
   }
 
@@ -1757,12 +2351,12 @@ export function StudioClient() {
         { method: "POST" },
       );
       if (body.mode === "key") {
-        setLog(body.hint || "This connector uses a pasted API key.");
+        setLog(body.hint || "Paste a key for this provider.");
         return;
       }
       if (body.authorize_url) window.open(body.authorize_url, "_blank", "noopener,noreferrer");
       if (body.mode !== "oauth") {
-        setLog(body.hint || "Paste a token.");
+        setLog(body.hint || "Paste an access token.");
         return;
       }
       setLog("Finish sign-in in the browser.");
@@ -1779,18 +2373,18 @@ export function StudioClient() {
         if (attempt !== oauthAttemptRef.current) return;
         const row = next.providers?.[id];
         if (row?.auth_state === "needs_reconnect") {
-          setLog(id + " needs reconnect.");
+          setLog(`${id} needs you to sign in again.`);
           return;
         }
         if (row?.auth_state === "connected") {
           await boot();
-          setLog(id + " connected.");
+          setLog(`${id} is connected.`);
           return;
         }
       }
-      if (attempt === oauthAttemptRef.current) setLog("Still waiting for sign-in.");
+      if (attempt === oauthAttemptRef.current) setLog("Still waiting for sign-in. Finish it in the browser, then come back.");
     } catch (err) {
-      setLog(String(err instanceof Error ? err.message : err));
+      setLog(plainError(err));
     }
   }
 
@@ -1802,9 +2396,9 @@ export function StudioClient() {
         body: JSON.stringify({ brief }),
       });
       setPlan(body.steps || []);
-      setLog((body.steps || []).length ? "Plan ready." : "No matching templates.");
+      setLog((body.steps || []).length ? "Plan ready. Press Run plan." : "No templates match. Try a shorter brief.");
     } catch (err) {
-      setLog(String(err instanceof Error ? err.message : err));
+      setLog(plainError(err));
     }
   }
 
@@ -1813,12 +2407,31 @@ export function StudioClient() {
     setBusy(true);
     try {
       for (const step of plan) {
+        const inputs = shotInputs({ prompt: brief.trim() || step.blurb || step.title });
+        const planned = (skills.find((s) => s.id === step.skill)?.workflow?.nodes || []).filter(
+          (n) => n.type === "generate",
+        );
+        const only = planned.length === 1 ? planned[0] : undefined;
+        const pinnedElsewhere = Boolean(only?.model_id && only.model_id !== selected?.id);
+        const pinnable = Boolean(
+          only?.capability &&
+            usable(selected) &&
+            !pinnedElsewhere &&
+            (selected?.capabilities || []).includes(only.capability),
+        );
+        if (pinnedElsewhere) {
+          if (!modelListsResolution(only?.model_id, inputs.resolution)) delete inputs.resolution;
+        } else if (!pinnable) {
+          // A lip-sync or audio step must not inherit a still model's resolution.
+          delete inputs.resolution;
+        }
         const body = await api<Run>("/runs", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             skill: step.skill,
-            inputs: shotInputs({ prompt: brief.trim() || step.blurb || step.title }),
+            inputs,
+            model_id: pinnable ? selected?.id : undefined,
             preference: pref,
             max_cost: 0,
           }),
@@ -1828,7 +2441,7 @@ export function StudioClient() {
       await loadMedia();
       setLog("Plan complete.");
     } catch (err) {
-      setLog(String(err instanceof Error ? err.message : err));
+      setLog(plainError(err));
     } finally {
       setBusy(false);
     }
@@ -1851,9 +2464,9 @@ export function StudioClient() {
       });
       setRunIds((ids) => [...ids, body.id]);
       await loadMedia();
-      setLog(body.state === "completed" ? "3D plate landed." : JSON.stringify(body.error || body));
+      setLog(body.state === "completed" ? "Your new angle is ready." : plainError(typeof body.error === "string" ? body.error : ""));
     } catch (err) {
-      setLog(String(err instanceof Error ? err.message : err));
+      setLog(plainError(err));
     } finally {
       setBusy(false);
     }
@@ -1864,7 +2477,7 @@ export function StudioClient() {
       const body = await api<{ sessions: { id: string; name: string }[] }>("/collab/sessions");
       setSessions(body.sessions || []);
     } catch (err) {
-      setLog(String(err instanceof Error ? err.message : err));
+      setLog(plainError(err));
     }
   }
 
@@ -1879,7 +2492,7 @@ export function StudioClient() {
       await pushCollab(body.id);
       await loadSessions();
     } catch (err) {
-      setLog(String(err instanceof Error ? err.message : err));
+      setLog(plainError(err));
     }
   }
 
@@ -1888,18 +2501,26 @@ export function StudioClient() {
       const body = await api<{
         id: string;
         name?: string;
-        snapshot?: { prompt?: string; graph?: { nodes: GraphNode[]; edges: GraphEdge[] }; cast?: CastRow[]; page?: PageId };
+        snapshot?: {
+          prompt?: string;
+          graph?: { nodes: GraphNode[]; edges: GraphEdge[] };
+          cast?: CastRow[];
+          page?: PageId;
+          project?: ProjectFile;
+        };
       }>(`/collab/sessions/${encodeURIComponent(sid)}`);
       setCollabId(body.id);
       if (body.name) setCollabName(body.name);
       const snap = body.snapshot || {};
       if (snap.prompt) setPrompt(snap.prompt);
-      if (snap.graph) resetGraph(snap.graph);
+      const opened = snap.project ? readProjectFile(JSON.stringify(snap.project)) : null;
+      if (opened) applyProject(opened);
+      else if (snap.graph) resetGraph(snap.graph);
       if (snap.cast) setCast(snap.cast);
-      if (snap.page) setPage(snap.page);
-      setLog("Opened collab " + body.id);
+      if (snap.page) setPage(String(snap.page) === "history" ? "assets" : snap.page);
+      setLog("Session opened.");
     } catch (err) {
-      setLog(String(err instanceof Error ? err.message : err));
+      setLog(plainError(err));
     }
   }
 
@@ -1910,30 +2531,34 @@ export function StudioClient() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           name: collabName || "Session",
-          snapshot: { prompt, graph, cast, page },
+          snapshot: { prompt, graph, cast, page, project: writeActive(project, graph, comments, viewport) },
         }),
       });
       setCollabId(sid);
-      setLog("Pushed graph to " + sid);
+      setLog("Session updated.");
       await loadSessions();
     } catch (err) {
-      setLog(String(err instanceof Error ? err.message : err));
+      setLog(plainError(err));
     }
   }
 
   const titles: Record<PageId, string> = {
-    explore: "Explore",
+    home: "Home",
+    explore: "Templates",
     image: "Image",
-    adapts: "Image › Adapts",
+    adapts: "Adapts",
     video: "Video",
     speak: "Speak",
     upscale: "Upscale still",
+    edit: "Edit",
     canvas: "Canvas",
     library: "Library",
+    assets: "Assets",
     agent: "Supercomputer",
     space: "3D",
     collab: "Collab",
     keys: "Connect",
+    settings: "Settings",
     skills: "Skills",
     find: "Find",
     cost: "Cost report",
@@ -1941,72 +2566,161 @@ export function StudioClient() {
 
   const live = Object.entries(doctor.providers || {}).filter(([id, row]) => id !== "mock" && row && row.available);
   const spent = projectRuns.reduce((sum, r) => sum + Number(r.estimate?.total || 0), 0);
-  const railGroups: {
-    label?: string;
-    items: { id: PageId; title: string; d: string; flyout?: "image" | "video" }[];
-  }[] = [
-    {
-      items: [{ id: "explore", title: "Explore", d: "M9 2a7 7 0 1 1 0 14A7 7 0 0 1 9 2zm0 2v5l3 2" }],
-    },
-    {
-      label: "Formats",
-      items: [
-        { id: "image", title: "Image", d: "M3 4h12v10H3zM3 12l3-3 2 2 2-2 4 4", flyout: "image" },
-        { id: "video", title: "Video", d: "M2.5 5h9v8h-9zM11.5 8l4-2v6l-4-2z", flyout: "video" },
-      ],
-    },
-    {
-      label: "Workflows",
-      items: [
-        { id: "canvas", title: "Canvas", d: "M3 4h5v4H3zM10 10h5v4h-5zM8 6h3v4" },
-        { id: "library", title: "Library", d: "M3 4h4v11H3zM8 4h3v11H8zM12.5 4.5L15 15" },
-      ],
-    },
-  ];
-  const imageOn = page === "image" || page === "upscale" || page === "adapts";
-  const videoOn = page === "video" || page === "speak";
-  const liveSpend = !!doctor.live_spend;
-  const flyoutModels = (kind: "image" | "video") => {
-    const rows = models.filter((row) => {
-      if (row.provider === "mock") return false;
-      const caps = row.capabilities || [];
-      if (kind === "image") return caps.includes("t2i") || caps.includes("upscale");
-      return caps.includes("t2v") || caps.includes("i2v") || caps.includes("lipsync") || caps.includes("tts");
+  const popoverTools = filterTools(toolsQuery, toolsCategory);
+  const popoverTabs = visibleCategories(toolsQuery);
+
+  const saveOutputDestination = useCallback(async () => {
+    await api("/settings", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        output_destination_kind: outputDestKind,
+        output_local_dir: outputLocalDir,
+        output_photos_album: outputPhotosAlbum,
+        output_r2_prefix: outputR2Prefix,
+      }),
     });
-    rows.sort(
-      (a, b) =>
-        availabilityRank(modelAvailability(a, doctor.providers?.[a.provider], liveSpend)) -
-        availabilityRank(modelAvailability(b, doctor.providers?.[b.provider], liveSpend)),
-    );
+    setLog("Save location updated.");
+  }, [outputDestKind, outputLocalDir, outputPhotosAlbum, outputR2Prefix]);
+  const liveSpend = !!doctor.live_spend;
+  /** Models in an Image or Video flyout. Membership and order come from modelsFor. */
+  function flyoutModels(kind: FlyoutKind) {
+    const groups: Model[][] =
+      kind === "image"
+        ? [
+            rankSurface("image", modelsFor("image", connected, models), connected, doctor),
+            rankSurface("image_edit", modelsFor("image_edit", connected, models), connected, doctor),
+            rankSurface("upscale", modelsFor("upscale", connected, models), connected, doctor),
+          ]
+        : [
+            rankSurface("video", modelsFor("video", connected, models), connected, doctor),
+            rankSurface("audio", modelsFor("audio", connected, models), connected, doctor),
+            rankSurface(
+              "canvas",
+              modelsFor("canvas", connected, models, { capability: "lipsync" }),
+              connected,
+              doctor,
+            ),
+          ];
+    const seen = new Set<string>();
+    const rows: Model[] = [];
+    for (const group of groups) {
+      for (const row of group) {
+        if (seen.has(row.id)) continue;
+        seen.add(row.id);
+        rows.push(row);
+      }
+    }
     return rows.slice(0, 8);
-  };
-  function openFlyoutPage(next: PageId) {
+  }
+
+  /** Per-node pill list. Capability membership is modelsFor, not a raw includes check. */
+  function nodeModels(capability: string): Model[] {
+    const cap = capability || "t2i";
+    return rankSurface("canvas", modelsFor("canvas", connected, models, { capability: cap }), connected, doctor);
+  }
+  function modelFlyoutPage(row: Model, kind: FlyoutKind): PageId {
+    const caps = row.capabilities || [];
+    if (kind === "image") return caps.includes("t2i") ? "image" : "upscale";
+    const talk = (caps.includes("lipsync") || caps.includes("tts")) && !caps.includes("t2v") && !caps.includes("i2v");
+    return talk ? "speak" : "video";
+  }
+  const shellModels: CommandModel[] = (["image", "video"] as const).flatMap((kind) =>
+    flyoutModels(kind).map((row) => ({
+      id: row.id,
+      title: row.display_name || row.id,
+      blurb: row.provider || "Model",
+      page: modelFlyoutPage(row, kind),
+      flyout: kind,
+    })),
+  );
+  const modelQuery = toolsQuery.trim().toLowerCase();
+  const popoverModels = shellModels.filter((row) => {
+    if (toolsCategory === "image" && row.flyout !== "image") return false;
+    if (toolsCategory === "video" && row.flyout !== "video") return false;
+    if (toolsCategory !== "all" && toolsCategory !== "image" && toolsCategory !== "video") return false;
+    if (!modelQuery) return true;
+    return (row.title + " " + row.blurb + " " + row.id).toLowerCase().includes(modelQuery);
+  });
+  const commandHits = commandSearch(commandQuery, {
+    assets,
+    models: shellModels,
+    projects: [
+      ...templates.map((row) => ({ id: row.id, title: row.title, blurb: row.blurb, page: (row.page || "canvas") as PageId })),
+      ...sessions.map((row) => ({ id: row.id, title: row.name, blurb: "Collab session", page: "collab" as const })),
+    ],
+  });
+  /** Close All tools, Ctrl+K, the avatar menu, and the mobile drawer. */
+  function closeShellOverlays() {
+    setToolsOpen(false);
+    setCommandOpen(false);
+    setAvatarOpen(false);
+    setNavOpen(false);
+    if (typeof document !== "undefined") {
+      (document.activeElement as HTMLElement | null)?.blur();
+    }
+  }
+  /** Open a Studio page and drop every shell overlay. */
+  function openPage(next: PageId) {
     setPage(next);
     setModelsOpen(false);
-    setNavOpen(false);
+    closeShellOverlays();
   }
-  function pickFlyoutModel(row: Model, kind: "image" | "video") {
-    const caps = row.capabilities || [];
+  function persistPins(next: string[]) {
+    setPinnedIds(next);
+    try {
+      localStorage.setItem(PIN_STORAGE_KEY, serializePinned(next));
+    } catch {
+      /* ignore */
+    }
+  }
+  /** Same page a flyout model pick opens. */
+  function pickFlyoutModel(row: Model, kind: FlyoutKind) {
+    modelTouched.current = true;
     setModelId(row.id);
-    if (kind === "image") {
-      openFlyoutPage(caps.includes("t2i") ? "image" : "upscale");
+    openPage(modelFlyoutPage(row, kind));
+  }
+  /** Enter on a Ctrl+K row: tool page, flyout model, asset, template, or collab session. */
+  function openCommandHit(hit: CommandHit) {
+    if (hit.kind === "model" && hit.flyout) {
+      const row = models.find((model) => model.id === hit.id);
+      if (row) {
+        pickFlyoutModel(row, hit.flyout);
+        return;
+      }
+    }
+    if (hit.kind === "asset") {
+      setFocusAssetId(hit.id);
+      openPage("assets");
       return;
     }
-    const talk = (caps.includes("lipsync") || caps.includes("tts")) && !caps.includes("t2v") && !caps.includes("i2v");
-    openFlyoutPage(talk ? "speak" : "video");
+    if (hit.kind === "project") {
+      const template = templates.find((row) => row.id === hit.id);
+      if (template) {
+        closeShellOverlays();
+        openTemplate(template);
+        return;
+      }
+      if (hit.page === "collab") {
+        closeShellOverlays();
+        void joinCollab(hit.id);
+        return;
+      }
+    }
+    if (hit.page) openPage(hit.page);
   }
 
   let main: ReactNode = null;
-  if (page === "explore") {
+  if (page === "home" || page === "explore") {
     const items = templates.filter((t) => category === "all" || t.category === category);
     main = (
       <div className="explore">
-        <h2>Templates</h2>
-        <p className="muted">First-party skill graphs. Speak scenes open Speak; the rest land on the canvas.</p>
+        <h2>{page === "home" ? "Home" : "Templates"}</h2>
+        <p className="muted">Templates on this computer. Talking scenes open Video. Everything else opens the canvas.</p>
         <div className="cats">
           {CATS.map((c) => (
             <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => setCategory(c)}>
-              {c}
+              {tabLabel(c)}
             </button>
           ))}
         </div>
@@ -2023,176 +2737,123 @@ export function StudioClient() {
         </div>
       </div>
     );
-  } else if (page === "image" || page === "video" || page === "upscale" || page === "speak") {
-    const offers: Record<string, { eyebrow: string; title: ReactNode; copy: string; primary: string; hint: string }> = {
-      image: {
-        eyebrow: "Create",
-        title: "Image",
-        copy: "Stills from a prompt. Write what you want, then generate.",
-        primary: "Write a prompt",
-        hint: "Price sits on Generate.",
-      },
-      video: {
-        eyebrow: "Create",
-        title: "Video",
-        copy: "Motion from a prompt. Describe the shot, then generate.",
-        primary: "Write a prompt",
-        hint: "Price sits on Generate.",
-      },
-      upscale: {
-        eyebrow: "Enhance",
-        title: (
-          <>
-            Upscale <em className="serif">still</em>
-          </>
-        ),
-        copy: "Increase resolution on a still you upload or generate.",
-        primary: "Upload a still",
-        hint: "PNG, JPEG, or WebP.",
-      },
-      speak: {
-        eyebrow: "Create",
-        title: "Speak",
-        copy: "Speech from a line of text. Add a still only when the model animates a photo.",
-        primary: "Write a line",
-        hint: "Price sits on Generate.",
-      },
-    };
-    const offer = offers[page];
-    let media: React.ReactNode = <p className="hero-empty">Generating…</p>;
-    if (page === "upscale" && uploadId && lastDigest && !stageReset && uploadId !== lastDigest) {
-      media = (
-        <div className="split" id="compose-split">
-          <div>
-            <span className="muted">Before</span>
-            <img src={`${API}/assets/${uploadId}/file`} alt="" />
-          </div>
-          <div>
-            <span className="muted">After</span>
-            <img src={`${API}/assets/${lastDigest}/file`} alt="" />
-          </div>
-        </div>
-      );
-    } else if (!stageReset && lastDigest && lastAsset?.mime?.startsWith("video/")) {
-      media = <video src={`${API}/assets/${lastDigest}/file`} controls />;
-    } else if (!stageReset && lastDigest && lastAsset?.mime?.startsWith("image/")) {
-      media = <img alt="" src={`${API}/assets/${lastDigest}/file`} />;
-    } else if ((page === "upscale" || page === "speak") && uploadId) {
-      media = <img alt="" src={`${API}/assets/${uploadId}/file`} />;
-    }
-    const showOffer = !hasComposeMedia && !busy;
-    async function onComposeFile(ev: ChangeEvent<HTMLInputElement>) {
-      const file = ev.target.files?.[0];
-      ev.target.value = "";
-      if (!file) return;
-      try {
-        const asset = await ingest(file);
-        setUploadId(asset.id);
-        setStageReset(false);
-        setLog("Input loaded. vinci://assets/" + asset.id);
-      } catch (err) {
-        setLog(String(err instanceof Error ? err.message : err));
-      }
-    }
+  } else if (page === "image") {
     main = (
-      <div className={"compose" + (showOffer ? "" : " has-media")}>
-        <input
-          id="compose-still"
-          ref={composeStillRef}
-          className="hidden"
-          type="file"
-          accept="image/*,video/*,audio/*"
-          onChange={onComposeFile}
-        />
-        <div className="compose-body">
-          {showOffer ? (
-            <div className="compose-offer">
-              <div className="compose-sample" data-kind={page} aria-hidden="true">
-                {page === "upscale" ? (
-                  <div className="compose-sample-split">
-                    <div className="compose-sample-before" />
-                    <div className="compose-sample-after" />
-                    <span className="compose-sample-handle" />
-                  </div>
-                ) : null}
-              </div>
-              <p className="eyebrow">{offer.eyebrow}</p>
-              <h2>{offer.title}</h2>
-              <p className="compose-offer-copy">{offer.copy}</p>
-              <div className="compose-offer-actions">
-                <button
-                  className="run"
-                  type="button"
-                  onClick={() => {
-                    if (page === "upscale") composeStillRef.current?.click();
-                    else document.getElementById("prompt")?.focus();
-                  }}
-                >
-                  {offer.primary}
-                </button>
-                {page === "upscale" && lastStill ? (
-                  <button
-                    className="ghost"
-                    type="button"
-                    onClick={() => {
-                      setUploadId(lastStill);
-                      setStageReset(false);
-                    }}
-                  >
-                    Use last still
-                  </button>
-                ) : (
-                  <button className="ghost" type="button" onClick={() => setModelsOpen(true)}>
-                    Choose a model
-                  </button>
-                )}
-              </div>
-              <p className="compose-offer-hint">{offer.hint}</p>
-            </div>
-          ) : (
-            <div className="compose-stage">{media}</div>
-          )}
-        </div>
-        <details
-          className="compose-models"
-          open={modelsOpen}
-          onToggle={(ev) => setModelsOpen((ev.target as HTMLDetailsElement).open)}
-        >
-          <summary>Choose a model</summary>
-          <input
-            id="gallery-query"
-            className="gallery-query"
-            type="text"
-            placeholder="Search models"
-            aria-label="Search models"
-            autoComplete="off"
-            value={galleryQuery}
-            onChange={(ev) => setGalleryQuery(ev.target.value)}
-          />
-          {galleryQuery.trim() && galleryModels.length === 0 ? (
-            <p className="muted gallery-empty">No models match</p>
-          ) : null}
-          <div className="compose-gallery">
-            {galleryModels.map((m) => (
-              <button
-                key={m.id}
-                className={"model-card" + (m.id === selected?.id ? " on" : "")}
-                type="button"
-                onClick={() => setModelId(m.id)}
-              >
-                <span className="who">{m.provider === "magnific" ? "Magnific / Freepik" : m.provider === "mock" ? "Local" : m.provider}</span>
-                <strong>{m.display_name}</strong>
-                <span className="meta">
-                  {money(m.pricing?.amount)}
-                  {statusSuffix(m)} · {(m.capabilities || []).slice(0, 3).join(" · ")}
-                </span>
-              </button>
-            ))}
-          </div>
-        </details>
-      </div>
+      <ImagePage
+        models={models}
+        connected={connected}
+        availability={modelRank}
+        selected={selected}
+        modelId={selected?.id || modelId}
+        onModelId={setModelId}
+        prompt={prompt}
+        onPrompt={setPrompt}
+        aspect={aspectRatio || ratios[0] || ""}
+        onAspect={(v) => {
+          setAspectRatio(v);
+          stampSelected({ aspect_ratio: v });
+        }}
+        resolution={shownResolution()}
+        onResolution={setResolution}
+        quality={quality}
+        onQuality={setQuality}
+        batch={batchCount}
+        onBatch={setBatchCount}
+        refs={uploadId ? [uploadId] : []}
+        onAddRef={(file) => {
+          void ingest(file)
+            .then((asset) => {
+              setUploadId(asset.id);
+              setLog("Reference added.");
+            })
+            .catch((err) => setLog(plainError(err)));
+        }}
+        onRemoveRef={() => setUploadId(null)}
+        cast={mentionItems.map(asCastRow)}
+        busy={busy}
+        pendingCount={batchCount === 4 ? 4 : 1}
+        runs={runs}
+        assets={assets}
+        ready={(row) => usable({ ...row, capabilities: row.capabilities || [] })}
+        onGenerate={() => void generate()}
+        onReference={(id) => {
+          setUploadId(id);
+          setLog("Using this still as the reference.");
+        }}
+        onAnimate={(id) => {
+          setUploadId(id);
+          setFirstFrameId(id);
+          setExtendMode(false);
+          setExtendClipId(null);
+          setPage("video");
+          setLog("Start frame set. You are on Video.");
+        }}
+        onLog={setLog}
+      />
     );
-  } else if (page === "adapts") {
+  } else if (page === "video") {
+    main = (
+      <VideoPage
+        models={models}
+        connected={connected}
+        availability={modelRank}
+        selected={selected}
+        modelId={selected?.id || modelId}
+        onModelId={setModelId}
+        prompt={prompt}
+        onPrompt={setPrompt}
+        aspect={aspectRatio || ratios[0] || ""}
+        onAspect={(v) => {
+          setAspectRatio(v);
+          stampSelected({ aspect_ratio: v });
+        }}
+        resolution={shownResolution()}
+        onResolution={setResolution}
+        duration={duration || (durs.includes(5) ? "5" : String(durs[0] || ""))}
+        onDuration={(v) => {
+          setDuration(v);
+          stampSelected({ duration: Number(v) });
+        }}
+        seed={seed}
+        onSeed={setSeed}
+        steps={steps}
+        onSteps={setSteps}
+        extendMode={extendMode}
+        onExtendMode={setExtendMode}
+        startId={firstFrameId}
+        endId={lastFrameId}
+        clipId={extendClipId}
+        audioId={audioId}
+        extraIds={videoExtraIds}
+        onStart={setFirstFrameId}
+        onEnd={setLastFrameId}
+        onClip={setExtendClipId}
+        onAudio={setAudioId}
+        onExtra={(id) => setVideoExtraIds((rows) => (rows.includes(id) ? rows : [...rows, id]))}
+        onRemoveStart={() => setFirstFrameId(null)}
+        onRemoveEnd={() => setLastFrameId(null)}
+        onRemoveClip={() => setExtendClipId(null)}
+        onRemoveAudio={() => setAudioId(null)}
+        onRemoveExtra={(id) => setVideoExtraIds((rows) => rows.filter((row) => row !== id))}
+        audioOn={audioOn}
+        onAudioOn={setAudioOn}
+        motion={motion}
+        onMotion={(v) => {
+          setMotion(v);
+          stampSelected({ motion: v });
+        }}
+        motions={MOTIONS}
+        cast={mentionItems.map(asCastRow)}
+        busy={busy}
+        runs={runs}
+        assets={assets}
+        ready={(row) => usable({ ...row, capabilities: row.capabilities || [] })}
+        onGenerate={() => void generate()}
+        onIngest={ingest}
+        onLog={setLog}
+      />
+    );
+  } else if (page === "speak" || page === "upscale" || page === "adapts") {
     const panelProps = {
       apiBase: API,
       liveSpend: Boolean(doctor?.live_spend),
@@ -2226,19 +2887,35 @@ export function StudioClient() {
       onDeletePreset: (id: string) => void deletePreset(id),
       fileInputRef: adaptFileRef,
     };
-    main = (
-      <>
-        <input
-          ref={adaptFileRef}
-          className="hidden"
-          type="file"
-          accept="image/*"
-          onChange={(ev) => {
-            const file = ev.target.files?.[0];
-            if (file) void uploadAdaptSource(file);
-          }}
-        />
-        {adaptView === "flow" ? (
+    const adaptsPanel =
+      page === "adapts" ? (
+        <>
+          <input
+            ref={adaptFileRef}
+            className="hidden"
+            type="file"
+            accept="image/*"
+            onChange={(ev) => {
+              const file = ev.target.files?.[0];
+              if (file) void uploadAdaptSource(file);
+            }}
+          />
+          <AdaptsPanel {...panelProps} />
+        </>
+      ) : null;
+    main =
+      page === "adapts" && adaptView === "flow" ? (
+        <>
+          <input
+            ref={adaptFileRef}
+            className="hidden"
+            type="file"
+            accept="image/*"
+            onChange={(ev) => {
+              const file = ev.target.files?.[0];
+              if (file) void uploadAdaptSource(file);
+            }}
+          />
           <AdaptFlowCanvas
             apiBase={API}
             liveSpend={Boolean(doctor?.live_spend)}
@@ -2255,23 +2932,31 @@ export function StudioClient() {
             onRun={() => void runAdapt()}
             onPickSource={() => adaptFileRef.current?.click()}
           />
-        ) : (
-          <AdaptsPanel {...panelProps} />
-        )}
-      </>
-    );
+        </>
+      ) : (
+        <EffectShell
+          page={page}
+          appId={effectAppId}
+          onAppIdChange={setEffectAppId}
+          models={models}
+          connected={connected}
+          liveSpend={liveSpend}
+          runs={projectRuns}
+          assets={assets}
+          money={money}
+          onOpenConnect={() => setPage("keys")}
+          onRunComplete={() => void loadMedia()}
+          adaptOutputIds={adaptOutputs}
+          adaptsPanel={adaptsPanel}
+          library={mentionItems}
+        />
+      );
   } else if (page === "canvas") {
-    const selectedRow = graph.nodes.find((n) => n.id === selectedNode);
     const pageHas = pageInputFlags();
-    const graphIds = graph.nodes.map((n) => n.id);
-    const graphBlocker = graph.nodes.length ? runBlocker(graphIds) : null;
-    // Generate graph pins nothing: only nodes with their own model_id are priced.
-    const graphCost = graph.nodes.length ? runCost(graphIds, new Set()).text : "";
-    const nodeBlocker = selectedRow ? runBlocker([selectedRow.id]) : null;
     main = (
       <div className="stage">
         <main
-          className="board"
+          className={"board" + (showGrid ? "" : " no-grid")}
           style={
             view === "canvas"
               ? {
@@ -2281,31 +2966,43 @@ export function StudioClient() {
               : undefined
           }
         >
-          {graph.nodes.length === 0 && view === "canvas" ? (
-            <div className="empty">
-              <div>
-                <h2>Empty canvas.</h2>
-                <p>Open a template, or add image / video / upscale nodes.</p>
-                <button className="ghost" type="button" onClick={() => setPage("adapts")}>
-                  Image › Adapts presets
-                </button>
-              </div>
-            </div>
-          ) : null}
+          {graph.nodes.length === 0 && view === "canvas" ? <CanvasEmpty onPick={(cap) => addNode(cap)} /> : null}
           {view === "canvas" ? (
             <div
               ref={boardRef}
-              className={"graph" + (canvasTool === "pan" ? " pan" : "") + (panning ? " panning" : "")}
+              className={"graph" + (canvasTool === "pan" ? " pan" : "") + (panning ? " panning" : "") + (canvasTool === "note" || canvasTool === "comment" ? " place" : "")}
               onPointerDown={(ev) => {
                 if (canvasTool === "pan" || spaceRef.current || ev.button === 1) {
                   ev.preventDefault();
+                  if (gestureTaken(ev.pointerId)) return;
+                  gesturePointerRef.current = ev.pointerId;
                   panRef.current = { x: ev.clientX, y: ev.clientY, vx: viewport.x, vy: viewport.y };
                   setPanning(true);
                   return;
                 }
                 setCtxMenu(null);
+                setDockMenu(null);
+                setMenuEpoch((n) => n + 1);
+                if ((canvasTool === "comment" || canvasTool === "note") && ev.target === ev.currentTarget && ev.button === 0) {
+                  const rect = ev.currentTarget.getBoundingClientRect();
+                  const gx = (ev.clientX - rect.left - viewport.x) / viewport.zoom;
+                  const gy = (ev.clientY - rect.top - viewport.y) / viewport.zoom;
+                  if (canvasTool === "comment") {
+                    const id = "c-" + Math.random().toString(16).slice(2, 6);
+                    setComments((list) => [...list, { id, x: gx, y: gy, text: "" }]);
+                    setEditingComment(id);
+                  } else {
+                    const at = freeSpot(graph, gx, gy);
+                    const note = buildNode("note", at.x, at.y);
+                    setGraph((g) => addGraphNode(g, note));
+                    setSelectedNode(note.id);
+                  }
+                  return;
+                }
                 if (ev.target !== ev.currentTarget || ev.button !== 0) return;
+                if (gestureTaken(ev.pointerId)) return;
                 const r = ev.currentTarget.getBoundingClientRect();
+                gesturePointerRef.current = ev.pointerId;
                 marqueeRef.current = { x: ev.clientX - r.left, y: ev.clientY - r.top, add: ev.shiftKey };
                 if (!ev.shiftKey) setSelection([]);
                 setSelectedEdge(null);
@@ -2331,6 +3028,7 @@ export function StudioClient() {
                       style={{ left: b.x, top: b.y, width: b.w, height: b.h }}
                       onPointerDown={(ev) => {
                         if (canvasTool === "pan" || spaceRef.current || ev.button !== 0) return;
+                        if (gestureTaken(ev.pointerId)) return;
                         ev.stopPropagation();
                         setCtxMenu(null);
                         setSelection(grp.nodeIds);
@@ -2411,7 +3109,7 @@ export function StudioClient() {
                     const a = graph.nodes.find((n) => n.id === e.src);
                     const b = graph.nodes.find((n) => n.id === e.dst);
                     if (!a || !b) return null;
-                    const d = wirePath(a, b, e.input_key);
+                    const d = wirePath(a, b, e.input_key, e.style);
                     const on = selectedEdge?.src === e.src && selectedEdge?.dst === e.dst;
                     return (
                       <g key={e.src + "->" + e.dst}>
@@ -2441,7 +3139,7 @@ export function StudioClient() {
                         if (tx > x1) return <path className="wire ghost" d={curve(x1, y1, tx, ty)} />;
                         // Menu opened under the node: leave the port rightwards, drop into the menu's top edge.
                         const [bx, by] = g(addMenu.x + 290, addMenu.y);
-                        return <path className="wire ghost" d={`M${x1} ${y1} C${x1 + 60} ${y1}, ${bx} ${by - 60}, ${bx} ${by}`} />;
+                        return <path className="wire ghost" d={curve(x1, y1, bx, by)} />;
                       })()
                     : null}
                 </svg>
@@ -2450,19 +3148,15 @@ export function StudioClient() {
                   const cap = n.capability || n.type;
                   const asset = assets.find((a) => a.id === digest);
                   const label = NODE_CATALOG.find((row) => row.capability === n.capability)?.label || cap;
-                  const aspect = typeof n.params?.aspect_ratio === "string" && !n.params.aspect_ratio.startsWith("{{") ? n.params.aspect_ratio : "";
-                  const ask = n.params?.prompt;
-                  const promptLine =
-                    typeof ask !== "string" ? "" : ask.startsWith("{{") ? "Page prompt" : ask.trim();
                   const needs = n.type === "generate" ? blockedReason(n, pageHas) : null;
                   return (
                     <div
                       key={n.id}
                       data-id={n.id}
-                      className={"node" + (selection.includes(n.id) ? " on" : "") + (nodeRuns[n.id] ? " run-" + nodeRuns[n.id].state : "")}
+                      className={"node" + (selection.includes(n.id) ? " on" : "") + (nodeRuns[n.id] ? " run-" + nodeRuns[n.id].state : "") + (n.instanceOf ? " is-instance" : "")}
                       style={{ left: n.x ?? 0, top: n.y ?? 0 }}
                       onPointerDown={(ev) => {
-                        if ((ev.target as HTMLElement).classList.contains("port")) return;
+                        if ((ev.target as HTMLElement).closest(".port, .node-ui")) return;
                         if (canvasTool === "pan" || spaceRef.current || ev.button !== 0) return;
                         ev.stopPropagation();
                         setCtxMenu(null);
@@ -2471,6 +3165,7 @@ export function StudioClient() {
                           setSelectedEdge(null);
                           return;
                         }
+                        if (gestureTaken(ev.pointerId)) return;
                         const ids = selection.includes(n.id) && selection.length > 1 ? selection : [n.id];
                         startDrag(ev, ids, [n.id]);
                       }}
@@ -2481,8 +3176,10 @@ export function StudioClient() {
                         openCtxMenu(ev);
                       }}
                     >
+                      {n.instanceOf ? <span className="node-instance">Instance</span> : null}
                       {portsFor(n).inputs.map((port, i) => (
-                        <div
+                        <button
+                          type="button"
                           key={port.key}
                           className={"port in kind-" + port.kind}
                           data-port="in"
@@ -2490,82 +3187,165 @@ export function StudioClient() {
                           data-key={port.key}
                           data-kind={port.kind}
                           style={{ top: portY(i) - 5 }}
-                          title={`${port.kind} input (${port.key})`}
+                          title={`${port.kind} in`}
+                          aria-label={`${port.kind} input`}
                           onPointerDown={(ev) => ev.stopPropagation()}
                           onClick={(ev) => {
                             ev.stopPropagation();
                             const from = linkFromRef.current;
                             if (!from) return;
                             closeAddMenu();
-                            const wired = connect(graph, from, n.id, port.key);
+                            const wired = connect(graph, from, n.id, port.key, project.edgeStyle);
                             if (!wired.ok) {
                               setLog(wired.error);
                               return;
                             }
                             setGraph(wired.graph);
-                            setLog(`Wired ${from} into ${n.id}.`);
+                            setLog("Connected.");
                           }}
                         />
                       ))}
                       {portsFor(n).output ? (
-                        <div
+                        <button
+                          type="button"
                           className={"port out kind-" + portsFor(n).output + (linkFrom === n.id ? " on" : "")}
                           data-port="out"
                           data-id={n.id}
                           data-kind={portsFor(n).output || ""}
                           style={{ top: portY(0) - 5 }}
-                          title={`${portsFor(n).output} output: click to add or connect`}
+                          title={`${portsFor(n).output} out. Click to add the next step.`}
+                          aria-label={`${portsFor(n).output} output`}
                           onPointerDown={(ev) => ev.stopPropagation()}
                           onClick={(ev) => {
                             ev.stopPropagation();
                             linkFromRef.current = n.id;
                             setLinkFrom(n.id);
                             openAddMenu(n.id);
-                            setLog(`Pick a node that takes ${portsFor(n).output}, or click an input port.`);
+                            setLog(`Pick a step that takes ${portsFor(n).output}, or click an input.`);
                           }}
                         />
                       ) : null}
-                      <div className="thumb">
-                        {digest && asset?.mime?.startsWith("video/") ? (
-                          <video src={`${API}/assets/${digest}/file`} muted />
-                        ) : digest ? (
-                          <img alt="" src={`${API}/assets/${digest}/file`} />
-                        ) : null}
-                        {nodeRuns[n.id]?.state === "running" ? <span className="spinner" aria-label="Running" /> : null}
-                        {nodeRuns[n.id]?.state === "cached" ? <span className="chip-cached">cached</span> : null}
-                        {n.type === "generate" ? (
-                          <button
-                            type="button"
-                            className="node-run"
-                            aria-label={`Run ${n.id}`}
-                            disabled={Boolean(needs) || busy}
-                            title={needs || runLabel([n.id])}
-                            onPointerDown={(ev) => ev.stopPropagation()}
-                            onClick={(ev) => {
-                              ev.stopPropagation();
-                              runNodes([n.id]);
+                      {(() => {
+                        const modelRows = comboModels(nodeModels(n.capability || "t2i"), true, statusSuffix);
+                        const model = models.find((m) => m.id === (n.model_id || modelIdForNode(n, selected?.id || "", models, connected)));
+                        const aspects = listedOr(model?.constraints?.aspect_ratios, ASPECTS);
+                        const resolutions = listedOr(model?.constraints?.resolutions, RESOLUTIONS);
+                        const aspectChip = pickListed(n.params?.aspect_ratio, aspects);
+                        const resolutionChip = pickListed(n.params?.resolution, resolutions);
+                        const runText = runCost([n.id]).text;
+                        const runBlock = n.type === "generate" ? runBlocker([n.id]) : null;
+                        return (
+                          <CanvasNodeCard
+                            node={n}
+                            label={label}
+                            subtitle={NODE_CATALOG.find((row) => row.capability === n.capability)?.blurb}
+                            placeholder={defaultsFor(n.capability).placeholder}
+                            showPrompt={defaultsFor(n.capability).prompt !== "none"}
+                            prompt={promptValue(n.params)}
+                            digest={digest}
+                            thumbSrc={digest ? `${API}/assets/${digest}/file` : undefined}
+                            video={Boolean(asset?.mime?.startsWith("video/"))}
+                            runState={nodeRuns[n.id]}
+                            needs={needs}
+                            models={modelRows}
+                            modelId={n.model_id || ""}
+                            aspects={aspects}
+                            resolutions={resolutions}
+                            count={countValue(n.params)}
+                            aspect={aspectChip}
+                            resolution={resolutionChip}
+                            costText={runText}
+                            runDisabled={Boolean(runBlock) || busy}
+                            runTitle={runBlock || `Run · ${runText || "cost unknown"}`}
+                            inspectorOpen={inspectorOpen && selectedNode === n.id}
+                            refCount={refsOf(n.params).length}
+                            promptRef={selectedNode === n.id ? settleOnUnmount : undefined}
+                            onPromptFocus={() => {
+                              promptBaseRef.current = graph;
                             }}
-                          >
-                            ▶
-                          </button>
-                        ) : null}
-                      </div>
-                      <div className="meta">
-                        <div className="k">{label}{aspect ? " · " + aspect : ""}</div>
-                        <strong>{n.id}</strong>
-                        {defaultsFor(n.capability).prompt !== "none" ? (
-                          <p className={"prompt-line" + (promptLine ? "" : " is-empty")}>
-                            {promptLine || defaultsFor(n.capability).placeholder || "No prompt"}
-                          </p>
-                        ) : null}
-                        {needs ? <p className="needs">{needs}</p> : null}
-                        {!needs && nodeRuns[n.id]?.state === "error" ? (
-                          <p className="needs" title={nodeRuns[n.id].error}>Run failed. Hover for details.</p>
-                        ) : null}
-                      </div>
+                            onPromptChange={(text) => {
+                              setGraphHistory((h) => preview(h, setParams(h.present, n.id, { prompt: text })));
+                            }}
+                            onPromptBlur={settlePrompt}
+                            onCount={(value) => setGraph((g) => setParams(g, n.id, countPatch(value)))}
+                            onAspect={(v) => setGraph((g) => setParams(g, n.id, { aspect_ratio: v }))}
+                            onResolution={(v) => setGraph((g) => setParams(g, n.id, { resolution: v }))}
+                            onModel={(value) => setGraph((g) => updateNode(g, n.id, { model_id: value || undefined }))}
+                            onGear={() => {
+                              if (inspectorOpen && selectedNode === n.id) {
+                                setInspectorOpen(false);
+                                return;
+                              }
+                              setSelectedNode(n.id);
+                              setSelectedEdge(null);
+                              setInspectorOpen(true);
+                            }}
+                            onRun={() => runNodes([n.id])}
+                            library={mentionItems}
+                            onMention={(item) => applyLibraryMention(n.id, item)}
+                            onAddReference={() => {
+                              if (refsOf(n.params).length >= REF_LIMIT) return;
+                              nodeRefTarget.current = n.id;
+                              nodeRefRole.current = nextRefRole(refsOf(n.params));
+                              nodeRefInput.current?.click();
+                            }}
+                            onUpload={
+                              n.capability === "media"
+                                ? (file) => {
+                                    void ingest(file)
+                                      .then((asset) => {
+                                        const kind = asset.mime?.startsWith("video/")
+                                          ? "video"
+                                          : asset.mime?.startsWith("audio/")
+                                            ? "audio"
+                                            : "image";
+                                        setGraph((g) => setParams(g, n.id, { asset: asset.id, mime: asset.mime, kind }));
+                                        setLog("File added.");
+                                      })
+                                      .catch((err) => setLog(plainError(err)));
+                                  }
+                                : undefined
+                            }
+                          />
+                        );
+                      })()}
                     </div>
                   );
                 })}
+                {comments.map((comment) => (
+                  <div
+                    key={comment.id}
+                    className="board-comment node-ui"
+                    data-testid="board-comment"
+                    style={{ left: comment.x, top: comment.y }}
+                    onPointerDown={(ev) => ev.stopPropagation()}
+                  >
+                    <button type="button" className="icon-round on" aria-label="Edit comment" onClick={() => setEditingComment(comment.id)}>
+                      C
+                    </button>
+                    {editingComment === comment.id || !comment.text ? (
+                      <textarea
+                        autoFocus
+                        aria-label="Comment text"
+                        value={comment.text}
+                        onChange={(ev) => setComments((list) => list.map((row) => (row.id === comment.id ? { ...row, text: ev.target.value } : row)))}
+                        onBlur={() => {
+                          if (comment.text.trim()) setEditingComment(null);
+                        }}
+                      />
+                    ) : (
+                      <p>{comment.text}</p>
+                    )}
+                    <button
+                      type="button"
+                      className="icon-round"
+                      aria-label="Delete comment"
+                      onClick={() => setComments((list) => list.filter((row) => row.id !== comment.id))}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
               </div>
               <div className={"results" + (view === "canvas" ? "" : " hidden")} id="results">
                 {graph.nodes.map((n) => {
@@ -2594,195 +3374,216 @@ export function StudioClient() {
                   );
                 })}
               </div>
+              {(() => {
+                const anchor = selectionAnchor();
+                if (!anchor) return null;
+                const rows = RUN_SCOPES.map((row) => ({ ...row, cost: scopeCost(row.id, selection).text }));
+                const pairs = edgesForStyle(graph, selection, selectedEdge);
+                const blocker = selection.length ? scopeBlocker(runScope, selection) : null;
+                return (
+                  <SelectionBar
+                    epoch={menuEpoch}
+                    x={anchor.x}
+                    y={anchor.y}
+                    below={anchor.below}
+                    scope={runScope}
+                    scopes={rows}
+                    cost={rows.find((row) => row.id === runScope)?.cost || "$0"}
+                    edgeStyle={commonEdgeStyle(graph, pairs) || project.edgeStyle}
+                    runDisabled={Boolean(blocker) || busy || !selection.length}
+                    runTitle={blocker || rows.find((row) => row.id === runScope)?.cost || "Run"}
+                    showRun={selection.length > 0}
+                    canDuplicate={selection.length > 0}
+                    canInstance={selection.length > 0}
+                    canDelete={selection.length > 0 || Boolean(selectedEdge)}
+                    canGroup={selection.length > 1}
+                    canUngroup={(graph.groups || []).some((grp) => grp.nodeIds.some((id) => selection.includes(id)))}
+                    onRun={() => runScoped(runScope)}
+                    onScope={setRunScope}
+                    onEdgeStyle={applyEdgeStyle}
+                    onDuplicate={() => runShortcut("duplicate")}
+                    onInstance={instanceSelection}
+                    onDelete={deleteSelection}
+                    onGroup={groupSelection}
+                    onUngroup={ungroupSelection}
+                  />
+                );
+              })()}
+              <EdgeTools
+                tool={canvasTool}
+                canUndo={graphHistory.past.length > 0}
+                canRedo={graphHistory.future.length > 0}
+                historyOpen={historyOpen}
+                addTitle={withKeys("addNode")}
+                selectTitle={withKeys("selectMode")}
+                panTitle={withKeys("panMode")}
+                commentTitle={withKeys("comment")}
+                undoTitle={withKeys("undo")}
+                redoTitle={withKeys("redo")}
+                onAdd={() => openAddMenu()}
+                onSelect={() => setCanvasTool("select")}
+                onPan={() => setCanvasTool("pan")}
+                onNote={() => setCanvasTool((tool) => (tool === "note" ? "select" : "note"))}
+                onComment={() => runShortcut("comment")}
+                onUndo={() => stepHistory("undo")}
+                onRedo={() => stepHistory("redo")}
+                onHistory={() => setHistoryOpen((open) => !open)}
+              />
+              <PageBar
+                pages={project.pages}
+                active={project.active}
+                onOpen={showPage}
+                onAdd={createPage}
+                onRemove={deletePage}
+                onRename={(id, name) => setProject((current) => renameBoardPage(current, id, name))}
+              />
+              <MinimapZoom
+                epoch={menuEpoch}
+                nodes={graph.nodes}
+                view={viewport}
+                boardW={boardSize().w}
+                boardH={boardSize().h}
+                onPan={(mx, my) => {
+                  const { w, h } = boardSize();
+                  const world = minimapWorld(graph.nodes, viewport, w, h);
+                  setViewport(viewportFromMinimap(world, MINIMAP_W, MINIMAP_H, mx, my, w, h, viewport.zoom));
+                }}
+                onZoomIn={() => zoomBy(1.2)}
+                onZoomOut={() => zoomBy(1 / 1.2)}
+                onFit={() => runShortcut("fit")}
+                onFitSelection={() => runShortcut("fitSelection")}
+                onReset={() => runShortcut("resetView")}
+              />
+              <HistoryPanel open={historyOpen} runs={projectRuns} money={money} onClose={() => setHistoryOpen(false)} />
             </div>
           ) : (
             <>
               <div className="tl-bar">
                 <span className="muted" id="tl-status">{tlStatus}</span>
+                <button className="ghost" type="button" id="tl-play" onClick={() => void playTimeline()}>
+                  Play timeline
+                </button>
               </div>
               <div className="tl-stage" id="tl-stage">
-                {tlMedia?.video ? <video src={tlMedia.src} autoPlay muted /> : tlMedia ? <img alt="" src={tlMedia.src} /> : <p className="muted">No output yet — generate the graph</p>}
+                {tlMedia?.video ? <video src={tlMedia.src} autoPlay muted /> : tlMedia ? <img alt="" src={tlMedia.src} /> : <p className="muted">Nothing to play yet. Press Run, then play.</p>}
               </div>
             </>
           )}
+          {view === "canvas" ? (
+            <>
+              <button
+                type="button"
+                className={"edge-btn edge-help help" + (sheetOpen ? " on" : "")}
+                aria-label="Show shortcuts"
+                title={withKeys("help")}
+                aria-expanded={sheetOpen}
+                onClick={() => setSheetOpen((open) => !open)}
+              >
+                <DockIcon d={DOCK_ICON.help} />
+              </button>
+            </>
+          ) : null}
           <div className="canvas-bar">
             {view === "canvas" ? (
               <div className="canvas-view" role="toolbar" aria-label="Canvas view">
-                <button type="button" className="ghost" title={withKeys("addNode")} onClick={() => openAddMenu()}>
-                  + Add
+                <button type="button" className={"dock-btn" + (canvasTool === "select" ? " on" : "")} aria-label="Select" aria-pressed={canvasTool === "select"} title={withKeys("selectMode")} onClick={() => { setCanvasTool("select"); setDockMenu(null); }}>
+                  <DockIcon d={DOCK_ICON.select} />
+                  <span className="dock-tip">Select <kbd>V</kbd></span>
                 </button>
-                <div className="views">
-                  <button
-                    type="button"
-                    className={canvasTool === "select" ? "on" : ""}
-                    title={withKeys("selectMode")}
-                    aria-pressed={canvasTool === "select"}
-                    onClick={() => setCanvasTool("select")}
-                  >
-                    Select
-                  </button>
-                  <button
-                    type="button"
-                    className={canvasTool === "pan" ? "on" : ""}
-                    title={withKeys("panMode")}
-                    aria-pressed={canvasTool === "pan"}
-                    onClick={() => setCanvasTool("pan")}
-                  >
-                    Pan
-                  </button>
-                </div>
-                <div className="views">
-                  <button type="button" title={withKeys("zoomOut")} aria-label="Zoom out" onClick={() => zoomBy(1 / 1.2)}>
-                    −
-                  </button>
-                  <button type="button" className="zoom-pct" title={withKeys("resetView")} onClick={() => runShortcut("resetView")}>
-                    {Math.round(viewport.zoom * 100)}%
-                  </button>
-                  <button type="button" title={withKeys("zoomIn")} aria-label="Zoom in" onClick={() => zoomBy(1.2)}>
-                    +
-                  </button>
-                  <button type="button" title={withKeys("fit")} onClick={() => runShortcut("fit")}>
-                    Fit
-                  </button>
-                </div>
+                <button type="button" className={"dock-btn" + (canvasTool === "pan" ? " on" : "")} aria-label="Pan" aria-pressed={canvasTool === "pan"} title={withKeys("panMode")} onClick={() => { setCanvasTool("pan"); setDockMenu(null); }}>
+                  <DockIcon d={DOCK_ICON.pan} />
+                  <span className="dock-tip">Pan <kbd>H</kbd></span>
+                </button>
+                <button type="button" className="dock-btn" aria-label="Frame" title={withKeys("group")} disabled={selection.length < 2} onClick={() => { groupSelection(); setDockMenu(null); }}>
+                  <DockIcon d={DOCK_ICON.frame} />
+                  <span className="dock-tip">Frame <kbd>⌘G</kbd></span>
+                </button>
                 <button
                   type="button"
-                  className={"ghost help" + (sheetOpen ? " on" : "")}
-                  title={withKeys("help")}
-                  aria-expanded={sheetOpen}
-                  onClick={() => setSheetOpen((open) => !open)}
+                  className="dock-btn"
+                  aria-label="Text"
+                  title="Edit the selected prompt"
+                  onClick={() => {
+                    setDockMenu(null);
+                    const id = selection[0];
+                    const el = id ? document.querySelector(`[data-node-prompt="${id}"]`) : null;
+                    if (el instanceof HTMLTextAreaElement) el.focus();
+                  }}
                 >
-                  ?
+                  <DockIcon d={DOCK_ICON.text} />
+                  <span className="dock-tip">Text</span>
                 </button>
+                {/* Pen is a dock slot. It does not change the pointer; Select and Pan still do. */}
+                <button type="button" className="dock-btn" aria-label="Pen" title="Pen" onClick={() => setDockMenu(null)}>
+                  <DockIcon d={DOCK_ICON.pen} />
+                  <span className="dock-tip">Pen</span>
+                </button>
+                <button type="button" className="dock-btn" aria-label="Grid" aria-pressed={showGrid} title="Dot grid" onClick={() => { setShowGrid((on) => !on); setDockMenu(null); }}>
+                  <DockIcon d={DOCK_ICON.grid} />
+                  <span className="dock-tip">Grid</span>
+                </button>
+                <button type="button" className="dock-btn" aria-label="Add node" data-testid="canvas-add" title={withKeys("addNode")} onClick={() => { setDockMenu(null); openAddMenu(); }}>
+                  <DockIcon d={DOCK_ICON.add} />
+                  <span className="dock-tip">Add <kbd>N</kbd></span>
+                </button>
+                <span className="dock-slot">
+                  <button type="button" className={"dock-btn" + (dockMenu === "zoom" ? " on" : "")} aria-label="Zoom" aria-expanded={dockMenu === "zoom"} title={withKeys("zoomIn")} onClick={() => setDockMenu((m) => (m === "zoom" ? null : "zoom"))}>
+                    <DockIcon d={DOCK_ICON.zoom} />
+                    <span className="dock-tip">Zoom</span>
+                  </button>
+                  {dockMenu === "zoom" ? (
+                    <div className="dock-pop" role="menu">
+                      <button type="button" aria-label="Zoom out" title={withKeys("zoomOut")} onClick={() => zoomBy(1 / 1.2)}>−</button>
+                      <button type="button" className="zoom-pct" title={withKeys("resetView")} onClick={() => runShortcut("resetView")}>{Math.round(viewport.zoom * 100)}%</button>
+                      <button type="button" aria-label="Zoom in" title={withKeys("zoomIn")} onClick={() => zoomBy(1.2)}>+</button>
+                      <button type="button" title={withKeys("fit")} onClick={() => runShortcut("fit")}>Fit</button>
+                    </div>
+                  ) : null}
+                </span>
+                <button type="button" className="dock-btn" aria-label="Undo" title={withKeys("undo")} disabled={!graphHistory.past.length} onClick={() => stepHistory("undo")}>
+                  <DockIcon d={DOCK_ICON.undo} />
+                  <span className="dock-tip">Undo <kbd>⌘Z</kbd></span>
+                </button>
+                <button type="button" className="dock-btn" aria-label="Redo" title={withKeys("redo")} disabled={!graphHistory.future.length} onClick={() => stepHistory("redo")}>
+                  <DockIcon d={DOCK_ICON.redo} />
+                  <span className="dock-tip">Redo <kbd>⌘⇧Z</kbd></span>
+                </button>
+                <span className="dock-slot">
+                  <button type="button" className={"dock-btn" + (dockMenu === "more" ? " on" : "")} aria-label="More canvas actions" aria-expanded={dockMenu === "more"} onClick={() => setDockMenu((m) => (m === "more" ? null : "more"))}>
+                    <DockIcon d={DOCK_ICON.more} />
+                    <span className="dock-tip">More</span>
+                  </button>
+                  {dockMenu === "more" ? (
+                    <div className="dock-pop" role="menu">
+                      {selectedEdge || selection.length ? (
+                        <button type="button" title={withKeys("delete")} onClick={() => { setDockMenu(null); deleteSelection(); }}>
+                          {selectedEdge ? "Delete connection" : selection.length > 1 ? `Delete ${selection.length}` : "Delete"}
+                        </button>
+                      ) : null}
+                      <button type="button" onClick={() => { setDockMenu(null); void playTimeline(); }}>Play timeline</button>
+                    </div>
+                  ) : null}
+                </span>
               </div>
             ) : null}
-            <div className="canvas-tools">
-              <button
-                className="ghost"
-                type="button"
-                title={withKeys("undo")}
-                disabled={!graphHistory.past.length}
-                onClick={() => stepHistory("undo")}
-              >
-                Undo
-              </button>
-              <button
-                className="ghost"
-                type="button"
-                title={withKeys("redo")}
-                disabled={!graphHistory.future.length}
-                onClick={() => stepHistory("redo")}
-              >
-                Redo
-              </button>
-              {selection.length > 1 ? (
-                <button className="ghost" type="button" title={withKeys("group")} onClick={groupSelection}>
-                  Group
-                </button>
-              ) : null}
-              {selectedEdge || selection.length ? (
-                <button className="ghost" type="button" title={withKeys("delete")} onClick={deleteSelection}>
-                  {selectedEdge ? "Delete wire" : selection.length > 1 ? `Delete ${selection.length}` : "Delete node"}
-                </button>
-              ) : null}
-              <button className="ghost" type="button" onClick={() => setPage("adapts")}>
-                Image › Adapts
-              </button>
-              <button
-                className="ghost"
-                type="button"
-                disabled={Boolean(graphBlocker)}
-                title={graphBlocker || runLabel(graphIds, new Set())}
-                onClick={() => void generate({ graph: true })}
-              >
-                Generate graph{graphCost ? <span className="tool-cost"> · {graphCost}</span> : null}
-              </button>
-              <button className="ghost" type="button" id="tl-play" onClick={() => void playTimeline()}>
-                Play timeline
-              </button>
-            </div>
           </div>
-          {addMenu && view === "canvas"
-            ? (() => {
-                const rows = searchCatalog(addQuery, addMenu.kind);
-                const pick = rows[Math.min(addIndex, rows.length - 1)];
-                const choose = (capability: string) => {
-                  insertNode(capability, addMenu.from);
-                  closeAddMenu();
-                };
-                return (
-                  <div
-                    className="add-menu"
-                    role="dialog"
-                    aria-label="Add node"
-                    style={{ left: addMenu.x, top: addMenu.y }}
-                    onPointerDown={(ev) => ev.stopPropagation()}
-                  >
-                    <input
-                      autoFocus
-                      placeholder={addMenu.kind ? `Nodes that take ${addMenu.kind}` : "Search nodes"}
-                      value={addQuery}
-                      aria-controls="add-menu-list"
-                      onChange={(ev) => {
-                        setAddQuery(ev.target.value);
-                        setAddIndex(0);
-                      }}
-                      onKeyDown={(ev) => {
-                        if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
-                          ev.preventDefault();
-                          const step = ev.key === "ArrowDown" ? 1 : -1;
-                          const at = Math.min(addIndex, rows.length - 1);
-                          const next = rows.length ? (at + step + rows.length) % rows.length : 0;
-                          setAddIndex(next);
-                          // The list scrolls (max-height); keep the keyboard pick visible, not the hovered one.
-                          document.getElementById("add-menu-list")?.children[next]?.scrollIntoView({ block: "nearest" });
-                        } else if (ev.key === "Enter" && pick && !ev.nativeEvent.isComposing) {
-                          ev.preventDefault();
-                          choose(pick.capability);
-                        } else if (ev.key === "Escape") {
-                          ev.preventDefault();
-                          closeAddMenu();
-                        }
-                      }}
-                    />
-                    <div className="add-list" id="add-menu-list" role="listbox">
-                      {rows.map((row) => {
-                        const ready = models.filter(
-                          (m) =>
-                            (m.capabilities || []).includes(row.capability) &&
-                            modelAvailability(m, doctor.providers?.[m.provider], !!doctor.live_spend) === "ready",
-                        ).length;
-                        return (
-                          <button
-                            key={row.capability}
-                            type="button"
-                            role="option"
-                            aria-selected={row === pick}
-                            className={row === pick ? "on" : ""}
-                            onMouseMove={(ev) => {
-                              // Only real pointer motion: a keyboard scroll can slide rows under a still cursor.
-                              if (ev.movementX || ev.movementY) setAddIndex(rows.indexOf(row));
-                            }}
-                            onClick={() => choose(row.capability)}
-                          >
-                            <span className={"kind-dot kind-" + (outputOf(row.capability) || "none")} />
-                            <span className="what">
-                              <strong>{row.label}</strong>
-                              <span>{row.blurb}</span>
-                            </span>
-                            <span className="ready">{ready ? `${ready} ready` : "needs a key"}</span>
-                          </button>
-                        );
-                      })}
-                      {!rows.length ? <p className="muted">No node matches.</p> : null}
-                    </div>
-                    <p className="add-hint">
-                      <kbd>↑↓</kbd> move <kbd>⏎</kbd> insert <kbd>Esc</kbd> close
-                    </p>
-                  </div>
-                );
-              })()
-            : null}
+          {addMenu && view === "canvas" ? (
+            <CanvasAddMenu
+              x={addMenu.x}
+              y={addMenu.y}
+              query={addQuery}
+              index={addIndex}
+              chip={addChip}
+              takes={addMenu.kind}
+              models={rankSurface("canvas", modelsForNodeTypes(connected, models), connected, doctor)}
+              templates={templates}
+              onQuery={setAddQuery}
+              onIndex={setAddIndex}
+              onChip={setAddChip}
+              onPick={(pick) => applyAddPick(pick, addMenu.from)}
+              onClose={closeAddMenu}
+            />
+          ) : null}
           {marquee ? (
             <div className="marquee" style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }} />
           ) : null}
@@ -2811,6 +3612,27 @@ export function StudioClient() {
                     onPointerDown={(ev) => ev.stopPropagation()}
                   >
                     {item("addNode", "Add node", true)}
+                    {(() => {
+                      const soloNode =
+                        selection.length === 1
+                          ? graph.nodes.find((node) => node.id === selection[0] && node.type === "generate")
+                          : undefined;
+                      const soloOnlyCost = soloNode ? runCost([soloNode.id], new Set([soloNode.id]), true).text : "";
+                      return (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          disabled={!soloNode || busy}
+                          onClick={() => {
+                            setCtxMenu(null);
+                            if (soloNode) runNodes([soloNode.id], true);
+                          }}
+                        >
+                          <span>Run this node only</span>
+                          <kbd>{soloOnlyCost}</kbd>
+                        </button>
+                      );
+                    })()}
                     {item("group", "Group", selection.length > 1)}
                     {item("ungroup", "Ungroup", inGroup)}
                     {item("duplicate", "Duplicate", selection.length > 0)}
@@ -2836,145 +3658,87 @@ export function StudioClient() {
               <p className="muted">Scroll to pan. Pinch or ⌘ + scroll to zoom.</p>
             </div>
           ) : null}
-          {selectedRow ? (
-            <aside className="drawer">
-              <h3>{selectedRow.id}</h3>
-              <p className="muted">{opticalLabel(selectedRow, camera, lens, look, motion, aperture, genre, lighting, palette) || "Set camera, lens, and look in the stack."}</p>
-              {nodeDigest(selectedRow.id) ? (
-                <img alt="" src={`${API}/assets/${nodeDigest(selectedRow.id)}/file`} />
-              ) : (
-                <p className="muted">No output on this node yet.</p>
-              )}
-              {defaultsFor(selectedRow.capability).prompt !== "none" ? (
-                <>
-                  <label htmlFor="node-prompt">Prompt</label>
-                  <textarea
-                    key={selectedRow.id}
-                    ref={settleOnUnmount}
-                    id="node-prompt"
-                    className="prompt"
-                    value={typeof selectedRow.params?.prompt === "string" && !selectedRow.params.prompt.startsWith("{{") ? selectedRow.params.prompt : ""}
-                    placeholder={
-                      typeof selectedRow.params?.prompt === "string" && selectedRow.params.prompt.startsWith("{{")
-                        ? "Uses the page prompt. Type to give this node its own."
-                        : defaultsFor(selectedRow.capability).placeholder
-                    }
-                    onFocus={() => {
-                      promptBaseRef.current = graph;
-                    }}
-                    onChange={(ev) => {
-                      const text = ev.target.value;
-                      setGraphHistory((h) => preview(h, setParams(h.present, selectedRow.id, { prompt: text })));
-                    }}
-                    onBlur={settlePrompt}
-                  />
-                </>
-              ) : null}
-              <label htmlFor="node-model">Node model</label>
-              <ModelCombo
-                inputId="node-model"
-                blankLabel="inherit skill default"
-                value={selectedRow.model_id || ""}
-                models={comboModels(
-                  models.filter((m) => (m.capabilities || []).includes(selectedRow.capability || "t2i")),
-                  false,
-                  statusSuffix,
-                )}
-                onChange={(value) => {
-                  setGraph((g) => updateNode(g, selectedRow.id, { model_id: value || undefined }));
-                }}
-              />
-              <div className="file-row" style={{ marginTop: 10 }}>
-                <button
-                  className="run"
-                  type="button"
-                  disabled={Boolean(nodeBlocker)}
-                  title={nodeBlocker || runLabel([selectedRow.id])}
-                  onClick={() => runNodes([selectedRow.id])}
-                >
-                  Generate this node
-                </button>
-                <button className="ghost" type="button" title={withKeys("delete")} onClick={deleteSelection}>
-                  Delete
-                </button>
-                <button className="ghost" type="button" onClick={() => setSelectedNode(null)}>
-                  Close
-                </button>
-              </div>
-              {nodeBlocker ? (
-                <p className="run-blocker">{nodeBlocker}</p>
-              ) : (
-                <p className="muted run-estimate">{runLabel([selectedRow.id])}</p>
-              )}
-            </aside>
-          ) : null}
+          <input
+            ref={nodeRefInput}
+            className="hidden"
+            type="file"
+            accept="image/*,video/*"
+            data-testid="node-ref-file"
+            onChange={(ev) => {
+              const file = ev.target.files?.[0];
+              ev.target.value = "";
+              const id = nodeRefTarget.current;
+              const role = nodeRefRole.current;
+              nodeRefTarget.current = null;
+              if (!file || !id) return;
+              void ingest(file).then((asset) => {
+                setGraph((g) => {
+                  const row = g.nodes.find((n) => n.id === id);
+                  if (!row || refsOf(row.params).length >= REF_LIMIT) return g;
+                  return setParams(g, id, addRef(row.params, role, asset.id));
+                });
+              });
+            }}
+          />
         </main>
       </div>
     );
-  } else if (page === "library") {
-    const shotIds = [...new Set(projectRuns.flatMap((r) => r.outputs || []))];
-    const allIds = libTab === "elements" ? [] : libTab === "shots" ? shotIds : assets.map((a) => a.id);
-    const showElements = libTab !== "shots";
+  } else if (page === "edit") {
     main = (
-      <div className="lib-page">
-        <h2>Library</h2>
-        <p className="muted">Shots from this project and local Elements. Not a scraped community feed.</p>
-        <div className="lib-tabs cats">
-          {(["all", "elements", "shots"] as const).map((tab) => (
-            <button key={tab} type="button" className={libTab === tab ? "on" : ""} onClick={() => setLibTab(tab)}>
-              {tab}
+      <div className="explore">
+        <h2>Edit</h2>
+        <p className="muted">These tools start from a file you upload. Sharpen and resize live under Image.</p>
+        <div className="grid">
+          {editTools().map((tool) => (
+            <button key={tool.id} className="card" type="button" onClick={() => openPage(tool.page)}>
+              <div>
+                <strong>{tool.title}</strong>
+                <div className="muted">{tool.blurb}</div>
+              </div>
             </button>
           ))}
         </div>
-        {showElements ? (
-          <>
-            <p className="eyebrow">Elements</p>
-            {cast.length === 0 ? <p className="muted">No characters, locations, or props yet. Add them from Image or Canvas.</p> : null}
-            <div className="connect-grid" id="element-kind-pills">
-              {cast.map((c) => (
-                <button key={c.assetId + c.name} type="button" className="connector-mark on" data-cast={c.name} onClick={() => setFirstFrameId(c.assetId)}>
-                  <img className="face" alt="" src={`${API}/assets/${c.assetId}/file`} style={{ objectFit: "cover" }} />
-                  <small>{c.name}</small>
-                </button>
-              ))}
-            </div>
-          </>
-        ) : null}
-        {libTab !== "elements" ? (
-          <>
-            <p className="eyebrow">Shots</p>
-            {allIds.length === 0 ? <p className="muted">Nothing in the library yet.</p> : null}
-            <div className="lib">
-            {allIds.map((id) => {
-              const a = assets.find((row) => row.id === id);
-              return (
-                <div key={id}>
-                  {a?.mime?.startsWith("video/") ? (
-                    <video src={`${API}/assets/${id}/file`} />
-                  ) : (
-                    <img alt="" src={`${API}/assets/${id}/file`} />
-                  )}
-                  <span className="muted">vinci://assets/{id}</span>
-                </div>
-              );
-            })}
-            </div>
-          </>
-        ) : null}
       </div>
+    );
+  } else if (page === "library") {
+    main = (
+      <LibraryPage
+        items={libraryItems}
+        tab={libTab}
+        onTab={setLibTab}
+        templates={templates}
+        onCreate={(item) => {
+          setCast((rows) => upsertLibraryItem(rows.map(asLibraryItem), item).map(asCastRow));
+          setLog("Library @" + item.name);
+        }}
+        onOpenTemplate={(id) => {
+          const template = templates.find((row) => row.id === id);
+          if (template) openTemplate(template);
+        }}
+        onIngest={ingest}
+      />
+    );
+  } else if (page === "assets") {
+    main = (
+      <AssetsPage
+        elements={cast}
+        focusId={focusAssetId}
+        onOpenConnect={() => setPage("keys")}
+        onRerun={(item) => void rerunFromLibrary(item)}
+      />
     );
   } else if (page === "agent") {
     main = (
       <div className="lib-page">
         <h2>Supercomputer</h2>
-        <p className="muted">A brief in. A plan out. Each step is a template you already own — no extra GPU farm.</p>
+        <p className="muted">Describe the job. Vinci turns it into steps you can run.</p>
         <label htmlFor="agent-brief">Brief</label>
         <textarea
           id="agent-brief"
           className="prompt"
           value={brief}
           onChange={(ev) => setBrief(ev.target.value)}
-          placeholder="Luxury watch on marble, dusk, 8K still then a slow orbit."
+          placeholder="A watch on marble at dusk, then a slow turn."
         />
         <div className="file-row" style={{ marginTop: 12 }}>
           <button className="run" type="button" onClick={() => void planBrief()}>
@@ -2994,7 +3758,7 @@ export function StudioClient() {
             ))}
           </div>
         ) : (
-          <p className="muted">Describe the job. Vinci maps it onto Explore templates.</p>
+          <p className="muted">Describe the job, then press Plan.</p>
         )}
         {log ? <p className="log">{log}</p> : null}
       </div>
@@ -3003,25 +3767,25 @@ export function StudioClient() {
     main = (
       <div className="lib-page">
         <h2>3D</h2>
-        <p className="muted">Orbit the last still. Generate a turntable plate when you want a new angle.</p>
+        <p className="muted">Turn the last still. Press the button when you want a new angle.</p>
         <div className="stage-3d">
           <div className="card3d" style={{ transform: `rotateY(${yaw}deg)` }}>
             {lastStill ? (
-              <img src={`${API}/assets/${lastStill}/file`} alt="3D still" />
+              <img src={`${API}/assets/${lastStill}/file`} alt="Last still" />
             ) : (
-              <span className="muted">Generate a still first.</span>
+              <span className="muted">Make a still first. Open Image, then come back.</span>
             )}
           </div>
         </div>
         <div className="file-row">
           <button className="ghost" type="button" onClick={() => setYaw((y) => y - 25)}>
-            Orbit left
+            Turn left
           </button>
           <button className="ghost" type="button" onClick={() => setYaw((y) => y + 25)}>
-            Orbit right
+            Turn right
           </button>
           <button className="run" type="button" onClick={() => void generate3d()} disabled={busy}>
-            Generate 3D plate
+            Make a new angle
           </button>
         </div>
         {log ? <p className="log">{log}</p> : null}
@@ -3031,7 +3795,7 @@ export function StudioClient() {
     main = (
       <div className="lib-page">
         <h2>Collab</h2>
-        <p className="muted">Share a session on this machine. Snapshot the graph, prompt, and cast.</p>
+        <p className="muted">Share a session on this computer. It keeps the board, the prompt, and the cast.</p>
         <div className="file-row">
           <input
             value={collabName}
@@ -3043,24 +3807,23 @@ export function StudioClient() {
             New session
           </button>
         </div>
-        {collabId ? <p className="muted">Open: {collabId}</p> : null}
+        {collabId ? <p className="muted">This session is open.</p> : null}
         <div className="lib" style={{ marginTop: 16 }}>
           {sessions.map((s) => (
             <article key={s.id} className="collab-card">
               <strong>{s.name}</strong>
-              <p className="muted">{s.id}</p>
               <div className="file-row">
                 <button className="ghost" type="button" onClick={() => void joinCollab(s.id)}>
                   Open
                 </button>
                 <button className="ghost" type="button" onClick={() => void pushCollab(s.id)}>
-                  Push
+                  Update
                 </button>
               </div>
             </article>
           ))}
         </div>
-        {!sessions.length ? <p className="muted">No sessions yet. Create one to share this Studio graph.</p> : null}
+        {!sessions.length ? <p className="muted">No sessions yet. Name one and press New session.</p> : null}
         {log ? <p className="log">{log}</p> : null}
       </div>
     );
@@ -3076,10 +3839,10 @@ export function StudioClient() {
     const pickedStatus = !picked
       ? ""
       : picked.available
-        ? "ready"
+        ? "Ready"
         : picked.configured
-          ? "key stored, spend off"
-          : "no key";
+          ? "Key saved, paid runs off"
+          : "Needs a key";
     const mark = (id: string, on: boolean) => {
       const row = rows[id];
       const label = id === "mock" ? "Local" : row?.display_name || id;
@@ -3104,7 +3867,7 @@ export function StudioClient() {
         <p className="eyebrow">Vinci</p>
         <h2>Connect</h2>
         <p className="muted lede">
-          Bring your own keys. Higgsfield and Magnific / Freepik are first-class HTTP plugins. Custom MCP is extra. Keys stay on this machine in <code>~/.vinci/keys</code>.
+          Paste a provider key. Higgsfield, Magnific, and Freepik are built in. Keys stay on this computer in <code>~/.vinci/keys</code>.
         </p>
         <p className="eyebrow">Connected</p>
         <div className="connect-grid" id="connected-grid">
@@ -3138,21 +3901,21 @@ export function StudioClient() {
             onChange={(ev) => setConnectId(ev.target.value)}
           >
             <option value="">New connector</option>
-            <optgroup label="HTTP plugins">
+            <optgroup label="Providers">
               {httpIds.map((id) => (
                 <option key={id} value={id}>
                   {rows[id]?.display_name || id}
                 </option>
               ))}
             </optgroup>
-            <optgroup label="MCP">
+            <optgroup label="Other servers">
               {mcpExtra.map((id) => (
                 <option key={id} value={id}>
                   {rows[id]?.display_name || id}
                 </option>
               ))}
-              {rows.mcp ? <option value="mcp">Custom MCP</option> : null}
-              <option value="mcp_new">Named MCP</option>
+              {rows.mcp ? <option value="mcp">Custom server</option> : null}
+              <option value="mcp_new">Another server</option>
             </optgroup>
           </select>
         </div>
@@ -3160,7 +3923,7 @@ export function StudioClient() {
           <div className="connect-sheet" id="connect-sheet">
             <span className="kind">Local</span>
             <strong>Local</strong>
-            <p className="muted">Local provider. No key required.</p>
+            <p className="muted">On this computer. No key.</p>
             <button
               className="ghost"
               type="button"
@@ -3179,10 +3942,10 @@ export function StudioClient() {
           </div>
         ) : connectId === "mcp_new" ? (
           <div className="connect-sheet" id="connect-sheet">
-            <span className="kind">Custom MCP</span>
-            <strong>Named MCP</strong>
+            <span className="kind">Custom server</span>
+            <strong>Another server</strong>
             <p className="muted">
-              Extra MCP servers sit beside Custom MCP. Pick a slug, URL, and optional OAuth authorize URL.
+              Add another server next to Custom server. It needs a short name, an address, and an optional sign-in address.
             </p>
             <label>Label</label>
             <input
@@ -3191,7 +3954,7 @@ export function StudioClient() {
               onChange={(ev) => setKeyDraft((d) => ({ ...d, "label-mcp_new": ev.target.value }))}
               placeholder="ComfyUI"
             />
-            <label>Id slug</label>
+            <label>Short name</label>
             <input
               id="slug-mcp_new"
               value={keyDraft["slug-mcp_new"] || ""}
@@ -3200,21 +3963,21 @@ export function StudioClient() {
               }
               placeholder="comfy"
             />
-            <label>MCP URL</label>
+            <label>Server address</label>
             <input
               id="url-mcp_new"
               value={keyDraft["url-mcp_new"] || ""}
               onChange={(ev) => setKeyDraft((d) => ({ ...d, "url-mcp_new": ev.target.value }))}
               placeholder="http://127.0.0.1:8765/mcp"
             />
-            <label>Authorize URL (optional)</label>
+            <label>Sign-in address (optional)</label>
             <input
               id="authurl-mcp_new"
               value={keyDraft["authurl-mcp_new"] || ""}
               onChange={(ev) => setKeyDraft((d) => ({ ...d, "authurl-mcp_new": ev.target.value }))}
-              placeholder="https://…/oauth/authorize"
+              placeholder="https://…/sign-in"
             />
-            <label>Bearer token (optional)</label>
+            <label>Access token (optional)</label>
             <input
               id="key-mcp_new"
               type="password"
@@ -3223,35 +3986,35 @@ export function StudioClient() {
               onChange={(ev) => setKeyDraft((d) => ({ ...d, "key-mcp_new": ev.target.value }))}
             />
             <button className="run" type="button" onClick={() => void addNamedMcp()}>
-              Add MCP
+              Add server
             </button>
           </div>
         ) : picked ? (
           <div className="connect-sheet" id="connect-sheet">
-            <span className="kind">{picked.kind === "mcp" ? "Custom MCP" : "HTTP plugin"}</span>
+            <span className="kind">{picked.kind === "mcp" ? "Custom server" : "Provider"}</span>
             <strong>{picked.display_name || connectId}</strong>
             <div className="muted">
-              {picked.secret_name} · {pickedStatus}
+              {pickedStatus}
             </div>
             {picked.docs ? (
               <p className="muted">
-                <a href={picked.docs} target="_blank" rel="noreferrer">docs</a>
+                <a href={picked.docs} target="_blank" rel="noreferrer">Provider docs</a>
               </p>
             ) : null}
             {mcpPicked ? (
               <>
-                <label>MCP URL</label>
+                <label>Server address</label>
                 <input
                   value={keyDraft[`url-${connectId}`] ?? picked.url ?? ""}
                   onChange={(ev) => setKeyDraft((d) => ({ ...d, [`url-${connectId}`]: ev.target.value }))}
                   placeholder="http://127.0.0.1:8765/mcp"
                   id={`url-${connectId}`}
                 />
-                <label>Authorize URL (optional)</label>
+                <label>Sign-in address (optional)</label>
                 <input
                   value={keyDraft[`authurl-${connectId}`] ?? picked.authorize_url ?? ""}
                   onChange={(ev) => setKeyDraft((d) => ({ ...d, [`authurl-${connectId}`]: ev.target.value }))}
-                  placeholder="https://…/oauth/authorize"
+                  placeholder="https://…/sign-in"
                   id={`authurl-${connectId}`}
                 />
               </>
@@ -3265,7 +4028,7 @@ export function StudioClient() {
               onChange={(ev) => setKeyDraft((d) => ({ ...d, [`key-${connectId}`]: ev.target.value }))}
               placeholder={picked.secret_name}
             />
-            <label>Or env var name</label>
+            <label>Or the name of an environment variable</label>
             <input
               id={`env-${connectId}`}
               value={keyDraft[`env-${connectId}`] || ""}
@@ -3279,13 +4042,13 @@ export function StudioClient() {
                   id={`acct-${connectId}`}
                   value={keyDraft[`acct-${connectId}`] || ""}
                   onChange={(ev) => setKeyDraft((d) => ({ ...d, [`acct-${connectId}`]: ev.target.value }))}
-                  placeholder="CLOUDFLARE_ACCOUNT_ID"
+                  placeholder="Account id"
                 />
               </>
             ) : null}
             {(picked.extra_secret_names || []).map((name) => (
               <div key={name}>
-                <label>Paste {name}</label>
+                <label>Paste the extra key</label>
                 <input
                   id={`extra-${connectId}`}
                   type="password"
@@ -3298,7 +4061,7 @@ export function StudioClient() {
             ))}
             <div className="file-row">
               <button className="ghost" type="button" onClick={() => void oauthStart(connectId)}>
-                {picked.auth === "oauth" ? "Sign in" : "Start OAuth"}
+                Sign in
               </button>
               {picked.auth_state === "connected" || picked.auth_state === "needs_reconnect" ? (
                 <button
@@ -3309,7 +4072,7 @@ export function StudioClient() {
                       method: "POST",
                     })
                       .then(() => boot())
-                      .catch((err) => setLog(String(err instanceof Error ? err.message : err)));
+                      .catch((err) => setLog(plainError(err)));
                   }}
                 >
                   Disconnect
@@ -3323,20 +4086,20 @@ export function StudioClient() {
         ) : (
           <div className="connect-sheet idle" id="connect-sheet">
             <strong>New connector</strong>
-            <p className="muted">Pick a mark or choose from the list. HTTP plugins take a key. Custom MCP takes a URL.</p>
+            <p className="muted">Pick a mark, or choose from the list. Providers take a key. A custom server takes an address.</p>
           </div>
         )}
         <div className="connect-routing">
-          <p className="eyebrow">Routing</p>
-          <label>Preference</label>
+          <p className="eyebrow">Model choice</p>
+          <label>Prefer</label>
           <select value={pref} onChange={(ev) => setPref(ev.target.value)}>
-            <option value="cheapest">cheapest</option>
-            <option value="fastest">fastest</option>
-            <option value="quality">quality</option>
+            <option value="cheapest">Lowest price</option>
+            <option value="fastest">Fastest</option>
+            <option value="quality">Best quality</option>
           </select>
-          <label>Max cost per run (USD)</label>
-          <input id="max-cost" value={maxCost} onChange={(ev) => setMaxCost(ev.target.value)} placeholder="none" />
-          <label>Monthly cap USD</label>
+          <label>Max price per run (USD)</label>
+          <input id="max-cost" value={maxCost} onChange={(ev) => setMaxCost(ev.target.value)} placeholder="No limit" />
+          <label>Monthly limit (USD)</label>
           <input id="monthly-cap" value={monthlyCap} onChange={(ev) => setMonthlyCap(ev.target.value)} placeholder="none" />
           <button
             className="ghost"
@@ -3351,15 +4114,44 @@ export function StudioClient() {
                   body: JSON.stringify(body),
                 });
                 setDoctor(await api<Doctor>("/doctor"));
-                setLog("Routing saved.");
+                setLog("Model choice saved.");
               } catch (err) {
-                setLog(String(err instanceof Error ? err.message : err));
+                setLog(plainError(err));
               }
             }}
           >
-            Save routing
+            Save model choice
           </button>
         </div>
+      </div>
+    );
+  } else if (page === "settings") {
+    main = (
+      <div className="keys connect">
+        <p className="eyebrow">Vinci</p>
+        <h2>Settings</h2>
+        <p className="muted lede">Preferences on this computer. Provider keys stay in Connect.</p>
+        <OutputSettingsPanel
+          outputDestKind={outputDestKind}
+          setOutputDestKind={setOutputDestKind}
+          outputLocalDir={outputLocalDir}
+          setOutputLocalDir={setOutputLocalDir}
+          outputPhotosAlbum={outputPhotosAlbum}
+          setOutputPhotosAlbum={setOutputPhotosAlbum}
+          outputR2Prefix={outputR2Prefix}
+          setOutputR2Prefix={setOutputR2Prefix}
+          outputR2Configured={outputR2Configured}
+          onSave={async () => {
+            try {
+              await saveOutputDestination();
+            } catch (err) {
+              setLog(plainError(err));
+            }
+          }}
+        />
+        <button className="ghost" type="button" onClick={() => setPage("assets")}>
+          View Assets
+        </button>
       </div>
     );
   } else if (page === "skills") {
@@ -3384,7 +4176,7 @@ export function StudioClient() {
     main = (
       <div className="keys">
         <h2>Find</h2>
-        <label>Query</label>
+        <label>Search</label>
         <input value={findQ} onChange={(ev) => setFindQ(ev.target.value)} />
         <button
           className="run"
@@ -3394,11 +4186,11 @@ export function StudioClient() {
             setFindHits(body.hits || []);
           }}
         >
-          Search index
+          Search
         </button>
         {findHits.map((h, i) => (
           <div className="hit" key={i}>
-            <div>{h.uri}</div>
+            <div>{findHitUri(h.uri)}</div>
             <div className="muted">{(h.transcript || "").slice(0, 160)}</div>
           </div>
         ))}
@@ -3408,8 +4200,8 @@ export function StudioClient() {
     main = (
       <div className="keys">
         <h2>Cost report</h2>
-        <p className="muted">USD by provider.</p>
-        <pre className="log">{costBody || "loading…"}</pre>
+        <p className="muted">What you have spent, by provider.</p>
+        <pre className="log">{costBody || "Loading…"}</pre>
       </div>
     );
   }
@@ -3450,7 +4242,8 @@ export function StudioClient() {
   const canvasKeyRef = useRef<(ev: KeyboardEvent) => void>(() => {});
   canvasKeyRef.current = (ev) => {
     const el = ev.target as HTMLElement | null;
-    if (el?.closest("input, textarea, select, [contenteditable='true']")) return;
+    if (commandOpen || toolsOpen || avatarOpen) return;
+    if (el?.closest("input, textarea, select, [contenteditable='true'], .node-pill")) return;
     if (ev.key === " ") {
       if (el?.closest("button")) return; // let a focused toolbar button activate
       ev.preventDefault();
@@ -3483,6 +4276,10 @@ export function StudioClient() {
     };
   }, [page, view]);
 
+  useEffect(() => {
+    if (!selectedNode) setInspectorOpen(false);
+  }, [selectedNode]);
+
   // Wheel pans; pinch or ⌘/Ctrl+wheel zooms around the cursor. Non-passive so the page does not scroll.
   useEffect(() => {
     const el = boardRef.current;
@@ -3504,6 +4301,34 @@ export function StudioClient() {
   }, [page, view]);
 
   useEffect(() => {
+    try {
+      setPinnedIds(parsePinned(localStorage.getItem(PIN_STORAGE_KEY)));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PROJECT_STORAGE_KEY);
+      const file = raw ? readProjectFile(raw) : null;
+      if (file) applyProject(file);
+    } catch {
+      /* ignore a blocked or corrupt project file */
+    }
+    setProjectReady(true);
+  }, [applyProject]);
+
+  useEffect(() => {
+    if (!projectReady) return;
+    try {
+      localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(writeActive(project, graph, comments, viewport)));
+    } catch {
+      /* ignore */
+    }
+  }, [comments, graph, project, projectReady, viewport]);
+
+  useEffect(() => {
     if (!navOpen) return;
     function onKey(ev: KeyboardEvent) {
       if (ev.key === "Escape") setNavOpen(false);
@@ -3512,20 +4337,53 @@ export function StudioClient() {
     return () => window.removeEventListener("keydown", onKey);
   }, [navOpen]);
 
+  useEffect(() => {
+    function onKey(ev: KeyboardEvent) {
+      if (isCommandHotkey(ev)) {
+        ev.preventDefault();
+        setCommandOpen((open) => !open);
+        setCommandQuery("");
+        setCommandIndex(0);
+        setToolsOpen(false);
+        setAvatarOpen(false);
+        return;
+      }
+      if (ev.key === "Escape") {
+        setCommandOpen(false);
+        setToolsOpen(false);
+        setAvatarOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
-    <div className={"shell" + (wantsInsp ? " with-insp" : "")} data-testid="vinci-studio-root">
-      {navOpen ? (
-        <button type="button" className="rail-scrim" aria-label="Close menu" onClick={() => setNavOpen(false)} />
+    <div
+      className={"shell" + (wantsInsp ? " with-insp" : "")}
+      data-testid="vinci-studio-root"
+    >
+      {navOpen || toolsOpen || commandOpen || avatarOpen ? (
+        <button
+          type="button"
+          className="rail-scrim"
+          aria-label="Close menu"
+          onClick={() => {
+            setNavOpen(false);
+            closeShellOverlays();
+          }}
+        />
       ) : null}
-      <nav id="studio-rail" className={"rail" + (navOpen ? " open" : "")} aria-label="Studio">
-        <svg className="mark" viewBox="0 0 32 32" aria-hidden="true">
-          <rect width="32" height="32" rx="8" fill="#34c6c0" />
-          <path d="M9 7h5l2 11 2-11h5L18 25h-4L9 7z" fill="#06262a" />
-        </svg>
-        {railGroups.flatMap((group) => {
+      <nav
+        id="studio-rail"
+        className={"rail" + (navOpen ? " open" : "")}
+        aria-label="Studio"
+        data-testid="studio-sidebar"
+      >
+        <VinciLogo />
+        {RAIL_GROUPS.flatMap((group) => {
           const items = group.items.map((item) => {
-            const on =
-              item.flyout === "image" ? imageOn : item.flyout === "video" ? videoOn : page === item.id;
+            const on = railItemOn(item, page);
             const button = (
               <button
                 key={item.id}
@@ -3533,34 +4391,23 @@ export function StudioClient() {
                 className={on ? "on" : ""}
                 title={item.title}
                 aria-label={item.title}
-                onClick={() => openFlyoutPage(item.id)}
+                onClick={() => openPage(item.id)}
               >
-                <RailIcon d={item.d} title={item.title} />
+                <RailIcon d={item.icon} title={item.title} />
                 <span className="rail-label">{item.title}</span>
               </button>
             );
             if (!item.flyout) return button;
             const kind = item.flyout;
-            const features: { id: PageId; name: string; blurb: string }[] =
-              kind === "image"
-                ? [
-                    { id: "image", name: "Create Image", blurb: "Stills from a prompt or reference" },
-                    { id: "upscale", name: "Upscale Still", blurb: "Increase resolution on a still" },
-                    { id: "adapts", name: "Adapts", blurb: "Partner and multi-ratio ad presets" },
-                  ]
-                : [
-                    { id: "video", name: "Create Video", blurb: "Motion from a prompt or still" },
-                    { id: "speak", name: "Talking Head", blurb: "Avatar video from a still and a line" },
-                  ];
             return (
               <div className="rail-entry" key={item.id}>
                 {button}
                 <div className="rail-flyout">
                   <div>
                     <p className="rail-flyout-h">Features</p>
-                    {features.map((row) => (
-                      <button key={row.id} className="flyout-row" type="button" onClick={() => openFlyoutPage(row.id)}>
-                        <strong>{row.name}</strong>
+                    {FLYOUT_FEATURES[kind].map((row) => (
+                      <button key={row.id} className="flyout-row" type="button" onClick={() => openPage(row.id)}>
+                        <strong>{row.title}</strong>
                         <span>{row.blurb}</span>
                       </button>
                     ))}
@@ -3576,11 +4423,11 @@ export function StudioClient() {
                           onClick={() => pickFlyoutModel(row, kind)}
                         >
                           <strong>{row.display_name || row.id}</strong>
-                          <span>{row.provider || "model"}</span>
+                          <span>{row.provider || "Model"}</span>
                         </button>
                       ))
                     ) : (
-                      <p className="rail-flyout-empty">No models yet</p>
+                      <p className="rail-flyout-empty">No models yet. Open Connect to add a key.</p>
                     )}
                   </div>
                 </div>
@@ -3592,23 +4439,163 @@ export function StudioClient() {
             : items;
         })}
         <span className="spacer" />
-        <button type="button" className={page === "skills" ? "on rail-text" : "rail-text"} title="Skills" aria-label="Skills" onClick={() => openFlyoutPage("skills")}>
-          <span className="rail-label">Skills</span>
-        </button>
-        <button type="button" className={page === "find" ? "on rail-text" : "rail-text"} title="Find" aria-label="Find" onClick={() => openFlyoutPage("find")}>
-          <span className="rail-label">Find</span>
-        </button>
-        <button type="button" className={page === "cost" ? "on rail-text has-mini" : "rail-text has-mini"} title="Cost report" aria-label="Cost report" onClick={() => openFlyoutPage("cost")}>
-          <span className="rail-mini" aria-hidden="true">$</span>
-          <span className="rail-label">Cost report</span>
-        </button>
-        <button type="button" className={page === "keys" ? "on rail-text" : "rail-text"} title="Connect" aria-label="Connect" onClick={() => openFlyoutPage("keys")}>
-          <span className="rail-label">Connect</span>
-        </button>
+        {RAIL_FOOTER.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={(page === item.id ? "on rail-text" : "rail-text") + (item.id === "cost" ? " has-mini" : "")}
+            title={item.title}
+            aria-label={item.title}
+            onClick={() => openPage(item.id)}
+          >
+            {item.id === "cost" ? <span className="rail-mini" aria-hidden="true">$</span> : null}
+            <span className="rail-label">{item.title}</span>
+          </button>
+        ))}
+        <div className="rail-avatar">
+          <button
+            type="button"
+            className={avatarOpen || page === "keys" || page === "cost" ? "on" : ""}
+            title="Account"
+            aria-label="Account menu"
+            aria-expanded={avatarOpen}
+            onClick={() => {
+              setAvatarOpen((open) => !open);
+              setToolsOpen(false);
+              setCommandOpen(false);
+            }}
+          >
+            <span className="avatar-face" aria-hidden="true">
+              {live.length ? (live[0][1].display_name || live[0][0]).slice(0, 1).toUpperCase() : "V"}
+            </span>
+            <span className="rail-label">{live.length ? live.map(([id, row]) => row.display_name || id).join(" · ") : "Local"}</span>
+          </button>
+          {avatarOpen ? (
+            <div className="avatar-menu" role="menu">
+              {AVATAR_MENU.map((item) => (
+                <button key={item.id} type="button" role="menuitem" onClick={() => openPage(item.page)}>
+                  {item.title}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </nav>
+      {toolsOpen ? (
+        <div className="all-tools" role="dialog" aria-label="All tools" data-testid="all-tools-popover">
+          <input
+            autoFocus
+            value={toolsQuery}
+            onChange={(ev) => setToolsQuery(ev.target.value)}
+            placeholder="Search tools"
+            aria-label="Search tools"
+          />
+          <div className="all-tools-tabs">
+            {popoverTabs.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                className={toolsCategory === tab ? "on" : ""}
+                onClick={() => setToolsCategory(tab)}
+              >
+                {tabLabel(tab)}
+              </button>
+            ))}
+          </div>
+          <div className="all-tools-list">
+            {popoverTools.map((tool) => (
+              <div key={tool.id} className="all-tools-row">
+                <button type="button" className="all-tools-open" onClick={() => openPage(tool.page)}>
+                  <strong>{tool.title}</strong>
+                  <span>{tool.blurb}</span>
+                </button>
+                {tool.pinable ? (
+                  <button
+                    type="button"
+                    className={pinnedIds.includes(tool.id) ? "pin on" : "pin"}
+                    aria-label={pinnedIds.includes(tool.id) ? `Unpin ${tool.title}` : `Pin ${tool.title}`}
+                    onClick={() => persistPins(togglePin(pinnedIds, tool.id))}
+                  >
+                    {pinnedIds.includes(tool.id) ? "Unpin" : "Pin"}
+                  </button>
+                ) : null}
+              </div>
+            ))}
+            {popoverModels.length ? <p className="rail-flyout-h">Models</p> : null}
+            {popoverModels.map((row) => (
+              <div key={row.flyout + row.id} className="all-tools-row">
+                <button
+                  type="button"
+                  className="all-tools-open"
+                  onClick={() => {
+                    const model = models.find((item) => item.id === row.id);
+                    if (model) pickFlyoutModel(model, row.flyout);
+                  }}
+                >
+                  <strong>{row.title}</strong>
+                  <span>{row.blurb}</span>
+                </button>
+              </div>
+            ))}
+            {popoverTools.length === 0 && popoverModels.length === 0 ? <p className="muted">No tools match. Try another word.</p> : null}
+          </div>
+        </div>
+      ) : null}
+      {commandOpen ? (
+        <div
+          className="command-box"
+          role="dialog"
+          aria-label="Search"
+          data-testid="command-box"
+        >
+          <input
+            autoFocus
+            value={commandQuery}
+            placeholder="Search tools, assets, projects"
+            aria-label="Search tools, assets, projects"
+            onChange={(ev) => {
+              setCommandQuery(ev.target.value);
+              setCommandIndex(0);
+            }}
+            onKeyDown={(ev) => {
+              if (ev.key === "ArrowDown") {
+                ev.preventDefault();
+                setCommandIndex((i) => moveCommandIndex(i, 1, commandHits.length));
+              } else if (ev.key === "ArrowUp") {
+                ev.preventDefault();
+                setCommandIndex((i) => moveCommandIndex(i, -1, commandHits.length));
+              } else if (ev.key === "Enter") {
+                ev.preventDefault();
+                const hit = pickCommandHit(commandHits, commandIndex);
+                if (hit) openCommandHit(hit);
+              }
+            }}
+          />
+          <div className="command-list">
+            {commandHits.map((hit, i) => (
+              <button
+                key={hit.kind + (hit.flyout || "") + hit.id}
+                type="button"
+                className={i === commandIndex ? "on" : ""}
+                onMouseEnter={() => setCommandIndex(i)}
+                onClick={() => openCommandHit(hit)}
+              >
+                <strong>{hit.title}</strong>
+                <span>
+                  {kindWord(hit.kind)} · {hit.blurb}
+                </span>
+              </button>
+            ))}
+            {commandHits.length === 0 ? <p className="muted">No matches. Try another word.</p> : null}
+          </div>
+        </div>
+      ) : null}
       <section className="main">
         <div className="top">
           <div className="top-lead">
+            <span className="top-logo">
+              <VinciLogo variant="mark" />
+            </span>
             <button
               type="button"
               className="rail-menu"
@@ -3621,55 +4608,168 @@ export function StudioClient() {
                 <path d="M3 5h12M3 9h12M3 13h12" stroke="currentColor" />
               </svg>
             </button>
-            <h1>{titles[page]}</h1>
+            <h1 className={page === "canvas" ? "sr-only" : ""}>
+              {page === "speak" || page === "upscale" || page === "adapts"
+                ? getApp(effectAppId)?.name || titles[page]
+                : titles[page]}
+            </h1>
+            {page === "canvas" ? (
+              <div className="space-switch" role="group" aria-label="Canvas view">
+                <button type="button" className={view === "canvas" ? "on" : ""} onClick={() => setView("canvas")}>
+                  Canvas
+                </button>
+                <button type="button" className={view === "timeline" ? "on" : ""} onClick={() => setView("timeline")}>
+                  Timeline
+                </button>
+              </div>
+            ) : null}
           </div>
-          {page === "image" || page === "video" || page === "upscale" || page === "speak" ? (
+          {page === "video" ? (
             <button
-              className="ghost"
+              className="icon-btn"
               type="button"
+              aria-label="New"
+              title="New"
               onClick={() => {
                 setStageReset(true);
                 setUploadId(null);
                 setFirstFrameId(null);
                 setLastFrameId(null);
+                setExtendMode(false);
+                setExtendClipId(null);
+                setAudioId(null);
+                setVideoExtraIds([]);
                 setModelsOpen(false);
               }}
             >
-              + New
+              <DockIcon d={DOCK_ICON.add} />
+            </button>
+          ) : page === "speak" || page === "upscale" || page === "adapts" ? (
+            <button
+              className="icon-btn"
+              type="button"
+              aria-label="New"
+              title="New"
+              onClick={() => setEffectAppId(defaultAppIdForPage(page))}
+            >
+              <DockIcon d={DOCK_ICON.add} />
             </button>
           ) : page === "canvas" ? (
-            <div className="views">
-              <button type="button" className={view === "canvas" ? "on" : ""} onClick={() => setView("canvas")}>
-                Canvas
-              </button>
-              <button type="button" className={view === "timeline" ? "on" : ""} onClick={() => setView("timeline")}>
-                Timeline
-              </button>
-            </div>
+            <span />
           ) : (
             <span />
           )}
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span className="muted">≈ {money(spent)}</span>
-            <button className="chip" type="button" onClick={() => setPage("keys")}>
-              {live.length
-                ? live.map(([id, row]) => row.display_name || id).join(" · ") + (doctor.live_spend ? "" : " · spend off")
-                : "Local"}
+          <div className="top-meta">
+            {page === "canvas" ? (
+              <>
+                <button
+                  type="button"
+                  className="access-pill"
+                  aria-label="Local access"
+                  aria-expanded={avatarOpen}
+                  onClick={() => {
+                    setAvatarOpen((open) => !open);
+                    setCommandOpen(false);
+                    setToolsOpen(false);
+                  }}
+                >
+                  <span className="access-dot" aria-hidden="true" />
+                  Local
+                </button>
+                <button
+                  className="run canvas-generate"
+                  type="button"
+                  disabled={graph.nodes.length === 0 || !!runBlocker(graph.nodes.map((node) => node.id))}
+                  title={runBlocker(graph.nodes.map((node) => node.id)) || "Runs this step and the steps that feed it."}
+                  onClick={() => void generate({ graph: true })}
+                >
+                  Run
+                </button>
+              </>
+            ) : (
+              <span className="muted">≈ {money(spent)}</span>
+            )}
+            <button
+              className="ghost"
+              type="button"
+              title="All tools"
+              onClick={() => {
+                setToolsOpen(true);
+                setToolsQuery("");
+                setToolsCategory("all");
+                setCommandOpen(false);
+                setAvatarOpen(false);
+              }}
+            >
+              All tools
             </button>
           </div>
         </div>
         <div className="page">{main}</div>
       </section>
-      {wantsInsp ? (
+      {wantsInsp && page === "canvas" && canvasSelected ? (
+        (() => {
+          const n = canvasSelected;
+          const modelRows = comboModels(nodeModels(n.capability || "t2i"), true, statusSuffix);
+          const model = models.find((m) => m.id === (n.model_id || modelIdForNode(n, selected?.id || "", models, connected)));
+          const aspects = listedOr(model?.constraints?.aspect_ratios, ASPECTS);
+          const resolutions = listedOr(model?.constraints?.resolutions, RESOLUTIONS);
+          const runText = runCost([n.id]).text;
+          const runBlock = n.type === "generate" ? runBlocker([n.id]) : null;
+          return (
+            <CanvasInspector
+              node={n}
+              label={NODE_CATALOG.find((row) => row.capability === n.capability)?.label || n.capability || n.id}
+              placeholder={defaultsFor(n.capability).placeholder}
+              prompt={promptValue(n.params)}
+              models={modelRows}
+              modelId={n.model_id || ""}
+              aspects={aspects}
+              resolutions={resolutions}
+              count={countValue(n.params)}
+              aspect={pickListed(n.params?.aspect_ratio, aspects)}
+              resolution={pickListed(n.params?.resolution, resolutions)}
+              costText={runText}
+              runDisabled={Boolean(runBlock) || busy}
+              runTitle={runBlock || `Run · ${runText || "cost unknown"}`}
+              assets={assets}
+              apiBase={API}
+              promptRef={settleOnUnmount}
+              onPromptFocus={() => {
+                promptBaseRef.current = graph;
+              }}
+              onPromptChange={(text) => {
+                setGraphHistory((h) => preview(h, setParams(h.present, n.id, { prompt: text })));
+              }}
+              onPromptBlur={settlePrompt}
+              onCount={(value) => setGraph((g) => setParams(g, n.id, countPatch(value)))}
+              onAspect={(v) => setGraph((g) => setParams(g, n.id, { aspect_ratio: v }))}
+              onResolution={(v) => setGraph((g) => setParams(g, n.id, { resolution: v }))}
+              onModel={(value) => setGraph((g) => updateNode(g, n.id, { model_id: value || undefined }))}
+              onSeed={(v) => {
+                const seed = v.trim();
+                setGraph((g) => setParams(g, n.id, { seed: seed === "" ? "" : Number(seed) || seed }));
+              }}
+              onRun={() => runNodes([n.id])}
+              onClose={() => setInspectorOpen(false)}
+              library={mentionItems}
+              onMention={(item) => applyLibraryMention(n.id, item)}
+              onAddSlot={(role) => {
+                if (refsOf(n.params).length >= REF_LIMIT) return;
+                nodeRefTarget.current = n.id;
+                nodeRefRole.current = role;
+                nodeRefInput.current?.click();
+              }}
+              onRemoveRef={(assetId) => setGraph((g) => setParams(g, n.id, removeRef(g.nodes.find((row) => row.id === n.id)?.params, assetId)))}
+            />
+          );
+        })()
+      ) : wantsInsp ? (
         <aside className="insp">
           <div className="insp-h">
             <p className="eyebrow">Cinema stack</p>
             <h2>{titles[page]}</h2>
-            <p className="muted">
-              {page === "upscale"
-                ? "Increase resolution on the still. A prompt is not required."
-                : "Pick a template or describe a shot. Price sits on Generate."}
-            </p>
+            <p className="muted">Pick a template or describe a shot. Price sits on Generate.</p>
           </div>
           <div className="fields">
             <div>
@@ -3678,22 +4778,26 @@ export function StudioClient() {
                 inputId="model"
                 value={selected?.id || ""}
                 models={comboModels(composeModels, true, statusSuffix)}
-                onChange={setModelId}
+                onChange={(id) => {
+                  modelTouched.current = true;
+                  setModelId(id);
+                }}
               />
             </div>
-            <div className={page === "upscale" && !mode.showMagnific ? "hidden" : ""}>
+            <div>
               <label htmlFor="prompt">{animateStill(selected) ? "Motion" : "Prompt"}</label>
-              <textarea
+              <PromptMention
                 id="prompt"
+                testId="compose-prompt"
+                mentionTestId="compose-mention"
                 placeholder={
-                  page === "upscale"
-                    ? "Optional. Leave blank to upscale the still as-is."
-                    : animateStill(selected)
-                      ? "How the still should move."
-                      : "north-light oak cube, 50mm cinema still."
+                  animateStill(selected)
+                    ? "How the still should move."
+                    : "north-light oak cube, 50mm cinema still."
                 }
                 value={prompt}
-                onChange={(ev) => setPrompt(ev.target.value)}
+                items={mentionItems}
+                onChange={setPrompt}
               />
             </div>
             {opticalPage ? (
@@ -3812,7 +4916,7 @@ export function StudioClient() {
                 />
               </div>
             ) : null}
-            {page !== "upscale" && mode.showMotion && durs.length ? (
+            {mode.showMotion && durs.length ? (
               <div>
                 <label>Duration</label>
                 <Pills
@@ -3832,7 +4936,7 @@ export function StudioClient() {
                 <Pills
                   id="resolution-pills"
                   values={selected?.constraints?.resolutions || []}
-                  current={resolution || selected?.constraints?.resolutions?.[0] || ""}
+                  current={shownResolution()}
                   onPick={(v) => {
                     setResolution(v);
                     stampSelected({ resolution: v });
@@ -3980,28 +5084,18 @@ export function StudioClient() {
                         return;
                       }
                       const asset = await ingest(file);
-                      setCast((rows) => [
-                        ...rows.filter((c) => c.name !== name),
-                        { name, assetId: asset.id, kind: elementKind },
-                      ]);
+                      const made = createLibraryItem({ name, kind: elementKind, refs: [asset.id] });
+                      if (!made.ok) {
+                        setLog(made.error);
+                        return;
+                      }
+                      setCast((rows) => upsertLibraryItem(rows.map(asLibraryItem), made.item).map(asCastRow));
                       setCastName("");
                       setLog("Cast @" + name);
                     }}
                   >
                     Add to cast
                   </button>
-                </div>
-              </div>
-            ) : null}
-            {page === "upscale" && uploadId && lastDigest ? (
-              <div className="split" id="split-view">
-                <div>
-                  <span className="muted">Before</span>
-                  <img className="split-before" src={`${API}/assets/${uploadId}/file`} alt="" />
-                </div>
-                <div>
-                  <span className="muted">After</span>
-                  <img className="split-after" src={`${API}/assets/${lastDigest}/file`} alt="" />
                 </div>
               </div>
             ) : null}
@@ -4060,16 +5154,7 @@ export function StudioClient() {
           <div className="onboard-card">
             <p className="eyebrow">Vinci</p>
             <p className="muted">{ONBOARD_STEPS[onboardStep].kicker}</p>
-            <h2>
-              {onboardStep === 0 ? (
-                <>
-                  {"Your Brand's "}
-                  <em className="serif">Superagency</em>
-                </>
-              ) : (
-                ONBOARD_STEPS[onboardStep].title
-              )}
-            </h2>
+            <h2>{ONBOARD_STEPS[onboardStep].title}</h2>
             <p className="onboard-copy">{ONBOARD_STEPS[onboardStep].copy}</p>
             <div className="onboard-actions">
               <button

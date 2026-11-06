@@ -40,8 +40,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/runtime" "$APP/Contents/
 
 cp "$MAC/Info.plist" "$APP/Contents/Info.plist"
 swiftc -parse-as-library -O -target arm64-apple-macos13.0 \
-  -framework Cocoa -framework WebKit -framework AVFoundation \
-  "$MAC/VinciStudio.swift" "$MAC/SmokeRunner.swift" -o "$APP/Contents/MacOS/VinciStudio"
+  -framework Cocoa -framework WebKit -framework AVFoundation -framework Photos \
+  "$MAC/VinciStudio.swift" "$MAC/SmokeRunner.swift" "$MAC/NativeBridge.swift" -o "$APP/Contents/MacOS/VinciStudio"
 
 cp -R "$PY_PREFIX/." "$APP/Contents/Resources/runtime/"
 cp -R "$STUDIO_BUNDLE/." "$APP/Contents/Resources/studio/"
@@ -52,8 +52,9 @@ tar -xzf "$CACHE/$NODE_TAR" -C "$NODE_EXTRACT" --strip-components=1
 cp "$NODE_EXTRACT/bin/node" "$APP/Contents/Resources/studio/node"
 cp "$CACHE/ffmpeg-arm64/bin/ffmpeg" "$APP/Contents/Resources/bin/ffmpeg"
 cp "$CACHE/ffmpeg-arm64/bin/ffprobe" "$APP/Contents/Resources/bin/ffprobe"
-cp "$ROOT/legal/THIRD_PARTY_NOTICES.md" "$APP/Contents/Resources/legal/THIRD_PARTY_NOTICES.md"
-cp "$ROOT/legal/provenance.json" "$APP/Contents/Resources/legal/provenance.json"
+# generate-notices-sbom.sh wrote these to dist/legal (build output, not in git).
+cp "$DIST/legal/THIRD_PARTY_NOTICES.md" "$APP/Contents/Resources/legal/THIRD_PARTY_NOTICES.md"
+cp "$DIST/legal/provenance.json" "$APP/Contents/Resources/legal/provenance.json"
 
 python3 "$ROOT/scripts/mac/verify-packaging-paths.py" --app "$APP"
 python3 "$ROOT/scripts/mac/verify-macho.py" "$APP"

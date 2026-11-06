@@ -14,7 +14,13 @@ from typing import Any
 import yaml
 from fastapi import FastAPI, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
 from pydantic import BaseModel, Field
 from vinci_core.paths import default_home
 from vinci_core.templates import get_template, preview_svg
@@ -89,6 +95,14 @@ class SettingsBody(BaseModel):
     require_approval_over: float | None = None
     gsheet_id: str | None = None
     gsheet_tab: str | None = None
+    output_destination_kind: str | None = None
+    output_local_dir: str | None = None
+    output_photos_album: str | None = None
+    output_r2_prefix: str | None = None
+
+
+class LibraryItemPatch(BaseModel):
+    favorite: bool | None = None
 
 
 class InstallSkillBody(BaseModel):
@@ -355,6 +369,10 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
                     require_approval_over=body.require_approval_over,
                     gsheet_id=body.gsheet_id,
                     gsheet_tab=body.gsheet_tab,
+                    output_destination_kind=body.output_destination_kind,
+                    output_local_dir=body.output_local_dir,
+                    output_photos_album=body.output_photos_album,
+                    output_r2_prefix=body.output_r2_prefix,
                 )
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -497,6 +515,115 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
     @app.get("/find")
     def find(q: str = "", limit: int = 20) -> dict[str, Any]:
         return {"query": q, "hits": eng.find(q, limit=limit)}
+
+    @app.get("/library")
+    def list_library(
+        kind: str | None = None,
+        model: str | None = None,
+        provider: str | None = None,
+        date: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        q: str | None = None,
+        tool: str | None = None,
+        section: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        return eng.list_library(
+            kind=kind,
+            model=model,
+            provider=provider,
+            date=date,
+            date_from=date_from,
+            date_to=date_to,
+            q=q,
+            tool=tool,
+            section=section,
+            limit=limit,
+        )
+
+    @app.post("/library/scan")
+    def scan_library() -> dict[str, Any]:
+        return eng.list_library()
+
+    @app.get("/library/items/{item_id}")
+    def get_library_item(item_id: str) -> dict[str, Any]:
+        item = eng.get_library_item(item_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="library item not found")
+        return item
+
+    @app.patch("/library/items/{item_id}")
+    def patch_library_item(
+        item_id: str, body: LibraryItemPatch, request: Request
+    ) -> dict[str, Any]:
+        if body.favorite is None:
+            raise HTTPException(status_code=400, detail="favorite is required")
+
+        def _patch() -> dict[str, Any]:
+            try:
+                return eng.favorite_library_item(item_id, body.favorite is True)
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail="library item not found") from exc
+
+        return with_journal_ack(
+            request,
+            method="PATCH",
+            path=f"/library/items/{item_id}",
+            payload={"item_id": item_id, "favorite": body.favorite},
+            blob_keys=[],
+            build_response=_patch,
+        )
+
+    @app.post("/library/items/{item_id}/restore")
+    def restore_library_item(item_id: str, request: Request) -> dict[str, Any]:
+        def _restore() -> dict[str, Any]:
+            try:
+                return eng.restore_library_item(item_id)
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail="library item not found") from exc
+
+        return with_journal_ack(
+            request,
+            method="POST",
+            path=f"/library/items/{item_id}/restore",
+            payload={"item_id": item_id},
+            blob_keys=[],
+            build_response=_restore,
+        )
+
+    @app.delete("/library/items/{item_id}")
+    def delete_library_item(
+        item_id: str, request: Request, purge: bool = False
+    ) -> dict[str, Any]:
+        def _delete() -> dict[str, Any]:
+            try:
+                if purge:
+                    return eng.purge_library_item(item_id)
+                return eng.delete_library_item(item_id)
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail="library item not found") from exc
+
+        return with_journal_ack(
+            request,
+            method="DELETE",
+            path=f"/library/items/{item_id}",
+            payload={"item_id": item_id, "purge": purge},
+            blob_keys=[],
+            build_response=_delete,
+        )
+
+    @app.get("/library/items/{item_id}/file")
+    def library_item_file(item_id: str) -> Response:
+        try:
+            path, blob, mime = eng.library_media(item_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="library item not found") from exc
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="library media not found") from exc
+        if path is not None:
+            return FileResponse(path, media_type=mime)
+        return Response(content=blob or b"", media_type=mime)
 
     @app.get("/assets")
     def list_assets() -> dict[str, Any]:

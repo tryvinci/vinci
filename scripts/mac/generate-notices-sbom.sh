@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
-# Write THIRD_PARTY_NOTICES.md and provenance.json (fail closed; requires committed notice inputs).
+# Write THIRD_PARTY_NOTICES.md and provenance.json to dist/legal (build output, not in git).
+# Fails closed: needs the npm notices that prepare-studio-bundle.sh writes to dist/notices.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-OUT_LEGAL="${1:-$ROOT/legal}"
+OUT_LEGAL="${1:-$ROOT/dist/legal}"
 LOCK="$ROOT/scripts/mac/deps.lock.json"
 PY_NOTICES="$ROOT/scripts/mac/python-bundle-notices.json"
-NPM_NOTICES="$ROOT/scripts/mac/studio-bundle-npm-notices.json"
+NPM_NOTICES="${VINCI_MAC_NPM_NOTICE_DIR:-$ROOT/dist/notices}/studio-bundle-npm-notices.json"
 mkdir -p "$OUT_LEGAL"
-bash "$ROOT/scripts/mac/sync-bundle-notices.sh"
-python3 "$ROOT/scripts/mac/verify-studio-bundle-npm-graph.py"
-python3 - "$LOCK" "$OUT_LEGAL/provenance.json" "$OUT_LEGAL/THIRD_PARTY_NOTICES.md" "$PY_NOTICES" "$NPM_NOTICES" <<'PY'
+# Read-only on inputs: prepare-studio-bundle.sh (run first by build-app.sh) already wrote the
+# npm graph, synced the notices, and checked the graph against dist/studio-bundle.
+# Explicit paths: the verify fails (does not skip npm) when the npm notices are missing.
+python3 "$ROOT/scripts/mac/verify-notices-inputs.py" "$PY_NOTICES" "$NPM_NOTICES"
+python3 - "$LOCK" "$OUT_LEGAL/provenance.json" "$OUT_LEGAL/THIRD_PARTY_NOTICES.md" "$PY_NOTICES" "$NPM_NOTICES" "$ROOT/scripts/mac" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -19,6 +22,9 @@ out_json = Path(sys.argv[2])
 out_md = Path(sys.argv[3])
 py_path = Path(sys.argv[4])
 npm_path = Path(sys.argv[5])
+sys.path.insert(0, sys.argv[6])
+from notice_graph import LOCAL_DIGESTS, local_digests
+
 lock = json.loads(lock_path.read_text(encoding="utf-8"))
 py_data = json.loads(py_path.read_text(encoding="utf-8"))
 npm_data = json.loads(npm_path.read_text(encoding="utf-8"))
@@ -26,6 +32,10 @@ if not py_data.get("pypi") or not py_data.get("local"):
     raise SystemExit("python-bundle-notices.json incomplete")
 if not npm_data.get("packages"):
     raise SystemExit("studio-bundle-npm-notices.json incomplete")
+# build-python-runtime.sh hashes the trees it installs; without that file, list names only.
+digests = local_digests()
+local = [{**p, **({"sha256": digests[p["name"]]} if digests else {})} for p in py_data["local"]]
+print(f"local trees: {len(local)}; sha256 " + (f"from {LOCAL_DIGESTS}" if digests else "skipped (no build-time digests)"))
 
 provenance = {
     "schema": 3,
@@ -54,7 +64,7 @@ provenance = {
         },
     },
     "pypi": py_data["pypi"],
-    "pypi_local": py_data["local"],
+    "pypi_local": local,
     "npm": npm_data["packages"],
 }
 
@@ -62,7 +72,7 @@ pypi_lines = "\n".join(
     f"- **{p.get('name')}** {p.get('version', '')} — {p.get('license', 'UNKNOWN')}" for p in py_data["pypi"][:80]
 )
 local_lines = "\n".join(
-    f"- **{p.get('name')}** `{p.get('sha256', '')[:12]}…` — {p.get('license', 'MIT')}" for p in py_data["local"]
+    f"- **{p['name']}**{' `' + p['sha256'][:12] + '…`' if 'sha256' in p else ''} — {p.get('license', 'MIT')}" for p in local
 )
 npm_lines = "\n".join(
     f"- **{p.get('name')}** {p.get('version', '')} — {p.get('licenses', 'UNKNOWN')}" for p in npm_data["packages"][:80]
@@ -100,5 +110,5 @@ FFmpeg built with `{provenance['bundled_runtimes']['ffmpeg']['build_flags']}`. S
 MIT unless noted in package metadata. See `legal/AGPL_CLEAN_ROOM.md`.
 """
 out_md.write_text(md, encoding="utf-8")
-print(f"notices ok: {out_md}")
+print(f"notices ok: {out_md} + {out_json.name} (pypi {len(py_data['pypi'])}, npm {len(npm_data['packages'])})")
 PY

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Fail closed: notice inputs must match lock/local/npm graphs exactly."""
+"""Fail closed: notice inputs must match lock/local/npm graphs exactly.
+
+The npm graph + notices are build output in dist/notices (COREPRODUC-508 part B). Until
+prepare-studio-bundle.sh writes them, only the Python inputs are checked.
+"""
 
 from __future__ import annotations
 
@@ -11,6 +15,8 @@ from pathlib import Path
 _SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_SCRIPT_DIR))
 from notice_graph import (  # noqa: E402
+    NPM_GRAPH,
+    NPM_NOTICES,
     graph_platform_fingerprint,
     local_paths_from_manifest,
     normalize_name,
@@ -24,8 +30,18 @@ LICENSE_BAD = re.compile(r"^(UNKNOWN|unknown|)$")
 
 
 def main() -> int:
+    """Check the Python notices, then the npm notices when a bundle build wrote them.
+
+    Usage: ``verify-notices-inputs.py [python-notices.json] [npm-notices.json]``. An npm
+    path on the command line must exist (``generate-notices-sbom.sh`` gives one). With no
+    npm path and no default file (for example the Mac workflow check before the bundle),
+    the npm checks are skipped and logged.
+
+    Returns:
+        0 when the inputs are ok, else 1.
+    """
     py_path = ROOT / "scripts/mac/python-bundle-notices.json"
-    npm_path = ROOT / "scripts/mac/studio-bundle-npm-notices.json"
+    npm_path = NPM_NOTICES
     if len(sys.argv) > 1:
         py_path = Path(sys.argv[1])
     if len(sys.argv) > 2:
@@ -33,7 +49,9 @@ def main() -> int:
     lock_path = ROOT / "scripts/mac/python-bundle-runtime.lock.txt"
     manifest_path = ROOT / "scripts/mac/python-bundle-local.manifest.json"
     pkg_lock = ROOT / "package-lock.json"
-    for path in (py_path, npm_path, lock_path, manifest_path, pkg_lock):
+    check_npm = len(sys.argv) > 2 or npm_path.is_file()
+    inputs = [py_path, lock_path, manifest_path] + ([npm_path, pkg_lock] if check_npm else [])
+    for path in inputs:
         if not path.is_file():
             print(f"missing: {path}", file=sys.stderr)
             return 1
@@ -43,33 +61,15 @@ def main() -> int:
 
     lock_versions = pypi_versions_from_lock(lock_path)
     try:
-        manifest_local = local_paths_from_manifest(manifest_path)
+        manifest_local = set(local_paths_from_manifest(manifest_path))
     except ValueError as exc:
         print(f"local manifest invalid: {exc}", file=sys.stderr)
         return 1
-    try:
-        npm_graph = studio_npm_graph(pkg_lock)
-    except ValueError as exc:
-        print(f"npm graph invalid: {exc}", file=sys.stderr)
-        return 1
-
     py_data = json.loads(py_path.read_text(encoding="utf-8"))
-    npm_data = json.loads(npm_path.read_text(encoding="utf-8"))
-    graph_path = ROOT / "scripts/mac/studio-bundle-npm-graph.json"
-    npm_fp = npm_data.get("graph_fingerprint", {})
-    graph_fp = graph_platform_fingerprint(graph_path)
-    if npm_fp != graph_fp:
-        print(
-            f"stale npm notices fingerprint {npm_fp} != graph {graph_fp}",
-            file=sys.stderr,
-        )
-        return 1
-
     pypi_rows = py_data.get("pypi", [])
     local_rows = py_data.get("local", [])
-    npm_rows = npm_data.get("packages", [])
 
-    if not pypi_rows or not local_rows or not npm_rows:
+    if not pypi_rows or not local_rows:
         print("empty notice section", file=sys.stderr)
         return 1
 
@@ -107,21 +107,43 @@ def main() -> int:
     seen_local: set[str] = set()
     for row in local_rows:
         rel = row.get("name", "")
-        sha = row.get("sha256", "")
         license_ = str(row.get("license", "")).strip()
-        if not rel or LICENSE_BAD.match(license_) or len(sha) != 64:
-            print(f"invalid local notice row: {row}", file=sys.stderr)
+        # A committed sha256 goes stale on each source edit; digests are build-time only.
+        if not rel or LICENSE_BAD.match(license_) or "sha256" in row:
+            print(f"invalid local notice row (name + license, no sha256): {row}", file=sys.stderr)
             return 1
         if rel not in manifest_local:
             print(f"local notice not in manifest: {rel}", file=sys.stderr)
             return 1
-        if manifest_local[rel] != sha:
-            print(f"stale local sha for {rel}", file=sys.stderr)
-            return 1
         seen_local.add(rel)
 
-    if seen_local != set(manifest_local.keys()):
+    if seen_local != manifest_local:
         print("local notice paths do not match manifest graph", file=sys.stderr)
+        return 1
+
+    if not check_npm:
+        print(f"npm notice checks skipped: no {npm_path} (prepare-studio-bundle.sh writes it)")
+        print(f"notices inputs ok (python only: {len(pypi_rows)} pypi, {len(local_rows)} local)")
+        return 0
+
+    try:
+        npm_graph = studio_npm_graph(pkg_lock)
+    except ValueError as exc:
+        print(f"npm graph invalid: {exc}", file=sys.stderr)
+        return 1
+    npm_data = json.loads(npm_path.read_text(encoding="utf-8"))
+    npm_fp = npm_data.get("graph_fingerprint", {})
+    graph_fp = graph_platform_fingerprint(NPM_GRAPH)
+    if npm_fp != graph_fp:
+        print(
+            f"stale npm notices fingerprint {npm_fp} != graph {graph_fp}"
+            " (run scripts/mac/sync-bundle-notices.sh)",
+            file=sys.stderr,
+        )
+        return 1
+    npm_rows = npm_data.get("packages", [])
+    if not npm_rows:
+        print("empty notice section", file=sys.stderr)
         return 1
 
     if len(npm_rows) != len(npm_graph):
@@ -156,7 +178,8 @@ def main() -> int:
         print("npm notice names do not match studio graph", file=sys.stderr)
         return 1
 
-    print("notices inputs ok")
+    counts = f"{len(pypi_rows)} pypi, {len(local_rows)} local, {len(npm_rows)} npm"
+    print(f"notices inputs ok ({counts})")
     return 0
 
 

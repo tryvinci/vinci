@@ -144,6 +144,244 @@ def test_wavespeed_seedvr2_image_uses_target_resolution(monkeypatch: pytest.Monk
     assert seen["body"] == {"image": "https://cdn.example/still.png", "target_resolution": "4k"}
 
 
+@pytest.mark.parametrize(
+    ("source", "route", "field"),
+    [
+        ("video", "/wavespeed-ai/infinitetalk/video-to-video", "video"),
+        ("image", "/wavespeed-ai/infinitetalk", "image"),
+    ],
+)
+def test_wavespeed_infinitetalk_forwards_audio_and_source(
+    monkeypatch: pytest.MonkeyPatch, source: str, route: str, field: str
+) -> None:
+    monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
+    blobs = {
+        "clip": b"\x00\x00\x00\x18ftypisom" + b"\x00" * 12,
+        "still": b"\x89PNG\r\n\x1a\n" + b"still",
+        "voice": b"ID3" + b"\x00" * 16,
+    }
+    provider = WavespeedProvider(api_key="ws-key", cas=_mem_cas(blobs))
+    seen: dict[str, Any] = {"uploads": []}
+
+    def fake_urlopen(request: Any, timeout: int = 30) -> _FakeResp:
+        if request.full_url.endswith("/media/upload/binary"):
+            mime = dict(request.header_items()).get("Content-type", "")
+            seen["uploads"].append(mime)
+            kind = mime.split("/")[0]
+            return _FakeResp({"data": {"download_url": f"https://cdn.example/{kind}"}})
+        seen["url"] = request.full_url
+        seen["body"] = json.loads(request.data.decode("utf-8"))
+        return _FakeResp({"data": {"id": "talk-1"}})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    inputs = {"audio": "voice", "prompt": "", source: "clip" if source == "video" else "still"}
+    req = JobRequest(
+        capability=Capability.LIPSYNC, model_id="wavespeed:infinitetalk:2026-08", inputs=inputs
+    )
+    provider.estimate(req)
+    assert provider.submit(req).ref == "talk-1"
+    assert seen["url"].endswith(route)
+    expected = {
+        field: f"https://cdn.example/{source}",
+        "audio": "https://cdn.example/audio",
+        "resolution": "720p",
+    }
+    assert seen["body"] == expected
+    assert "audio/mpeg" in seen["uploads"]
+
+
+def test_wavespeed_infinitetalk_maps_catalog_resolution_and_wav(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
+    wav = b"RIFF" + b"\x00" * 4 + b"WAVE" + b"fmt "
+    png = b"\x89PNG\r\n\x1a\n" + b"still"
+    provider = WavespeedProvider(api_key="ws-key", cas=_mem_cas({"voice": wav, "still": png}))
+    seen: dict[str, Any] = {}
+
+    def fake_urlopen(request: Any, timeout: int = 30) -> _FakeResp:
+        headers = {str(k).lower(): str(v) for k, v in request.header_items()}
+        if request.full_url.endswith("/media/upload/binary"):
+            row = (headers.get("content-type"), headers.get("file"))
+            seen.setdefault("uploads", []).append(row)
+            return _FakeResp({"data": {"download_url": "https://cdn.example/media"}})
+        seen["body"] = json.loads(request.data.decode("utf-8"))
+        return _FakeResp({"data": {"id": "talk-wav"}})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    req = JobRequest(
+        capability=Capability.LIPSYNC,
+        model_id="wavespeed:infinitetalk:2026-08",
+        inputs={"audio": "voice", "image": "still", "resolution": "1280x720"},
+    )
+    provider.estimate(req)
+    assert provider.submit(req).ref == "talk-wav"
+    assert seen["body"]["resolution"] == "720p"
+    assert ("audio/wav", "still.wav") in seen["uploads"]
+
+
+def test_wavespeed_infinitetalk_estimate_skips_remote_audio_on_local_cas(tmp_path: Path) -> None:
+    from vinci_storage.cas import ContentAddressedStore
+
+    provider = WavespeedProvider(api_key="ws-key", cas=ContentAddressedStore(tmp_path))
+    hinted = JobRequest(
+        capability=Capability.LIPSYNC,
+        model_id="wavespeed:infinitetalk:2026-08",
+        inputs={"audio": "https://cdn.example/a.mp3", "resolution": "720p", "duration": 10},
+    )
+    assert provider.estimate(hinted).amount == 0.60
+    half = JobRequest(
+        capability=Capability.LIPSYNC,
+        model_id="wavespeed:infinitetalk:2026-08",
+        inputs={"audio": "https://cdn.example/a.mp3", "resolution": "720p", "duration": 0.5},
+    )
+    # 0.5s rounds up, then the 3s minimum bills $0.18 at 720p.
+    assert provider.estimate(half).amount == 0.18
+    remote = JobRequest(
+        capability=Capability.LIPSYNC,
+        model_id="wavespeed:infinitetalk:2026-08",
+        inputs={"audio": "https://cdn.example/long.mp3", "resolution": "720p"},
+    )
+    with pytest.raises(ValueError, match="duration"):
+        provider.estimate(remote)
+    zero = JobRequest(
+        capability=Capability.LIPSYNC,
+        model_id="wavespeed:infinitetalk:2026-08",
+        inputs={"audio": "https://cdn.example/long.mp3", "resolution": "720p", "duration": 0},
+    )
+    with pytest.raises(ValueError, match="positive duration"):
+        provider.estimate(zero)
+    with pytest.raises(RuntimeError, match="estimate"):
+        provider.submit(zero)
+
+
+def test_wavespeed_infinitetalk_estimate_rejects_nonfinite_remote_hint() -> None:
+    provider = WavespeedProvider(api_key="ws-key")
+    for duration in (float("nan"), float("inf"), "1e400"):
+        req = JobRequest(
+            capability=Capability.LIPSYNC,
+            model_id="wavespeed:infinitetalk:2026-08",
+            inputs={
+                "audio": "https://cdn.example/a.mp3",
+                "resolution": "720p",
+                "duration": duration,
+            },
+        )
+        with pytest.raises(ValueError, match="positive duration"):
+            provider.estimate(req)
+
+
+def test_wavespeed_infinitetalk_estimate_rejects_nonpositive_remote_hint() -> None:
+    provider = WavespeedProvider(api_key="ws-key")
+    for duration in (0, -1, "-2"):
+        req = JobRequest(
+            capability=Capability.LIPSYNC,
+            model_id="wavespeed:infinitetalk:2026-08",
+            inputs={
+                "audio": "https://cdn.example/a.mp3",
+                "resolution": "720p",
+                "duration": duration,
+            },
+        )
+        with pytest.raises(ValueError, match="positive duration"):
+            provider.estimate(req)
+
+
+def test_wavespeed_infinitetalk_estimate_uses_rate_and_duration() -> None:
+    provider = WavespeedProvider(api_key="ws-key")
+    ten = JobRequest(
+        capability=Capability.LIPSYNC,
+        model_id="wavespeed:infinitetalk:2026-08",
+        inputs={"audio": "https://cdn.example/a.mp3", "resolution": "1280x720", "duration": 10},
+    )
+    priced = provider.estimate(ten)
+    assert priced.amount == 0.60
+    unknown = JobRequest(
+        capability=Capability.LIPSYNC,
+        model_id="wavespeed:infinitetalk:2026-08",
+        inputs={"audio": "https://cdn.example/a.mp3"},
+    )
+    assert provider.estimate(unknown).amount == 0.30
+    short = JobRequest(
+        capability=Capability.LIPSYNC,
+        model_id="wavespeed:infinitetalk:2026-08",
+        inputs={"audio": "https://cdn.example/a.mp3", "resolution": "480p", "duration": 1},
+    )
+    assert provider.estimate(short).amount == 0.09
+
+
+def _mpeg1_layer3(kbps_index: int) -> bytes:
+    """One MPEG1 layer3 frame at 44100 Hz. Index 9 is 128 kbps and index 1 is 32."""
+    kbps = (0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0)[kbps_index]
+    size = 144 * kbps * 1000 // 44100
+    return bytes((0xFF, 0xFB, kbps_index << 4, 0x00)) + b"\x00" * (size - 4)
+
+
+def test_wavespeed_infinitetalk_estimate_reads_mp3_length() -> None:
+    from vinci_provider_wavespeed.plugin import _mp3_seconds
+
+    # 382 frames is just under 10s. The mixed file is 128 kbps, then 32 kbps.
+    frames = 382
+    steady = _mpeg1_layer3(9) * frames
+    mixed = _mpeg1_layer3(9) + _mpeg1_layer3(1) * (frames - 1)
+    expected = frames * 1152 / 44100
+    assert _mp3_seconds(mixed) == pytest.approx(expected)
+    provider = WavespeedProvider(api_key="ws-key", cas=_mem_cas({"steady": steady, "mixed": mixed}))
+    for name in ("steady", "mixed"):
+        req = JobRequest(
+            capability=Capability.LIPSYNC,
+            model_id="wavespeed:infinitetalk:2026-08",
+            inputs={"audio": name, "resolution": "720p"},
+        )
+        assert provider.estimate(req).amount == 0.60
+
+
+def test_mp3_seconds_counts_mpeg2_frames() -> None:
+    from vinci_provider_wavespeed.plugin import _mp3_seconds
+
+    # MPEG2 layer3, 64 kbps, 22050 Hz, with the padding bit set.
+    size = 72 * 64 * 1000 // 22050 + 1
+    frame = bytes((0xFF, 0xF3, 0x82, 0x00)) + b"\x00" * (size - 4)
+    assert _mp3_seconds(frame) == pytest.approx(576 / 22050)
+
+
+def test_mp3_seconds_counts_mpeg25_frames_after_id3() -> None:
+    from vinci_provider_wavespeed.plugin import _mp3_seconds
+
+    # MPEG-2.5 layer3, 64 kbps, 11025 Hz. 191 frames is just under 10s.
+    size = 72 * 64 * 1000 // 11025
+    frame = bytes((0xFF, 0xE3, 0x80, 0x00)) + b"\x00" * (size - 4)
+    blob = b"ID3\x03\x00\x00" + b"\x00" * 4 + frame * 191
+    assert _mp3_seconds(blob) == pytest.approx(191 * 576 / 11025)
+    provider = WavespeedProvider(api_key="ws-key", cas=_mem_cas({"voice": blob}))
+    req = JobRequest(
+        capability=Capability.LIPSYNC,
+        model_id="wavespeed:infinitetalk:2026-08",
+        inputs={"audio": "voice", "resolution": "720p"},
+    )
+    assert provider.estimate(req).amount == 0.60
+
+
+def test_wavespeed_infinitetalk_estimate_prices_local_audio_over_a_hint() -> None:
+    fmt = b"\x01\x00\x01\x00" + (8000).to_bytes(4, "little") * 2 + b"\x01\x00\x08\x00"
+    wav = b"RIFF" + b"\x00\x00\x00\x00" + b"WAVE" + b"fmt " + (16).to_bytes(4, "little")
+    wav += fmt + b"data" + (80_000).to_bytes(4, "little")
+    provider = WavespeedProvider(api_key="ws-key", cas=_mem_cas({"voice": wav, "junk": b"nope"}))
+    voiced = JobRequest(
+        capability=Capability.LIPSYNC,
+        model_id="wavespeed:infinitetalk:2026-08",
+        inputs={"audio": "voice", "resolution": "720p", "duration": 5},
+    )
+    # 10s of audio at 720p is $0.60. The hint says 5s, which would be $0.30.
+    assert provider.estimate(voiced).amount == 0.60
+    hinted = JobRequest(
+        capability=Capability.LIPSYNC,
+        model_id="wavespeed:infinitetalk:2026-08",
+        inputs={"audio": "junk", "resolution": "720p", "duration": 10},
+    )
+    assert provider.estimate(hinted).amount == 0.60
+
+
 def test_higgsfield_status_live_completed(monkeypatch: pytest.MonkeyPatch) -> None:
     provider = HiggsfieldProvider(api_key="key-id", api_secret="key-secret")
     seen: dict[str, str] = {}

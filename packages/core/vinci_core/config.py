@@ -16,6 +16,16 @@ class BudgetConfig:
 
 
 @dataclass
+class OutputDestinationConfig:
+    """User-facing export target for generated media (credentials stay in env)."""
+
+    kind: str = "none"
+    local_dir: str = ""
+    photos_album: str = "Vinci"
+    r2_prefix: str = "vinci/outputs/"
+
+
+@dataclass
 class VinciConfig:
     home: Path
     protocol_version: str = "0.1.0"
@@ -27,6 +37,7 @@ class VinciConfig:
     daemon_port: int = 4310
     gsheet_id: str = ""
     gsheet_tab: str = ""
+    output_destination: OutputDestinationConfig = field(default_factory=OutputDestinationConfig)
 
     @property
     def cas_dir(self) -> Path:
@@ -53,6 +64,7 @@ def load_config(home: Path | None = None) -> VinciConfig:
     if path.exists():
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     budget_raw = data.get("budget") or {}
+    output_raw = data.get("output_destination") or {}
     return VinciConfig(
         home=root,
         protocol_version=str(data.get("protocol_version", "0.1.0")),
@@ -67,6 +79,12 @@ def load_config(home: Path | None = None) -> VinciConfig:
         daemon_port=int(data.get("daemon_port", 4310)),
         gsheet_id=str(data.get("gsheet_id") or ""),
         gsheet_tab=str(data.get("gsheet_tab") or ""),
+        output_destination=OutputDestinationConfig(
+            kind=str(output_raw.get("kind") or data.get("output_destination_kind") or "none"),
+            local_dir=str(output_raw.get("local_dir") or ""),
+            photos_album=str(output_raw.get("photos_album") or "Vinci"),
+            r2_prefix=str(output_raw.get("r2_prefix") or "vinci/outputs/"),
+        ),
     )
 
 
@@ -93,6 +111,21 @@ def write_config(config: VinciConfig) -> Path:
         lines.append(f"gsheet_id = {_toml_value(config.gsheet_id)}")
     if config.gsheet_tab:
         lines.append(f"gsheet_tab = {_toml_value(config.gsheet_tab)}")
+    od = config.output_destination
+    if od.kind and od.kind != "none":
+        lines.extend(
+            [
+                "",
+                "[output_destination]",
+                f"kind = {_toml_value(od.kind)}",
+            ]
+        )
+        if od.local_dir:
+            lines.append(f"local_dir = {_toml_value(od.local_dir)}")
+        if od.photos_album and od.photos_album != "Vinci":
+            lines.append(f"photos_album = {_toml_value(od.photos_album)}")
+        if od.r2_prefix and od.r2_prefix != "vinci/outputs/":
+            lines.append(f"r2_prefix = {_toml_value(od.r2_prefix)}")
     lines.extend(["", "[budget]"])
     if config.budget.monthly_cap_usd is not None:
         lines.append(f"monthly_cap_usd = {config.budget.monthly_cap_usd}")

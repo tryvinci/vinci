@@ -7,6 +7,7 @@ __pycache__/
 .ruff_cache/
 .pytest_cache/
 dist/
+.mac-bundle-cache/
 build/
 node_modules/
 .DS_Store
@@ -27,4 +28,3 @@ deploy/cloudflare/.deploy-state.json
 deploy/cloudflare/.deploy-state.json.fixture
 apps/cli/dist/
 packages/protocol/dist/
-ci-artifacts/

@@ -189,13 +189,14 @@ case "$*" in
     touch "$MAC_STUB_ROOT/dist/Vinci-Studio-0.1.0-alpha-arm64.zip"
     exit 0 ;;
   *build-dmg.sh*)
+    # Real digests via the stub shasum: /usr/bin/shasum is missing on some Linux hosts (Arch).
     if [ "${{MAC_STUB_SKIP_ARTIFACTS:-0}}" = "1" ]; then exit 0; fi
     touch "$MAC_STUB_ROOT/dist/Vinci-Studio-0.1.0-alpha-arm64.dmg"
     zip="$MAC_STUB_ROOT/dist/Vinci-Studio-0.1.0-alpha-arm64.zip"
     dmg="$MAC_STUB_ROOT/dist/Vinci-Studio-0.1.0-alpha-arm64.dmg"
-    zh=$(/usr/bin/shasum -a 256 "$zip" 2>/dev/null | awk '{{print $1}}')
+    zh=$(MAC_STUB_BAD_SHA=0 "{sbin}/shasum" -a 256 "$zip" | awk '{{print $1}}')
     echo "$zh  $(basename "$zip")" > "$MAC_STUB_ROOT/dist/SHA256SUMS"
-    dh=$(/usr/bin/shasum -a 256 "$dmg" 2>/dev/null | awk '{{print $1}}')
+    dh=$(MAC_STUB_BAD_SHA=0 "{sbin}/shasum" -a 256 "$dmg" | awk '{{print $1}}')
     echo "$dh  $(basename "$dmg")" >> "$MAC_STUB_ROOT/dist/SHA256SUMS"
     exit 0 ;;
   *)

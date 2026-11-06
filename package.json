@@ -1,7 +1,7 @@
 {
   "name": "vinci",
   "private": true,
-  "description": "Open-source AI video studio monorepo for local generation workflows.",
+  "description": "Vinci — open-source generative media runtime (workspace root). JS packages live under @tryvinci/*.",
   "bin": {
     "vinci": "apps/cli/dist/index.js"
   },

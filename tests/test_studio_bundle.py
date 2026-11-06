@@ -4,14 +4,25 @@ import os
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_studio_bundle_is_self_contained() -> None:
+@pytest.fixture()
+def iso() -> Iterator[Path]:
+    """Scratch dir for the ~517 MB bundle copy. Removed also when the copy or the test fails."""
+    with tempfile.TemporaryDirectory(prefix="studio-iso-") as raw:
+        yield Path(raw)
+
+
+def test_studio_bundle_is_self_contained(iso: Path) -> None:
     bundle = ROOT / "dist" / "studio-bundle"
     if not (bundle / "server.js").is_file():
+        # Writes dist/studio-bundle + dist/notices (build output, not in git).
         subprocess.run(
             ["/bin/bash", "scripts/mac/prepare-studio-bundle.sh"],
             cwd=ROOT,
@@ -19,7 +30,6 @@ def test_studio_bundle_is_self_contained() -> None:
             env={**os.environ, "NODE_ENV": "production"},
         )
     assert (bundle / "server.js").is_file()
-    iso = Path(tempfile.mkdtemp(prefix="studio-iso-"))
     shutil.copytree(bundle, iso, dirs_exist_ok=True, ignore_dangling_symlinks=True)
     node = shutil.which("node") or "node"
     proc = subprocess.Popen(

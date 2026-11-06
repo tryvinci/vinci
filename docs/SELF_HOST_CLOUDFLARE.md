@@ -49,7 +49,7 @@ The script prints the **observed** `*.workers.dev` URL parsed from `wrangler dep
 - **Ack ordering:** for journaled mutations, immutable blob write must succeed first, then DO journal commit, then HTTP response. Orphan blobs without DO references are acceptable; DO references without blobs are not.
 - **Env:** `VINCI_DURABLE_JOURNAL=do` with `VINCI_DO_JOURNAL_BASE` (worker public origin **or** full `…/__vinci/journal` prefix; deploy script sets the latter after `wrangler deploy`); `local` for loopback journal file tests; `off` preserves legacy loopback-only behavior.
 - **Timer snapshots:** `VINCI_HOME_SNAPSHOT_ROLE=compact` (default in container) runs optional R2 home tarball compaction only — **not** an acknowledgement durability boundary. Do not rely on shutdown/final snapshots for zero-loss acks.
-- **Coverage:** see [`docs/internal/MUTATION_INVENTORY.md`](internal/MUTATION_INVENTORY.md). All inventoried mutation paths are wired for durable-before-ack when journaling is enabled (`local` / `do`); loopback default keeps `VINCI_DURABLE_JOURNAL=off`.
+- **Coverage:** see `docs/MUTATION_INVENTORY.md`. All inventoried mutation paths are wired for durable-before-ack when journaling is enabled (`local` / `do`); loopback default keeps `VINCI_DURABLE_JOURNAL=off`.
 - **Interrupted work:** when `VINCI_DURABLE_JOURNAL` is `do` or `local`, startup calls `reconcile_pending_outbox` (replay committed ops, resume runs, terminal `:output` receipts). `recover_interrupted_jobs` runs only for **non-journaled** R2 home snapshots (`journal` off) and marks local in-flight rows failed.
 - **Provider refs:** committed ledger child `{op_id}:provider_inflight:{node_id}` survives fresh `VINCI_HOME`; resume polls vendor status when `durable_job_reconciliation` is true. Vendors without reconciliation (e.g. synchronous OpenAI image submit) **fail closed** if a ledger ref exists after home loss — no blind resubmit.
 
@@ -83,5 +83,6 @@ The script prints the **observed** `*.workers.dev` URL parsed from `wrangler dep
 
 - Real R2 SigV4 against Cloudflare is **not** exercised in CI (mock dir only).
 - Container image build is defined in `deploy/cloudflare/container/Dockerfile`; run `docker build -f deploy/cloudflare/container/Dockerfile .` from repo root to verify locally.
+- Bug fixed (first occurrence, Nov 2026, COREPRODUC-502; failed on every run): `deploy/cloudflare/package-lock.json` had no `@esbuild/*` platform entries, so `npm ci` (and `./scripts/deploy.sh`) stopped with `EUSAGE` "Missing: @esbuild/... from lock file". The lockfile is regenerated. Direct dependency versions did not change.
 
 Canonical tree: [`tryvinci/vinci`](https://github.com/tryvinci/vinci) (`apps/vinci-oss/` in the monorepo).

@@ -8,7 +8,7 @@ Follow the [quickstart](quickstart.md) until `./scripts/vinci studio` prints a l
 
 ## 2. Start from a template
 
-Open **Explore** and pick a template close to what you want to make. Templates are finished workflow graphs: a product spot, a scene sequence, a short. Picking one fills in the steps for you.
+Open **Home** (or **Create** / Ctrl+K) and pick a template close to what you want to make. Templates are finished workflow graphs: a product spot, a scene sequence, a short. Picking one fills in the steps for you. A blank **Canvas** asks you to choose a first node (Image Gen, Video Gen, Upscaler, Image Editor, or Voiceover).
 
 ## 3. Describe your shot
 

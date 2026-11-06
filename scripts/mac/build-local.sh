@@ -240,7 +240,7 @@ python3 "${ROOT}/scripts/mac/verify-packaging-paths.py" --app "${APP}"
 bash "${ROOT}/scripts/mac/scan-bundle.sh" "${APP}"
 codesign --verify --strict --deep "${APP}"
 
-echo "build-local.sh: outputs verified (ad-hoc codesign, not notarized; Gatekeeper may block; see docs/internal/MAC_ALPHA.md)" >&2
+echo "build-local.sh: outputs verified (ad-hoc codesign, not notarized — Gatekeeper may block; see docs/MAC_ALPHA.md)" >&2
 echo "  git HEAD: ${GIT_SHA}" >&2
 echo "  app: ${APP}" >&2
 echo "  zip: ${ZIP}" >&2

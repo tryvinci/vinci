@@ -10,10 +10,7 @@ from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_SCRIPT_DIR))
-from notice_graph import packages_in_bundle_node_modules  # noqa: E402
-
-ROOT = Path(__file__).resolve().parents[2]
-COMMITTED = ROOT / "scripts/mac/studio-bundle-npm-graph.json"
+from notice_graph import NPM_GRAPH, packages_in_bundle_node_modules  # noqa: E402
 
 
 def write_graph(bundle_root: Path, out_path: Path) -> dict:
@@ -38,7 +35,7 @@ def main() -> int:
         print("usage: write-studio-bundle-npm-graph.py <bundle-dir> [out-json]", file=sys.stderr)
         return 2
     bundle = Path(sys.argv[1])
-    out = Path(sys.argv[2]) if len(sys.argv) > 2 else COMMITTED
+    out = Path(sys.argv[2]) if len(sys.argv) > 2 else NPM_GRAPH
     write_graph(bundle, out)
     print(f"wrote {out} ({len(json.loads(out.read_text())['packages'])} packages)")
     return 0

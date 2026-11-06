@@ -2,7 +2,7 @@
 
 import type { RefObject } from "react";
 import type { AdaptPresetRow, AdaptTarget, BatchStatus } from "./adapt-ui-shared";
-import { byteCapLabel, engineLabel, formatBytes, groupPresets, groupTitle, sourceOf } from "./adapt-ui-shared";
+import { byteCapLabel, engineLabel, formatBytes, groupPresets, groupTitle, sourceLabel, sourceOf } from "./adapt-ui-shared";
 
 type PresetDraft = {
   label: string;
@@ -62,16 +62,16 @@ export function AdaptsPanel(props: Props) {
     <div className="adapt-studio" id="adapt-panel">
       <header className="adapt-head">
         <div>
-          <p className="eyebrow">Image › Adapts</p>
+          <p className="eyebrow">Adapts</p>
           <h2>Exports</h2>
           <p className="muted adapt-note">
-            Partner presets. Fit/pad/crop is local ffmpeg. Human-review advisories are guidance, not automatic compliance.
+            Partner sizes. Fit, pad, and crop run on this computer. The notes are guidance, not a compliance check.
           </p>
         </div>
         <div className="adapt-head-actions">
           <span className={engine.real ? "adapt-pill adapt-pill-real" : "adapt-pill adapt-pill-mock"}>{engine.text}</span>
           <button className="ghost" type="button" onClick={props.onOpenFlow}>
-            Flow
+            Preview
           </button>
         </div>
       </header>
@@ -81,7 +81,7 @@ export function AdaptsPanel(props: Props) {
           <h3>Source</h3>
           <div className="adapt-source-frame">
             {props.adaptSourceId ? (
-              <img alt="Source creative" src={`${props.apiBase}/assets/${props.adaptSourceId}/file`} />
+              <img alt="Source still" src={`${props.apiBase}/assets/${props.adaptSourceId}/file`} />
             ) : (
               <div className="adapt-source-empty">
                 <button className="run" type="button" onClick={() => props.fileInputRef.current?.click()}>
@@ -100,7 +100,7 @@ export function AdaptsPanel(props: Props) {
               </button>
             ) : null}
           </div>
-          <h3 className="adapt-subhead">Presets</h3>
+          <h3 className="adapt-subhead">Sizes</h3>
           <div className="adapt-groups" id="adapt-preset-groups">
             {groups.map((group, index) => (
               <div key={group.partner} className="adapt-group">
@@ -113,7 +113,7 @@ export function AdaptsPanel(props: Props) {
                       <li key={preset.id}>
                         <span>
                           {preset.label}
-                          <em className={"adapt-source adapt-source-" + source}>{source}</em>
+                          <em className={"adapt-source adapt-source-" + source}>{sourceLabel(preset)}</em>
                           {cap ? <em className="adapt-cap">{cap}</em> : null}
                         </span>
                         {source === "custom" ? (
@@ -129,7 +129,7 @@ export function AdaptsPanel(props: Props) {
             ))}
           </div>
           <button className="ghost" id="adapt-add-preset" type="button" onClick={props.onTogglePresetForm}>
-            Add preset
+            Add a size
           </button>
           {props.presetFormOpen ? (
             <form
@@ -172,20 +172,20 @@ export function AdaptsPanel(props: Props) {
                   />
                 </label>
                 <label>
-                  KB cap
+                  Size limit (KB)
                   <input
                     inputMode="decimal"
-                    placeholder="optional"
+                    placeholder="Optional"
                     value={props.presetDraft.kb}
                     onChange={(ev) => props.onDraftChange({ ...props.presetDraft, kb: ev.target.value })}
                   />
                 </label>
               </div>
-              <p className="muted">Safe-area margins (px, optional)</p>
+              <p className="muted">Safe area margins, in pixels. Optional.</p>
               <div className="adapt-form-grid">
                 {(["left", "right", "top", "bottom"] as const).map((edge) => (
                   <label key={edge}>
-                    {edge}
+                    {edge[0].toUpperCase() + edge.slice(1)}
                     <input
                       inputMode="numeric"
                       value={props.presetDraft[edge]}
@@ -195,7 +195,7 @@ export function AdaptsPanel(props: Props) {
                 ))}
               </div>
               <button className="run" type="submit">
-                Save preset
+                Save size
               </button>
             </form>
           ) : null}
@@ -203,12 +203,12 @@ export function AdaptsPanel(props: Props) {
 
         <section className="adapt-col adapt-col-controls">
           <h3>Settings</h3>
-          <label>Presets</label>
+          <label>Sizes</label>
           <select
             value={props.adaptPartnerOnly ? "partner" : "all"}
             onChange={(ev) => props.onPartnerOnlyChange(ev.target.value === "partner")}
           >
-            <option value="partner">Partner presets</option>
+            <option value="partner">Partner sizes</option>
             <option value="all">All</option>
           </select>
 
@@ -218,8 +218,8 @@ export function AdaptsPanel(props: Props) {
             value={props.adaptLayout}
             onChange={(ev) => props.onLayoutChange(ev.target.value as "fit_pad_crop" | "ai_extend")}
           >
-            <option value="fit_pad_crop">Fit / pad / crop</option>
-            <option value="ai_extend">AI extend</option>
+            <option value="fit_pad_crop">Fit, pad, or crop</option>
+            <option value="ai_extend">Extend with a model</option>
           </select>
 
           {props.adaptLayout === "fit_pad_crop" ? (
@@ -236,7 +236,7 @@ export function AdaptsPanel(props: Props) {
             </>
           ) : null}
 
-          <h4 className="adapt-subhead">Targets</h4>
+          <h4 className="adapt-subhead">Sizes to export</h4>
           <div id="adapt-targets" className="adapt-target-list">
             {props.adaptTargets.map((row, i) => {
               const preset = props.adaptPresetChoices.find((item) => item.id === row.preset_id);
@@ -259,7 +259,7 @@ export function AdaptsPanel(props: Props) {
                           <option key={item.id} value={item.id}>
                             {item.label}
                             {byteCapLabel(item) ? ` · ${byteCapLabel(item)}` : ""}
-                            {` · ${sourceOf(item)}`}
+                            {` · ${sourceLabel(item)}`}
                           </option>
                         ))}
                       </optgroup>
@@ -270,7 +270,7 @@ export function AdaptsPanel(props: Props) {
                       {preset.width}×{preset.height}
                       {byteCapLabel(preset) ? ` · ${byteCapLabel(preset)}` : ""}
                       {preset.safe_rect ? ` · margins ${preset.safe_rect.left}/${preset.safe_rect.right}px` : ""}
-                      {` · ${sourceOf(preset)}`}
+                      {` · ${sourceLabel(preset)}`}
                     </p>
                   ) : null}
                 </div>
@@ -288,7 +288,7 @@ export function AdaptsPanel(props: Props) {
               ])
             }
           >
-            + Target
+            Add a size
           </button>
 
           {props.adaptNote ? (
@@ -297,7 +297,7 @@ export function AdaptsPanel(props: Props) {
             </p>
           ) : (
             <p className="muted adapt-note" id="adapt-safe">
-              Safe-area overlay and export byte caps validate on run.
+              Safe area and file size are checked when you run.
             </p>
           )}
 
@@ -306,27 +306,27 @@ export function AdaptsPanel(props: Props) {
               Estimate
             </button>
             <button className="run" id="adapt-run" type="button" disabled={props.busy} onClick={props.onRun}>
-              <span>{props.busy ? "Running…" : "Run Adapts"}</span>
+              <span>{props.busy ? "Working…" : "Run Adapts"}</span>
               <span id="adapt-est-btn">{props.adaptEstimateUsd == null ? "$—" : props.money(props.adaptEstimateUsd)}</span>
             </button>
           </div>
           <p className="adapt-status" id="adapt-status">
-            {props.busy ? "Running…" : props.batch ? `Done. ${checks.length} export${checks.length === 1 ? "" : "s"}.` : ""}
+            {props.busy ? "Working…" : props.batch ? `Done. ${checks.length} file${checks.length === 1 ? "" : "s"}.` : ""}
           </p>
           {props.batch ? (
             <section className="adapt-batch" id="adapt-batch">
               <header>
-                <h3>Batch</h3>
+                <h3>This run</h3>
                 {bundleHref ? (
                   <a className="ghost adapt-bundle" id="adapt-bundle" href={bundleHref}>
-                    bundle.zip
+                    Download zip
                   </a>
                 ) : null}
               </header>
               <ul>
                 {props.batch.items.map((item) => (
                   <li key={item.index} className={"adapt-batch-row is-" + item.status}>
-                    <span>Item {item.index + 1}</span>
+                    <span>Size {item.index + 1}</span>
                     <strong>{item.status}</strong>
                     {item.error ? <em>{item.error}</em> : null}
                   </li>

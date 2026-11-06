@@ -5,7 +5,7 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
-  outputFileTracingRoot: dir,
+  outputFileTracingRoot: path.join(dir, "../.."),
   async rewrites() {
     // Dev-only fallback; production Mac bundle uses app/vinci-api/[...path]/route.ts
     if (process.env.VINCI_STUDIO_USE_REWRITE === "1") {

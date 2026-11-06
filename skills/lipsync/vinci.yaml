@@ -5,6 +5,7 @@ inputs:
   prompt: { type: string, required: true }
   audio: { type: string, required: false }
   video: { type: string, required: false }
+  duration: { type: number, required: false }
 outputs:
   video: { kind: video }
 capabilities: [lipsync]

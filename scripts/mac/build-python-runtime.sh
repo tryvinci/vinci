@@ -17,7 +17,8 @@ tar -xzf "$CACHE/$PY_TAR" -C "$PREFIX" --strip-components=1
 PY="$PREFIX/bin/python3"
 export PYTHONDONTWRITEBYTECODE=1
 python3 "$ROOT/scripts/mac/verify-python-bundle-lock.py" "$ROOT/scripts/mac/python-bundle-runtime.lock.txt"
-python3 "$ROOT/scripts/mac/verify-python-local-manifest.py"
+# Checks the committed tree list, then writes build-time digests for provenance (COREPRODUC-508).
+python3 "$ROOT/scripts/mac/hash-python-local-trees.py"
 "$PY" -m pip install --no-compile --require-hashes -r "$ROOT/scripts/mac/python-bundle-runtime.lock.txt"
 while IFS= read -r rel; do
   [[ -z "$rel" ]] && continue

@@ -1,0 +1,57 @@
+/* Vinci Studio tokens.
+   Pulled from apps/vinci-landing (tryvinci.com):
+   accent hsl(177 59% 50%) = #21dad2, peach #f0dec6, paper #f7f4ee,
+   header hsl(200 35% 8%), ink/muted neutrals, Inter Tight, Instrument Serif.
+   The shell is a near-black product UI. Teal is the primary action and the
+   active mark. Surfaces use the --glass-* recipe (blur, hairline, soft shadow).
+   Loaded after globals.css so these values win over a stale :root. */
+
+:root {
+  --vinci-cyan: #21dad2;
+  --vinci-cyan-soft: #b7edea;
+  --vinci-peach: #f0dec6;
+  --vinci-paper: #f7f4ee;
+  --bg: #0c0e12;
+  --panel: #12141a;
+  --raised: #171a21;
+  --line: rgb(255 255 255 / 0.08);
+  --ink: #f4f4f5;
+  --dim: #a1a1aa;
+  --mute: #71717a;
+  --teal: var(--vinci-cyan);
+  --accent: var(--vinci-cyan);
+  --peach: var(--vinci-peach);
+  --ok: #3dcaa0;
+  --danger: #f07167;
+  --btn: var(--vinci-cyan);
+  --btn-ink: #062421;
+  --rail: #0e1014;
+  --rail-ink: #f4f4f5;
+  --board: #090b10;
+  --board-ink: #f4f4f5;
+  --hover: rgb(255 255 255 / 0.06);
+  --wash: rgb(255 255 255 / 0.06);
+  --chip: rgb(255 255 255 / 0.05);
+  --media: #07080c;
+  --bar: rgb(255 255 255 / 0.05);
+  --glass: rgb(255 255 255 / 0.05);
+  --glass-strong: rgb(255 255 255 / 0.07);
+  --glass-line: rgb(255 255 255 / 0.10);
+  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.06);
+  --glass-blur: blur(22px) saturate(140%);
+  --glass-fallback: #14161c;
+  --card-shadow: 0 28px 60px -32px rgb(0 0 0 / 0.55);
+  --glass-shadow:
+    var(--glass-highlight),
+    0 28px 60px -32px rgb(0 0 0 / 0.55);
+  --font-ui: var(--font-inter-tight), "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-instrument-serif), "Instrument Serif", Georgia, serif;
+  --radius-lg: 1rem;
+  --radius-md: 0.85rem;
+  --pill: 9999px;
+  --kind-image: #8fd9d4;
+  --kind-video: #d7b48a;
+  --kind-audio: #b7a8d4;
+  --kind-text: #c8c4b0;
+  color-scheme: dark;
+}

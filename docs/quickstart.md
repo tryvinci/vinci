@@ -19,7 +19,7 @@ make test && make conformance && make lint
 
 That starts `vinci-daemon` on `:4310` and TypeScript Studio on `:4311` (the HTML `/studio` page is a deprecated fallback). No account. Mock generations stay $0. `--html` still skips Next, but that page gets no new features.
 
-Bring your own key: in Studio, **Connect**, paste a Wavespeed / Google / fal / ElevenLabs / Cloudflare / MCP secret (or an env var name). Named MCP (`mcp_<slug>`) takes a URL plus an optional bearer. Higgsfield and Magnific also offer **Sign in**, which runs OAuth against their MCP servers and stores tokens under `~/.vinci/keys` (mode 0600) or the OS keychain. Live HTTP stays off until `VINCI_ALLOW_LIVE_SPEND=1`. Supercomputer, 3D, and Collab are first-party Studio pages on the same daemon.
+Bring your own key: in Studio, open **Connect** on the rail (or the avatar menu), paste a Wavespeed / Google / fal / ElevenLabs / Cloudflare / MCP secret (or an env var name). Named MCP (`mcp_<slug>`) takes a URL plus an optional bearer. Higgsfield and Magnific also offer **Sign in**, which runs OAuth against their MCP servers and stores tokens under `~/.vinci/keys` (mode 0600) or the OS keychain. Live HTTP stays off until `VINCI_ALLOW_LIVE_SPEND=1`. Supercomputer, 3D, and Collab stay first-party pages in All tools and the avatar menu. They are not rail icons.
 
 Phone or another Mac: `./scripts/vinci studio --lan` then load the printed LAN TypeScript URL (`:4311`) in `apps/android` or `apps/mac`. The HTML `/studio` page is a deprecated fallback.
 

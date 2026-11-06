@@ -13,7 +13,7 @@ NORTH_STAR_FILES = (
     "README.md",
     "legal/AGPL_CLEAN_ROOM.md",
     "docs/VINCI_OSS_RUNTIME.md",
-    "docs/internal/VINCI_OSS_E2E_ACHIEVEMENT.md",
+    "docs/VINCI_OSS_E2E_ACHIEVEMENT.md",
     "scripts/vinci",
     "scripts/clone-smoke.sh",
     "scripts/create-github-repo.sh",
@@ -42,7 +42,7 @@ def test_clone_tree_has_north_star_files() -> None:
     assert "GNU Affero" not in license_text
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "docs/assets/studio-tour.gif" in readme
-    assert "Quick start" in readme
+    assert "Why Vinci" in readme
     assert "VINCI_ALLOW_LIVE_SPEND=1" in readme
     assert "docs/google-sheets.md" in readme
     assert "make github" not in readme
@@ -82,7 +82,9 @@ def test_clone_tree_has_north_star_files() -> None:
     studio_client = (ROOT / "apps/studio/app/studio-client.tsx").read_text(encoding="utf-8")
     assert "/vinci-api" in studio_client
     assert "Play timeline" in studio_client
-    assert "Generate this node" in studio_client
+    assert "Choose your first node" in (ROOT / "apps/studio/app/canvas-empty.tsx").read_text(encoding="utf-8")
+    assert "canvas-inspector" in (ROOT / "apps/studio/app/canvas-inspector.tsx").read_text(encoding="utf-8")
+    assert "Run this node" in studio_client
     assert "Cinema stack" in studio_client
     assert "cast-pills" in studio_client
     assert "first-frame" in studio_client
@@ -92,7 +94,7 @@ def test_clone_tree_has_north_star_files() -> None:
     assert "New connector" in studio_client
     assert "connector-mark" in studio_client
     assert "connect-select" in studio_client
-    assert "Named MCP" in studio_client
+    assert "Another server" in studio_client
     assert "Supercomputer" in studio_client
     assert "Collab" in studio_client
     assert "aperture-pills" in studio_client
@@ -105,10 +107,10 @@ def test_clone_tree_has_north_star_files() -> None:
     assert "element-kind-pills" in studio_client
     assert "t.defaults" in studio_client
     assert 't.page || "canvas"' in studio_client
-    assert "Speak scenes open Speak" in studio_client
+    assert "Talking scenes open Video" in studio_client
     assert "Skip for now" in studio_client
     assert "vinci-onboard-v1" in studio_client
-    assert "Your Brand's Superagency" in studio_client
+    assert "Make images and video here" in studio_client
     assert "ftyp" in smoke_text
     assert "/receipts/" in smoke_text
     assert '"/runs"' in smoke_text or "/runs" in smoke_text

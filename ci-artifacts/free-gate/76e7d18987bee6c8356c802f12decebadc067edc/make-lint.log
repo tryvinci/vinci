@@ -1,0 +1,45 @@
+make[1]: Entering directory '/workspace/apps/vinci-oss'
+ruff check packages tests apps/daemon scripts/*.py
+[1m[91mE501[0m[1m Line too long (125 > 100)[0m
+   [1m[94m--> [0mtests/test_desktop_daemon.py:143:101
+    [1m[94m|[0m
+[1m[94m141[0m [1m[94m|[0m     env["VINCI_ALLOW_LIVE_SPEND"] = "0"
+[1m[94m142[0m [1m[94m|[0m     first = subprocess.Popen(
+[1m[94m143[0m [1m[94m|[0m         [sys.executable, "-m", "vinci_daemon.app", "--host", "127.0.0.1", "--port", "0", "--desktop", "--launch-nonce", "a"],
+    [1m[94m|[0m                                                                                                     [1m[91m^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[1m[94m144[0m [1m[94m|[0m         env=env,
+[1m[94m145[0m [1m[94m|[0m         stdout=subprocess.PIPE,
+    [1m[94m|[0m
+
+[1m[91mF401[0m [[1m[96m*[0m][1m `sys` imported but unused[0m
+ [1m[94m--> [0mtests/test_studio_bundle.py:6:8
+  [1m[94m|[0m
+[1m[94m4[0m [1m[94m|[0m import shutil
+[1m[94m5[0m [1m[94m|[0m import subprocess
+[1m[94m6[0m [1m[94m|[0m import sys
+  [1m[94m|[0m        [1m[91m^^^[0m
+[1m[94m7[0m [1m[94m|[0m import tempfile
+[1m[94m8[0m [1m[94m|[0m from pathlib import Path
+  [1m[94m|[0m
+[1m[96mhelp[0m[1m: Remove unused import: `sys`[0m
+[1m[94m [0m [1m[94m|[0m
+[1m[94m5[0m [1m[94m|[0m import subprocess
+[1m[94m [0m [1m[31m-[0m [31mimport sys
+[0m[1m[94m6[0m [1m[94m|[0m import tempfile
+[1m[94m [0m [1m[94m|[0m
+
+[1m[91mE501[0m[1m Line too long (126 > 100)[0m
+  [1m[94m--> [0mtests/test_studio_proxy_auth.py:37:101
+   [1m[94m|[0m
+[1m[94m35[0m [1m[94m|[0m     env["VINCI_ALLOW_LIVE_SPEND"] = "0"
+[1m[94m36[0m [1m[94m|[0m     daemon = subprocess.Popen(
+[1m[94m37[0m [1m[94m|[0m         [sys.executable, "-m", "vinci_daemon.app", "--host", "127.0.0.1", "--port", "0", "--desktop", "--launch-nonce", "n1"],
+   [1m[94m|[0m                                                                                                     [1m[91m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[1m[94m38[0m [1m[94m|[0m         env=env,
+[1m[94m39[0m [1m[94m|[0m         stdout=subprocess.PIPE,
+   [1m[94m|[0m
+
+Found 3 errors.
+[[36m*[0m] 1 fixable with the `--fix` option.
+make[1]: *** [Makefile:63: lint] Error 1
+make[1]: Leaving directory '/workspace/apps/vinci-oss'

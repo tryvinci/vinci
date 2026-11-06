@@ -7,10 +7,6 @@ if [[ -d "$ROOT/.venv/bin" ]]; then
 fi
 CLI="$ROOT/apps/cli/dist/index.js"
 if [[ ! -f "$CLI" ]]; then
-  if [[ ! -x "$ROOT/node_modules/.bin/tsc" ]]; then
-    echo "Run make install first (from the repo root)." >&2
-    exit 1
-  fi
   (cd "$ROOT" && npm run build --workspace @tryvinci/cli)
 fi
 exec node "$CLI" "$@"

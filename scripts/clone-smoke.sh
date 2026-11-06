@@ -479,7 +479,7 @@ page = Path("apps/studio/app/page.tsx").read_text()
 if "iframe" in page:
     raise SystemExit("clone smoke TS Studio still iframes daemon HTML")
 client = Path("apps/studio/app/studio-client.tsx").read_text()
-need = ("vinci-api", "Play timeline", "Generate this node", "Cinema stack", "motion", "cast-pills", "first-frame", "Bring your own keys", "New connector", "connector-mark", "connect-select", "Named MCP", "Supercomputer", "Collab", "Custom MCP", "data-port", "vinci://assets/", "Start generating", "aperture-pills", "lighting-pills", "palette-pills", "image_urls", "add-shot", "creativity", "optimized-pills", "element-kind-pills", "t.defaults", "t.page || \"canvas\"", "Speak scenes open Speak", "Skip for now", "vinci-onboard-v1", "Your Brand\u0027s Superagency")
+need = ("vinci-api", "Play timeline", "Run this node", "Cinema stack", "motion", "cast-pills", "first-frame", "Paste a provider key", "New connector", "connector-mark", "connect-select", "Another server", "Supercomputer", "Collab", "Custom server", "data-port", "vinci://assets/", "Start generating", "aperture-pills", "lighting-pills", "palette-pills", "image_urls", "add-shot", "creativity", "optimized-pills", "element-kind-pills", "t.defaults", "t.page || \"canvas\"", "Talking scenes open Video", "Skip for now", "vinci-onboard-v1", "Stills, video, and campaigns in one place")
 missing = [item for item in need if item not in client]
 if missing:
     raise SystemExit("clone smoke TS Studio missing %s" % missing)

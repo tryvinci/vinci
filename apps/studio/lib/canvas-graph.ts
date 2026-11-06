@@ -10,7 +10,8 @@
  * `{{nodes.a.output}}` (see vinci_runtime.engine, `interpolate(node.params, context)`).
  */
 
-export type MediaKind = "image" | "video" | "audio";
+/** Magnific port kinds. Text is a first-class wire, same as image / video / audio. */
+export type MediaKind = "text" | "image" | "video" | "audio";
 export type GraphNode = {
   id: string;
   type: string;
@@ -19,8 +20,17 @@ export type GraphNode = {
   params?: Record<string, unknown>;
   x?: number;
   y?: number;
+  /** Set when this card is a linked copy of another node. Canvas-only; stripped before /runs. */
+  instanceOf?: string;
 };
-export type GraphEdge = { src: string; dst: string; input_key?: string };
+/** How a wire is drawn. `rounded` is the default orthogonal wire and is omitted on the edge. */
+export type EdgeStyle = "rounded" | "curve" | "straight";
+export const EDGE_STYLES: { id: EdgeStyle; label: string }[] = [
+  { id: "rounded", label: "Rounded" },
+  { id: "curve", label: "Curve" },
+  { id: "straight", label: "Straight" },
+];
+export type GraphEdge = { src: string; dst: string; input_key?: string; style?: EdgeStyle };
 /** A canvas-only frame around nodes. Never sent to the runtime. */
 export const GROUP_COLORS = ["teal", "amber", "violet", "slate"] as const;
 export type GroupColor = (typeof GROUP_COLORS)[number];
@@ -34,12 +44,24 @@ export const EMPTY_GRAPH: Graph = { nodes: [], edges: [] };
 
 /** Typed ports per capability. Keys are the param names providers read. */
 const PORTS: Record<string, NodePorts> = {
-  t2i: { inputs: [], output: "image" },
-  i2i: { inputs: [{ key: "media", kind: "image" }], output: "image" },
+  t2i: { inputs: [{ key: "prompt", kind: "text" }], output: "image" },
+  i2i: {
+    inputs: [
+      { key: "media", kind: "image" },
+      { key: "prompt", kind: "text" },
+    ],
+    output: "image",
+  },
   upscale: { inputs: [{ key: "media", kind: "image" }], output: "image" },
-  t2v: { inputs: [], output: "video" },
-  i2v: { inputs: [{ key: "image", kind: "image" }], output: "video" },
-  tts: { inputs: [], output: "audio" },
+  t2v: { inputs: [{ key: "prompt", kind: "text" }], output: "video" },
+  i2v: {
+    inputs: [
+      { key: "image", kind: "image" },
+      { key: "prompt", kind: "text" },
+    ],
+    output: "video",
+  },
+  tts: { inputs: [{ key: "prompt", kind: "text" }], output: "audio" },
   voice_clone: { inputs: [{ key: "reference", kind: "audio" }], output: "audio" },
   lipsync: {
     inputs: [
@@ -50,12 +72,29 @@ const PORTS: Record<string, NodePorts> = {
   },
   reframe: { inputs: [{ key: "media", kind: "video" }], output: "video" },
   caption: { inputs: [{ key: "media", kind: "video" }], output: "video" },
+  media: { inputs: [], output: "image" },
+  text: { inputs: [], output: "text" },
+  list: { inputs: [], output: "text" },
+  assistant: { inputs: [{ key: "prompt", kind: "text" }], output: "text" },
+  note: { inputs: [], output: null },
 };
 const NO_PORTS: NodePorts = { inputs: [], output: null };
 
+/** Image / video / audio / text from an upload mime or an explicit kind. */
+export function kindFromMime(value: unknown): MediaKind {
+  const s = String(value || "").toLowerCase();
+  if (s.includes("video")) return "video";
+  if (s.includes("audio")) return "audio";
+  if (s === "text" || s.includes("text/") || s.includes("json")) return "text";
+  return "image";
+}
+
 /** Ports for a node. Unknown capabilities get none, so they cannot be wired by hand. */
 export function portsFor(node: GraphNode | undefined): NodePorts {
-  return (node && PORTS[node.capability || ""]) || NO_PORTS;
+  if (!node) return NO_PORTS;
+  const cap = node.capability || "";
+  if (cap === "media") return { inputs: [], output: kindFromMime(node.params?.kind || node.params?.mime) };
+  return PORTS[cap] || NO_PORTS;
 }
 
 /** What a capability produces, or null when it has no declared ports. */
@@ -63,37 +102,232 @@ export function outputOf(capability: string): MediaKind | null {
   return PORTS[capability]?.output || null;
 }
 
-/** Nodes the add menu offers, in menu order. Every capability here has ports above. */
-export type CatalogEntry = { capability: string; label: string; blurb: string };
+/** Magnific add-popover chips. 3D / Library stay empty until those surfaces exist. */
+export const ADD_CHIPS = [
+  { id: "image", label: "Image" },
+  { id: "video", label: "Video" },
+  { id: "audio", label: "Audio" },
+  { id: "3d", label: "3D" },
+  { id: "utilities", label: "Utilities" },
+  { id: "flows", label: "Flows" },
+  { id: "templates", label: "Templates" },
+  { id: "library", label: "Library" },
+] as const;
+export type AddChipId = (typeof ADD_CHIPS)[number]["id"];
+export type AddSectionId = "media" | "nodes" | "providers" | "flows";
+export type CatalogNodeType = "generate" | "media" | "transform";
+
+/** Nodes the add menu offers, in Magnific section order. */
+export type CatalogEntry = {
+  capability: string;
+  label: string;
+  blurb: string;
+  section: AddSectionId;
+  chips: AddChipId[];
+  nodeType: CatalogNodeType;
+};
 export const NODE_CATALOG: CatalogEntry[] = [
-  { capability: "t2i", label: "Image", blurb: "Generate an image from a prompt" },
-  { capability: "i2i", label: "Image edit", blurb: "Restyle or edit an image with a prompt" },
-  { capability: "upscale", label: "Upscale", blurb: "Enlarge and sharpen an image" },
-  { capability: "t2v", label: "Video", blurb: "Generate a video from a prompt" },
-  { capability: "i2v", label: "Animate image", blurb: "Turn a still into a clip" },
-  { capability: "lipsync", label: "Lip sync", blurb: "Sync a video to an audio track" },
-  { capability: "tts", label: "Voice", blurb: "Speak a prompt as audio" },
+  { capability: "media", label: "Media", blurb: "Upload an image, video, or audio file", section: "media", chips: ["image", "video", "audio", "utilities"], nodeType: "media" },
+  { capability: "t2i", label: "Image Gen", blurb: "Generate an image from a prompt", section: "nodes", chips: ["image"], nodeType: "generate" },
+  { capability: "t2v", label: "Video Gen", blurb: "Generate a video from a prompt", section: "nodes", chips: ["video"], nodeType: "generate" },
+  { capability: "upscale", label: "Upscaler", blurb: "Enlarge and sharpen an image", section: "nodes", chips: ["image"], nodeType: "generate" },
+  { capability: "i2i", label: "Image Editor", blurb: "Restyle or edit an image with a prompt", section: "nodes", chips: ["image"], nodeType: "generate" },
+  { capability: "tts", label: "Voiceover", blurb: "Speak a prompt as audio", section: "nodes", chips: ["audio"], nodeType: "generate" },
+  { capability: "i2v", label: "Animate image", blurb: "Turn a still into a clip", section: "nodes", chips: ["image", "video"], nodeType: "generate" },
+  { capability: "lipsync", label: "Lip sync", blurb: "Sync a video to an audio track", section: "nodes", chips: ["video", "audio"], nodeType: "generate" },
+  { capability: "text", label: "Text", blurb: "A text block you can wire into prompts", section: "nodes", chips: ["utilities"], nodeType: "transform" },
+  { capability: "list", label: "List", blurb: "A list of lines you can wire into prompts", section: "nodes", chips: ["utilities"], nodeType: "transform" },
+  { capability: "assistant", label: "Assistant", blurb: "An LLM that writes text", section: "nodes", chips: ["utilities"], nodeType: "transform" },
+  { capability: "note", label: "Note", blurb: "A note on the board", section: "nodes", chips: ["utilities"], nodeType: "transform" },
 ];
 
+export function nodeTypeOf(capability: string): CatalogNodeType {
+  return NODE_CATALOG.find((row) => row.capability === capability)?.nodeType || "generate";
+}
+
+function catalogScore(label: string, capability: string, blurb: string, query: string): number {
+  const q = query.trim().toLowerCase();
+  if (!q) return 0;
+  const name = label.toLowerCase();
+  if (name.startsWith(q)) return 0;
+  if (name.split(/\s+/).some((w) => w.startsWith(q))) return 1;
+  return `${name} ${capability} ${blurb.toLowerCase()}`.includes(q) ? 2 : -1;
+}
+
 /**
- * Add-menu rows matching `query`, best first. With `takes`, only nodes with an input of that kind
+ * Add-menu node rows matching `query`, best first. With `takes`, only nodes with an input of that kind
  * (the add-from-port case). Label prefix beats a word prefix beats a substring anywhere.
  */
-export function searchCatalog(query: string, takes?: MediaKind | null): CatalogEntry[] {
+export function searchCatalog(query: string, takes?: MediaKind | null, chip?: AddChipId | null): CatalogEntry[] {
+  const rows = NODE_CATALOG.filter((e) => {
+    if (takes && !(PORTS[e.capability]?.inputs || []).some((p) => p.kind === takes)) return false;
+    if (chip && !e.chips.includes(chip)) return false;
+    return true;
+  });
   const q = query.trim().toLowerCase();
-  const rows = NODE_CATALOG.filter((e) => !takes || (PORTS[e.capability]?.inputs || []).some((p) => p.kind === takes));
   if (!q) return rows;
-  const score = (e: CatalogEntry): number => {
-    const label = e.label.toLowerCase();
-    if (label.startsWith(q)) return 0;
-    if (label.split(/\s+/).some((w) => w.startsWith(q))) return 1;
-    return `${label} ${e.capability} ${e.blurb.toLowerCase()}`.includes(q) ? 2 : -1;
-  };
   return rows
-    .map((e, i) => ({ e, i, s: score(e) }))
+    .map((e, i) => ({ e, i, s: catalogScore(e.label, e.capability, e.blurb, q) }))
     .filter((r) => r.s >= 0)
     .sort((a, b) => a.s - b.s || a.i - b.i)
     .map((r) => r.e);
+}
+
+export type AddModel = { id: string; display_name: string; provider: string; capabilities: string[] };
+export type AddTemplate = { id: string; title: string; blurb: string };
+export type AddPick =
+  | { kind: "node"; capability: string }
+  | { kind: "model"; capability: string; modelId: string }
+  | { kind: "flow"; templateId: string };
+export type AddMenuRow = {
+  id: string;
+  pick: AddPick;
+  section: AddSectionId;
+  vendor?: string;
+  vendorCount?: number;
+  label: string;
+  blurb: string;
+  output: MediaKind | null;
+};
+export type AddMenuSection = { id: AddSectionId; label: string; rows: AddMenuRow[] };
+
+const SECTION_LABEL: Record<AddSectionId, string> = {
+  media: "Media",
+  nodes: "Nodes",
+  providers: "Models",
+  flows: "Flows",
+};
+
+const MODEL_CHIPS: Record<Exclude<AddChipId, "3d" | "utilities" | "flows" | "templates" | "library">, string[]> = {
+  image: ["t2i", "i2i", "upscale"],
+  video: ["t2v", "i2v", "lipsync"],
+  audio: ["tts", "voice_clone"],
+};
+
+/** First generate capability on a model that can take `takes` (click-output-to-add). */
+export function capabilityForModel(capabilities: string[], takes?: MediaKind | null): string | null {
+  for (const row of NODE_CATALOG) {
+    if (row.nodeType !== "generate" || !capabilities.includes(row.capability)) continue;
+    if (takes && !(PORTS[row.capability]?.inputs || []).some((p) => p.kind === takes)) continue;
+    return row.capability;
+  }
+  return null;
+}
+
+function modelMatchesChip(model: AddModel, chip?: AddChipId | null): boolean {
+  if (!chip) return true;
+  if (chip === "3d" || chip === "utilities" || chip === "flows" || chip === "templates" || chip === "library") return false;
+  return (model.capabilities || []).some((cap) => MODEL_CHIPS[chip].includes(cap));
+}
+
+/**
+ * Magnific add popover: Media / Nodes / Models (grouped by vendor, with counts) / Flows.
+ * `takes` is the click-output filter. Flows stay out of that list — only compatible nodes and models.
+ */
+export function buildAddMenu(
+  query: string,
+  opts?: { chip?: AddChipId | null; takes?: MediaKind | null; models?: AddModel[]; templates?: AddTemplate[] },
+): AddMenuSection[] {
+  const chip = opts?.chip || null;
+  const takes = opts?.takes || null;
+  const q = query.trim().toLowerCase();
+  const sections: AddMenuSection[] = [];
+
+  const nodes = searchCatalog(query, takes, chip === "flows" || chip === "templates" || chip === "library" || chip === "3d" ? null : chip);
+  const media = nodes.filter((row) => row.section === "media");
+  const rest = nodes.filter((row) => row.section === "nodes");
+  if (chip !== "flows" && chip !== "templates" && chip !== "library" && chip !== "3d") {
+    if (media.length) {
+      sections.push({
+        id: "media",
+        label: SECTION_LABEL.media,
+        rows: media.map((row) => ({
+          id: "node:" + row.capability,
+          pick: { kind: "node", capability: row.capability },
+          section: "media",
+          label: row.label,
+          blurb: row.blurb,
+          output: outputOf(row.capability),
+        })),
+      });
+    }
+    if (rest.length) {
+      sections.push({
+        id: "nodes",
+        label: SECTION_LABEL.nodes,
+        rows: rest.map((row) => ({
+          id: "node:" + row.capability,
+          pick: { kind: "node", capability: row.capability },
+          section: "nodes",
+          label: row.label,
+          blurb: row.blurb,
+          output: outputOf(row.capability),
+        })),
+      });
+    }
+  }
+
+  if (chip !== "utilities" && chip !== "3d" && chip !== "library" && chip !== "flows" && chip !== "templates") {
+    const models = (opts?.models || []).filter((m) => {
+      if (!modelMatchesChip(m, chip)) return false;
+      const cap = capabilityForModel(m.capabilities || [], takes);
+      if (!cap) return false;
+      if (!q) return true;
+      return catalogScore(m.display_name || m.id, m.id, m.provider, q) >= 0;
+    });
+    const grouped = new Map<string, AddModel[]>();
+    for (const model of models) {
+      const vendor = model.provider || "other";
+      const list = grouped.get(vendor) || [];
+      list.push(model);
+      grouped.set(vendor, list);
+    }
+    const rows: AddMenuRow[] = [];
+    for (const [vendor, list] of grouped) {
+      for (const model of list) {
+        const cap = capabilityForModel(model.capabilities || [], takes);
+        if (!cap) continue;
+        rows.push({
+          id: "model:" + model.id,
+          pick: { kind: "model", capability: cap, modelId: model.id },
+          section: "providers",
+          vendor,
+          vendorCount: list.length,
+          label: model.display_name || model.id,
+          blurb: vendor,
+          output: outputOf(cap),
+        });
+      }
+    }
+    if (rows.length) sections.push({ id: "providers", label: SECTION_LABEL.providers, rows });
+  }
+
+  if (!takes && (chip === "flows" || chip === "templates" || !chip)) {
+    const templates = (opts?.templates || []).filter((t) => {
+      if (!q) return true;
+      return catalogScore(t.title, t.id, t.blurb, q) >= 0;
+    });
+    if (templates.length) {
+      sections.push({
+        id: "flows",
+        label: SECTION_LABEL.flows,
+        rows: templates.map((t) => ({
+          id: "flow:" + t.id,
+          pick: { kind: "flow", templateId: t.id },
+          section: "flows",
+          label: t.title,
+          blurb: t.blurb,
+          output: null,
+        })),
+      });
+    }
+  }
+
+  return sections;
+}
+
+export function flattenAddMenu(sections: AddMenuSection[]): AddMenuRow[] {
+  return sections.flatMap((section) => section.rows);
 }
 
 /** Unwired inputs read page inputs, e.g. `{ media: "{{inputs.media}}" }` for an upscale. */
@@ -107,15 +341,22 @@ export type NodeDefaults = {
   placeholder?: string;
   aspect_ratio?: string;
   duration?: number;
+  resolution?: string;
+  count?: number;
 };
 export const NODE_DEFAULTS: Record<string, NodeDefaults> = {
-  t2i: { prompt: "required", placeholder: "Describe the image you want", aspect_ratio: "16:9" },
-  i2i: { prompt: "required", placeholder: "Describe the change to make" },
+  t2i: { prompt: "required", placeholder: "Describe the image you want", aspect_ratio: "16:9", resolution: "1K", count: 1 },
+  i2i: { prompt: "required", placeholder: "Describe the change to make", resolution: "1K", count: 1 },
   upscale: { prompt: "none" },
-  t2v: { prompt: "required", placeholder: "Describe the shot and its motion", aspect_ratio: "16:9", duration: 5 },
-  i2v: { prompt: "optional", placeholder: "Describe how the still should move", duration: 5 },
+  t2v: { prompt: "required", placeholder: "Describe the shot and its motion", aspect_ratio: "16:9", duration: 5, count: 1 },
+  i2v: { prompt: "optional", placeholder: "Describe how the still should move", duration: 5, count: 1 },
   lipsync: { prompt: "none" },
   tts: { prompt: "required", placeholder: "What should the voice say?" },
+  media: { prompt: "none" },
+  text: { prompt: "required", placeholder: "Write the text" },
+  list: { prompt: "optional", placeholder: "One item per line" },
+  assistant: { prompt: "optional", placeholder: "Ask the assistant" },
+  note: { prompt: "optional", placeholder: "A note on the board" },
 };
 const PROMPT_ONLY: NodeDefaults = { prompt: "optional" };
 
@@ -129,13 +370,18 @@ export function defaultsFor(capability?: string): NodeDefaults {
  */
 export function startParams(
   capability: string,
-  page: { prompt?: string; aspect_ratio?: string; duration?: string | number },
+  page: { prompt?: string; aspect_ratio?: string; duration?: string | number; resolution?: string },
 ): Record<string, unknown> {
   const d = defaultsFor(capability);
   const out: Record<string, unknown> = { ...inputDefaults(capability) };
   if (d.prompt !== "none") out.prompt = (page.prompt || "").trim();
   if (d.aspect_ratio) out.aspect_ratio = page.aspect_ratio || d.aspect_ratio;
   if (d.duration != null) out.duration = Number(page.duration) || d.duration;
+  if (d.resolution) out.resolution = page.resolution || d.resolution;
+  if (d.count != null) {
+    out.count = d.count;
+    out.num_images = d.count;
+  }
   return out;
 }
 
@@ -151,9 +397,11 @@ export function blockedReason(node: GraphNode, page: Record<string, boolean>): s
     const ref = /^\{\{\s*inputs\.([\w.]+)\s*\}\}$/.exec(v.trim());
     return ref ? Boolean(page[ref[1]]) : v.trim() !== "";
   };
-  if (defaultsFor(node.capability).prompt === "required" && !filled("prompt")) return "Add a prompt.";
+  const promptNeed = defaultsFor(node.capability).prompt;
+  if (promptNeed === "required" && !filled("prompt")) return "Add a prompt, then run.";
   for (const port of portsFor(node).inputs) {
-    if (!filled(port.key)) return `Connect ${/^[aeiou]/.test(port.kind) ? "an" : "a"} ${port.kind} input.`;
+    if (port.key === "prompt" && promptNeed !== "required") continue;
+    if (!filled(port.key)) return `Connect ${port.kind} first.`;
   }
   return null;
 }
@@ -194,21 +442,21 @@ function setNodeParam(graph: Graph, id: string, key: string, value: string): Gra
  * Picks `key` when given, else the first free input whose kind matches. An input
  * takes one source, so an existing wire into the same input is replaced.
  */
-export function connect(graph: Graph, src: string, dst: string, key?: string): GraphResult {
+export function connect(graph: Graph, src: string, dst: string, key?: string, style?: EdgeStyle): GraphResult {
   const a = graph.nodes.find((n) => n.id === src);
   const b = graph.nodes.find((n) => n.id === dst);
-  if (!a || !b) return { ok: false, error: "Node not found." };
-  if (src === dst) return { ok: false, error: "A node cannot connect to itself." };
+  if (!a || !b) return { ok: false, error: "That step is missing. Add it again." };
+  if (src === dst) return { ok: false, error: "Connect this to a different step." };
   const out = portsFor(a).output;
-  if (!out) return { ok: false, error: `${a.id} has no output to connect.` };
+  if (!out) return { ok: false, error: "This step has nothing to connect." };
   const fits = portsFor(b).inputs.filter((p) => p.kind === out && (!key || p.key === key));
-  if (!fits.length) return { ok: false, error: `${b.id} has no ${out} input.` };
+  if (!fits.length) return { ok: false, error: `This step cannot take ${out}.` };
   const taken = new Set(graph.edges.filter((e) => e.dst === dst).map((e) => e.input_key));
   const port = fits.find((p) => !taken.has(p.key)) || fits[0];
   const wired = graph.edges.some((e) => e.src === src && e.dst === dst && e.input_key === port.key);
   // Same wire again: a no-op, unless an older save left the param pointing at page inputs.
   if (wired && b.params?.[port.key] === nodeRef(src)) return { ok: true, graph };
-  if (reaches(graph, dst, src)) return { ok: false, error: "That wire would make a loop." };
+  if (reaches(graph, dst, src)) return { ok: false, error: "That connection loops. Pick a different step." };
   // The input's old source: a keyed edge, or an unkeyed one (templates, old saves) feeding this param.
   const replaced = graph.edges.filter(
     (e) => e.dst === dst && (e.input_key === port.key || (e.input_key == null && b.params?.[port.key] === nodeRef(e.src))),
@@ -221,7 +469,12 @@ export function connect(graph: Graph, src: string, dst: string, key?: string): G
   }
   return {
     ok: true,
-    graph: setNodeParam({ ...graph, edges: [...edges, { src, dst, input_key: port.key }] }, dst, port.key, nodeRef(src)),
+    graph: setNodeParam(
+      { ...graph, edges: [...edges, { src, dst, input_key: port.key, ...(style && style !== "rounded" ? { style } : {}) }] },
+      dst,
+      port.key,
+      nodeRef(src),
+    ),
   };
 }
 
@@ -251,10 +504,18 @@ function scrubRefs(value: unknown, src: string, fallback: unknown): unknown {
  * `outputs`, `data`...), even inside a list or object. Same grammar as the runtime's
  * `interpolate`: whitespace is allowed inside the braces.
  */
+/** Every string inside a param value (lists and objects included). JSON would escape `\t` in `{{ }}`. */
+function stringsIn(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(stringsIn);
+  if (value && typeof value === "object") return Object.values(value).flatMap(stringsIn);
+  return [];
+}
+
 function readsFrom(node: GraphNode | undefined, src: string, except?: string): boolean {
   const ref = refPattern(src);
   return Object.entries(node?.params || {}).some(
-    ([key, value]) => key !== except && ref.test(typeof value === "string" ? value : JSON.stringify(value ?? null)),
+    ([key, value]) => key !== except && stringsIn(value).some((s) => ref.test(s)),
   );
 }
 
@@ -290,6 +551,11 @@ export function removeNodes(graph: Graph, ids: Iterable<string>): Graph {
         params[key] = [...gone].reduce((v, id) => scrubRefs(v, id, inputRef(key)), value);
       }
       return { ...n, params };
+    })
+    .map((n) => {
+      if (!n.instanceOf || !gone.has(n.instanceOf)) return n;
+      const { instanceOf: _drop, ...rest } = n;
+      return rest;
     });
   const edges = next.edges.filter((e) => !gone.has(e.src) && !gone.has(e.dst));
   const groups = (next.groups || [])
@@ -309,7 +575,7 @@ export function moveNodes(graph: Graph, starts: Record<string, { x: number; y: n
 }
 
 /** Group `ids` (two or more existing nodes). A node lives in one group, so it leaves any other. */
-export function groupNodes(graph: Graph, ids: string[], id: string, name = "Untitled group"): Graph {
+export function groupNodes(graph: Graph, ids: string[], id: string, name = "Group"): Graph {
   const members = ids.filter((m) => graph.nodes.some((n) => n.id === m));
   // Regrouping an existing group would reset its name and colour.
   if (members.length < 2 || groupOf(graph, members)) return graph;
@@ -338,25 +604,125 @@ export function groupOf(graph: Graph, ids: string[]): GraphGroup | undefined {
   );
 }
 
-/** Append `node`; when `linkFrom` is set and the types fit, wire it in. */
-export function addNode(graph: Graph, node: GraphNode, linkFrom?: string): Graph {
+/** Append `node`; when `linkFrom` is set and the types fit, wire it in. `style` is the new wire's draw style. */
+export function addNode(graph: Graph, node: GraphNode, linkFrom?: string, style?: EdgeStyle): Graph {
   const next = { ...graph, nodes: [...graph.nodes, node] };
   if (!linkFrom) return next;
-  const wired = connect(next, linkFrom, node.id);
+  const wired = connect(next, linkFrom, node.id, undefined, style);
   return wired.ok ? wired.graph : next;
 }
 
-/** Shallow-merge `patch` into a node. */
+/** Shallow-merge `patch` into a node. Linked instances follow model, type, and params. */
 export function updateNode(graph: Graph, id: string, patch: Partial<GraphNode>): Graph {
-  return { ...graph, nodes: graph.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)) };
+  const next = { ...graph, nodes: graph.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)) };
+  return syncInstances(next, id);
 }
 
-/** Shallow-merge `patch` into a node's params. */
+/** Shallow-merge `patch` into a node's params. Linked instances stay on the same params. */
 export function setParams(graph: Graph, id: string, patch: Record<string, unknown>): Graph {
-  return {
+  const next = {
     ...graph,
     nodes: graph.nodes.map((n) => (n.id === id ? { ...n, params: { ...(n.params || {}), ...patch } } : n)),
   };
+  return syncInstances(next, id);
+}
+
+/**
+ * Copy params, model, and capability from a linked source onto its instances.
+ * Editing an instance writes through to the source first. A missing source detaches the copy.
+ * Returns the same graph when nothing is linked.
+ */
+export function syncInstances(graph: Graph, editedId?: string): Graph {
+  if (!graph.nodes.some((n) => n.instanceOf)) return graph;
+  let nodes = graph.nodes;
+  const edited = editedId ? nodes.find((n) => n.id === editedId) : undefined;
+  if (edited?.instanceOf) {
+    const srcId = edited.instanceOf;
+    nodes = nodes.map((n) =>
+      n.id === srcId
+        ? { ...n, params: edited.params, model_id: edited.model_id, capability: edited.capability, type: edited.type }
+        : n,
+    );
+  }
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  let changed = edited?.instanceOf ? true : false;
+  const next = nodes.map((n) => {
+    if (!n.instanceOf) return n;
+    const src = byId.get(n.instanceOf);
+    if (!src) {
+      changed = true;
+      const { instanceOf: _drop, ...rest } = n;
+      return rest;
+    }
+    if (n.params === src.params && n.model_id === src.model_id && n.capability === src.capability && n.type === src.type) return n;
+    changed = true;
+    return { ...n, params: src.params, model_id: src.model_id, capability: src.capability, type: src.type };
+  });
+  return changed ? { ...graph, nodes: next } : graph;
+}
+
+/** Linked copies of `ids`. Each copy follows its source (or that source's own source). */
+export function instanceNodes(graph: Graph, ids: readonly string[], newIds: readonly string[]): Graph {
+  let next = graph;
+  ids.forEach((id, i) => {
+    const src = next.nodes.find((n) => n.id === id);
+    const newId = newIds[i];
+    if (!src || !newId) return;
+    const sourceId = src.instanceOf || id;
+    const origin = next.nodes.find((n) => n.id === sourceId) || src;
+    next = {
+      ...next,
+      nodes: [
+        ...next.nodes,
+        { ...origin, id: newId, instanceOf: sourceId, x: (src.x || 0) + 36, y: (src.y || 0) + 36 },
+      ],
+    };
+  });
+  return next;
+}
+
+/** Draw style for the wires that touch the selection, or the selected wire. */
+export function edgesForStyle(
+  graph: Graph,
+  ids: readonly string[],
+  edge: { src: string; dst: string } | null,
+): { src: string; dst: string }[] {
+  if (edge) return graph.edges.filter((e) => e.src === edge.src && e.dst === edge.dst).map((e) => ({ src: e.src, dst: e.dst }));
+  return graph.edges.filter((e) => ids.includes(e.src) || ids.includes(e.dst)).map((e) => ({ src: e.src, dst: e.dst }));
+}
+
+/** The shared style of `pairs`, or null when they disagree or there are none. */
+export function commonEdgeStyle(graph: Graph, pairs: readonly { src: string; dst: string }[]): EdgeStyle | null {
+  if (!pairs.length) return null;
+  const styles = pairs.map((p) => graph.edges.find((e) => e.src === p.src && e.dst === p.dst)?.style || "rounded");
+  return styles.every((s) => s === styles[0]) ? styles[0] : null;
+}
+
+/** Set the draw style of `pairs`. `rounded` drops the field so old saves stay unchanged. */
+export function setEdgeStyle(graph: Graph, pairs: readonly { src: string; dst: string }[], style: EdgeStyle): Graph {
+  const want = new Set(pairs.map((p) => `${p.src}->${p.dst}`));
+  if (!want.size) return graph;
+  let changed = false;
+  const edges = graph.edges.map((e) => {
+    if (!want.has(`${e.src}->${e.dst}`)) return e;
+    if ((e.style || "rounded") === style) return e;
+    changed = true;
+    if (style === "rounded") {
+      const { style: _drop, ...rest } = e;
+      return rest;
+    }
+    return { ...e, style };
+  });
+  return changed ? { ...graph, edges } : graph;
+}
+
+/**
+ * Nodes a Run click should send.
+ * Card, inspector, and group Run omit `solo`, so they include ancestors.
+ * `solo` is the context-menu item "Run this node only".
+ */
+export function runSet(graph: Graph, ids: Iterable<string>, solo = false): Set<string> {
+  return solo ? new Set(ids) : withAncestors(graph, ids);
 }
 
 /** `ids` plus every node upstream of them. */
@@ -375,15 +741,58 @@ export function withAncestors(graph: Graph, ids: Iterable<string>): Set<string> 
   return keep;
 }
 
-/** Copy a node beside the original. Wires are not copied, so wired inputs fall back to page inputs. */
+/** Selection-toolbar run scope. Card Run stays on ancestors; these scopes do not replace it. */
+export type RunScope = "node" | "upstream" | "page";
+export const RUN_SCOPES: { id: RunScope; label: string }[] = [
+  { id: "node", label: "This node only" },
+  { id: "upstream", label: "Up to here" },
+  { id: "page", label: "Whole page" },
+];
+
+/**
+ * Nodes a selection-toolbar scope runs.
+ * `upstream` ("up to here") is the selection and what feeds it, never nodes downstream of it.
+ * `node` is the selection alone. `page` is every node on the current page.
+ */
+export function scopeNodes(graph: Graph, ids: Iterable<string>, scope: RunScope): string[] {
+  if (scope === "page") return graph.nodes.map((n) => n.id);
+  const picked = [...ids].filter((id, i, all) => all.indexOf(id) === i && graph.nodes.some((n) => n.id === id));
+  if (scope === "node") return picked;
+  return [...withAncestors(graph, picked)];
+}
+
+/**
+ * Price of a toolbar scope. The id list is already closed, so ancestors are not added again.
+ * Downstream nodes stay out of an "up to here" total.
+ */
+export function estimateScope(
+  graph: Graph,
+  ids: Iterable<string>,
+  priceOf: (node: GraphNode) => number | null | undefined,
+  scope: RunScope,
+): { nodes: number; total: number; unpriced: number } {
+  return estimateRun(graph, scopeNodes(graph, ids, scope), priceOf, true);
+}
+
+/** Copy a node beside the original. Wires are not copied, so every node reference falls back to page inputs. */
 export function duplicateNode(graph: Graph, id: string, newId: string): Graph {
   const src = graph.nodes.find((n) => n.id === id);
   if (!src) return graph;
-  const params = { ...(src.params || {}) };
-  for (const port of portsFor(src).inputs) {
-    if (String(params[port.key] || "").startsWith("{{nodes.")) params[port.key] = inputRef(port.key);
+  // A space before `.` is part of the id (`{{nodes.a .output}}` is node "a ").
+  // A space before `}}` is not (`{{ nodes.still }}` is node "still").
+  const named = (s: string) =>
+    [...s.matchAll(/\{\{\s*nodes\.([^}]+)\}\}/g)].map((m) => {
+      const body = m[1];
+      const dot = body.indexOf(".");
+      return dot < 0 ? body.trimEnd() : body.slice(0, dot);
+    });
+  const refs = stringsIn(src.params).flatMap(named);
+  const params: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(src.params || {})) {
+    params[key] = [...new Set(refs)].reduce((v, id) => scrubRefs(v, id, inputRef(key)), value);
   }
-  const copy = { ...src, id: newId, params, x: (src.x || 0) + 24, y: (src.y || 0) + 24 };
+  const { instanceOf: _linked, ...bare } = src;
+  const copy = { ...bare, id: newId, params, x: (src.x || 0) + 24, y: (src.y || 0) + 24 };
   return { ...graph, nodes: [...graph.nodes, copy] };
 }
 
@@ -418,9 +827,21 @@ export function settle(h: GraphHistory, base: Graph): GraphHistory {
   return record(h, base, h.present);
 }
 
+/** Generate nodes and the wires between them. Canvas-only types stay off the runtime. */
+export function runtimeGraph(graph: Graph): { nodes: GraphNode[]; edges: GraphEdge[] } {
+  const nodes = toWorkflowNodes(graph.nodes);
+  const ids = new Set(nodes.map((n) => n.id));
+  return {
+    nodes,
+    edges: graph.edges
+      .filter((e) => ids.has(e.src) && ids.has(e.dst))
+      .map(({ style: _style, ...e }) => e),
+  };
+}
+
 /** What a run reads from the canvas. Layout (positions, groups) is left out. */
 function runtimeOf(graph: Graph): string {
-  return JSON.stringify({ nodes: toWorkflowNodes(graph.nodes), edges: graph.edges });
+  return JSON.stringify(runtimeGraph(graph));
 }
 
 /**
@@ -451,11 +872,12 @@ export function estimateRun(
   graph: Graph,
   ids: Iterable<string>,
   priceOf: (node: GraphNode) => number | null | undefined,
+  solo = false,
 ): { nodes: number; total: number; unpriced: number } {
   let total = 0;
   let unpriced = 0;
   let nodes = 0;
-  for (const id of withAncestors(graph, ids)) {
+  for (const id of runSet(graph, ids, solo)) {
     const node = graph.nodes.find((n) => n.id === id);
     if (!node || node.type !== "generate") continue;
     nodes += 1;
@@ -470,9 +892,10 @@ const SHOT_KEYS = ["aspect_ratio", "camera", "lens", "look", "aperture", "genre"
 
 /** Runtime nodes: fill unset shot params from page inputs and drop canvas-only fields. */
 export function toWorkflowNodes(nodes: GraphNode[]): GraphNode[] {
-  return nodes.map(({ x, y, ...n }) => {
+  return nodes.filter((n) => n.type === "generate").map(({ x, y, instanceOf, ...n }) => {
     void x;
     void y;
+    void instanceOf;
     const params = { ...(n.params || {}) };
     const video = n.capability === "t2v" || n.capability === "i2v";
     for (const key of SHOT_KEYS) if (!params[key]) params[key] = inputRef(key);
@@ -484,9 +907,9 @@ export function toWorkflowNodes(nodes: GraphNode[]): GraphNode[] {
 
 /* ---------- View: node geometry, pan and zoom ---------- */
 
-/** Node card size in graph units. Width matches `.node` in globals.css; height is the idle card (labels grow it). */
-export const NODE_W = 196;
-export const NODE_H = 172;
+/** Node card size in graph units. Width matches `.node` in globals.css; height is the idle Magnific card. */
+export const NODE_W = 320;
+export const NODE_H = 300;
 const PORT_Y = 44;
 const PORT_GAP = 26;
 
@@ -495,15 +918,36 @@ export function portY(index: number): number {
   return PORT_Y + index * PORT_GAP;
 }
 
-/** Bezier between two graph points, leaving and entering horizontally. */
+/** Orthogonal rounded wire (Magnific Spaces). Leaves and enters horizontally. */
 export function curve(x1: number, y1: number, x2: number, y2: number): string {
-  return `M${x1} ${y1} C${x1 + 40} ${y1}, ${x2 - 40} ${y2}, ${x2} ${y2}`;
+  const dy = y2 - y1;
+  if (Math.abs(dy) < 0.5) return `M${x1} ${y1} L${x2} ${y2}`;
+  const dir = dy > 0 ? 1 : -1;
+  if (x2 >= x1 + 24) {
+    const mid = x1 + Math.max(32, (x2 - x1) / 2);
+    const r = Math.min(12, Math.abs(mid - x1) / 2, Math.abs(x2 - mid) / 2, Math.abs(dy) / 2);
+    return `M${x1} ${y1} L${mid - r} ${y1} Q${mid} ${y1} ${mid} ${y1 + dir * r} L${mid} ${y2 - dir * r} Q${mid} ${y2} ${mid + r} ${y2} L${x2} ${y2}`;
+  }
+  const outX = x1 + 40;
+  const inX = x2 - 40;
+  const midY = y1 + dy / 2;
+  const r = Math.min(12, 20, Math.abs(dy) / 4);
+  return `M${x1} ${y1} L${outX - r} ${y1} Q${outX} ${y1} ${outX} ${y1 + dir * r} L${outX} ${midY - dir * r} Q${outX} ${midY} ${outX - r} ${midY} L${inX + r} ${midY} Q${inX} ${midY} ${inX} ${midY + dir * r} L${inX} ${y2 - dir * r} Q${inX} ${y2} ${inX + r} ${y2} L${x2} ${y2}`;
 }
 
-/** Bezier from `a`'s output port into `b`'s input `key` (first input when unknown). */
-export function wirePath(a: GraphNode, b: GraphNode, key?: string): string {
+/** Wire from `a`'s output into `b`'s input `key` (first input when unknown). Default is the rounded orthogonal wire. */
+export function wirePath(a: GraphNode, b: GraphNode, key?: string, style?: EdgeStyle): string {
   const index = Math.max(0, portsFor(b).inputs.findIndex((p) => p.key === key));
-  return curve((a.x || 0) + NODE_W, (a.y || 0) + PORT_Y, b.x || 0, (b.y || 0) + portY(index));
+  const x1 = (a.x || 0) + NODE_W;
+  const y1 = (a.y || 0) + PORT_Y;
+  const x2 = b.x || 0;
+  const y2 = (b.y || 0) + portY(index);
+  if (style === "straight") return `M${x1} ${y1} L${x2} ${y2}`;
+  if (style === "curve") {
+    const c = Math.max(48, Math.abs(x2 - x1) / 2);
+    return `M${x1} ${y1} C${x1 + c} ${y1} ${x2 - c} ${y2} ${x2} ${y2}`;
+  }
+  return curve(x1, y1, x2, y2);
 }
 
 /**
@@ -621,6 +1065,7 @@ export type ShortcutId =
   | "zoomOut"
   | "panMode"
   | "selectMode"
+  | "comment"
   | "help";
 type KeySpec = { key: string; mod?: boolean; shift?: boolean };
 export type Shortcut = { id: ShortcutId; label: string; keys: string; group: "Edit" | "View"; match: KeySpec[] };
@@ -650,6 +1095,7 @@ export const SHORTCUTS: Shortcut[] = [
   { id: "zoomOut", label: "Zoom out", keys: "⌘−", group: "View", match: [{ key: "-", mod: true }] },
   { id: "panMode", label: "Pan tool (or hold Space)", keys: "H", group: "View", match: [{ key: "h" }] },
   { id: "selectMode", label: "Select tool", keys: "V", group: "View", match: [{ key: "v" }] },
+  { id: "comment", label: "Comment", keys: "C", group: "Edit", match: [{ key: "c" }] },
   { id: "help", label: "Show shortcuts", keys: "?", group: "View", match: [{ key: "?", shift: true }] },
 ];
 
