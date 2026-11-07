@@ -6,6 +6,8 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 const nextConfig = {
   output: "standalone",
   outputFileTracingRoot: path.join(dir, "../.."),
+  // POST /runs blocks until a live job ends. The rewrite proxy default (30 s) turned every video into a 500.
+  experimental: { proxyTimeout: 15 * 60 * 1000 },
   async rewrites() {
     // Dev-only fallback; production Mac bundle uses app/vinci-api/[...path]/route.ts
     if (process.env.VINCI_STUDIO_USE_REWRITE === "1") {

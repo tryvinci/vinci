@@ -20,6 +20,7 @@ import {
   type MentionRow,
 } from "../lib/image-page";
 import { daemonHasPath } from "../lib/daemon-routes";
+import { isUnpriced, PRICE_VARIES } from "../lib/model-capabilities";
 import { ImageFeed } from "./image-feed";
 import { ImagePromptBar } from "./image-prompt-bar";
 import { plainError } from "./ui/plain-text";
@@ -226,7 +227,7 @@ export function ImagePage({
     [onLog],
   );
 
-  const cost = money(generateCost(selected?.pricing?.amount, batch));
+  const cost = selected && isUnpriced(selected) ? PRICE_VARIES : money(generateCost(selected?.pricing?.amount, batch));
   const blocked = needsReference(selected) && refs.length === 0;
 
   return (

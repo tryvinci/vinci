@@ -276,7 +276,17 @@ class WavespeedProvider(CatalogBackedProvider):
         else:
             payload["prompt"] = self.prompt_text(req)
             image = self._provider_image(_image_input(req))
-            if image:
+            if image and "/text-to-video" in endpoint:
+                # t2v+i2v models: the text route drops the still, so send it to the image route.
+                # Keeps a variant suffix (text-to-video-turbo -> image-to-video-turbo). Rewrites the
+                # endpoint only, never the base URL (WAVESPEED_API_URL can be any host).
+                route = endpoint.replace("/text-to-video", "/image-to-video", 1)
+                url = f"{self._base()}/api/v3/{route}"
+            if image and endpoint == "bytedance/seedream-v4.5":
+                # Seedream edits live on /edit and take a list of references.
+                url += "/edit"
+                payload["images"] = [image]
+            elif image:
                 payload["image"] = image
             last = req.inputs.get("last_frame_url") or req.inputs.get("tail_image_url")
             if isinstance(last, str) and last:

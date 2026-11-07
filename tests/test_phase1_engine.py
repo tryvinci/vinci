@@ -17,7 +17,7 @@ from vinci_provider_openai import OpenAIProvider
 from vinci_provider_sdk.catalog_provider import LiveSpendDisabled
 from vinci_provider_sdk.mock import mp4_dimensions
 from vinci_provider_wavespeed import WavespeedProvider
-from vinci_runtime.engine import Engine
+from vinci_runtime.engine import Engine, all_secret_names
 from vinci_skills import SkillLoader
 
 
@@ -276,6 +276,26 @@ def test_max_cost_gate_with_priced_catalog(tmp_path: Path, monkeypatch: pytest.M
     parked = engine.start_run("@tryvinci/image-generate", {"prompt": "seedream"}, max_cost=0.001)
     assert parked["state"] == "awaiting_approval"
     assert parked["estimate"]["total"] > 0.001
+
+
+def test_init_home_auto_mode_needs_live_spend_and_a_live_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Studio boot sends demo=null. Live needs live spend and a ready non-mock model, even for env-only keys."""
+    monkeypatch.setenv("VINCI_HOME", str(tmp_path))
+    for name in all_secret_names():
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.delenv("VINCI_ALLOW_LIVE_SPEND", raising=False)
+
+    assert Engine(tmp_path).init_home(demo=None)["demo"] is True  # no key, no live spend
+    monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
+    assert Engine(tmp_path).init_home(demo=None)["demo"] is True  # live spend, no key
+    monkeypatch.setenv("WAVESPEED_API_KEY", "not-a-real-key")
+    eng = Engine(tmp_path)
+    assert eng.init_home(demo=None)["demo"] is False  # env key, no config row yet
+    assert eng.config.providers["mock"] == {"enabled": False}
+    monkeypatch.delenv("VINCI_ALLOW_LIVE_SPEND")
+    assert Engine(tmp_path).init_home(demo=None)["demo"] is True  # key, live spend off
 
 
 def test_add_provider_file_secret_never_hits_receipt(

@@ -22,6 +22,17 @@ BUNDLED_CATALOGS = (
 )
 
 
+def price_key(model: ModelSpec) -> tuple[bool, float]:
+    """Sort key for price ranking: an unpriced model ranks after every priced one.
+
+    Amount 0 on a live provider means "no flat price" (OpenAI image models bill per token),
+    not "free". Mock is free by design, so it keeps the first place in demo mode.
+    COREPRODUC-529: "cheapest" used to rank the OpenAI image models first at $0.
+    """
+    amount = model.pricing.amount
+    return (model.provider != "mock" and amount <= 0, amount)
+
+
 def reject_sunset_defaults(model_id: str) -> None:
     lowered = model_id.lower()
     if any(marker in lowered for marker in SORA_MARKERS):
@@ -47,6 +58,14 @@ class Catalog:
         return [m for m in self.models if capability in [c.value for c in m.capabilities]]
 
     def cheapest(self, capability: str) -> ModelSpec | None:
+        """Return the cheapest active USD model for a capability, ranked by `price_key`.
+
+        Args:
+            capability: Capability value, such as `t2i`.
+
+        Returns:
+            The cheapest model, or `None` when no active USD model has the capability.
+        """
         candidates = [
             m
             for m in self.by_capability(capability)
@@ -54,7 +73,7 @@ class Catalog:
         ]
         if not candidates:
             return None
-        return min(candidates, key=lambda m: m.pricing.amount)
+        return min(candidates, key=price_key)
 
     def endpoint_for(self, model_id: str) -> str | None:
         return self.endpoints.get(model_id)
