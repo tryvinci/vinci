@@ -898,7 +898,12 @@ export function toWorkflowNodes(nodes: GraphNode[]): GraphNode[] {
     void instanceOf;
     const params = { ...(n.params || {}) };
     const video = n.capability === "t2v" || n.capability === "i2v";
-    for (const key of SHOT_KEYS) if (!params[key]) params[key] = inputRef(key);
+    for (const key of SHOT_KEYS) {
+      // A shot key set to "" was cleared in the inspector (COREPRODUC-525): keep it empty, so the page
+      // value (for example a template's 85mm) does not come back. aspect_ratio keeps the falsy fill.
+      const unset = key === "aspect_ratio" ? !params[key] : params[key] === undefined;
+      if (unset) params[key] = inputRef(key);
+    }
     if (video && params.duration == null) params.duration = inputRef("duration");
     if (video && !params.motion) params.motion = inputRef("motion");
     return { ...n, params };

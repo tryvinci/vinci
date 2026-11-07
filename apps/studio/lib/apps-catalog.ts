@@ -27,7 +27,19 @@ export type AppInput = {
   default?: string | number;
   /** Prompt slot (default) or a `/runs` input key such as `media`. */
   slot?: string;
+  /** Number fields with both bounds render as a slider. */
+  min?: number;
+  max?: number;
+  /** Shown under Advanced instead of the main form. */
+  advanced?: boolean;
 };
+
+/** Magnific Creative upscaler settings (Precision ignores them). Same names as the Magnific API. */
+export const MAG_STYLES = ["standard", "soft_portraits", "hard_portraits", "art_n_illustration", "films_n_photography", "3d_renders"];
+export const MAG_ENGINES = ["automatic", "magnific_illusio", "magnific_sharpy", "magnific_sparkle"];
+const magSlider = (id: string, label: string): AppInput => ({
+  id, label, type: "number", default: 0, min: -10, max: 10, slot: id, advanced: true,
+});
 
 export type EffectPage = "speak" | "upscale" | "adapts";
 
@@ -255,8 +267,17 @@ export const STUDIO_APPS: readonly StudioApp[] = [
     provider: "magnific",
     preferred_model_id: "magnific:upscaler-creative:2026-09",
     prompt_template: "upscale",
-    params: { scale: "4x", optimized_for: "standard", engine: "automatic" },
-    inputs: [{ id: "still", label: "Still", type: "media", required: true, slot: "media" }],
+    params: { scale: "4x" },
+    inputs: [
+      { id: "still", label: "Still", type: "media", required: true, slot: "media" },
+      // Magnific's own upscaler controls (COREPRODUC-525), under Advanced.
+      magSlider("creativity", "Creativity"),
+      magSlider("resemblance", "Resemblance"),
+      magSlider("hdr", "HDR"),
+      magSlider("fractality", "Fractality"),
+      { id: "optimized_for", label: "Optimized for", type: "select", options: MAG_STYLES, default: "standard", slot: "optimized_for", advanced: true },
+      { id: "engine", label: "Engine", type: "select", options: MAG_ENGINES, default: "automatic", slot: "engine", advanced: true },
+    ],
     output_kind: "image",
   },
 ];

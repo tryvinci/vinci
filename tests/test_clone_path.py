@@ -85,11 +85,7 @@ def test_clone_tree_has_north_star_files() -> None:
     assert "Choose your first node" in (ROOT / "apps/studio/app/canvas-empty.tsx").read_text(encoding="utf-8")
     assert "canvas-inspector" in (ROOT / "apps/studio/app/canvas-inspector.tsx").read_text(encoding="utf-8")
     assert "Run this node" in studio_client
-    assert "Cinema stack" in studio_client
-    assert "cast-pills" in studio_client
-    assert "first-frame" in studio_client
     assert "data-port" in studio_client
-    assert "vinci://assets/" in studio_client
     assert "Start generating" in studio_client
     assert "New connector" in studio_client
     assert "connector-mark" in studio_client
@@ -97,17 +93,15 @@ def test_clone_tree_has_north_star_files() -> None:
     assert "Another server" in studio_client
     assert "Supercomputer" in studio_client
     assert "Collab" in studio_client
-    assert "aperture-pills" in studio_client
-    assert "lighting-pills" in studio_client
-    assert "palette-pills" in studio_client
     assert "image_urls" in studio_client
-    assert "add-shot" in studio_client
     assert "creativity" in studio_client
-    assert "optimized-pills" in studio_client
-    assert "element-kind-pills" in studio_client
     assert "t.defaults" in studio_client
     assert 't.page || "canvas"' in studio_client
     assert "Talking scenes open Video" in studio_client
+    # Cinema rows live in the canvas inspector; Magnific upscaler settings in the Still to 4K app (COREPRODUC-525).
+    assert "onShot=" in studio_client
+    assert "shotRows(cap)" in (ROOT / "apps/studio/app/canvas-inspector.tsx").read_text(encoding="utf-8")
+    assert 'magSlider("creativity"' in (ROOT / "apps/studio/lib/apps-catalog.ts").read_text(encoding="utf-8")
     assert "Skip for now" in studio_client
     assert "vinci-onboard-v1" in studio_client
     assert "Make images and video here" in studio_client

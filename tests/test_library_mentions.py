@@ -129,7 +129,10 @@ def test_studio_wires_shared_popover_and_library_page() -> None:
     assert "LibraryPage" in client
     assert "providerMentionInputs" in client
     assert "withMentionRefs" in client
-    assert "PromptMention" in client
+    # studio-client.tsx rendered PromptMention only in the dead side panel (COREPRODUC-525); the live fields
+    # are in the components below and in the canvas inspector.
+    inspector = (ROOT / "apps" / "studio" / "app" / "canvas-inspector.tsx").read_text(encoding="utf-8")
+    assert "PromptMention" in inspector
     bar = (ROOT / "apps" / "studio" / "app" / "image-prompt-bar.tsx").read_text(encoding="utf-8")
     assert "image-elements" in bar
     panel = (ROOT / "apps" / "studio" / "app" / "video-panel.tsx").read_text(encoding="utf-8")

@@ -16,9 +16,8 @@ import { CanvasInspector } from "./canvas-inspector";
 import { CanvasNodeCard } from "./canvas-node-card";
 import { ImagePage } from "./image-page";
 import { LibraryPage } from "./library-page";
-import { PromptMention } from "./prompt-mention";
 import { VideoPage } from "./video-page";
-import { ModelCombo, type ComboModel } from "./model-combo";
+import { type ComboModel } from "./model-combo";
 import { VinciLogo } from "./ui/logo";
 import { DockIcon, DOCK_ICON } from "./ui/icons";
 import { plainError } from "./ui/plain-text";
@@ -39,7 +38,9 @@ import {
   countPatch,
   countValue,
   listedOr,
+  MOTIONS,
   nextRefRole,
+  OPTICAL_NEUTRAL,
   pickListed,
   promptValue,
   REF_LIMIT,
@@ -158,7 +159,6 @@ import {
   LIBRARY_STORAGE_KEY,
   asCastRow,
   asLibraryItem,
-  createLibraryItem,
   mentionRole,
   mentionableItems,
   mentionedItems,
@@ -187,24 +187,6 @@ function findHitUri(uri?: string): string {
   if (/vinci:\/\//i.test(value) || /\b[0-9a-f]{32,}\b/i.test(value)) return "File";
   return value;
 }
-const CAMERAS = ["locked-off", "handheld", "tracking", "crane", "aerial"];
-const LENSES = ["24mm", "35mm", "50mm", "85mm", "anamorphic"];
-const LOOKS = ["commercial", "documentary", "noir", "fashion", "product"];
-const LIGHTING = ["available", "studio", "golden-hour", "overcast", "neon", "moonlight", "practical"];
-const PALETTES = ["filmic", "teal-orange", "bleach", "tungsten", "daylight", "pastel", "verdant"];
-const MOTIONS = ["static", "pan", "orbit", "push-in", "pull-out"];
-const APERTURES = ["f/1.4", "f/2.8", "f/5.6", "f/11"];
-const GENRES = ["action", "drama", "documentary", "music-video"];
-// Neutral cinema stack: no Studio control shows these values (COREPRODUC-525), so a run adds no
-// words to the prompt unless a template sets them. compose_shot_prompt skips "", available,
-// filmic, and static. Before, every image/video run got "locked-off, 50mm, f/2.8, commercial, drama".
-const OPTICAL_NEUTRAL = {
-  camera: "", lens: "", look: "", lighting: "available", palette: "filmic", motion: "static", aperture: "", genre: "",
-};
-const SCENES = ["general", "selfie", "podcast", "car-talking"];
-const ELEMENT_KINDS = ["character", "location", "element", "style"] as const;
-const MAG_STYLES = ["standard", "soft_portraits", "hard_portraits", "art_n_illustration", "films_n_photography", "3d_renders"];
-const MAG_ENGINES = ["automatic", "magnific_illusio", "magnific_sharpy", "magnific_sparkle"];
 const CATS = ["all", "image", "motion", "upscale", "cinema", "ads", "clips", "audio"];
 const KEY_ORDER = ["higgsfield", "magnific", "wavespeed", "google", "fal", "elevenlabs", "cloudflare", "mcp"];
 const CONNECTOR_ORDER = ["mock", ...KEY_ORDER];
@@ -436,33 +418,6 @@ function comboModels(rows: Model[], withPrice: boolean, suffix: (row: Model) => 
   });
 }
 
-function MagRange({
-  id,
-  label,
-  value,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: number;
-  onChange: (n: number) => void;
-}) {
-  return (
-    <div className="range-row">
-      <label htmlFor={id}>
-        {label} <span id={id + "-val"}>{value}</span>
-      </label>
-      <input
-        id={id}
-        type="range"
-        min={-10}
-        max={10}
-        value={value}
-        onChange={(ev) => onChange(Number(ev.target.value))}
-      />
-    </div>
-  );
-}
 
 function opticalValue(value: unknown, fallback: string): string {
   if (value == null || value === "" || String(value).includes("{{")) return fallback;
@@ -683,7 +638,6 @@ export function StudioClient() {
   const [fractality, setFractality] = useState(0);
   const [optimizedFor, setOptimizedFor] = useState("standard");
   const [engine, setEngine] = useState("automatic");
-  const [elementKind, setElementKind] = useState<(typeof ELEMENT_KINDS)[number]>("character");
   const [aspectRatio, setAspectRatio] = useState("");
   const [duration, setDuration] = useState("");
   const [scale, setScale] = useState("4x");
@@ -808,7 +762,6 @@ export function StudioClient() {
   const [seed, setSeed] = useState("");
   const [steps, setSteps] = useState("");
   const [cast, setCast] = useState<CastRow[]>([]);
-  const [castName, setCastName] = useState("");
   const libraryItems = useMemo(() => cast.map(asLibraryItem), [cast]);
   const mentionItems = useMemo(() => mentionableItems(libraryItems), [libraryItems]);
   const [libraryReady, setLibraryReady] = useState(false);
@@ -826,7 +779,6 @@ export function StudioClient() {
   const trackedRef = useRef<string[]>([]);
   graphRef.current = graph;
   const linkFromRef = useRef<string | null>(null);
-  const castFileRef = useRef<HTMLInputElement>(null);
   const composeStillRef = useRef<HTMLInputElement>(null);
   const adaptFileRef = useRef<HTMLInputElement>(null);
   const oauthAttemptRef = useRef(0);
@@ -927,8 +879,6 @@ export function StudioClient() {
 
   const selected = composeModels.find((m) => m.id === modelId) || composeModels[0];
   const mode = panelFor(selected, page);
-  const opticalPage = mode.showOptical;
-  const videoish = mode.showMotion;
 
   const loadMedia = useCallback(async () => {
     const [runBody, assetBody] = await Promise.all([
@@ -2247,15 +2197,6 @@ export function StudioClient() {
     linkFromRef.current = null;
     setLinkFrom(null);
     setAddChip(null);
-  }
-
-  function addShot() {
-    const shots = graph.nodes.filter((n) => n.capability === "t2i");
-    if (shots.length >= 6) {
-      setLog("This template stays at 6 shots.");
-      return;
-    }
-    addNode("t2i");
   }
 
   async function playTimeline() {
@@ -4212,28 +4153,6 @@ export function StudioClient() {
     );
   }
 
-  function Pills({
-    id,
-    values,
-    current,
-    onPick,
-  }: {
-    id?: string;
-    values: string[];
-    current: string;
-    onPick: (v: string) => void;
-  }) {
-    return (
-      <div className="pills" id={id}>
-        {values.map((v) => (
-          <button key={v} type="button" className={v === current ? "on" : ""} onClick={() => onPick(v)}>
-            {v}
-          </button>
-        ))}
-      </div>
-    );
-  }
-
   /**
    * End a node-prompt edit as one undo step. Reads a ref and a stable setter, so a stale closure is safe.
    */
@@ -4756,6 +4675,7 @@ export function StudioClient() {
                 const seed = v.trim();
                 setGraph((g) => setParams(g, n.id, { seed: seed === "" ? "" : Number(seed) || seed }));
               }}
+              onShot={(patch) => setGraph((g) => setParams(g, n.id, patch))}
               onRun={() => runNodes([n.id])}
               onClose={() => setInspectorOpen(false)}
               library={mentionItems}
@@ -4770,389 +4690,6 @@ export function StudioClient() {
             />
           );
         })()
-      ) : wantsInsp ? (
-        <aside className="insp">
-          <div className="insp-h">
-            <p className="eyebrow">Cinema stack</p>
-            <h2>{titles[page]}</h2>
-            <p className="muted">Pick a template or describe a shot. Price sits on Generate.</p>
-          </div>
-          <div className="fields">
-            <div>
-              <label htmlFor="model">Model</label>
-              <ModelCombo
-                inputId="model"
-                value={selected?.id || ""}
-                models={comboModels(composeModels, true, statusSuffix)}
-                onChange={(id) => {
-                  modelTouched.current = true;
-                  setModelId(id);
-                }}
-              />
-            </div>
-            <div>
-              <label htmlFor="prompt">{animateStill(selected) ? "Motion" : "Prompt"}</label>
-              <PromptMention
-                id="prompt"
-                testId="compose-prompt"
-                mentionTestId="compose-mention"
-                placeholder={
-                  animateStill(selected)
-                    ? "How the still should move."
-                    : "north-light oak cube, 50mm cinema still."
-                }
-                value={prompt}
-                items={mentionItems}
-                onChange={setPrompt}
-              />
-            </div>
-            {opticalPage ? (
-              <>
-            <div>
-              <label>Camera</label>
-              <Pills
-                id="camera-pills"
-                values={CAMERAS}
-                current={camera}
-                onPick={(v) => {
-                  setCamera(v);
-                  stampSelected({ camera: v });
-                }}
-              />
-            </div>
-            <div>
-              <label>Lens</label>
-              <Pills
-                id="lens-pills"
-                values={LENSES}
-                current={lens}
-                onPick={(v) => {
-                  setLens(v);
-                  stampSelected({ lens: v });
-                }}
-              />
-            </div>
-            <div>
-              <label>Look</label>
-              <Pills
-                id="look-pills"
-                values={LOOKS}
-                current={look}
-                onPick={(v) => {
-                  setLook(v);
-                  stampSelected({ look: v });
-                }}
-              />
-            </div>
-            <div>
-              <label>Lighting</label>
-              <Pills
-                id="lighting-pills"
-                values={LIGHTING}
-                current={lighting}
-                onPick={(v) => {
-                  setLighting(v);
-                  stampSelected({ lighting: v });
-                }}
-              />
-            </div>
-            <div>
-              <label>Color palette</label>
-              <Pills
-                id="palette-pills"
-                values={PALETTES}
-                current={palette}
-                onPick={(v) => {
-                  setPalette(v);
-                  stampSelected({ palette: v });
-                }}
-              />
-            </div>
-            <div>
-              <label>Aperture</label>
-              <Pills
-                id="aperture-pills"
-                values={APERTURES}
-                current={aperture}
-                onPick={(v) => {
-                  setAperture(v);
-                  stampSelected({ aperture: v });
-                }}
-              />
-            </div>
-            <div>
-              <label>Genre</label>
-              <Pills
-                id="genre-pills"
-                values={GENRES}
-                current={genre}
-                onPick={(v) => {
-                  setGenre(v);
-                  stampSelected({ genre: v });
-                }}
-              />
-            </div>
-            {videoish && opticalPage ? (
-              <div>
-                <label>Camera motion</label>
-                <Pills
-                  id="motion-pills"
-                  values={MOTIONS}
-                  current={motion}
-                  onPick={(v) => {
-                    setMotion(v);
-                    stampSelected({ motion: v });
-                  }}
-                />
-              </div>
-            ) : null}
-              </>
-            ) : null}
-            {ratios.length ? (
-              <div>
-                <label>Aspect</label>
-                <Pills
-                  id="aspect-pills"
-                  values={ratios}
-                  current={aspectRatio || ratios[0]}
-                  onPick={(v) => {
-                    setAspectRatio(v);
-                    stampSelected({ aspect_ratio: v });
-                  }}
-                />
-              </div>
-            ) : null}
-            {mode.showMotion && durs.length ? (
-              <div>
-                <label>Duration</label>
-                <Pills
-                  id="duration-pills"
-                  values={durs.map(String)}
-                  current={duration || String(durs.includes(5) ? 5 : durs[0])}
-                  onPick={(v) => {
-                    setDuration(v);
-                    stampSelected({ duration: Number(v) });
-                  }}
-                />
-              </div>
-            ) : null}
-            {(selected?.constraints?.resolutions || []).length ? (
-              <div>
-                <label>Quality</label>
-                <Pills
-                  id="resolution-pills"
-                  values={selected?.constraints?.resolutions || []}
-                  current={shownResolution()}
-                  onPick={(v) => {
-                    setResolution(v);
-                    stampSelected({ resolution: v });
-                  }}
-                />
-              </div>
-            ) : null}
-            {mode.showScale ? (
-              <div>
-                <label>Scale</label>
-                <Pills id="scale-pills" values={["2x", "4x", "8x", "16x"]} current={scale} onPick={setScale} />
-              </div>
-            ) : null}
-            {mode.showScene ? (
-              <div id="scene-field">
-                <label>Speak scene</label>
-                <Pills id="scene-pills" values={SCENES} current={scene} onPick={setScene} />
-              </div>
-            ) : null}
-            {mode.showMagnific ? (
-              <div id="magnific-field">
-                <p className="muted" style={{ margin: 0 }}>
-                  Magnific Creative. Precision ignores these.
-                </p>
-                <MagRange id="creativity" label="Creativity" value={creativity} onChange={setCreativity} />
-                <MagRange id="resemblance" label="Resemblance" value={resemblance} onChange={setResemblance} />
-                <MagRange id="hdr" label="HDR" value={hdr} onChange={setHdr} />
-                <MagRange id="fractality" label="Fractality" value={fractality} onChange={setFractality} />
-                <label>Optimized for</label>
-                <Pills id="optimized-pills" values={MAG_STYLES} current={optimizedFor} onPick={setOptimizedFor} />
-                <label>Engine</label>
-                <Pills id="engine-pills" values={MAG_ENGINES} current={engine} onPick={setEngine} />
-              </div>
-            ) : null}
-            {mode.showStill ? (
-            <div id="still-field">
-              <label htmlFor="insp-still">{mode.stillLabel}</label>
-              <input
-                id="insp-still"
-                type="file"
-                accept={mode.stillAccept}
-                onChange={async (ev) => {
-                  const file = ev.target.files?.[0];
-                  if (!file) return;
-                  try {
-                    const asset = await ingest(file);
-                    setUploadId(asset.id);
-                    setStageReset(false);
-                    setLog("Input loaded. vinci://assets/" + asset.id);
-                  } catch (err) {
-                    setLog(String(err instanceof Error ? err.message : err));
-                  }
-                }}
-              />
-              <span className="muted">{uploadId ? "vinci://assets/" + uploadId : mode.stillHint}</span>
-            </div>
-            ) : null}
-            {mode.showFrames ? (
-              <div id="frames-field">
-                <label>First / last frame</label>
-                <div className="insp-frames">
-                  <div>
-                    <label htmlFor="first-frame">First</label>
-                    <input
-                      id="first-frame"
-                      type="file"
-                      accept="image/*"
-                      onChange={async (ev) => {
-                        const file = ev.target.files?.[0];
-                        if (!file) return;
-                        const asset = await ingest(file);
-                        setFirstFrameId(asset.id);
-                        setLog("First frame " + asset.id);
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="last-frame">Last</label>
-                    <input
-                      id="last-frame"
-                      type="file"
-                      accept="image/*"
-                      onChange={async (ev) => {
-                        const file = ev.target.files?.[0];
-                        if (!file) return;
-                        const asset = await ingest(file);
-                        setLastFrameId(asset.id);
-                        setLog("Last frame " + asset.id);
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : null}
-            {mode.showCast ? (
-              <div id="cast-field">
-                <label>Elements</label>
-                <p className="muted" style={{ margin: "0 0 6px" }}>
-                  Local named stills for characters, locations, and props. Not a scraped community feed.
-                </p>
-                <Pills
-                  id="element-kind-pills"
-                  values={[...ELEMENT_KINDS]}
-                  current={elementKind}
-                  onPick={(v) => setElementKind(v as (typeof ELEMENT_KINDS)[number])}
-                />
-                <div className="pills" id="cast-pills">
-                  {cast.length === 0 ? <span className="muted">None yet</span> : null}
-                  {cast.map((c) => (
-                    <button
-                      key={c.name}
-                      type="button"
-                      className={prompt.includes("@" + c.name) ? "on" : ""}
-                      data-cast={c.name}
-                      onClick={() => {
-                        const tag = "@" + c.name;
-                        setPrompt((p) => (p.includes(tag) ? p : (p.trim() + " " + tag).trim()));
-                        setUploadId(c.assetId);
-                        setFirstFrameId(c.assetId);
-                      }}
-                    >
-                      @{c.name}
-                      {c.kind && c.kind !== "character" ? " · " + c.kind : ""}
-                    </button>
-                  ))}
-                </div>
-                <div className="file-row">
-                  <input id="cast-file" ref={castFileRef} type="file" accept="image/*" />
-                  <input
-                    id="cast-name"
-                    type="text"
-                    placeholder="Name"
-                    value={castName}
-                    onChange={(ev) => setCastName(ev.target.value)}
-                  />
-                  <button
-                    className="ghost"
-                    id="cast-add"
-                    type="button"
-                    onClick={async () => {
-                      const file = castFileRef.current?.files?.[0];
-                      const name = castName.trim() || file?.name.replace(/\.[^.]+$/, "") || "Cast";
-                      if (!file) {
-                        setLog("Pick a still, then Add to cast.");
-                        return;
-                      }
-                      const asset = await ingest(file);
-                      const made = createLibraryItem({ name, kind: elementKind, refs: [asset.id] });
-                      if (!made.ok) {
-                        setLog(made.error);
-                        return;
-                      }
-                      setCast((rows) => upsertLibraryItem(rows.map(asLibraryItem), made.item).map(asCastRow));
-                      setCastName("");
-                      setLog("Cast @" + name);
-                    }}
-                  >
-                    Add to cast
-                  </button>
-                </div>
-              </div>
-            ) : null}
-            <div className="file-row">
-              <button className="ghost" type="button" onClick={() => addNode("t2i")}>+ Image node</button>
-              <button
-                className="ghost"
-                type="button"
-                onClick={() => {
-                  const caps = selected?.capabilities || [];
-                  addNode(caps.includes("i2v") && !caps.includes("t2v") ? "i2v" : "t2v");
-                }}
-              >
-                + Video node
-              </button>
-              <button
-                className="ghost"
-                type="button"
-                onClick={() => {
-                  const caps = selected?.capabilities || [];
-                  const videoJob = caps.includes("t2v") || caps.includes("i2v");
-                  addNode(caps.includes("upscale") && !caps.includes("i2i") && !videoJob ? "upscale" : "i2i");
-                }}
-              >
-                + Upscale node
-              </button>
-              <button className="ghost" id="add-shot" type="button" onClick={() => addShot()}>+ Shot</button>
-            </div>
-            <p className="log">{log}</p>
-          </div>
-          <div className="foot">
-            <button className="run" type="button" disabled={busy || !selected} onClick={() => void generate()}>
-              <span>{busy ? "Generating…" : "Generate"}</span>
-              <span>{money(selected?.pricing?.amount)}</span>
-            </button>
-            {lastDigest ? (
-              <a
-                className="ghost"
-                data-testid="studio-export-last"
-                download={`vinci-${lastDigest.slice(0, 12)}`}
-                href={`${API}/assets/${lastDigest}/file`}
-                style={{ display: "inline-block", marginTop: 8 }}
-              >
-                Export last output
-              </a>
-            ) : null}
-            <p className="muted" style={{ margin: "8px 0 0" }}>
-              Estimates appear on Generate.
-            </p>
-          </div>
-        </aside>
       ) : null}
       {onboardOpen ? (
         <div id="onboard" data-onboard data-step={String(onboardStep)}>

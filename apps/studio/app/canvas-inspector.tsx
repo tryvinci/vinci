@@ -8,6 +8,9 @@ import {
   REF_ROLES,
   refsOf,
   seedValue,
+  shotPatch,
+  shotRows,
+  shotValue,
   showsCount,
   showsFrame,
   slotRef,
@@ -44,6 +47,8 @@ type Props = {
   onResolution: (v: string) => void;
   onModel: (id: string) => void;
   onSeed: (v: string) => void;
+  /** Merge a shot patch (camera, lens, look, ...) into the node params. */
+  onShot: (patch: Record<string, string>) => void;
   onRun: () => void;
   onClose: () => void;
   onAddSlot: (role: "style" | "character") => void;
@@ -55,7 +60,7 @@ type Props = {
 
 /**
  * Magnific gear inspector: model, references 0/8 (Style + Character), prompt, seed,
- * aspect, resolution, Run. Same params object as the card.
+ * aspect, resolution, shot (camera, lens, look, ...), Run. Same params object as the card.
  */
 export function CanvasInspector({
   node,
@@ -82,6 +87,7 @@ export function CanvasInspector({
   onResolution,
   onModel,
   onSeed,
+  onShot,
   onRun,
   onClose,
   onAddSlot,
@@ -227,6 +233,23 @@ export function CanvasInspector({
               </div>
             </div>
           ) : null}
+          {shotRows(cap).map((row) => (
+            <div key={row.key} data-testid={`node-shot-${row.key}`}>
+              <label>{row.label}</label>
+              <div className="pills" id={`node-${row.key}-pills`}>
+                {row.values.map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    className={v === shotValue(node.params, row.key) ? "on" : ""}
+                    onClick={() => onShot(shotPatch(node.params, row.key, v))}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </AdvancedDisclosure>
       </div>
       <div className="foot">

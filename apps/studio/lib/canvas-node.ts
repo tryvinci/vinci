@@ -36,7 +36,44 @@ export const START_CARDS: StartCard[] = [
   { capability: "tts", label: "Voiceover", blurb: "Speak a prompt as audio" },
 ];
 
+/**
+ * Cinema stack rows in the inspector's Advanced section (COREPRODUC-525). The runtime folds a
+ * set value into the prompt (compose_shot_prompt), for example "85mm lens" or "neon lighting".
+ */
+export const SHOT_ROWS = [
+  { key: "camera", label: "Camera", values: ["locked-off", "handheld", "tracking", "crane", "aerial"] },
+  { key: "lens", label: "Lens", values: ["24mm", "35mm", "50mm", "85mm", "anamorphic"] },
+  { key: "aperture", label: "Aperture", values: ["f/1.4", "f/2.8", "f/5.6", "f/11"] },
+  { key: "look", label: "Look", values: ["commercial", "documentary", "noir", "fashion", "product"] },
+  { key: "genre", label: "Genre", values: ["action", "drama", "documentary", "music-video"] },
+  { key: "lighting", label: "Lighting", values: ["available", "studio", "golden-hour", "overcast", "neon", "moonlight", "practical"] },
+  { key: "palette", label: "Palette", values: ["filmic", "teal-orange", "bleach", "tungsten", "daylight", "pastel", "verdant"] },
+];
+export const MOTIONS = ["static", "pan", "orbit", "push-in", "pull-out"];
+/** Values that add no words to the prompt: unset, natural light, filmic grade, no camera move. */
+export const OPTICAL_NEUTRAL: Record<string, string> = {
+  camera: "", lens: "", look: "", lighting: "available", palette: "filmic", motion: "static", aperture: "", genre: "",
+};
+
 const COUNTED = new Set(["t2i", "i2i", "t2v", "i2v"]);
+
+/** Shot rows for a node: image and video generators; camera motion only for video. */
+export function shotRows(capability?: string): { key: string; label: string; values: string[] }[] {
+  if (!COUNTED.has(capability || "")) return [];
+  const video = capability === "t2v" || capability === "i2v";
+  return video ? [...SHOT_ROWS, { key: "motion", label: "Camera motion", values: MOTIONS }] : SHOT_ROWS;
+}
+
+/** The shot value a node has set, or "" (a skill placeholder such as {{inputs.camera}} counts as unset). */
+export function shotValue(params: Record<string, unknown> | undefined, key: string): string {
+  const raw = params?.[key];
+  return typeof raw === "string" && !isTemplate(raw) ? raw : "";
+}
+
+/** The patch for a shot pill press: pressing the set value again clears it to the neutral value. */
+export function shotPatch(params: Record<string, unknown> | undefined, key: string, value: string): Record<string, string> {
+  return { [key]: shotValue(params, key) === value ? OPTICAL_NEUTRAL[key] ?? "" : value };
+}
 
 /** True when this capability shows the 1–10 count stepper (Magnific Image / Video Gen). */
 export function showsCount(capability?: string): boolean {

@@ -227,6 +227,10 @@ const a = wf.find((n) => n.id === "anim");
 eq(a.params.motion, "orbit", "set motion is kept");
 eq(a.params.duration, "{{inputs.duration}}", "video duration from page inputs");
 eq(a.params.image, "{{nodes.up.output}}", "wired input survives");
+// A shot value cleared in the inspector ("") stays empty, so the page value cannot come back (COREPRODUC-525).
+const cleared = toWorkflowNodes(setParams(g, "still", { lens: "", aspect_ratio: "" }).nodes).find((n) => n.id === "still");
+eq(cleared.params.lens, "", "cleared lens stays empty");
+eq(cleared.params.aspect_ratio, "{{inputs.aspect_ratio}}", "empty aspect still comes from the page");
 """)
 
 
