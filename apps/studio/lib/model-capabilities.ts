@@ -241,6 +241,18 @@ function isTextModel(model: CatalogRow, caps: Set<string>): boolean {
   return /(^|:)(gpt-[45]|gpt-4o|o1|o3|claude|llama|mistral|gemini)([-:]|$)/.test(id);
 }
 
+/** Shown in place of "$0" for a model with no flat price. */
+export const PRICE_VARIES = "price varies";
+
+/**
+ * True for a non-mock model with no flat price. OpenAI image models bill per token, so the
+ * catalog amount is 0, which means "unknown", not "free". Mock is free by design.
+ * Mirrors `price_key` in `vinci_core/catalog.py` (COREPRODUC-529).
+ */
+export function isUnpriced(model: { provider?: string; pricing?: { amount?: number } }): boolean {
+  return model.provider !== "mock" && !(Number(model.pricing?.amount) > 0);
+}
+
 function ordered<T extends string>(all: readonly T[], picked: Set<T>): T[] {
   return all.filter((item) => picked.has(item));
 }
@@ -339,8 +351,11 @@ export function classifyModel(model: CatalogRow): ClassifiedModel {
     functions.has("audio_sts") ||
     functions.has("audio_voice");
   const amount = model.pricing?.amount;
+  // Within a tier, an unpriced model ranks after the priced ones (the daemon's "cheapest" does the same).
   const price =
-    typeof amount === "number" && Number.isFinite(amount) ? amount : Number.POSITIVE_INFINITY;
+    !isUnpriced(model) && typeof amount === "number" && Number.isFinite(amount)
+      ? amount
+      : Number.POSITIVE_INFINITY;
 
   return {
     id: model.id,

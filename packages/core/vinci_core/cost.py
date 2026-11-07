@@ -8,7 +8,7 @@ from typing import Any
 from vinci_protocol.enums import RoutePreference
 from vinci_protocol.models import Estimate, JobRequest, ModelSpec, WorkflowSpec
 
-from vinci_core.catalog import Catalog
+from vinci_core.catalog import Catalog, price_key
 
 
 def estimate_from_spec(
@@ -34,6 +34,23 @@ def active_candidates(catalog: Catalog, capability: str) -> list[ModelSpec]:
 def resolve_model(
     catalog: Catalog, req: JobRequest, *, available_providers: set[str] | None = None
 ) -> ModelSpec:
+    """Pick the model a request runs on.
+
+    A pinned `req.model_id` wins. Otherwise the preference ranks the active USD candidates,
+    and an unpriced model ranks after priced ones (see `price_key`).
+
+    Args:
+        catalog: The active catalog.
+        req: The request. `model_id`, `capability`, and `preference` drive the choice.
+        available_providers: When set, only models of these providers can win.
+
+    Returns:
+        The chosen model spec.
+
+    Raises:
+        ValueError: A pinned model lacks the requested capability.
+        KeyError: A pinned model is not in the catalog, or no model fits.
+    """
     if req.model_id:
         spec = catalog.by_id(req.model_id)
         if req.capability.value not in [c.value for c in spec.capabilities]:
@@ -52,8 +69,8 @@ def resolve_model(
     if req.preference == RoutePreference.FASTEST:
         fast = [m for m in candidates if m.quality_tier == "fast"]
         pool = fast or candidates
-        return min(pool, key=lambda m: m.pricing.amount)
-    return min(candidates, key=lambda m: m.pricing.amount)
+        return min(pool, key=price_key)
+    return min(candidates, key=price_key)
 
 
 def with_alternative(estimate: Estimate, catalog: Catalog, capability: str) -> Estimate:

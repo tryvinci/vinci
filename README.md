@@ -63,6 +63,7 @@ Your studio opens at `http://127.0.0.1:4311`, running in free demo mode. No acco
 Then pick your path:
 
 - **New here?** [Make your first scene](docs/first-film.md): a guided 10-minute walk from empty canvas to finished shot.
+- **Coming from Higgsfield or Magnific?** [Demo walkthrough](docs/demo-walkthrough.md): the same jobs in Vinci, segment by segment.
 - **Full setup details:** [Quickstart guide](docs/quickstart.md), including phone and tablet access on your network.
 - **Run it on your own server:** [Self-host on Cloudflare](docs/SELF_HOST_CLOUDFLARE.md).
 - **Batch work from a spreadsheet:** [Google Sheets guide](docs/google-sheets.md).

@@ -25,8 +25,10 @@ import { availabilityRank, modelAvailability, rankModels } from "../lib/model-se
 import {
   classifyModel,
   connectedProviderIds,
+  isUnpriced,
   modelsFor,
   modelsForNodeTypes,
+  PRICE_VARIES,
   surfaceForPage,
   tieBreakAvailability,
   withoutMockWhenConnected,
@@ -409,10 +411,21 @@ function money(n: number | undefined): string {
   return "$" + v.toFixed(3);
 }
 
+/**
+ * Build the rows of a model combobox. With `withPrice`, a row shows its price, or "price varies"
+ * for an unpriced model.
+ *
+ * Args:
+ *   rows: Catalog rows for the node's capability.
+ *   withPrice: Add the price text to each label.
+ *   suffix: Status text added at the end of each label.
+ * Returns:
+ *   One combobox row per model.
+ */
 function comboModels(rows: Model[], withPrice: boolean, suffix: (row: Model) => string): ComboModel[] {
   return rows.map((row) => {
     const who = withPrice && row.provider === "mock" ? "Local" : row.provider;
-    const price = withPrice ? ` · ${money(row.pricing?.amount)}` : "";
+    const price = withPrice ? ` · ${isUnpriced(row) ? PRICE_VARIES : money(row.pricing?.amount)}` : "";
     const label = `${row.display_name} · ${who}${price}${suffix(row)}`;
     return { id: row.id, display_name: row.display_name, provider: row.provider, label };
   });
@@ -782,6 +795,7 @@ export function StudioClient() {
   const composeStillRef = useRef<HTMLInputElement>(null);
   const adaptFileRef = useRef<HTMLInputElement>(null);
   const oauthAttemptRef = useRef(0);
+  const localOnlyRef = useRef(false); // set by "Use local models"; boot() then keeps demo on
   const [adaptPresets, setAdaptPresets] = useState<AdaptPresetRow[]>([]);
   const [adaptSourceId, setAdaptSourceId] = useState<string | null>(null);
   const [adaptTargets, setAdaptTargets] = useState<AdaptTarget[]>([
@@ -1045,10 +1059,13 @@ export function StudioClient() {
 
   const boot = useCallback(async () => {
     try {
+      // demo=null lets the daemon go live when live spend is on and a live model is ready.
+      // Forcing demo here re-enabled mock, so "cheapest" templates rendered mock output with live keys.
+      // "Use local models" pins demo for this session.
       await api("/init", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ demo: true }),
+        body: JSON.stringify({ demo: localOnlyRef.current ? true : null }),
       });
       const [doc, modelBody, skillBody, tplBody, presetBody, settingsBody] = await Promise.all([
         api<Doctor>("/doctor"),
@@ -1992,7 +2009,8 @@ export function StudioClient() {
   function nodePrice(n: GraphNode, targets: Set<string>): number | null {
     if (!targets.has(n.id) && !n.model_id) return null;
     const id = modelIdForNode(n, selected?.id || "", models, connected);
-    return models.find((m) => m.id === id)?.pricing?.amount ?? null;
+    const row = models.find((m) => m.id === id);
+    return row && !isUnpriced(row) ? (row.pricing?.amount ?? null) : null;
   }
 
   /** Short pre-run cost of `ids` and what feeds them; `pinned` are the nodes the run pins to a model. */
@@ -3875,11 +3893,7 @@ export function StudioClient() {
               className="ghost"
               type="button"
               onClick={async () => {
-                await api("/init", {
-                  method: "POST",
-                  headers: { "content-type": "application/json" },
-                  body: JSON.stringify({ demo: true }),
-                });
+                localOnlyRef.current = true;
                 await boot();
                 setLog("Local models are on.");
               }}

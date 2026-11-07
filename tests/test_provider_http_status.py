@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -114,8 +115,38 @@ def test_wavespeed_catalog_matches_public_api_paths() -> None:
         endpoints["wavespeed:seedance-2.0-i2v:2026-09"]
         == "bytedance/seedance-2.0/image-to-video"
     )
+    # https://wavespeed.ai/models/bytedance/seedance-2.0/text-to-video-turbo/llms.txt
+    assert (
+        endpoints["wavespeed:seedance-2.0-turbo:2026-08"]
+        == "bytedance/seedance-2.0/text-to-video-turbo"
+    )
     assert endpoints["wavespeed:seedvr2:2026-08"] == "wavespeed-ai/seedvr2/image"
     assert not any("sora" in model.id.lower() for model in catalog.models)
+
+
+def test_wavespeed_endpoint_shape_matches_capabilities() -> None:
+    """Every endpoint is `<org>/<model>[/<task>]` and its task fits the model (COREPRODUC-527).
+
+    Offline: it cannot prove a path exists, but it catches the invented `seedance-v2.0-turbo`
+    form. Wavespeed spells Seedance and Wan versions without a `v` (Kling and Seedream keep it).
+    """
+    catalog = load_bundled_catalog("wavespeed")
+    assert set(catalog.endpoints) == {m.id for m in catalog.models}
+    shape = re.compile(r"^[a-z0-9-]+/[a-z0-9][a-z0-9.-]*(/[a-z0-9-]+)?$")
+    for model in catalog.models:
+        endpoint = catalog.endpoints[model.id]
+        caps = {c.value for c in model.capabilities}
+        assert shape.match(endpoint), f"{model.id}: bad endpoint shape {endpoint!r}"
+        if endpoint.startswith(("bytedance/seedance-", "alibaba/wan-")):
+            assert not re.search(r"-v\d", endpoint), f"{model.id}: docs use no 'v': {endpoint}"
+        task = endpoint.split("/", 2)[2] if endpoint.count("/") == 2 else ""
+        if task.startswith("text-to-video"):
+            assert "t2v" in caps, f"{model.id}: text route needs t2v"
+        elif task.startswith("image-to-video"):
+            # Nothing reroutes a text-only run off an image route.
+            assert "i2v" in caps and "t2v" not in caps, f"{model.id}: image route fits i2v only"
+        elif task.startswith("text-to-image"):
+            assert "t2i" in caps, f"{model.id}: text-to-image route needs t2i"
 
 
 def test_wavespeed_seedvr2_image_uses_target_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -142,6 +173,45 @@ def test_wavespeed_seedvr2_image_uses_target_resolution(monkeypatch: pytest.Monk
     assert ref.ref == "up-1"
     assert seen["url"].endswith("/wavespeed-ai/seedvr2/image")
     assert seen["body"] == {"image": "https://cdn.example/still.png", "target_resolution": "4k"}
+
+
+@pytest.mark.parametrize(
+    ("model_id", "capability", "still", "route", "field"),
+    [
+        ("wavespeed:kling-2.6-pro:2026-08", Capability.I2V, True, "/kwaivgi/kling-v2.6-pro/image-to-video", "image"),
+        ("wavespeed:seedance-2.0-turbo:2026-08", Capability.I2V, True, "/bytedance/seedance-2.0/image-to-video-turbo", "image"),
+        ("wavespeed:seedance-2.0-turbo:2026-08", Capability.T2V, False, "/bytedance/seedance-2.0/text-to-video-turbo", None),
+        ("wavespeed:seedream-4.5:2026-08", Capability.I2I, True, "/bytedance/seedream-v4.5/edit", "images"),
+        ("wavespeed:seedream-4.5:2026-08", Capability.T2I, False, "/bytedance/seedream-v4.5", None),
+    ],
+)
+def test_wavespeed_still_picks_the_image_route(
+    monkeypatch: pytest.MonkeyPatch, model_id: str, capability: Capability, still: bool, route: str, field: str | None
+) -> None:
+    """A still must reach a route that reads it; t2v and t2i routes drop it (found 2026-11-07)."""
+    monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
+    provider = WavespeedProvider(api_key="ws-key", cas=_mem_cas({"still": b"\x89PNG\r\n\x1a\nstill"}))
+    seen: dict[str, Any] = {}
+
+    def fake_urlopen(request: Any, timeout: int = 30) -> _FakeResp:
+        if request.full_url.endswith("/media/upload/binary"):
+            return _FakeResp({"data": {"download_url": "https://cdn.example/still.png"}})
+        seen["url"] = request.full_url
+        seen["body"] = json.loads(request.data.decode("utf-8"))
+        return _FakeResp({"data": {"id": "job-1"}})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    inputs: dict[str, Any] = {"prompt": "a sneaker", **({"image": "still"} if still else {})}
+    req = JobRequest(capability=capability, model_id=model_id, inputs=inputs)
+    provider.estimate(req)
+    provider.submit(req)
+    assert seen["url"].endswith(route)
+    if field == "images":
+        assert seen["body"]["images"] == ["https://cdn.example/still.png"]
+    elif field:
+        assert seen["body"][field] == "https://cdn.example/still.png"
+    else:
+        assert "image" not in seen["body"] and "images" not in seen["body"]
 
 
 @pytest.mark.parametrize(
@@ -1209,3 +1279,24 @@ def test_ingest_data_uri_without_live_spend(
     )
     blob = engine.cas.get(outputs[0])
     assert blob == png
+
+
+def test_wavespeed_reroute_leaves_the_base_url_alone(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only the endpoint task changes; a base URL with /text-to-video in it stays (PR-Agent, Opus 5.5)."""
+    monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
+    monkeypatch.setenv("WAVESPEED_API_URL", "https://proxy.example/text-to-video")
+    provider = WavespeedProvider(api_key="ws-key", cas=_mem_cas({}))
+    seen: dict[str, Any] = {}
+
+    def fake_urlopen(request: Any, timeout: int = 30) -> _FakeResp:
+        seen["url"] = request.full_url
+        return _FakeResp({"data": {"id": "job-1"}})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    inputs = {"prompt": "a sneaker", "image": "https://cdn.example/still.png"}
+    req = JobRequest(capability=Capability.I2V, model_id="wavespeed:seedance-2.0-turbo:2026-08", inputs=inputs)
+    provider.estimate(req)
+    provider.submit(req)
+    assert seen["url"] == (
+        "https://proxy.example/text-to-video/api/v3/bytedance/seedance-2.0/image-to-video-turbo"
+    )

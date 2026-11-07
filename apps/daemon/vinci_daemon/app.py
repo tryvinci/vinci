@@ -86,7 +86,7 @@ class AgentPlanBody(BaseModel):
 
 
 class InitBody(BaseModel):
-    demo: bool = False
+    demo: bool | None = False  # null: pick live when live spend is on and a live model is ready
 
 
 class SettingsBody(BaseModel):

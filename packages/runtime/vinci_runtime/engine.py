@@ -39,7 +39,7 @@ from vinci_core.cost import (
 )
 from vinci_core.credentials import CredentialResolver
 from vinci_core.paths import allow_live_spend
-from vinci_core.redact import redact_mapping
+from vinci_core.redact import redact_mapping, redact_text
 from vinci_core.templates import list_templates
 from vinci_index.store import AssetIndex
 from vinci_media.adapt import (
@@ -197,6 +197,55 @@ def provider_secret_names(name: str) -> list[str]:
     names = [PROVIDER_SECRETS[name]]
     names.extend(PROVIDER_EXTRA_SECRETS.get(name, ()))
     return names
+
+
+def auth_rejected_message(name: str, code: int, detail: str = "") -> str:
+    """User message for a provider 401 or 403.
+
+    A 401 is a rejected key. Built-in providers name the key(s) they send. An MCP server can
+    use an OAuth token, a per-server key, or the shared `MCP_API_KEY`, so it gets a generic
+    message. A 403 can come with a valid key (no balance, an unverified org, a blocked
+    region), so it shows the provider's reason and does not blame the key.
+
+    Args:
+        name: Provider id, such as `openai` or `mcp_magnific`.
+        code: The HTTP status the provider returned.
+        detail: The provider's error text, already redacted. Shown for a 403.
+    """
+    if code == 403:
+        reason = f": {detail}" if detail else ""
+        return f"{name} refused the request (HTTP 403){reason}. Check the account and model access."
+    if is_mcp_name(name):
+        return f"{name} rejected its credentials (HTTP {code}). Reconnect it in Connect."
+    keys = " and ".join(provider_secret_names(name))
+    return f"{name} rejected its API key (HTTP {code}). Check {keys} in Connect."
+
+
+def provider_error_detail(exc: urllib.error.HTTPError, secrets: list[str]) -> str:
+    """Return the provider's error text from an HTTP error body: short, one line, redacted.
+
+    Args:
+        exc: The HTTP error the provider returned. Its body is read once.
+        secrets: Secret values to remove from the text.
+
+    Returns:
+        Up to 200 characters, or "" when the body has no readable message.
+    """
+    try:
+        raw = exc.read().decode("utf-8", "replace")
+    except Exception:  # noqa: BLE001 - the body is best effort
+        return ""
+    try:
+        body: Any = json.loads(raw)
+    except ValueError:
+        body = raw
+    if isinstance(body, dict):
+        error = body.get("error")
+        body = (error.get("message") if isinstance(error, dict) else error) or body.get(
+            "message"
+        ) or body.get("detail") or ""
+    # Redact before the cut: a key cut in half would no longer match and would leak.
+    return redact_text(" ".join(str(body).split()), secrets)[:200]
 
 
 def all_secret_names() -> list[str]:
@@ -549,11 +598,21 @@ class Engine:
             enabled.append(name)
         return enabled
 
-    def init_home(self, *, demo: bool = False) -> dict[str, Any]:
-        self.config.demo = demo
-        if demo:
-            self.config.providers["mock"] = {"enabled": True}
+    def init_home(self, *, demo: bool | None = False) -> dict[str, Any]:
+        """Set up the home. `demo=None` goes live if live spend is on and a live model is ready."""
         self._enable_resolved_providers()
+        if demo is None:
+            # Decide after env-key providers are enabled. An MCP server with no models is not live.
+            demo = not (
+                allow_live_spend()
+                and any(
+                    m.provider != "mock" and self.provider_available(m.provider)
+                    for m in self.full_catalog().models
+                )
+            )
+        self.config.demo = demo
+        # Leaving demo must drop mock too, or "cheapest" keeps routing live jobs to $0 mock output.
+        self.config.providers["mock"] = {"enabled": demo}
         write_config(self.config)
         self.config = load_config(self.config.home)
         self._rebuild_providers()
@@ -1408,6 +1467,18 @@ class Engine:
             )
         rows = plan_workflow(catalog, spec, available_providers=available)
         total = _usd_total(rows)
+        # Pin each node to the model the estimate used. A later mode change (POST /init, a key
+        # connect) then cannot re-route it to a provider the approval did not cover
+        # (COREPRODUC-531).
+        planned = {row["node_id"]: row["model"].id for row in rows}
+        spec = spec.model_copy(
+            update={
+                "nodes": [
+                    node.model_copy(update={"model_id": node.model_id or planned.get(node.id)})
+                    for node in spec.nodes
+                ]
+            }
+        )
         plan = {
             "skill": f"{skill_name}@{skill_version}",
             "total": total,
@@ -1831,7 +1902,17 @@ class Engine:
                 idempotency_key_value=idempotency_key_value,
             )
             record_writer_effect("submit")
-            ref = provider.submit(req)
+            try:
+                ref = provider.submit(req)
+            except urllib.error.HTTPError as exc:
+                if exc.code not in {401, 403}:
+                    raise
+                # A bare "HTTP Error 401" names neither the provider nor the key (COREPRODUC-529).
+                detail = provider_error_detail(exc, secrets) if exc.code == 403 else ""
+                LOG.warning(
+                    "provider=%s refused the submit (HTTP %s) %s", provider_name, exc.code, detail
+                )
+                raise RuntimeError(auth_rejected_message(provider_name, exc.code, detail)) from exc
             record_writer_effect("submit_accepted")
             pending = Job(
                 id=job_id,
@@ -1887,7 +1968,24 @@ class Engine:
             inputs=params if isinstance(params, dict) else {"value": params},
             preference=spec.preference,
         )
-        model = resolve_model(catalog, req, available_providers=available or None)
+        try:
+            model = resolve_model(catalog, req, available_providers=available or None)
+        except KeyError as exc:
+            if not node.model_id:
+                raise
+            # The pinned model left the catalog after the run was accepted: its provider went off
+            # (a mode change), or a catalog update removed it. Fail closed: moving the node to
+            # another model would skip the approval.
+            LOG.warning(
+                "run=%s node=%s: pinned model %s is not in the catalog",
+                run_id,
+                node.id,
+                node.model_id,
+            )
+            raise RuntimeError(
+                f"{node.model_id} is not in the catalog now (its provider is off, or the model "
+                "was removed). Start the run again."
+            ) from exc
         provider = self.providers[model.provider]
         key = idempotency_key(model.id, req.inputs)
         prior = self.store.find_by_idempotency(key)

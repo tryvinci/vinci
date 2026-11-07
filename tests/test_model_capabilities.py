@@ -14,6 +14,8 @@ NAMES = [
     "withoutMockWhenConnected",
     "tieBreakAvailability",
     "modelsForNodeTypes",
+    "isUnpriced",
+    "PRICE_VARIES",
 ]
 STUDIO = ROOT / "apps" / "studio" / "app" / "studio-client.tsx"
 
@@ -232,10 +234,10 @@ if (!live || live.provider === "mock") throw new Error("default should be a conn
 if (live.quality_tier !== "quality") throw new Error("default should be quality when one exists");
 const qualityPrices = models
   .filter((row) => (row.provider === "openai" || row.provider === "fal"))
-  .filter((row) => caps(row).has("t2i") && row.quality_tier === "quality")
+  .filter((row) => caps(row).has("t2i") && row.quality_tier === "quality" && !isUnpriced(row))
   .map((row) => row.pricing.amount);
-if (live.pricing.amount > Math.min(...qualityPrices)) {
-  throw new Error("default should be the cheapest quality row");
+if (isUnpriced(live) || live.pricing.amount > Math.min(...qualityPrices)) {
+  throw new Error("default should be the cheapest priced quality row");
 }
 
 const up = defaultModelFor("upscale", all, models);
@@ -310,6 +312,31 @@ if (!nodes.includes("mock:png:v1")) throw new Error("node types missed t2i");
     assert result.returncode == 0, result.stderr or result.stdout
 
 
+def test_unpriced_models_rank_last_and_mock_stays_free() -> None:
+    """Amount 0 on a live provider is "unknown", not free (COREPRODUC-529)."""
+    script = """
+const row = (id, provider, amount, unit) => ({
+  id, provider, capabilities: ["t2i"], quality_tier: "quality", pricing: { amount, unit },
+});
+const rows = [
+  row("openai:tokens", "openai", 0, "token"),
+  row("fal:priced", "fal", 0.04, "image"),
+  row("mock:png:v1", "mock", 0, "image"),
+];
+if (!isUnpriced(rows[0]) || isUnpriced(rows[1]) || isUnpriced(rows[2])) throw new Error("isUnpriced");
+if (!isUnpriced({ provider: "openai" })) throw new Error("no pricing is unpriced");
+const live = modelsFor("image", ["openai", "fal"], rows).map((r) => r.id).join();
+if (live !== "fal:priced,openai:tokens") throw new Error("priced first: " + live);
+const only = modelsFor("image", ["openai"], rows).map((r) => r.id).join();
+if (only !== "openai:tokens") throw new Error("an unpriced model still lists alone: " + only);
+if (defaultModelFor("image", ["openai", "fal"], rows).id !== "fal:priced") throw new Error("live default");
+if (defaultModelFor("image", ["mock"], rows).id !== "mock:png:v1") throw new Error("demo default is mock");
+if (PRICE_VARIES !== "price varies") throw new Error("copy");
+"""
+    result = _run(script)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
 def test_studio_pickers_call_the_registry() -> None:
     """The TypeScript Studio delegates picker membership to modelsFor."""
     text = STUDIO.read_text(encoding="utf-8")
@@ -325,6 +352,9 @@ def test_studio_pickers_call_the_registry() -> None:
     image = (ROOT / "apps" / "studio" / "app" / "image-page.tsx").read_text(encoding="utf-8")
     video = (ROOT / "apps" / "studio" / "app" / "video-page.tsx").read_text(encoding="utf-8")
     effects = (ROOT / "apps" / "studio" / "app" / "effect-shell.tsx").read_text(encoding="utf-8")
+    assert "isUnpriced(row) ? PRICE_VARIES" in text  # picker rows: no "$0" for unpriced models
+    assert "row && !isUnpriced(row)" in text  # canvas estimate: unpriced counts as not estimated
+    assert "selected && isUnpriced(selected) ? PRICE_VARIES" in image
     assert "imageModels(models, connected, availability)" in image
     assert "videoModels(models, connected, availability)" in video
     assert "appModelChoices(" in effects
