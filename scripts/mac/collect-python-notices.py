@@ -41,7 +41,10 @@ def license_from_downloaded_dist(name: str, version: str) -> str:
     with tempfile.TemporaryDirectory() as tmp:
         td = Path(tmp)
         proc = subprocess.run(
-            [sys.executable, "-m", "pip", "download", "--no-deps", f"{name}=={version}", "-d", str(td)],
+            [
+                sys.executable, "-m", "pip", "download", "--no-deps",
+                f"{name}=={version}", "-d", str(td),
+            ],
             capture_output=True,
             text=True,
         )
@@ -52,13 +55,16 @@ def license_from_downloaded_dist(name: str, version: str) -> str:
             if path.suffix == ".whl":
                 with zipfile.ZipFile(path) as zf:
                     meta_name = next(n for n in zf.namelist() if n.endswith("METADATA"))
-                    return _license_from_metadata_text(zf.read(meta_name).decode("utf-8", errors="replace"))
+                    text = zf.read(meta_name).decode("utf-8", errors="replace")
+                    return _license_from_metadata_text(text)
             if path.suffix == ".gz" and path.name.endswith(".tar.gz"):
                 import tarfile
 
                 with tarfile.open(path) as tar:
                     member = next(
-                        m for m in tar.getmembers() if m.name.endswith("PKG-INFO") or m.name.endswith("METADATA")
+                        m
+                        for m in tar.getmembers()
+                        if m.name.endswith(("PKG-INFO", "METADATA"))
                     )
                     text = tar.extractfile(member).read().decode("utf-8", errors="replace")
                     return _license_from_metadata_text(text)
@@ -97,7 +103,9 @@ def display_name_for_normalized(norm: str, lock_path: Path) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--lock", default=str(ROOT / "scripts/mac/python-bundle-runtime.lock.txt"))
-    parser.add_argument("--manifest", default=str(ROOT / "scripts/mac/python-bundle-local.manifest.json"))
+    parser.add_argument(
+        "--manifest", default=str(ROOT / "scripts/mac/python-bundle-local.manifest.json")
+    )
     parser.add_argument("--out", default=str(ROOT / "scripts/mac/python-bundle-notices.json"))
     args = parser.parse_args()
     lock = Path(args.lock)

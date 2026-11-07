@@ -177,6 +177,26 @@ def test_notices_skip_npm_before_bundle_and_sbom_fails_closed(tmp_path: Path) ->
     assert not (tmp_path / "legal/provenance.json").exists()
 
 
+def test_notices_list_self_hosted_fonts(tmp_path: Path, npm_notice_dir: Path) -> None:
+    """The app notices list each Studio font with its sha256 and carry the OFL texts."""
+    out = tmp_path / "legal"
+    proc = subprocess.run(
+        ["/bin/bash", "scripts/mac/generate-notices-sbom.sh", str(out)],
+        cwd=ROOT,
+        env=_env(npm_notice_dir),
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+    fonts = json.loads((out / "provenance.json").read_text(encoding="utf-8"))["fonts"]
+    names = sorted(f["file"] for f in fonts)
+    assert names == [p.name for p in sorted((ROOT / "apps/studio/app/fonts").glob("*.woff2"))]
+    assert names and all(len(f["sha256"]) == 64 and f["license"] == "OFL-1.1" for f in fonts)
+    notices = (out / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+    assert "## Fonts (Studio, SIL Open Font License 1.1)" in notices
+    assert notices.count("SIL OPEN FONT LICENSE Version 1.1") == 2
+
+
 def _run_verify_notices(
     py_notices: Path, npm_notice_dir: Path, npm_notices: Path | None = None
 ) -> subprocess.CompletedProcess[str]:

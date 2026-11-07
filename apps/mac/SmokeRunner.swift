@@ -323,25 +323,28 @@ final class SmokeRunner {
   private func runMainWorkflow(app: AppDelegate) {
     let hydrationJs = """
     (async () => {
-      try { localStorage.setItem('vinci-onboard', 'done'); } catch (e) {}
+      try { localStorage.setItem('vinci-onboard-v1', 'done'); } catch (e) {}
       const sleep = (ms) => new Promise(r => setTimeout(r, ms));
       let hydrated = false;
       let hasNext = false;
       let hasCss = false;
       let color = '';
+      let cards = 0;
       for (let i = 0; i < 80; i++) {
         const root = document.querySelector('[data-testid="vinci-studio-root"]');
         hasNext = !!document.querySelector('script[src*="/_next/static/"]');
         hasCss = !!document.querySelector('link[href*="/_next/static/"]');
         const style = root ? getComputedStyle(root) : null;
         color = style ? style.color : '';
-        if (root && hasNext && hasCss && color.length > 0) {
+        // Home renders template cards only after boot() has loaded its data (COREPRODUC-521).
+        cards = document.querySelectorAll('.explore .grid button.card').length;
+        if (root && hasNext && hasCss && color.length > 0 && cards > 0) {
           hydrated = true;
           break;
         }
         await sleep(250);
       }
-      return { hydrated, hasNext, hasCss, color };
+      return { hydrated, hasNext, hasCss, color, cards };
     })()
     """
     wkEval(app: app, js: hydrationJs) { [self] raw in
@@ -491,6 +494,16 @@ final class SmokeRunner {
     }
   }
 
+  /// Downloads the harness image through the real Studio control and hashes the file.
+  ///
+  /// The user's path: the rail's Image button opens the Image page, which lists recent images, and
+  /// each card has a Download link. The hash check uses the asset in that link (COREPRODUC-521).
+  /// The canvas "Export last output" link that this step used to look for never renders (COREPRODUC-525).
+  ///
+  /// Args:
+  ///   app: The app under test.
+  ///   imageAsset: The image asset this harness made over the API; the step clicks its card.
+  ///   completion: Called with (clicked and downloaded, file sha256, asset sha256).
   private func uiExportLastOutput(
     app: AppDelegate,
     imageAsset: String,
@@ -499,22 +512,44 @@ final class SmokeRunner {
     app.smokeExportDownloadDone = false
     app.smokeExportByteCount = 0
     let exportPath = downloadPath ?? (app.dataHome + "/smoke-export.bin")
+    // JSON string literal for the JS below (the id is a hex digest, but do not trust that).
+    let want = (try? JSONEncoder().encode(imageAsset)).flatMap { String(data: $0, encoding: .utf8) } ?? "\"\""
     let js = """
     (async () => {
-      try { localStorage.setItem('vinci-onboard', 'done'); } catch (e) {}
-      // Same link the canvas "Export last output" renders (download attr + asset file URL).
-      // That link only shows with a canvas node selected, so build it for the known asset.
-      const link = document.createElement('a');
-      link.href = '/vinci-api/assets/\(imageAsset)/file';
-      link.download = 'vinci-\(imageAsset.prefix(12))';
-      link.dataset.testid = 'studio-export-last';
-      document.body.appendChild(link);
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      const find = async (pick) => {
+        for (let i = 0; i < 80; i++) {
+          const hit = pick();
+          if (hit) return hit;
+          await sleep(250);
+        }
+        return null;
+      };
+      const rail = await find(() => document.querySelector('[data-testid="studio-sidebar"] button[aria-label="Image"]'));
+      if (!rail) return { clicked: false, missing: 'rail Image button' };
+      rail.click();
+      // The Image page loads its feed when it opens. Click the card of the image this harness made,
+      // so the hash check cannot pass on another image (COREPRODUC-521).
+      const want = \(want);
+      const link = await find(() => [...document.querySelectorAll('[data-testid="image-feed"] a[aria-label="Download"][href]')]
+        .find((a) => new URL(a.href).pathname.split('/').includes(want)));
+      if (!link) return { clicked: false, missing: 'Download link for image ' + want };
+      const parts = new URL(link.href).pathname.split('/');
+      const asset = parts[parts.indexOf('assets') + 1] || '';
       link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-      return { clicked: true };
+      return { clicked: true, asset, download: link.getAttribute('download') };
     })()
     """
-    wkEval(app: app, js: js) { _ in
-      self.waitForExportFile(app: app, path: exportPath, assetId: imageAsset, attempt: 0, completion: completion)
+    wkEval(app: app, js: js) { [self] raw in
+      let dict = raw.data(using: .utf8).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+      let asset = dict?["asset"] as? String ?? ""
+      let clicked = dict?["clicked"] as? Bool == true && !asset.isEmpty
+      step("ui_image_feed_download", ok: clicked, detail: raw)
+      guard clicked else {
+        completion(false, "", "")
+        return
+      }
+      waitForExportFile(app: app, path: exportPath, assetId: asset, attempt: 0, completion: completion)
     }
   }
 
