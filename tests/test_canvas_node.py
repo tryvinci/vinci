@@ -27,6 +27,9 @@ NAMES = [
     "seedValue",
     "showsCount",
     "showsFrame",
+    "shotRows",
+    "shotValue",
+    "shotPatch",
 ]
 SETUP = """
 const eq = (a, b, msg) => {
@@ -153,3 +156,17 @@ def test_studio_wires_typed_ports_and_add_popover() -> None:
     assert "kind-text" in css
     assert "add-chips" in css
     assert "add-vendor" in css
+
+
+def test_shot_rows_values_and_toggle() -> None:
+    """Inspector shot rows (COREPRODUC-525): generators only, motion for video, a second press clears."""
+    _check("""
+eq(shotRows("upscale").length, 0, "no shot rows for upscale");
+eq(shotRows("t2i").map((r) => r.key), ["camera", "lens", "aperture", "look", "genre", "lighting", "palette"], "image rows");
+eq(shotRows("i2v").at(-1).key, "motion", "video adds camera motion");
+eq(shotValue({ camera: "{{inputs.camera}}" }, "camera"), "", "skill placeholder counts as unset");
+eq(shotValue({ lens: "85mm" }, "lens"), "85mm", "set value");
+eq(shotPatch({}, "lens", "85mm"), { lens: "85mm" }, "set");
+eq(shotPatch({ lens: "85mm" }, "lens", "85mm"), { lens: "" }, "second press clears");
+eq(shotPatch({ lighting: "neon" }, "lighting", "neon"), { lighting: "available" }, "lighting clears to available");
+""")

@@ -10,6 +10,7 @@ import {
   appModelChoices,
   missingAppInputs,
   resolveAppModel,
+  type AppInput,
   type EffectPage,
   type StudioApp,
 } from "../lib/apps-catalog";
@@ -273,6 +274,73 @@ export function EffectShell(props: EffectShellProps) {
     }
   }
 
+  /** One form field. Number fields with min and max render as a slider. */
+  function renderField(field: AppInput) {
+    return (
+      <label key={field.id} htmlFor={`effect-field-${field.id}`}>
+        {field.label}
+        {field.type === "textarea" ? (
+          <PromptMention
+            id={`effect-field-${field.id}`}
+            testId={`effect-field-${field.id}`}
+            mentionTestId="effect-mention"
+            value={String(values[field.id] ?? "")}
+            placeholder={field.placeholder}
+            items={library}
+            onChange={(text) => setField(field.id, text)}
+          />
+        ) : field.type === "select" ? (
+          <select
+            id={`effect-field-${field.id}`}
+            value={String(values[field.id] ?? field.default ?? "")}
+            onChange={(ev) => setField(field.id, ev.target.value)}
+          >
+            {(field.options || []).map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        ) : field.type === "number" && field.min !== undefined && field.max !== undefined ? (
+          <span className="range-row">
+            <span>{String(values[field.id] ?? field.default ?? 0)}</span>
+            <input
+              id={`effect-field-${field.id}`}
+              data-testid={`effect-field-${field.id}`}
+              type="range"
+              min={field.min}
+              max={field.max}
+              value={Number(values[field.id] ?? field.default ?? 0)}
+              onChange={(ev) => setField(field.id, Number(ev.target.value))}
+            />
+          </span>
+        ) : field.type === "media" ? (
+          <div className={"apps-drop" + (values[field.id] ? " has-file" : "")}>
+            {values[field.id] ? (
+              <img alt="" src={`${API}/assets/${values[field.id]}/file`} />
+            ) : (
+              <span>Drop a file, or click to choose one</span>
+            )}
+            <input
+              id={`effect-field-${field.id}`}
+              type="file"
+              accept="image/*,video/*,audio/*"
+              onChange={(ev: ChangeEvent<HTMLInputElement>) => void onMedia(field.id, ev.target.files?.[0])}
+            />
+          </div>
+        ) : (
+          <input
+            id={`effect-field-${field.id}`}
+            type="text"
+            value={String(values[field.id] ?? "")}
+            placeholder={field.placeholder}
+            onChange={(ev) => setField(field.id, ev.target.value)}
+          />
+        )}
+      </label>
+    );
+  }
+
   if (!app) {
     return <p className="apps-empty">This effect is missing. Press Change and pick another.</p>;
   }
@@ -299,56 +367,7 @@ export function EffectShell(props: EffectShellProps) {
               void generate();
             }}
           >
-            {app.inputs.map((field) => (
-              <label key={field.id} htmlFor={`effect-field-${field.id}`}>
-                {field.label}
-                {field.type === "textarea" ? (
-                  <PromptMention
-                    id={`effect-field-${field.id}`}
-                    testId={`effect-field-${field.id}`}
-                    mentionTestId="effect-mention"
-                    value={String(values[field.id] ?? "")}
-                    placeholder={field.placeholder}
-                    items={library}
-                    onChange={(text) => setField(field.id, text)}
-                  />
-                ) : field.type === "select" ? (
-                  <select
-                    id={`effect-field-${field.id}`}
-                    value={String(values[field.id] ?? field.default ?? "")}
-                    onChange={(ev) => setField(field.id, ev.target.value)}
-                  >
-                    {(field.options || []).map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                ) : field.type === "media" ? (
-                  <div className={"apps-drop" + (values[field.id] ? " has-file" : "")}>
-                    {values[field.id] ? (
-                      <img alt="" src={`${API}/assets/${values[field.id]}/file`} />
-                    ) : (
-                      <span>Drop a file, or click to choose one</span>
-                    )}
-                    <input
-                      id={`effect-field-${field.id}`}
-                      type="file"
-                      accept="image/*,video/*,audio/*"
-                      onChange={(ev: ChangeEvent<HTMLInputElement>) => void onMedia(field.id, ev.target.files?.[0])}
-                    />
-                  </div>
-                ) : (
-                  <input
-                    id={`effect-field-${field.id}`}
-                    type="text"
-                    value={String(values[field.id] ?? "")}
-                    placeholder={field.placeholder}
-                    onChange={(ev) => setField(field.id, ev.target.value)}
-                  />
-                )}
-              </label>
-            ))}
+            {app.inputs.filter((field) => !field.advanced).map(renderField)}
             {modelChoices.length ? (
               <label htmlFor="effect-model">
                 Model
@@ -367,6 +386,7 @@ export function EffectShell(props: EffectShellProps) {
               </label>
             ) : null}
             <AdvancedDisclosure testId="effects-advanced">
+              {app.inputs.filter((field) => field.advanced).map(renderField)}
               {app.params.aspect_ratio !== undefined || app.output_kind !== "audio" ? (
                 <div className="effects-tiles">
                   <p className="effects-tiles-label">Aspect</p>

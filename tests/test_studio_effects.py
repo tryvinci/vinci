@@ -206,6 +206,26 @@ console.log(JSON.stringify(payload));
     assert body["outputs"]
 
 
+def test_still_4k_magnific_settings_are_advanced_fields() -> None:
+    """Magnific Creative settings: Advanced fields with Magnific's names and neutral defaults (COREPRODUC-525)."""
+    _check(
+        CATALOG,
+        CATALOG_NAMES,
+        """
+const app = getApp("still-4k");
+const adv = app.inputs.filter((f) => f.advanced).map((f) => f.id);
+if (JSON.stringify(adv) !== JSON.stringify(["creativity", "resemblance", "hdr", "fractality", "optimized_for", "engine"])) throw new Error(JSON.stringify(adv));
+const sliders = app.inputs.filter((f) => f.type === "number");
+if (!sliders.every((f) => f.min === -10 && f.max === 10 && f.slot === f.id)) throw new Error("slider bounds");
+const base = buildRunPayload(app, { ...appDefaults(app), still: "asset-1" }).inputs;
+for (const k of ["creativity", "resemblance", "hdr", "fractality"]) if (base[k] !== 0) throw new Error(k + "=" + base[k]);
+if (base.optimized_for !== "standard" || base.engine !== "automatic") throw new Error("style defaults");
+const set = buildRunPayload(app, { ...appDefaults(app), still: "asset-1", hdr: -3, engine: "magnific_sharpy" }).inputs;
+if (set.hdr !== -3 || set.engine !== "magnific_sharpy") throw new Error(JSON.stringify(set));
+""",
+    )
+
+
 def test_still_4k_payload_runs_on_mock(client: TestClient) -> None:
     upload = client.post("/assets", files={"file": ("face.png", PNG_SWATCH, "image/png")})
     assert upload.status_code == 200
@@ -215,13 +235,14 @@ def test_still_4k_payload_runs_on_mock(client: TestClient) -> None:
         CATALOG_NAMES,
         f"""
 const app = getApp("still-4k");
-const payload = buildRunPayload(app, {{ still: {asset_id!r} }});
+const payload = buildRunPayload(app, {{ ...appDefaults(app), still: {asset_id!r}, creativity: 4, optimized_for: "soft_portraits" }});
 console.log(JSON.stringify(payload));
 """,
     )
     assert result.returncode == 0, result.stderr or result.stdout
     payload = json.loads(result.stdout)
     assert payload["inputs"]["media"] == asset_id
+    assert payload["inputs"]["creativity"] == 4 and payload["inputs"]["optimized_for"] == "soft_portraits"
     res = client.post("/runs", json=payload)
     assert res.status_code == 200, res.text
     assert res.json()["state"] == "completed"
