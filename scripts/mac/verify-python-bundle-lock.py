@@ -13,7 +13,8 @@ HASH_LINE = re.compile(r"^\s+--hash=sha256:[0-9a-f]{64}")
 
 
 def main() -> int:
-    path = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).parent / "python-bundle-runtime.lock.txt")
+    default = Path(__file__).parent / "python-bundle-runtime.lock.txt"
+    path = Path(sys.argv[1] if len(sys.argv) > 1 else default)
     text = path.read_text(encoding="utf-8")
     if not path.is_file():
         print(f"missing lock: {path}", file=sys.stderr)

@@ -166,7 +166,10 @@ def main() -> int:
             return 1
         meta = npm_graph[name]
         if meta.get("version") != version:
-            print(f"stale npm notice {name}: {version} != lock {meta.get('version')}", file=sys.stderr)
+            print(
+                f"stale npm notice {name}: {version} != lock {meta.get('version')}",
+                file=sys.stderr,
+            )
             return 1
         lock_lic = str(meta.get("licenses", "")).strip()
         if lock_lic and LICENSE_BAD.match(lock_lic):

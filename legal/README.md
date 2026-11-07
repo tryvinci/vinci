@@ -11,6 +11,7 @@ The committed inputs are:
 - `scripts/mac/python-bundle-notices.json`: the PyPI licenses and the licenses of the local trees.
 - `scripts/mac/python-bundle-local.manifest.json`: the paths of the local `-e` trees.
 - `package-lock.json`: the npm versions and licenses.
+- `apps/studio/app/fonts/`: the Studio fonts (latin woff2) and their SIL OFL 1.1 texts. `generate-notices-sbom.sh` lists each font with its sha256 and adds the OFL texts to the notices.
 
 The build also makes these inputs (gitignored):
 

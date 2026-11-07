@@ -60,7 +60,7 @@ conformance:
 	$(PYTEST) -q packages/provider-sdk/tests/conformance
 
 lint:
-	ruff check packages tests apps/daemon scripts/*.py
+	ruff check packages tests apps/daemon scripts/*.py scripts/mac/*.py
 	mypy --config-file pyproject.toml \
 		packages/protocol/vinci_protocol \
 		packages/core/vinci_core \

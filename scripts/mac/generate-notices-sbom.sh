@@ -12,7 +12,8 @@ mkdir -p "$OUT_LEGAL"
 # npm graph, synced the notices, and checked the graph against dist/studio-bundle.
 # Explicit paths: the verify fails (does not skip npm) when the npm notices are missing.
 python3 "$ROOT/scripts/mac/verify-notices-inputs.py" "$PY_NOTICES" "$NPM_NOTICES"
-python3 - "$LOCK" "$OUT_LEGAL/provenance.json" "$OUT_LEGAL/THIRD_PARTY_NOTICES.md" "$PY_NOTICES" "$NPM_NOTICES" "$ROOT/scripts/mac" <<'PY'
+python3 - "$LOCK" "$OUT_LEGAL/provenance.json" "$OUT_LEGAL/THIRD_PARTY_NOTICES.md" "$PY_NOTICES" "$NPM_NOTICES" "$ROOT/scripts/mac" "$ROOT/apps/studio/app/fonts" <<'PY'
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -22,6 +23,7 @@ out_json = Path(sys.argv[2])
 out_md = Path(sys.argv[3])
 py_path = Path(sys.argv[4])
 npm_path = Path(sys.argv[5])
+fonts_dir = Path(sys.argv[7])
 sys.path.insert(0, sys.argv[6])
 from notice_graph import LOCAL_DIGESTS, local_digests
 
@@ -35,6 +37,14 @@ if not npm_data.get("packages"):
 # build-python-runtime.sh hashes the trees it installs; without that file, list names only.
 digests = local_digests()
 local = [{**p, **({"sha256": digests[p["name"]]} if digests else {})} for p in py_data["local"]]
+# Studio self-hosts its fonts (COREPRODUC-522); they ship in the Studio bundle under OFL 1.1.
+fonts = [
+    {"file": f.name, "sha256": hashlib.sha256(f.read_bytes()).hexdigest(), "license": "OFL-1.1"}
+    for f in sorted(fonts_dir.glob("*.woff2"))
+]
+font_licenses = sorted(fonts_dir.glob("OFL-*.txt"))
+if not fonts or not font_licenses:
+    raise SystemExit(f"Studio fonts or OFL texts missing in {fonts_dir}")
 print(f"local trees: {len(local)}; sha256 " + (f"from {LOCAL_DIGESTS}" if digests else "skipped (no build-time digests)"))
 
 provenance = {
@@ -66,6 +76,7 @@ provenance = {
     "pypi": py_data["pypi"],
     "pypi_local": local,
     "npm": npm_data["packages"],
+    "fonts": fonts,
 }
 
 pypi_lines = "\n".join(
@@ -77,6 +88,9 @@ local_lines = "\n".join(
 npm_lines = "\n".join(
     f"- **{p.get('name')}** {p.get('version', '')} — {p.get('licenses', 'UNKNOWN')}" for p in npm_data["packages"][:80]
 )
+
+font_lines = "\n".join(f"- **{f['file']}** `{f['sha256'][:12]}…` — {f['license']}" for f in fonts)
+font_texts = "\n\n".join(f"### {t.name}\n\n```text\n{t.read_text(encoding='utf-8').strip()}\n```" for t in font_licenses)
 
 out_json.write_text(json.dumps(provenance, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 md = f"""# Third-party notices (Vinci Studio Mac bundle)
@@ -104,6 +118,12 @@ FFmpeg built with `{provenance['bundled_runtimes']['ffmpeg']['build_flags']}`. S
 ## npm (Studio production)
 
 {npm_lines}
+
+## Fonts (Studio, SIL Open Font License 1.1)
+
+{font_lines}
+
+{font_texts}
 
 ## Application code
 

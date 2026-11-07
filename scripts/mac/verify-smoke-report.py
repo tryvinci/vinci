@@ -92,7 +92,8 @@ def main() -> int:
     relaunch_mode = "--relaunch" in sys.argv
     if len(argv) < 1:
         print(
-            "usage: verify-smoke-report.py [--relaunch] <report.json> [screenshot.png] [expected_git_sha] [exe]",
+            "usage: verify-smoke-report.py [--relaunch] <report.json> [screenshot.png]"
+            " [expected_git_sha] [exe]",
             file=sys.stderr,
         )
         return 2

@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -43,7 +42,8 @@ def forbidden_dep(dep: str) -> bool:
     if dep.startswith("/opt/homebrew") or dep.startswith("/usr/local/"):
         return True
     if dep.startswith("/"):
-        return not any(dep.startswith(prefix) for prefix in ALLOWED_PREFIXES if prefix.startswith("/"))
+        absolute = (prefix for prefix in ALLOWED_PREFIXES if prefix.startswith("/"))
+        return not any(dep.startswith(prefix) for prefix in absolute)
     return not dep.startswith("@")
 
 
