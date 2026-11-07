@@ -195,6 +195,12 @@ const PALETTES = ["filmic", "teal-orange", "bleach", "tungsten", "daylight", "pa
 const MOTIONS = ["static", "pan", "orbit", "push-in", "pull-out"];
 const APERTURES = ["f/1.4", "f/2.8", "f/5.6", "f/11"];
 const GENRES = ["action", "drama", "documentary", "music-video"];
+// Neutral cinema stack: no Studio control shows these values (COREPRODUC-525), so a run adds no
+// words to the prompt unless a template sets them. compose_shot_prompt skips "", available,
+// filmic, and static. Before, every image/video run got "locked-off, 50mm, f/2.8, commercial, drama".
+const OPTICAL_NEUTRAL = {
+  camera: "", lens: "", look: "", lighting: "available", palette: "filmic", motion: "static", aperture: "", genre: "",
+};
 const SCENES = ["general", "selfie", "podcast", "car-talking"];
 const ELEMENT_KINDS = ["character", "location", "element", "style"] as const;
 const MAG_STYLES = ["standard", "soft_portraits", "hard_portraits", "art_n_illustration", "films_n_photography", "3d_renders"];
@@ -662,14 +668,14 @@ export function StudioClient() {
   const [doctor, setDoctor] = useState<Doctor>({});
   const [prompt, setPrompt] = useState("");
   const [modelId, setModelId] = useState("");
-  const [camera, setCamera] = useState("locked-off");
-  const [lens, setLens] = useState("50mm");
-  const [look, setLook] = useState("commercial");
-  const [lighting, setLighting] = useState("available");
-  const [palette, setPalette] = useState("filmic");
-  const [motion, setMotion] = useState("static");
-  const [aperture, setAperture] = useState("f/2.8");
-  const [genre, setGenre] = useState("drama");
+  const [camera, setCamera] = useState(OPTICAL_NEUTRAL.camera);
+  const [lens, setLens] = useState(OPTICAL_NEUTRAL.lens);
+  const [look, setLook] = useState(OPTICAL_NEUTRAL.look);
+  const [lighting, setLighting] = useState(OPTICAL_NEUTRAL.lighting);
+  const [palette, setPalette] = useState(OPTICAL_NEUTRAL.palette);
+  const [motion, setMotion] = useState(OPTICAL_NEUTRAL.motion);
+  const [aperture, setAperture] = useState(OPTICAL_NEUTRAL.aperture);
+  const [genre, setGenre] = useState(OPTICAL_NEUTRAL.genre);
   const [scene, setScene] = useState("general");
   const [creativity, setCreativity] = useState(0);
   const [resemblance, setResemblance] = useState(0);
@@ -2069,14 +2075,14 @@ export function StudioClient() {
     const skill = skills.find((s) => s.id === t.skill);
     const defaults = t.defaults || {};
     const nextPrompt = prompt.trim() || String(defaults.prompt || "") || "north-light oak cube tumbling";
-    const nextCamera = String(defaults.camera || camera);
-    const nextLens = String(defaults.lens || lens);
-    const nextLook = String(defaults.look || look);
-    const nextLighting = String(defaults.lighting || lighting);
-    const nextPalette = String(defaults.palette || palette);
-    const nextMotion = String(defaults.motion || motion);
-    const nextAperture = String(defaults.aperture || aperture);
-    const nextGenre = String(defaults.genre || genre);
+    const nextCamera = String(defaults.camera || OPTICAL_NEUTRAL.camera);
+    const nextLens = String(defaults.lens || OPTICAL_NEUTRAL.lens);
+    const nextLook = String(defaults.look || OPTICAL_NEUTRAL.look);
+    const nextLighting = String(defaults.lighting || OPTICAL_NEUTRAL.lighting);
+    const nextPalette = String(defaults.palette || OPTICAL_NEUTRAL.palette);
+    const nextMotion = String(defaults.motion || OPTICAL_NEUTRAL.motion);
+    const nextAperture = String(defaults.aperture || OPTICAL_NEUTRAL.aperture);
+    const nextGenre = String(defaults.genre || OPTICAL_NEUTRAL.genre);
     const nextPage = t.page || "canvas";
     setPrompt(nextPrompt);
     setCamera(nextCamera);
