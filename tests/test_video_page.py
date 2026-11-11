@@ -59,6 +59,11 @@ def test_duration_and_aspect_come_from_catalog() -> None:
     script = """
 if (durationOptions(8).join() !== "3,5,6,8") throw new Error("dur 8");
 if (durationOptions(0).length) throw new Error("no invented duration");
+// The exact lengths from the catalog win (provider API docs): Kling 2.6 takes 5 or 10 s only.
+if (durationOptions(10, [5, 10]).join() !== "5,10") throw new Error("kling 2.6: " + durationOptions(10, [5, 10]));
+if (durationOptions(8, [4, 6, 8]).join() !== "4,6,8") throw new Error("veo 3.1 fast");
+const kling3 = Array.from({ length: 13 }, (_, i) => i + 3); // 3..15 s
+if (durationOptions(15, kling3).join() !== "3,5,6,8,10,15") throw new Error("kling 3: Studio picks among them");
 if (closestAspect(960, 540, ["16:9", "9:16", "1:1"]) !== "16:9") throw new Error("landscape");
 if (closestAspect(540, 960, ["16:9", "9:16"]) !== "9:16") throw new Error("portrait");
 const mock = {

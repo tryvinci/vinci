@@ -65,6 +65,22 @@
       "quality_tier": "quality",
       "status": "active",
       "secret_names": ["GEMINI_API_KEY"]
+    },
+    {
+      "id": "google:gemini-3.8-flash:2026-09",
+      "display_name": "Gemini 3.8 Flash",
+      "provider": "google",
+      "capabilities": ["t2t"],
+      "constraints": {},
+      "pricing": {
+        "unit": "token",
+        "amount": 0,
+        "currency": "USD",
+        "snapshot_at": "2026-11-09T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["GEMINI_API_KEY"]
     }
   ]
 }

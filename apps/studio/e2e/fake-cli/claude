@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+"""Stands in for Claude Code in the Studio e2e: start-studio.sh points VINCI_AGENT_CLI_PATH here.
+
+It answers as `claude -p --output-format json` does: the prompt (stdin) as a one-scene script.
+"""
+import json
+import sys
+
+prompt = sys.stdin.read().strip()
+script = f"EXT. HARBOR - NIGHT\n\n{prompt}\n\nMIRA\nSomeone is out there.\n"
+print(json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": script}))

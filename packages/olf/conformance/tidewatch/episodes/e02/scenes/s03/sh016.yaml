@@ -1,0 +1,9 @@
+# A shot in its own file (SPEC.md: a scene MAY split into one file per shot).
+id: e02/s03/sh016
+duration: 2s
+description: Insert. The brass key on the open floorboard, cloth falling away.
+camera: { framing: insert, angle: overhead, lens: 85mm, template: cam/key-insert }  # the move
+characters: { $remove: [char/mira] }
+props: [prop/brass-key]
+control:
+  first_frame: keyframe

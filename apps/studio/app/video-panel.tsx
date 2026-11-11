@@ -114,7 +114,7 @@ export function VideoPanel({
   const controls = visibleVideoControls(selected);
   const aspects = selected?.constraints?.aspect_ratios || [];
   const resolutions = selected?.constraints?.resolutions || [];
-  const durs = durationOptions(Number(selected?.constraints?.max_duration || 0));
+  const durs = durationOptions(Number(selected?.constraints?.max_duration || 0), selected?.constraints?.durations);
   const items: LibraryItem[] = mentionableItems(cast.map(asLibraryItem));
 
   useEffect(() => {

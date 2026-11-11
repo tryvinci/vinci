@@ -36,6 +36,9 @@ CAPABILITIES = (
     "reframe",
     "caption",
     "edit_multi",
+    "t2t",
+    "music",
+    "sfx",
 )
 
 ASSET_KINDS = ("image", "video", "audio", "text", "timeline")

@@ -1,0 +1,16 @@
+# Vinci OLF camerawork library, dialogue family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/insert-object
+version: 1
+family: dialogue
+name: Insert of an object
+notation: INS
+intent: A close-up of an object that matters to the story.
+camera: { move: static, render: model }
+framing: [insert, extreme_close_up, close_up]
+timing: { default: 2+00, min: 1+00, max: 4+00 }
+slots: []          # the object only: the shot sets `characters: []`
+rules: { needs_prop: true }
+keyframe: The object fills the frame. No faces are in the picture.
+prompt: >
+  Static camera on the object. Only the light, or a small move of a hand, changes.
+avoid: [hands that change shape, camera movement]

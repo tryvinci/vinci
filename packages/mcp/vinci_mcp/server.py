@@ -7,6 +7,8 @@ from vinci_core.redact import redact_mapping
 from vinci_protocol.models import WorkflowSpec
 from vinci_runtime.engine import Engine
 
+from vinci_mcp import olf_tools
+
 TOOL_NAMES = (
     "vinci.models_list",
     "vinci.skills_search",
@@ -20,6 +22,7 @@ TOOL_NAMES = (
     "vinci.presets_list",
     "vinci.adapts_run",
     "vinci.batch_status",
+    *olf_tools.NAMES,  # the OLF movie engine, when vinci-olf is installed
 )
 
 _TOOL_DESCRIPTIONS = {
@@ -35,6 +38,7 @@ _TOOL_DESCRIPTIONS = {
     "vinci.presets_list": "List generic, partner, and custom adapt presets.",
     "vinci.adapts_run": "Adapt one asset or source URL through preset ids. Returns a batch_id.",
     "vinci.batch_status": "Status, outputs, and per-preset checks for an adapt batch.",
+    **olf_tools.DESCRIPTIONS,
 }
 
 _SPEND_TOOLS = {"vinci.image_generate", "vinci.video_generate", "vinci.workflow_run"}
@@ -63,6 +67,8 @@ def tool_schemas() -> list[dict[str, Any]]:
     tools: list[dict[str, Any]] = []
     for name in TOOL_NAMES:
         schema: dict[str, Any] = {"type": "object", "properties": {}, "additionalProperties": True}
+        if name in olf_tools.NAMES:
+            schema = olf_tools.schema(name)
         if name in _SPEND_TOOLS:
             schema["properties"]["max_cost"] = {"type": "number"}
             schema["properties"]["prompt"] = {"type": "string"}
@@ -120,6 +126,8 @@ def call_tool(
     args = redact_mapping(arguments, extra_values=secrets)
     if name not in TOOL_NAMES:
         raise KeyError(name)
+    if name in olf_tools.NAMES:
+        return olf_tools.call(engine, name, args)
     if name == "vinci.models_list":
         return {"models": engine.models()}
     if name == "vinci.skills_search":

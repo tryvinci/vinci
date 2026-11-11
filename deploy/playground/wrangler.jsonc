@@ -1,0 +1,18 @@
+{
+  // Public "try it in your browser" page for the README. Images run on
+  // Workers AI (FLUX.1 Schnell); nothing is stored. Deploy: see README.md.
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "vinci-playground",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-30",
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  "ai": { "binding": "AI" },
+  "kv_namespaces": [{ "binding": "QUOTA", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }],
+  "vars": {
+    "PER_VISITOR_DAILY": "3",
+    "GLOBAL_DAILY": "20000",
+    "TURNSTILE_SITE_KEY": ""
+  }
+  // Secrets: `wrangler secret put QUOTA_SALT`, optional `wrangler secret put TURNSTILE_SECRET`.
+}

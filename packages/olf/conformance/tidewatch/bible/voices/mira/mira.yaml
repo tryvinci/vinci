@@ -1,0 +1,4 @@
+id: voice/mira
+description: Low, calm, slight rasp.
+extensions:
+  elevenlabs: { voice_id: "..." }

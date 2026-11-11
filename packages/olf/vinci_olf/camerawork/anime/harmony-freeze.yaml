@@ -1,0 +1,13 @@
+# Vinci OLF camerawork library, hold family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/harmony-freeze
+version: 1
+family: hold
+name: Painted freeze
+notation: Harmony
+intent: End a big moment on a painted still with more detail than the shots around it.
+camera: { move: static, render: engine }
+timing: { default: 1+00, min: 0+12, max: 3+00 }
+rules: { max_per_scene: 1 }   # its effect is in its rarity
+keyframe: A painted still with more texture and detail than an ordinary frame, like a harmony cel.
+prompt: >          # for a shot that sets render: model
+  The picture holds still like a painting. Nothing moves.

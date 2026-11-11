@@ -1,0 +1,11 @@
+# Vinci OLF camerawork library, hold family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/tome-e-hold
+version: 1
+family: hold
+name: Held drawing
+notation: Tome
+intent: A held drawing for a beat of silence (ma) or a comic pause.
+camera: { move: static, render: engine }
+timing: { default: 1+12, min: 0+12, max: 4+00 }
+prompt: >          # for a shot that sets render: model
+  Static camera. Nothing moves.

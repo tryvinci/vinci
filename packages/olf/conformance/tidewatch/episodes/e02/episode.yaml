@@ -1,0 +1,5 @@
+id: e02
+title: The Second Light
+synopsis: Mira finds the key her father hid.
+forms: { char/mira: winter }  # episode-wide default
+scenes: [e02/s03]

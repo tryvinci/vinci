@@ -441,6 +441,13 @@ input[type="file"]::-webkit-file-upload-button {
     background: var(--glass-strong);
   }
 }
+/* A menu that opens from the rail cannot be glass. The rail blurs its own backdrop, so a blur
+   inside it sees only the rail, and the page showed through these menus sharp. They get the solid
+   fallback. On a narrow screen the flyout sits inside the open rail and stays as it is. */
+.rail .avatar-menu { background: var(--glass-fallback); }
+@media (min-width: 961px) {
+  .rail-flyout { background: var(--glass-fallback); }
+}
 .space-switch {
   display: flex; gap: 2px; padding: 3px; border-radius: 16px;
 }

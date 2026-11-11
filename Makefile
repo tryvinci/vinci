@@ -8,6 +8,7 @@ EDITABLE := \
 	-e packages/provider-sdk \
 	-e packages/runtime \
 	-e packages/media \
+	-e packages/olf \
 	-e packages/index \
 	-e packages/mcp \
 	-e packages/skills \
@@ -45,9 +46,10 @@ require-python:
 		exit 1; \
 	fi
 
+# c2pa-python 0.38.2 has macOS wheels only: >=0.38.1 keeps `make install` working on Linux CI.
 install: require-python
 	$(PIP) install -U pip
-	$(PIP) install pytest ruff mypy jsonschema types-jsonschema pyyaml types-PyYAML httpx fastapi uvicorn python-multipart
+	$(PIP) install pytest ruff mypy jsonschema types-jsonschema pyyaml types-PyYAML httpx fastapi uvicorn python-multipart "c2pa-python>=0.38.1" cryptography
 	$(PIP) install $(EDITABLE)
 	npm install
 	npm run typecheck --workspaces --if-present
@@ -70,6 +72,7 @@ lint:
 		packages/runtime/vinci_runtime \
 		packages/mcp/vinci_mcp \
 		packages/media/vinci_media \
+		packages/olf/vinci_olf \
 		packages/index/vinci_index \
 		packages/provider-elevenlabs/vinci_provider_elevenlabs \
 		packages/provider-cloudflare/vinci_provider_cloudflare \

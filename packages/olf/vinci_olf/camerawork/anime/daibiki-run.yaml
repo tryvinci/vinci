@@ -1,0 +1,18 @@
+# Vinci OLF camerawork library, follow family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/daibiki-run
+version: 1
+family: follow
+name: Run in place, the background slides
+notation: Daibiki
+intent: The character runs at one place in the frame while the background slides past.
+camera: { move: truck, direction: right, ease: none, render: model }
+framing: [wide, medium]
+timing: { default: 2+12, min: 1+12, max: 4+00 }
+slots: [a]
+layout:
+  start: [{ slot: a, x: 0.45, facing: right }]
+  end: [{ slot: a, x: 0.45, facing: right }]
+prompt: >
+  Side view. {a} runs to the right at full speed and stays at the same place in the frame.
+  The background slides to the left at a steady rate.
+avoid: [camera shake, zoom, the character crosses the frame, extra limbs]

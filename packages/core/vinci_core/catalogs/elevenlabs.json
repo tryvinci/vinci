@@ -4,7 +4,9 @@
     "elevenlabs:flash-v2.5:2026-08": "eleven_flash_v2_5",
     "elevenlabs:multilingual-v2:2026-08": "eleven_multilingual_v2",
     "elevenlabs:speech-to-speech:2026-08": "eleven_multilingual_sts_v2",
-    "elevenlabs:voice-clone:2026-08": "voice_clone"
+    "elevenlabs:voice-clone:2026-08": "voice_clone",
+    "elevenlabs:sound-effects-v2:2026-11": "eleven_text_to_sound_v2",
+    "elevenlabs:music-v1:2026-11": "music_v1"
   },
   "models": [
     {
@@ -66,6 +68,38 @@
         "amount": 0.0,
         "currency": "USD",
         "snapshot_at": "2026-08-27T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["ELEVENLABS_API_KEY"]
+    },
+    {
+      "id": "elevenlabs:sound-effects-v2:2026-11",
+      "display_name": "Eleven Sound Effects v2",
+      "provider": "elevenlabs",
+      "capabilities": ["sfx"],
+      "constraints": { "max_duration": 30 },
+      "pricing": {
+        "unit": "generation_30s",
+        "amount": 0.06,
+        "currency": "USD",
+        "snapshot_at": "2026-11-09T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["ELEVENLABS_API_KEY"]
+    },
+    {
+      "id": "elevenlabs:music-v1:2026-11",
+      "display_name": "Eleven Music v1",
+      "provider": "elevenlabs",
+      "capabilities": ["music"],
+      "constraints": { "max_duration": 60 },
+      "pricing": {
+        "unit": "minute",
+        "amount": 0.15,
+        "currency": "USD",
+        "snapshot_at": "2026-11-09T00:00:00+00:00"
       },
       "quality_tier": "fast",
       "status": "active",

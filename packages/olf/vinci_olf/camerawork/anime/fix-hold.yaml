@@ -1,0 +1,13 @@
+# Vinci OLF camerawork library, hold family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/fix-hold
+version: 1
+family: hold
+name: Fixed frame
+notation: Fix
+intent: A static frame. Only a blink and the breath move.
+camera: { move: static, render: model }
+timing: { default: 3+00, min: 1+00, max: 8+00 }
+slots: [a]
+prompt: >
+  Static camera. {a} holds still. Only a blink and the breath move.
+avoid: [camera movement, new gestures]

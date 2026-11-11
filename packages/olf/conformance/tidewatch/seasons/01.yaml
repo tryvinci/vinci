@@ -1,0 +1,7 @@
+id: season/01
+title: First Light
+synopsis: Mira takes over the lamp and learns what the light keeps away.
+episodes: [e02]
+outfits: { char/mira: default }   # season-wide default; scene s03 overrides it with night
+style:
+  look: { grain: medium }          # season 1 is grainier than the show default

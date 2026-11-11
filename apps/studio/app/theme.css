@@ -53,5 +53,13 @@
   --kind-video: #d7b48a;
   --kind-audio: #b7a8d4;
   --kind-text: #c8c4b0;
+  /* Take states (Shows / OLF): stale is orange, not error red, because nothing failed. */
+  --stale: #ffb86b;
+  --stale-soft: rgb(255 184 107 / 0.12);
+  --stale-line: rgb(255 184 107 / 0.45);
+  --status-approved: var(--ok);
+  --status-candidate: #8ab4ff;
+  --status-rejected: var(--danger);
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
   color-scheme: dark;
 }

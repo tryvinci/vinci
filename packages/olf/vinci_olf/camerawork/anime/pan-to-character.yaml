@@ -1,0 +1,17 @@
+# Vinci OLF camerawork library, pan family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/pan-to-character
+version: 1
+family: pan
+name: Pan to a seated character
+notation: PAN
+intent: A pan across a room that stops on a character who sits still.
+camera: { move: pan, direction: right, ease: out, render: model }
+framing: [medium, wide]
+timing: { default: 4+00, min: 3+00, max: 6+00 }
+slots: [a]
+layout:            # the pan finds the character: they come into the frame from the right
+  start: []
+  end: [{ slot: a, x: 0.62, facing: camera }]
+prompt: >
+  The camera pans across the room from left to right and stops on {a}, who sits still.
+avoid: [the character moves before the pan ends, camera shake]

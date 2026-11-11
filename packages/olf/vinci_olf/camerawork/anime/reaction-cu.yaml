@@ -1,0 +1,15 @@
+# Vinci OLF camerawork library, dialogue family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/reaction-cu
+version: 1
+family: dialogue
+name: Reaction close-up
+notation: Fix
+intent: A short close-up of a reaction between two lines.
+camera: { move: static, render: model }
+framing: [close_up, medium_close]
+timing: { default: 1+12, min: 0+18, max: 3+00 }
+slots: [a]
+rules: { needs_dialogue: false }
+prompt: >
+  Static camera. {a} reacts with the eyes and the brows only, and does not speak.
+avoid: [the mouth moves, speech, head turn, camera movement]

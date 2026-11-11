@@ -1,0 +1,18 @@
+# Vinci OLF camerawork library, follow family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/tsuke-pan-walk
+version: 1
+family: follow
+name: Follow a walk
+notation: Tsuke pan
+intent: The camera follows a character who walks. The frame keeps them in one place.
+camera: { move: truck, direction: right, ease: none, render: model }
+framing: [wide, medium]
+timing: { default: 3+00, min: 2+00, max: 6+00 }
+slots: [a]
+layout:            # the same place at both ends: the camera goes with them
+  start: [{ slot: a, x: 0.5, facing: right }]
+  end: [{ slot: a, x: 0.5, facing: right }]
+prompt: >
+  The camera moves along with {a}, who walks to the right. {a} stays in the middle of the
+  frame and the background passes behind.
+avoid: [the character leaves the middle of the frame, camera shake]

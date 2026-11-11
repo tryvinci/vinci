@@ -1,16 +1,25 @@
 # Vinci
 
-**Make ads, films, and shorts with every AI model in one place.** Vinci is a free, open-source studio that runs on your own machine. Marketers ship product spots and campaign assets, filmmakers develop scenes and previs, creators turn long footage into daily shorts. You keep your keys, your files, and your budget.
+**The open-source studio for making ads, films, and shorts with every AI model.**
 
-![Vinci Studio tour](docs/assets/studio-tour.gif)
+Run Veo 3.1, Kling 3.0, Seedance 2.0, Nano Banana, GPT Image 2, Flux 2, and ElevenLabs side by side on your own machine, with your own keys. An open alternative to Higgsfield, Runway, and Opus Clip.
 
+[![GitHub stars](https://img.shields.io/github/stars/tryvinci/vinci?style=social)](https://github.com/tryvinci/vinci/stargazers)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](docs/quickstart.md)
-[![Self-host on Cloudflare](https://img.shields.io/badge/self--host-Cloudflare-orange.svg)](docs/SELF_HOST_CLOUDFLARE.md)
+[![Release](https://img.shields.io/github/v/release/tryvinci/vinci)](https://github.com/tryvinci/vinci/releases)
+[![Discussions](https://img.shields.io/badge/discussions-join-blue.svg)](https://github.com/tryvinci/vinci/discussions)
+
+[Quickstart](#get-started-in-5-minutes) · [Skills](#workflows-and-skills) · [Models](#models-and-providers) · [Docs](docs/quickstart.md) · [Contributing](CONTRIBUTING.md)
+
+![The same prompt on Veo 3.1 Fast, Kling 3.0 Pro and Hailuo 2.3](docs/assets/same-prompt-three-models.gif)
+
+New models land here soon after they ship. Star the repo to follow along, and to help other people find it.
 
 ## What you can make
 
 Real workflows ship in the box, ready to run:
+
+![Vinci Studio tour](docs/assets/studio-tour.gif)
 
 - **Product and brand spots.** Turn one product photo into a 5-second reveal clip for a hero page, a launch post, or an ad.
 - **Shorts from long footage.** Point Vinci at a podcast episode, stream, or webinar and get back vertical clips with burned-in captions, cut and reframed automatically.
@@ -20,45 +29,21 @@ Real workflows ship in the box, ready to run:
 
 ![Ready-to-run templates in the Studio](docs/assets/studio-templates.png)
 
-Every one of these is an installable skill, so the community can add more and you can build your own.
-
-## What it replaces, and how it saves money
-
-Most teams stitch together one subscription per task. Vinci is one studio instead of that stack. Current list prices on each vendor's own pricing page (checked October 2026):
-
-- AI video generation subscriptions: Runway starts at **$12/month** ([runwayml.com/pricing](https://runwayml.com/pricing)). Vinci talks to the same class of models through your own provider accounts, at per-generation API rates, with no subscription.
-- AI presenters and talking avatars: HeyGen Creator is **$29/month** ([heygen.com/pricing](https://www.heygen.com/pricing)). Vinci's talking photo, lipsync, and voice skills cover the everyday cases.
-- Podcast and webinar clipping: Opus Clip starts at **$15/month** ([opus.pro/pricing](https://www.opus.pro/pricing)). Vinci's podcast-to-shorts workflow transcribes locally, picks the moments, reframes to vertical, and burns captions.
-- Video upscaling: Topaz Video is **$59/month** ([topazlabs.com/pricing](https://www.topazlabs.com/pricing)). Vinci routes upscales to the provider you choose, priced per clip before it runs.
-
-Those four alone add up to **$115/month in subscriptions** before you generate anything. With Vinci there is no subscription at all: the studio is free, trying things in demo mode costs $0, and when you go live you pay providers per generation at their own API rates. Vinci shows the exact price of each job before it runs and saves a receipt for every generation, so a campaign's media cost is a number you can show a client, not a surprise.
-
-Honest note: Vinci does not replace the model providers themselves. You still pay Wavespeed, Google, fal, ElevenLabs, Cloudflare, Higgsfield, or Magnific for what you generate. What goes away is the layer of single-purpose app subscriptions on top.
-
-## Why Vinci
-
-**Every provider, one studio.** Connect the accounts you already have. Keys are stored on your machine only, never sent anywhere else.
-
-![Connect providers in the Studio](docs/assets/studio-connect.png)
-
-Paste an API key, or simply sign in for providers that support it (Higgsfield, Magnific). No account with Vinci, no middleman.
-
-![Paste a provider key](docs/assets/studio-connect-key.png)
-
-Then try the same shot on three different models and keep the best take. Swapping providers never changes your workflow.
-
 ## Get started in 5 minutes
 
-You need Python 3.12+, Node 20+, and `ffmpeg` ([install help](docs/quickstart.md)). Then:
+Everything below runs in free demo mode first: no account, no key, no cost.
+
+You need Python 3.12+, Node 20+, and `ffmpeg` ([install help](docs/quickstart.md)). Install takes about a minute:
 
 ```bash
+git clone https://github.com/tryvinci/vinci && cd vinci
 python3 -m venv .venv && source .venv/bin/activate
 make install
 ./scripts/vinci init --demo
 ./scripts/vinci studio
 ```
 
-Your studio opens at `http://127.0.0.1:4311`, running in free demo mode. No account, no key, no cost. When you are ready for real models, open **Connect** (pictured above) and add a provider.
+Your studio opens at `http://127.0.0.1:4311`. When you are ready for real models, open **Connect** and add a provider key.
 
 Then pick your path:
 
@@ -68,9 +53,59 @@ Then pick your path:
 - **Run it on your own server:** [Self-host on Cloudflare](docs/SELF_HOST_CLOUDFLARE.md).
 - **Batch work from a spreadsheet:** [Google Sheets guide](docs/google-sheets.md).
 
+## Why Vinci
+
+**Every provider, one studio.** Connect the accounts you already have, then try the same shot on three different models and keep the best take. Swapping providers never changes your workflow. Keys stay on your machine and are never sent anywhere else.
+
+![Connect providers in the Studio](docs/assets/studio-connect.png)
+
+**You see the price before anything runs.** Every live job shows its cost first and writes a receipt when it finishes, so a campaign's media spend is a number you can show a client.
+
+**Workflows are small files you can read.** A skill is a short YAML graph, not a plugin SDK. Here is the product reveal, trimmed:
+
+```yaml
+# skills/product-reveal-5s/workflow.yaml
+nodes:
+  - id: still
+    type: generate
+    capability: t2i          # any connected image model
+    params: { prompt: "{{inputs.prompt}}" }
+  - id: reveal
+    type: generate
+    capability: i2v          # any connected video model
+    params: { prompt: "{{inputs.prompt}}", image: "{{nodes.still.output}}", duration: 5 }
+edges:
+  - { src: still, dst: reveal, input_key: image }
+```
+
+Run it from the Studio, or from a script:
+
+```bash
+./scripts/vinci run @tryvinci/product-reveal-5s --input '{"prompt":"matte black headphones on wet stone"}'
+```
+
+**Your AI assistant can drive it.** Vinci ships an MCP server, so Claude, Cursor, or any MCP client can plan shots, run skills, and fetch results. `./scripts/vinci mcp print-config` prints the config to paste in.
+
+## Models and providers
+
+Bring a key for any of these, or sign in where the provider supports it (Higgsfield, Magnific). The catalog holds 90+ models today.
+
+| Provider | Highlights |
+| --- | --- |
+| Google | Veo 3.1, Gemini Flash Image (Nano Banana) |
+| Wavespeed | Seedance 2.0, Kling 3.0, Hailuo 2.3, Wan 2.6, Nano Banana Pro |
+| Magnific | Kling 3, Seedance 2, FLUX.2, Seedream 5.0, Mystic, upscalers |
+| fal | Veo 3.1 Fast, Kling 2.6, Nano Banana Pro, FLUX.1, Ideogram v3 |
+| Higgsfield | DoP, Kling 2.5, Hailuo 02, Seedance, Nano Banana |
+| OpenAI | GPT Image 2 and 2.5 |
+| ElevenLabs | Multilingual v2, Flash v2.5, instant voice cloning |
+| Cloudflare | FLUX.1 Schnell on Workers AI |
+
+Missing a model you want? [Open an issue](https://github.com/tryvinci/vinci/issues) or add it: each provider's catalog is one JSON file (see [CONTRIBUTING](CONTRIBUTING.md)).
+
 ## Workflows and skills
 
-Skills are installable workflow recipes. Ship-ready today:
+Ship-ready today:
 
 | Skill | What it does |
 | --- | --- |
@@ -84,21 +119,26 @@ Skills are installable workflow recipes. Ship-ready today:
 | `podcast-to-shorts` / `clip-select` | Find the moments in long footage and cut them |
 | `reframe-9x16` / `captions-burn` / `streamer-split` | Vertical reframes, burned captions, long takes into parts |
 
-Add more with `vinci skills add`, or write your own: a skill is a small workflow graph, not a plugin SDK.
+Add more with `vinci skills add`, or write your own and send a pull request.
 
-## How cost works
+## What it replaces, and what it costs
 
-- **Free to try, forever.** The full Studio runs in demo mode with practice providers at $0. Every feature works; outputs are marked as mock.
-- **You see the price first.** Before any live job runs, Vinci shows what it will cost. Confirm or change the model.
-- **A receipt for everything.** Every generation writes a receipt, and the Studio's cost report adds them up per project.
+Most teams pay for one app per task: Runway from $12/month, HeyGen Creator at $29/month, Opus Clip from $15/month, Topaz Video at $59/month (list prices on each vendor's pricing page, checked October 2026). That is $115/month before you generate anything.
+
+Vinci has no subscription. The studio is free, demo mode costs $0, and live work is billed by your providers per generation at their own API rates. Vinci adds nothing on top.
+
+Honest note: Vinci does not replace the model providers themselves. You still pay Wavespeed, Google, fal, ElevenLabs, Cloudflare, Higgsfield, or Magnific for what you generate. What goes away is the layer of single-purpose app subscriptions on top.
+
+- **Free to try, forever.** The full Studio runs in demo mode with practice providers at $0. Outputs are marked as mock.
 - **Off means off.** Live spend stays disabled until you connect a key and enable it yourself (`VINCI_ALLOW_LIVE_SPEND=1`).
 
 ## What is inside
 
-- **Studio** - the visual workspace: templates, a shot canvas, timeline, asset library, generation Assets, and a cost report. Also runs on Mac and Android.
-- **Skills** - the workflow recipes listed above, installable and extensible.
-- **CLI and API** - `./scripts/vinci run @tryvinci/image-generate` for scripts and automation.
-- **MCP tools** - let an AI assistant drive the studio for you.
+- **Studio**: the visual workspace with templates, a shot canvas, timeline, asset library, and a cost report. Also runs on Mac and Android.
+- **Skills**: the workflow recipes above, installable and extensible.
+- **CLI and API**: `./scripts/vinci run @tryvinci/image-generate` for scripts and automation.
+- **MCP server**: lets an AI assistant drive the studio.
+- **Movie engine (preview)**: build the world once, render every episode. Write the show bible once (characters, places, props, style), then seasons, episodes, scenes and shots, in the open [Open Lore Format](packages/olf/SPEC.md). In the Studio, **Shows** turns each scene into a storyboard: render a shot (price first, $0 in demo mode), approve takes, and see which takes are out of date after you change the bible. **Camerawork** gives a shot a camera move from a library of anime templates (track up, quick zoom, shake, held drawing); many of them need no video model, so the engine makes them from the keyframe for $0. The same engine runs from the CLI (`./scripts/vinci olf ...`). See [`docs/OLF_ENGINE.md`](docs/OLF_ENGINE.md).
 
 How it works under the hood: [`docs/VINCI_OSS_RUNTIME.md`](docs/VINCI_OSS_RUNTIME.md).
 
@@ -106,26 +146,30 @@ How it works under the hood: [`docs/VINCI_OSS_RUNTIME.md`](docs/VINCI_OSS_RUNTIM
 
 **Do I need to know how to code?** No. The Studio is a visual app. Everything in it also has a CLI and API for people who want that.
 
-**What does it cost to try?** Nothing. Demo mode runs the whole studio at $0 with no account.
-
-**What does it cost for real work?** Only what your providers charge per generation, at their API rates. Vinci adds nothing on top, shows the price before each run, and keeps receipts.
+**What does it cost for real work?** Only what your providers charge per generation. Vinci shows the price before each run and keeps receipts.
 
 **Where do my files and keys live?** On your machine. Keys stay in `~/.vinci/keys` or your OS keychain. Media stays in your local library.
 
 **Can I use the output commercially?** Vinci itself is MIT-licensed. Your output is governed by the terms of the provider whose model generated it.
 
-**What do I need to run it?** A Mac or Linux machine with Python 3.12+, Node 20+, and ffmpeg. Details in the [quickstart](docs/quickstart.md).
+## Community
 
-## Package names
+- Ideas, questions, and things you made: [Discussions](https://github.com/tryvinci/vinci/discussions).
+- Want to contribute? Start with a [good first issue](https://github.com/tryvinci/vinci/labels/good%20first%20issue). New skills and models are the easiest way in.
 
-Packages publish as `@tryvinci/*` on npm and `vinci-core` / `vinci-runtime` / `vinci-media` / `vinci-harness` / `vinci-provider-*` on PyPI. Nothing is published yet, so run from a clone as shown above. See `NAMESPACE.md`.
+## Related projects
 
-The hosted product, **Vinci Platform**, is a separate codebase. Canonical source tree: `apps/vinci-oss/` in `tryvinci/vinci-monorepo`, split-synced here.
+- [Vinci Clips](https://github.com/tryvinci/vinci-clips): only need to cut long videos into shorts? A smaller, self-hosted Node app that transcribes, picks clips, reframes to 9:16 and burns captions. It is a separate AGPL codebase and shares no code with this repo.
+- [Vinci Scroll](https://github.com/tryvinci/vinci-scroll): a swipe-and-react video feed for testing creative with real viewers.
 
-## Contributing
+## Vinci for enterprises
 
-MIT-licensed, contributions welcome. See `CONTRIBUTING.md`. `vinci-clips` is AGPL and **must not** enter this tree: see `legal/AGPL_CLEAN_ROOM.md`.
+This repo is the open core. Companies that run Vinci across teams use Vinci Enterprise, which adds a brand engine (your guidelines and voice in every generation), SSO, review gates and audit, and deployment in your own cloud with our team supporting it. Our creative studio, Vinci Studios, works on the same system.
 
-## License
+[tryvinci.com](https://tryvinci.com) · [Talk to us](https://tryvinci.com/meet)
 
-MIT
+## Contributing and license
+
+MIT-licensed, contributions welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md). `vinci-clips` is AGPL and **must not** enter this tree: see `legal/AGPL_CLEAN_ROOM.md`.
+
+Packages will publish as `@tryvinci/*` on npm and `vinci-*` on PyPI; until then run from a clone. See `NAMESPACE.md`.

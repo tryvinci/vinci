@@ -12,7 +12,7 @@
     "capabilities": {
       "type": "array",
       "items": {
-        "enum": ["t2i", "i2i", "t2v", "i2v", "lipsync", "tts", "sts", "voice_clone", "upscale", "transcribe", "reframe", "caption", "edit_multi"]
+        "enum": ["t2i", "i2i", "t2v", "i2v", "lipsync", "tts", "sts", "voice_clone", "upscale", "transcribe", "reframe", "caption", "edit_multi", "t2t", "music", "sfx"]
       }
     },
     "constraints": {
@@ -21,6 +21,7 @@
       "properties": {
         "aspect_ratios": { "type": "array", "items": { "type": "string" } },
         "max_duration": { "type": ["number", "null"] },
+        "durations": { "type": "array", "items": { "type": "number" } },
         "resolutions": { "type": "array", "items": { "type": "string" } },
         "max_input_images": { "type": ["integer", "null"] }
       }

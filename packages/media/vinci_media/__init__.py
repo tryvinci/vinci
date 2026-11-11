@@ -8,6 +8,17 @@ from vinci_media.adapt import (
     validate_export_for_preset,
     validate_output_image,
 )
+from vinci_media.camera import camera_move
+from vinci_media.episode import (
+    burn_cues,
+    extract_audio,
+    has_audio,
+    join_audio,
+    join_clips,
+    mix_cues,
+    normalize_clip,
+    stem_cues,
+)
 from vinci_media.ops import (
     MediaError,
     burn_captions,
@@ -33,6 +44,15 @@ __all__ = [
     "validate_output_image",
     "MediaError",
     "burn_captions",
+    "burn_cues",
+    "camera_move",
+    "has_audio",
+    "join_audio",
+    "mix_cues",
+    "extract_audio",
+    "stem_cues",
+    "join_clips",
+    "normalize_clip",
     "concat",
     "cut",
     "make_fixture_video",

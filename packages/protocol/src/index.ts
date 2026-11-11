@@ -33,7 +33,10 @@ export type Capability =
   | "transcribe"
   | "reframe"
   | "caption"
-  | "edit_multi";
+  | "edit_multi"
+  | "t2t"
+  | "music"
+  | "sfx";
 
 export type AssetKind = "image" | "video" | "audio" | "text" | "timeline";
 export type AssetSource = "generated" | "uploaded" | "derived";
@@ -77,6 +80,8 @@ export interface ModelSpec {
   constraints?: {
     aspect_ratios?: string[];
     max_duration?: number | null;
+    /** The exact clip lengths (seconds) a video model takes; empty: any length up to max_duration. */
+    durations?: number[];
     resolutions?: string[];
     max_input_images?: number | null;
   };

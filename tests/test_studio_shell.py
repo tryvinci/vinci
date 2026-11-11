@@ -1,6 +1,6 @@
 """Studio shell: one format rail, All tools, and Ctrl+K.
 
-The rail is Explore / Image / Video / Canvas / Library, with Features|Models
+The rail is Explore / Image / Video / Canvas / Shows / Library, with Features|Models
 flyouts and the Skills, Find, Cost, Connect footer. All tools and Ctrl+K
 index those same entries. Home, Assets, Edit, and the avatar pages stay in
 that index; they are not a second rail.
@@ -50,7 +50,7 @@ def test_format_rail_is_the_only_rail() -> None:
     _run(
         """
 const groups = RAIL_GROUPS.map((group) => (group.label || "") + ":" + group.items.map((row) => row.id).join("+")).join("|");
-if (groups !== ":explore|Formats:image+video|Workflows:canvas+library") {
+if (groups !== ":explore|Formats:image+video|Workflows:canvas+shows+library") {
   throw new Error("rail groups: " + groups);
 }
 if (RAIL_GROUPS[1].items[0].flyout !== "image" || RAIL_GROUPS[1].items[1].flyout !== "video") {
@@ -62,7 +62,7 @@ if (RAIL_FOOTER.map((row) => row.id).join(",") !== "skills,find,cost,keys") {
   throw new Error("footer");
 }
 const onRail = new Set(railPageIds());
-for (const id of ["explore", "image", "upscale", "adapts", "video", "speak", "canvas", "library", "skills", "find", "cost", "keys"]) {
+for (const id of ["explore", "image", "upscale", "adapts", "video", "speak", "canvas", "shows", "library", "skills", "find", "cost", "keys"]) {
   if (!onRail.has(id)) throw new Error(id + " left the rail");
 }
 for (const id of ["home", "assets", "edit", "agent", "space", "collab"]) {

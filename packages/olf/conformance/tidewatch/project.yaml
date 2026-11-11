@@ -1,0 +1,11 @@
+spec: olf/0.1
+show: tidewatch
+title: Tidewatch
+defaults:
+  aspect: "16:9"
+  fps: 24
+  resolution: 1920x1080
+exports: ["16:9", "9:16"]
+license:                      # default license for assets the engine adds
+  owner: "@creator"
+  terms: all-rights-reserved

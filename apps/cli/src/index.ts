@@ -28,6 +28,7 @@ Usage:
   vinci sheets sync
   vinci mcp print-config
   vinci studio [--lan] [--host HOST] [--port PORT] [--html] [--no-open]
+  vinci olf validate|resolve <shot>|status|render <shot>|review <take>|select <shot> [-C PROJECT]   (OLF movie engine)
 `);
   process.exit(1);
 }
@@ -46,6 +47,18 @@ async function main(): Promise<void> {
 
   if (cmd === "studio") {
     await runStudio(argv);
+    return;
+  }
+
+  if (cmd === "olf") {
+    // OLF movie engine (packages/olf): Python, local runtime, no daemon. Exit code passes through.
+    const child = spawn("python3", ["-m", "vinci_olf", ...argv.slice(1)], { stdio: "inherit" });
+    child.on("error", (err) => {
+      // No python3 on PATH: one line instead of an unhandled 'error' event and a stack trace.
+      process.stderr.write(`vinci olf: cannot start python3 (${err.message}). Install Python 3.11 or newer, then run make install.\n`);
+      process.exit(2);
+    });
+    child.on("exit", (code) => process.exit(code ?? 1));
     return;
   }
 

@@ -1,0 +1,14 @@
+# Vinci OLF camerawork library, pan family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/tilt-up-hero
+version: 1
+family: pan
+name: Tilt up to the hero
+notation: PAN up
+intent: A tilt from the feet to the face for the entrance of a hero.
+camera: { move: tilt, direction: up, ease: in_out, canvas: "9:16", render: engine }
+framing: [wide, medium]
+timing: { default: 3+00, min: 2+00, max: 5+00 }
+slots: [a]
+keyframe: "{a} stands tall in a strong pose, seen whole from the feet to the head."
+prompt: >          # for a shot that sets render: model
+  The camera tilts up from {a}'s feet to the face. {a} stands still.

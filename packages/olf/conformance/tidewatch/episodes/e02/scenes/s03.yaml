@@ -1,0 +1,31 @@
+id: e02/s03
+heading: INT. LAMP ROOM - NIGHT
+location: loc/lighthouse
+variant: night
+characters: [char/mira]
+outfits: { char/mira: night }
+mood: tense, quiet
+script: |
+  Mira lifts the floorboard. A brass key, wrapped in cloth.
+  MIRA: You kept the key?
+shots:
+  - id: e02/s03/sh014
+    duration: 4s
+    description: Mira looks up from the key toward the door.
+    camera: { framing: close_up, angle: eye_level, lens: 50mm, move: push_in }
+    blocking:
+      char/mira: kneeling by the open floorboard, key in right hand
+    dialogue:
+      - { speaker: char/mira, line: "You kept the key?", delivery: whisper }
+    props: [prop/brass-key]
+    control:
+      first_frame: keyframe      # animate from the selected keyframe
+  - id: e02/s03/sh015
+    duration: 2.5s
+    description: The door creaks open. Mira turns, the key hidden behind her back.
+    camera: { framing: medium, angle: low, lens: 35mm, move: static }
+    forms: { char/mira: ember }  # this shot overrides the episode default
+    blocking:
+      char/mira: standing, key behind her back
+    control:
+      first_frame: keyframe

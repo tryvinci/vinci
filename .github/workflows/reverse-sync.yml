@@ -1,0 +1,97 @@
+name: reverse-sync
+
+# Community PRs merge here, on tryvinci/vinci:main, but the canonical source is
+# vinci-monorepo/apps/vinci-oss, which syncs back over this repo. Without a port,
+# a contributor's merged change is lost on the next sync (first seen with #11,
+# Nov 2026). This job copies each merged community PR into a monorepo PR on dev.
+#
+# Safety: pull_request_target runs with secrets, so this job never checks out or
+# runs the contributor's code. It only downloads the PR's patch via the API and
+# applies it as text inside the monorepo checkout.
+#
+# Needs secret MONOREPO_PORT_TOKEN: contents + pull requests write on
+# tryvinci/vinci-monorepo. Without it the job comments on the PR and stops.
+
+on:
+  pull_request_target:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: reverse-sync-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  port:
+    # Skip the staging promotion PRs (sync output) and unmerged PRs.
+    if: >-
+      github.event.pull_request.merged == true &&
+      !(github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.pull_request.head.ref == 'staging')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PR: ${{ github.event.pull_request.number }}
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_URL: ${{ github.event.pull_request.html_url }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check token
+        id: token
+        env:
+          PORT_TOKEN: ${{ secrets.MONOREPO_PORT_TOKEN }}
+        run: |
+          if [ -z "$PORT_TOKEN" ]; then
+            echo "MONOREPO_PORT_TOKEN is not set; asking a maintainer to port by hand."
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "Thanks! A maintainer will port this into the monorepo by hand (\`git am --directory=apps/vinci-oss\`), otherwise the next sync overwrites it."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download the PR patch
+        if: steps.token.outputs.ok == 'true'
+        run: |
+          gh pr diff "$PR" --repo "$GITHUB_REPOSITORY" --patch > "$RUNNER_TEMP/pr.patch"
+          echo "Patch for #$PR: $(grep -c '^From ' "$RUNNER_TEMP/pr.patch") commit(s), $(wc -l < "$RUNNER_TEMP/pr.patch") lines"
+
+      - name: Check out monorepo dev
+        if: steps.token.outputs.ok == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: tryvinci/vinci-monorepo
+          ref: dev
+          token: ${{ secrets.MONOREPO_PORT_TOKEN }}
+          path: monorepo
+          fetch-depth: 1
+
+      - name: Apply under apps/vinci-oss and open a PR
+        if: steps.token.outputs.ok == 'true'
+        working-directory: monorepo
+        env:
+          GH_TOKEN: ${{ secrets.MONOREPO_PORT_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "vinci-reverse-sync[bot]"
+          git config user.email "vinci-reverse-sync[bot]@users.noreply.github.com"
+          branch="port/vinci-pr-$PR"
+          git checkout -b "$branch"
+          # git am keeps each commit's author and Signed-off-by (DCO).
+          if ! git am --3way --directory=apps/vinci-oss "$RUNNER_TEMP/pr.patch"; then
+            git am --abort || true
+            echo "::warning::Patch for #$PR did not apply cleanly on monorepo dev."
+            GH_TOKEN="${{ github.token }}" gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" \
+              --body "Auto-port to the monorepo hit a conflict. A maintainer needs to port this by hand before the next sync."
+            exit 1
+          fi
+          git push -u origin "$branch"
+          url=$(gh pr create --repo tryvinci/vinci-monorepo --base dev --head "$branch" \
+            --title "port(vinci-oss): tryvinci/vinci#$PR $PR_TITLE" \
+            --body "Ports community PR $PR_URL into \`apps/vinci-oss/\` so the next split sync keeps it. Opened by \`.github/workflows/reverse-sync.yml\` on tryvinci/vinci.")
+          echo "Opened $url"
+          GH_TOKEN="${{ github.token }}" gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" \
+            --body "Ported to the monorepo in $url so the next sync keeps this change."

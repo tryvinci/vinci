@@ -183,6 +183,8 @@ def test_wavespeed_seedvr2_image_uses_target_resolution(monkeypatch: pytest.Monk
         ("wavespeed:seedance-2.0-turbo:2026-08", Capability.T2V, False, "/bytedance/seedance-2.0/text-to-video-turbo", None),
         ("wavespeed:seedream-4.5:2026-08", Capability.I2I, True, "/bytedance/seedream-v4.5/edit", "images"),
         ("wavespeed:seedream-4.5:2026-08", Capability.T2I, False, "/bytedance/seedream-v4.5", None),
+        # The route reads `images` only: a lone `image` reached it with no reference (2026-11-09).
+        ("wavespeed:nano-banana-pro-edit:2026-09", Capability.I2I, True, "/google/nano-banana-pro/edit", "images"),
     ],
 )
 def test_wavespeed_still_picks_the_image_route(
@@ -212,6 +214,72 @@ def test_wavespeed_still_picks_the_image_route(
         assert seen["body"][field] == "https://cdn.example/still.png"
     else:
         assert "image" not in seen["body"] and "images" not in seen["body"]
+
+
+@pytest.mark.parametrize(
+    ("aspect", "size"),
+    [("16:9", "2560*1440"), ("9:16", "1440*2560"), ("1:1", "2048*2048"), ("21:9", "3136*1344")],
+)
+def test_wavespeed_seedream_gets_its_shape_as_size(
+    monkeypatch: pytest.MonkeyPatch, aspect: str, size: str
+) -> None:
+    """Seedream reads `size`, not `aspect_ratio`: a 16:9 show got square keyframes (COREPRODUC-566)."""
+    monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
+    provider = WavespeedProvider(api_key="ws-key", cas=_mem_cas({"ref": b"\x89PNG\r\n\x1a\nref"}))
+    seen: dict[str, Any] = {}
+
+    def fake_urlopen(request: Any, timeout: int = 30) -> _FakeResp:
+        if request.full_url.endswith("/media/upload/binary"):
+            return _FakeResp({"data": {"download_url": "https://cdn.example/ref.png"}})
+        seen["body"] = json.loads(request.data.decode("utf-8"))
+        return _FakeResp({"data": {"id": "job-1"}})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    for capability, image in ((Capability.T2I, {}), (Capability.I2I, {"image": "ref"})):
+        inputs: dict[str, Any] = {"prompt": "a cliff path at dusk", "aspect_ratio": aspect, **image}
+        req = JobRequest(capability=capability, model_id="wavespeed:seedream-4.5:2026-08", inputs=inputs)
+        provider.estimate(req)  # the plugin checks the price before each submit
+        provider.submit(req)
+        assert seen["body"]["size"] == size, capability
+    # A size the job states wins, and another model keeps its aspect_ratio alone.
+    for model, inputs, want in (
+        ("wavespeed:seedream-4.5:2026-08", {"prompt": "x", "aspect_ratio": "16:9", "size": "1024x576"}, "1024*576"),
+        ("wavespeed:nano-banana:2026-09", {"prompt": "x", "aspect_ratio": "16:9"}, None),
+    ):
+        req = JobRequest(capability=Capability.T2I, model_id=model, inputs=inputs)
+        provider.estimate(req)
+        provider.submit(req)
+        assert seen["body"].get("size") == want and seen["body"]["aspect_ratio"] == "16:9", model
+
+
+def test_wavespeed_edit_sends_every_reference(monkeypatch: pytest.MonkeyPatch) -> None:
+    """OLF sends each character, prop and location reference in image_urls (COREPRODUC-541)."""
+    monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
+    blobs = {f"ref{n}": b"\x89PNG\r\n\x1a\n" + bytes([n]) for n in range(12)}
+    provider = WavespeedProvider(api_key="ws-key", cas=_mem_cas(blobs))
+    uploads: list[int] = []
+    seen: dict[str, Any] = {}
+
+    def fake_urlopen(request: Any, timeout: int = 30) -> _FakeResp:
+        if request.full_url.endswith("/media/upload/binary"):
+            uploads.append(request.data[-1])
+            return _FakeResp({"data": {"download_url": f"https://cdn.example/{request.data[-1]}.png"}})
+        seen["url"], seen["body"] = request.full_url, json.loads(request.data.decode("utf-8"))
+        return _FakeResp({"data": {"id": "job-1"}})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    refs = [f"ref{n}" for n in range(12)]
+    req = JobRequest(
+        capability=Capability.I2I,
+        model_id="wavespeed:seedream-4.5:2026-08",
+        inputs={"prompt": "Mira in the lamp room", "image": "ref0", "image_urls": refs},
+    )
+    provider.estimate(req)
+    provider.submit(req)
+    assert seen["url"].endswith("/bytedance/seedream-v4.5/edit") and "image" not in seen["body"]
+    # The primary reference first, each uploaded once, at most 10 (the route's limit).
+    assert seen["body"]["images"] == [f"https://cdn.example/{n}.png" for n in range(10)]
+    assert uploads == list(range(10))
 
 
 @pytest.mark.parametrize(
@@ -655,6 +723,35 @@ def test_fal_i2v_submit_sends_start_image_url(monkeypatch: pytest.MonkeyPatch) -
     assert seen["body"]["prompt"] == "walk"
     assert seen["body"]["start_image_url"] == "https://cdn.example/start.png"
     assert seen["body"]["duration"] == "5"
+
+
+@pytest.mark.parametrize(
+    ("model_id", "duration", "sent"),
+    [
+        ("fal:kling-2.6-pro-i2v:2026-09", 5.0, "5"),  # OLF fits a shot to 5 s; never "5.0"
+        ("fal:veo-3.1-fast-i2v:2026-09", 8, "8s"),  # Veo's enum is "4s", "6s", "8s" (fal API docs)
+        ("fal:veo-3.1-fast-i2v:2026-09", "6s", "6s"),
+    ],
+)
+def test_fal_duration_matches_the_model_enum(
+    monkeypatch: pytest.MonkeyPatch, model_id: str, duration: Any, sent: str
+) -> None:
+    monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
+    provider = FalProvider(api_key="fal-key")
+    seen: dict[str, Any] = {}
+
+    def fake_urlopen(request: Any, timeout: int = 30) -> _FakeResp:
+        if request.get_method() == "POST":
+            seen["body"] = json.loads(request.data.decode("utf-8"))
+            return _FakeResp({"request_id": "req-1"})
+        return _FakeResp({"status": "IN_QUEUE"})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    inputs = {"prompt": "walk", "image_url": "https://cdn.example/start.png", "duration": duration}
+    req = JobRequest(capability=Capability.I2V, model_id=model_id, inputs=inputs)
+    provider.estimate(req)
+    provider.submit(req)
+    assert seen["body"]["duration"] == sent
 
 
 def test_higgsfield_flf_submit_sends_frame_urls(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1192,14 +1289,15 @@ def test_elevenlabs_submit_caches_mpeg_data_uri(monkeypatch: pytest.MonkeyPatch)
     def fake_urlopen(request: Any, timeout: int = 30) -> _FakeResp:
         headers = {str(k).lower(): str(v) for k, v in request.header_items()}
         assert headers.get("xi-api-key") == "el-key"
-        assert request.full_url.endswith("/v1/text-to-speech/default")
+        # A voice ID from the account: "default" is no ElevenLabs voice (live test 2026-11-09).
+        assert request.full_url.endswith("/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL")
         return _FakeResp(audio)
 
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
     req = JobRequest(
         capability=Capability.TTS,
         model_id="elevenlabs:flash-v2.5:2026-08",
-        inputs={"prompt": "hello"},
+        inputs={"prompt": "hello", "voice_id": "EXAVITQu4vr4xnSDxMaL"},
     )
     provider.estimate(req)
     ref = provider.submit(req)

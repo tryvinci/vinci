@@ -1,0 +1,21 @@
+# Vinci OLF camerawork library, dialogue family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/two-shot-axis
+version: 2
+family: dialogue
+name: Two-shot that sets the axis
+notation: Fix
+intent: Both characters are in frame. This shot fixes who is left and who is right.
+camera: { move: static, render: model }
+framing: [medium, wide]
+timing: { default: 3+00, min: 2+00, max: 8+00 }
+slots: [a, b]
+rules: { sets_axis: true }   # the later shots of the scene keep a on the left (180° line)
+layout:
+  start:
+    - { slot: a, x: 0.3, look_at: b }
+    - { slot: b, x: 0.7, look_at: a }
+keyframe: "{a} stands at frame left and {b} at frame right. They face each other."
+prompt: >
+  Static camera. {a} stays at frame left and {b} stays at frame right.
+  They face each other and talk.
+avoid: [both characters face the camera, the characters swap sides, camera movement]

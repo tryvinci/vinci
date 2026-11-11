@@ -38,16 +38,80 @@
       "secret_names": ["MOCK_API_KEY"]
     },
     {
-      "id": "mock:txt:v1",
-      "display_name": "Mock transcript / TTS",
+      "id": "mock:wav:v1",
+      "display_name": "Mock speech",
       "provider": "mock",
-      "capabilities": ["transcribe", "tts", "sts", "voice_clone"],
+      "capabilities": ["tts"],
       "constraints": {},
       "pricing": {
         "unit": "second",
         "amount": 0.0,
         "currency": "USD",
         "snapshot_at": "2026-08-27T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["MOCK_API_KEY"]
+    },
+    {
+      "id": "mock:txt:v1",
+      "display_name": "Mock transcript",
+      "provider": "mock",
+      "capabilities": ["transcribe", "sts", "voice_clone"],
+      "constraints": {},
+      "pricing": {
+        "unit": "second",
+        "amount": 0.0,
+        "currency": "USD",
+        "snapshot_at": "2026-08-27T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["MOCK_API_KEY"]
+    },
+    {
+      "id": "mock:llm:v1",
+      "display_name": "Mock text",
+      "provider": "mock",
+      "capabilities": ["t2t"],
+      "constraints": {},
+      "pricing": {
+        "unit": "request",
+        "amount": 0.0,
+        "currency": "USD",
+        "snapshot_at": "2026-11-09T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["MOCK_API_KEY"]
+    },
+    {
+      "id": "mock:music:v1",
+      "display_name": "Mock music",
+      "provider": "mock",
+      "capabilities": ["music"],
+      "constraints": {},
+      "pricing": {
+        "unit": "minute",
+        "amount": 0.0,
+        "currency": "USD",
+        "snapshot_at": "2026-11-09T00:00:00+00:00"
+      },
+      "quality_tier": "fast",
+      "status": "active",
+      "secret_names": ["MOCK_API_KEY"]
+    },
+    {
+      "id": "mock:sfx:v1",
+      "display_name": "Mock sound effects",
+      "provider": "mock",
+      "capabilities": ["sfx"],
+      "constraints": {},
+      "pricing": {
+        "unit": "generation",
+        "amount": 0.0,
+        "currency": "USD",
+        "snapshot_at": "2026-11-09T00:00:00+00:00"
       },
       "quality_tier": "fast",
       "status": "active",

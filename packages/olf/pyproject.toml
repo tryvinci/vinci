@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vinci-olf"
+version = "0.1.0"
+description = "Open Lore Format (OLF) reader, validator and renderer: the Vinci movie engine."
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+# The reader needs only these two. YAML 1.2 matters: PyYAML (1.1) reads `aspect: 16:9` as 969.
+dependencies = ["ruamel.yaml>=0.18", "jsonschema>=4.18"]
+
+[project.optional-dependencies]
+# Rendering drives the Vinci runtime (MIT). Other engines can use the reader without it.
+render = ["vinci-runtime==0.1.0", "vinci-media==0.1.0"]
+# C2PA provenance in exports (COREPRODUC-544): c2pa-python signs, cryptography makes the signer.
+# 0.38.1 is the newest c2pa-python with Linux wheels (0.38.2 ships macOS wheels only).
+c2pa = ["c2pa-python>=0.38.1", "cryptography>=42"]
+
+[tool.setuptools.packages.find]
+include = ["vinci_olf*"]
+
+[tool.setuptools.package-data]
+# camerawork/: the CC0 template library (its own LICENSE), read by vinci_olf.api.library.
+vinci_olf = ["py.typed", "schema.json", "camerawork/LICENSE", "camerawork/README.md", "camerawork/*/*.yaml"]

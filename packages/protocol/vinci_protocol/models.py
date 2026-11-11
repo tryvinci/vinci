@@ -60,6 +60,9 @@ class Pricing(StrictModel):
 class ModelConstraints(StrictModel):
     aspect_ratios: list[str] = Field(default_factory=list)
     max_duration: float | None = None
+    # The exact clip lengths (seconds) a video model takes, from its API docs. Empty: any
+    # length up to max_duration. The OLF engine fits a shot's length to these.
+    durations: list[float] = Field(default_factory=list)
     resolutions: list[str] = Field(default_factory=list)
     max_input_images: int | None = None
 

@@ -1,0 +1,825 @@
+/* Shows page: the OLF movie engine editor (app/shows-*.tsx, lib/shows.ts).
+   Claude Design layout in the Studio look: tokens from theme.css (cyan accent, Inter Tight,
+   Instrument Serif headings, glass surfaces). Status colours: --status-*; the orange stale
+   mark: --stale (calculated, never stored). Class names avoid the global .empty overlay. */
+
+.shows-page {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+.shows-page.shows-solo {
+  grid-template-columns: minmax(0, 1fr);
+  place-content: center;
+  justify-items: center;
+  gap: 16px;
+  padding: 48px 24px;
+}
+
+/* Show header in the Studio top bar (the .top-shows slot in studio-client.tsx), as in the design */
+.top-lead:has(> .top-shows) { flex: 1; }
+.top-shows { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-left: 4px; }
+.top-crumb { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 14px; }
+.top-crumb b { font-weight: 600; }
+.top-crumb code { font: 13px var(--font-mono); color: var(--ink); }
+.top-context { overflow: hidden; text-overflow: ellipsis; }
+.top-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.top-file { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11.5px var(--font-mono); color: var(--mute); }
+.shows-health {
+  padding: 2px 9px;
+  border-radius: var(--pill);
+  font-size: 11.5px;
+  border: 1px solid var(--line);
+  background: var(--chip);
+  color: var(--dim);
+}
+.shows-health.ok { color: var(--teal); border-color: rgb(33 218 210 / 0.35); background: rgb(33 218 210 / 0.08); }
+.shows-health.bad { color: var(--danger); border-color: rgb(240 113 103 / 0.4); background: rgb(240 113 103 / 0.1); }
+
+/* Left panel: the sections as a list, then episodes by season or bible entries (design) */
+.shows-nav {
+  overflow: auto;
+  padding: 16px 12px 28px;
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--glass-fallback);
+}
+.shows-sections { display: grid; gap: 2px; padding-bottom: 14px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.shows-sections button,
+.shows-list button {
+  min-width: 0;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 10px;
+  text-align: left;
+  font-size: 14px;
+  background: transparent;
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shows-list button { padding: 8px 12px; font-size: 13.5px; }
+.shows-sections button:hover:not(:disabled),
+.shows-list button:hover { background: var(--hover); color: var(--ink); }
+.shows-sections button.on,
+.shows-list button.on { background: var(--raised); color: var(--ink); box-shadow: var(--card-shadow); }
+.shows-sections button.on { font-weight: 600; }
+.shows-sections button:disabled { color: var(--mute); cursor: default; }
+.shows-list { display: grid; gap: 2px; }
+.shows-list-group { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
+.shows-list .eyebrow { margin: 14px 12px 4px; }
+
+/* Main stage */
+.shows-main { min-width: 0; overflow: auto; padding: 28px 32px 72px; }
+.olf-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; margin-bottom: 20px; }
+.olf-head h1 {
+  margin: 4px 0 6px;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 42px;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+}
+.olf-head .muted { max-width: 52rem; margin: 0; }
+.olf-head-meta { display: grid; justify-items: end; gap: 4px; font-size: 12px; color: var(--dim); }
+/* Batch buttons (design): re-render stale in the stale colour, then the primary action */
+.olf-head-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.olf-stale-btn { color: var(--stale); border-color: var(--stale-line); }
+.olf-stale-btn:hover:not(:disabled) { color: var(--stale); background: var(--stale-soft); }
+.olf-head-meta code { font: 11.5px var(--font-mono); color: var(--mute); }
+.shows-notice,
+.shows-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--ink);
+}
+.shows-notice { background: rgb(33 218 210 / 0.08); border: 1px solid rgb(33 218 210 / 0.3); }
+.shows-banner { background: rgb(240 113 103 / 0.1); border: 1px solid rgb(240 113 103 / 0.35); }
+.shows-banner .ghost { padding: 4px 12px; font-size: 12px; }
+.olf-x {
+  border: 0;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 17px;
+  line-height: 1;
+  background: transparent;
+  color: var(--dim);
+}
+.olf-x:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+.olf-x:disabled { opacity: 0.35; cursor: default; }
+.shows-error,
+.olf-error { margin: 0; font-size: 13px; color: var(--danger); }
+.olf-warn { margin: 0; font-size: 12px; color: var(--stale); }
+.olf-ok { color: var(--teal); }
+.olf-small { min-height: 28px; padding: 4px 12px; font-size: 12px; }
+.olf-small-text { margin: 0; font-size: 12px; line-height: 1.5; }
+.olf-grow { flex: 1; }
+.olf-row { display: flex; gap: 8px; }
+.olf-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.olf-chips .chip,
+.olf-cast .chip { padding: 3px 10px; font-size: 12px; color: var(--dim); }
+.olf-chips .chip b,
+.olf-cast .chip b { color: var(--ink); font-weight: 500; }
+.olf-chips .used-stale { color: var(--stale); border-color: var(--stale-line); }
+.olf-chips .used-fresh { color: var(--teal); }
+.olf-chips .used-error { color: var(--danger); }
+.tone-ok { color: var(--status-approved); }
+.tone-stale { color: var(--stale); }
+
+/* Status and stale pills */
+.olf-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--pill);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dim);
+  background: rgb(12 14 18 / 0.76);
+  border: 1px solid rgb(255 255 255 / 0.12);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.olf-pill.status-approved { color: var(--status-approved); border-color: rgb(61 202 160 / 0.45); }
+.olf-pill.status-candidate { color: var(--status-candidate); border-color: rgb(138 180 255 / 0.45); }
+.olf-pill.status-rejected { color: var(--status-rejected); border-color: rgb(240 113 103 / 0.45); }
+.olf-pill.is-stale { color: var(--stale); border-color: var(--stale-line); background: rgb(36 24 10 / 0.82); }
+.status-text { text-transform: capitalize; color: var(--mute); }
+.status-text.status-approved { color: var(--status-approved); }
+.status-text.status-candidate { color: var(--status-candidate); }
+.status-text.status-rejected { color: var(--status-rejected); }
+
+/* Storyboard: stats, scenes, keyframe cards */
+.olf-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 26px; }
+.olf-stat {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-line);
+  background: var(--glass-fallback);
+}
+.olf-stat span { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); }
+.olf-stat b { font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.olf-scene { margin-bottom: 30px; }
+.olf-scene > header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 12px; }
+.olf-scene > header h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: 0.01em; }
+.olf-scene > header code { font: 11.5px var(--font-mono); color: var(--teal); }
+.olf-scene > header .muted { font-size: 12.5px; }
+.olf-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; }
+/* A card is one button: it opens the shot page (design). */
+.olf-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-line);
+  background: var(--glass-fallback);
+  box-shadow: var(--glass-shadow);
+  transition: transform 160ms ease, border-color 160ms ease;
+}
+.olf-card:hover { transform: translateY(-2px); border-color: rgb(33 218 210 / 0.35); }
+.olf-card.is-stale { border-color: var(--stale-line); }
+.olf-card-thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--media);
+}
+.olf-card-stale { position: absolute; top: 10px; right: 10px; }
+.olf-card-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.olf-card-ph,
+.olf-preview-ph {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  text-align: center;
+  font: 13px var(--font-mono);
+  color: var(--mute);
+  background:
+    repeating-linear-gradient(135deg, rgb(255 255 255 / 0.025) 0 10px, transparent 10px 20px),
+    radial-gradient(120% 80% at 50% 0%, rgb(33 218 210 / 0.08), transparent 70%);
+}
+.olf-card-tags { position: absolute; top: 10px; left: 10px; display: flex; gap: 6px; }
+/* Pills: the staging of a shot with no picture yet (same shapes as the e-conte sheet). */
+.olf-pills { position: absolute; inset: 0; width: 100%; height: 100%; }
+.olf-pills-grid { stroke: var(--line); stroke-width: 0.3; }
+.olf-pills-horizon { stroke: var(--mute); stroke-width: 0.4; opacity: 0.6; }
+.olf-pill-body { fill: rgb(255 255 255 / 0.1); }
+.olf-pill-eye { fill: #fff; stroke: rgb(8 10 12 / 0.7); stroke-width: 0.3; }
+.olf-pill-name { fill: var(--ink); font-family: var(--font-mono); }
+.olf-pills-tag { position: absolute; right: 10px; bottom: 10px; font: 11px var(--font-mono); color: var(--mute); }
+.olf-previs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 18px; }
+.olf-busy {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  color: var(--ink);
+  background: rgb(8 10 12 / 0.62);
+  animation: olf-pulse 1.4s ease-in-out infinite;
+}
+@keyframes olf-pulse { 50% { background: rgb(8 10 12 / 0.38); } }
+.olf-card-body { display: grid; gap: 6px; padding: 12px 14px 14px; }
+.olf-card-line { display: flex; justify-content: space-between; font-size: 12px; color: var(--mute); }
+.olf-card-desc,
+.olf-card-meta { display: block; }
+.olf-card-line code { font: 12px var(--font-mono); color: var(--ink); }
+.olf-card-desc {
+  margin: 0;
+  min-height: 2.9em;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.olf-card-meta { margin: 0; font: 11.5px var(--font-mono); color: var(--mute); }
+.olf-chip-btn {
+  padding: 4px 11px;
+  border-radius: var(--pill);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  background: transparent;
+  color: var(--dim);
+}
+.olf-chip-btn:hover { color: var(--ink); border-color: rgb(255 255 255 / 0.2); }
+.olf-chip-btn[aria-pressed="true"] { color: var(--btn-ink); background: var(--teal); border-color: var(--teal); }
+
+/* Shots table */
+.olf-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.olf-table th {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+.olf-table td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: middle; color: var(--dim); }
+.olf-table td code { font: 12px var(--font-mono); color: var(--ink); }
+.olf-table tbody tr { cursor: pointer; }
+.olf-table tbody tr:hover td { background: var(--hover); }
+.olf-table-desc { max-width: 28rem; }
+
+/* Panels and fields (shot page and bible) */
+.olf-panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-line);
+  background: var(--glass-fallback);
+}
+.olf-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.olf-panel h3,
+.olf-strip-head h3 {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+.olf-panel-aside { display: inline-flex; gap: 6px; font-size: 12px; color: var(--mute); }
+.olf-field { display: grid; gap: 5px; }
+.olf-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mute); }
+.olf-value { min-width: 0; font-size: 13px; line-height: 1.5; color: var(--ink); }
+.olf-box {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.olf-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.olf-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: rgb(255 255 255 / 0.25);
+  text-underline-offset: 3px;
+}
+.olf-details { font-size: 13px; }
+.olf-details summary { cursor: pointer; color: var(--dim); }
+.olf-details .olf-label { display: block; margin: 12px 0 6px; }
+.olf-details pre {
+  margin: 8px 0 0;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--dim);
+  font: 12px/1.5 var(--font-mono);
+  white-space: pre-wrap;
+}
+.hash-list { display: grid; gap: 6px; margin: 10px 0 0; }
+.hash-list div { display: grid; grid-template-columns: 72px 1fr; }
+.hash-list dt { color: var(--mute); }
+.hash-list dd { margin: 0; color: var(--dim); font: 12px var(--font-mono); }
+.plan-row { display: grid; grid-template-columns: 72px 1fr auto; gap: 8px; align-items: baseline; font-size: 12px; }
+.plan-row span { color: var(--mute); }
+.plan-row code { font: 11.5px var(--font-mono); color: var(--dim); }
+.olf-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+
+/* Shot page: full width, no left panel (design) */
+.shows-page.is-full { grid-template-columns: minmax(0, 1fr); }
+.olf-back { padding: 0; border: 0; background: transparent; color: var(--teal); font-size: 14px; }
+.olf-stale-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--stale-line);
+  background: var(--stale-soft);
+  color: var(--stale);
+  font-size: 13px;
+}
+.olf-shot-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 22px; align-items: start; }
+.olf-shot-main,
+.olf-shot-side,
+.olf-col { display: grid; gap: 14px; min-width: 0; }
+.olf-preview {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-line);
+  background: var(--media);
+}
+.olf-preview img,
+.olf-preview video { display: block; width: 100%; height: 100%; object-fit: contain; }
+.olf-preview-ph b { font-size: 22px; color: var(--dim); }
+/* A dialogue take plays over the shot's picture (the play bar drives it) */
+.olf-strip-len { font: 12px var(--font-mono); color: var(--dim); }
+.olf-draws { display: flex; align-items: center; gap: 6px; }
+.olf-draws .olf-label { margin-right: auto; }
+.olf-strip-head { display: flex; align-items: baseline; gap: 12px; font-size: 12px; }
+.olf-strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+/* Take cards (design): the take, then kind and status */
+.olf-strip-item {
+  flex: none;
+  display: grid;
+  width: 148px;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+.olf-strip-media {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--media);
+}
+.olf-strip-media img,
+.olf-strip-media video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.olf-strip-media code {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 1px 6px;
+  border-radius: var(--pill);
+  font: 10.5px var(--font-mono);
+  color: var(--ink);
+  background: rgb(12 14 18 / 0.8);
+}
+.olf-strip-item.chosen { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal); }
+.olf-strip-item.is-stale { border-color: var(--stale-line); }
+.olf-strip-item.on { outline: 2px solid rgb(255 255 255 / 0.55); outline-offset: 2px; }
+.olf-strip-meta { display: flex; justify-content: space-between; padding: 6px 10px; font-size: 12px; color: var(--dim); }
+.olf-strip-item.is-stale .status-text { color: var(--stale); }
+.olf-prov { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 16px; margin: 0; }
+.olf-prov dt { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mute); }
+.olf-prov dd { margin: 2px 0 0; font: 12px var(--font-mono); color: var(--dim); overflow-wrap: anywhere; }
+.olf-cast { display: grid; gap: 6px; margin-bottom: 8px; }
+.olf-render { margin-top: 6px; }
+.olf-cost { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--dim); }
+.olf-cost b { font-weight: 500; color: var(--ink); }
+.olf-cast-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.olf-cast-line code { font: 11px var(--font-mono); color: var(--mute); }
+.olf-cast .chip { cursor: default; }
+.olf-line { display: grid; gap: 2px; margin-bottom: 6px; }
+
+/* Bible: two columns (design) */
+.olf-usage {
+  padding: 4px 12px;
+  border-radius: var(--pill);
+  border: 1px solid var(--line);
+  background: var(--chip);
+  font-size: 12.5px;
+  color: var(--dim);
+}
+.olf-subhead { margin: 6px 0 0; font-size: 13px; font-weight: 600; }
+.olf-ref-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
+.olf-ref-grid figure { display: grid; gap: 6px; margin: 0; }
+.olf-ref-grid .ref-thumb { width: 100%; height: 96px; object-fit: cover; }
+.olf-ref-grid figcaption { font-size: 12px; color: var(--dim); }
+.olf-kv { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.olf-kv:first-of-type { border-top: 0; }
+.olf-kv > :last-child { text-align: right; }
+.olf-two { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, 1fr); gap: 22px; align-items: start; }
+.olf-impact {
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--chip);
+  font-size: 13px;
+  color: var(--dim);
+}
+.olf-impact.is-stale { border-color: var(--stale-line); background: var(--stale-soft); color: var(--stale); }
+.olf-look { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; }
+.olf-look-line { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.olf-look .swatches { margin-top: 6px; }
+/* max-width: 100% in an auto grid column collapses an image to its border (first seen on the ember form). */
+.olf-look > .ref-thumb { max-width: none; }
+
+/* References, palettes, sheet */
+.swatches { display: inline-flex; gap: 3px; vertical-align: middle; }
+.swatches i { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgb(255 255 255 / 0.15); }
+.swatches.large i { width: 34px; height: 34px; border-radius: 8px; }
+.ref-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.ref-thumb {
+  display: inline-block;
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background-color: var(--media);
+  object-fit: contain;
+}
+.ref-missing { display: inline-grid; place-items: center; font-size: 11px; color: var(--mute); }
+.sheet-view { margin: 0; }
+.sheet-frame {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--media);
+}
+.sheet-frame img { display: block; max-width: 100%; max-height: 360px; width: auto; height: auto; }
+
+/* Cut and export (design screen 4): full width, tabs in the top bar */
+.top-tabs { display: flex; gap: 2px; margin-right: auto; }
+.top-tabs button { padding: 6px 12px; border: 0; border-radius: 10px; font-size: 14px; background: transparent; color: var(--dim); }
+.top-tabs button:hover { background: var(--hover); color: var(--ink); }
+.top-tabs button.on { background: var(--raised); color: var(--ink); font-weight: 600; }
+.olf-cut { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
+.olf-cut-main { min-width: 0; }
+/* 3.16 : 1 columns give a 16:9 box and a 9:16 box the same height. */
+.olf-cut-previews { display: grid; grid-template-columns: minmax(0, 3.16fr) minmax(0, 1fr); gap: 16px; }
+.olf-cut-wide,
+.olf-cut-tall {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-line);
+  background: var(--media);
+}
+.olf-cut-wide { aspect-ratio: 16 / 9; }
+.olf-cut-tall { aspect-ratio: 9 / 16; border-style: dashed; }
+.olf-cut-wide video,
+.olf-cut-wide img,
+.olf-cut-tall video,
+.olf-cut-tall img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.olf-cut-tall video,
+.olf-cut-tall img { object-fit: cover; } /* the same center crop as the 9:16 export */
+.olf-cut-ph { position: absolute; inset: 0; display: grid; place-items: center; font: 12px var(--font-mono); color: var(--mute); }
+.olf-cue {
+  position: absolute;
+  left: 50%;
+  bottom: 7%;
+  transform: translateX(-50%);
+  max-width: 86%;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.6);
+  color: #fff;
+  font-size: 14px;
+  text-align: center;
+}
+.olf-cut-tall .olf-cue { font-size: 11px; }
+.olf-cut-transport { display: flex; align-items: center; gap: 12px; margin: 14px 0; }
+.olf-cut-transport code { font: 14px var(--font-mono); color: var(--ink); }
+.olf-play { width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--teal); color: var(--btn-ink); font-size: 14px; }
+.olf-timeline {
+  position: relative;
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  row-gap: 8px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-line);
+  background: var(--glass-fallback);
+}
+.olf-track-label { align-self: center; font-size: 12.5px; color: var(--dim); }
+.olf-ruler { position: relative; height: 18px; font: 11px var(--font-mono); color: var(--mute); cursor: pointer; }
+.olf-ruler span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.olf-ruler span:first-child { transform: none; }
+.olf-ruler span:last-child { transform: translateX(-100%); }
+.olf-lane { position: relative; min-height: 34px; cursor: pointer; }
+.olf-lane-video { min-height: 58px; }
+.olf-lane-note { position: absolute; inset: 0; display: flex; align-items: center; font-size: 12px; color: var(--mute); }
+.olf-clip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: grid;
+  align-content: space-between;
+  padding: 6px 8px;
+  overflow: hidden;
+  text-align: left;
+  white-space: nowrap;
+  border-radius: 8px;
+  border: 1px solid rgb(33 218 210 / 0.3);
+  background: rgb(33 218 210 / 0.08);
+  color: var(--ink);
+  font-size: 11.5px;
+}
+.olf-clip code { font: 11.5px var(--font-mono); overflow: hidden; text-overflow: ellipsis; }
+.olf-clip span { color: var(--dim); overflow: hidden; text-overflow: ellipsis; }
+.olf-clip.on { box-shadow: 0 0 0 2px var(--teal); }
+.olf-clip.is-stale { border-color: var(--stale-line); background: var(--stale-soft); }
+.olf-clip.is-missing { border-color: rgb(240 113 103 / 0.5); }
+.olf-cue-block {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  padding: 4px 8px;
+  overflow: hidden;
+  white-space: nowrap;
+  border-radius: 6px;
+  border: 1px solid rgb(138 180 255 / 0.4);
+  background: rgb(138 180 255 / 0.15);
+  font-size: 11.5px;
+}
+.olf-cue-block.is-music { border-color: var(--stale-line); background: var(--stale-soft); }
+.olf-cue-block.is-stale { border-color: var(--stale-line); color: var(--stale); }
+.olf-cue-block.is-missing { border-style: dashed; border-color: rgb(240 113 103 / 0.5); background: transparent; color: var(--mute); }
+.olf-playhead-lane { position: absolute; top: 14px; bottom: 14px; left: calc(16px + 96px); right: 16px; pointer-events: none; }
+.olf-playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--teal); }
+.olf-cut-side { display: grid; gap: 18px; padding-left: 24px; border-left: 1px solid var(--line); }
+.olf-cut-block { display: grid; gap: 12px; }
+.olf-cut-block + .olf-cut-block { padding-top: 18px; border-top: 1px solid var(--line); }
+.olf-cut-block header { display: flex; align-items: center; justify-content: space-between; }
+.olf-cut-block h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--ink); }
+.olf-cut-take { font: 13px var(--font-mono); color: var(--ink); }
+.olf-input {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  font: 13px var(--font-mono);
+}
+.olf-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.olf-choice button { padding: 9px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--dim); }
+.olf-choice button[aria-pressed="true"] { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal); color: var(--ink); }
+.olf-choice button:disabled { opacity: 0.4; cursor: default; }
+.olf-check { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--ink); }
+.olf-check input { width: 16px; height: 16px; accent-color: var(--teal); }
+.olf-check.is-off { color: var(--mute); }
+.olf-clone { display: grid; gap: 8px; margin-top: 6px; }
+.olf-clone .olf-file-btn,
+.olf-clone-open { justify-self: start; }
+.olf-clone-open { margin-top: 6px; }
+.olf-cut-export { width: 100%; }
+.olf-export-files { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font: 12px var(--font-mono); }
+.olf-export-files a { color: var(--teal); }
+.olf-cut-empty { display: grid; justify-items: start; gap: 12px; max-width: 560px; }
+.olf-cut-empty h1 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 42px; }
+
+/* Issues */
+.issue-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.issue-list li {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 280px) 1fr;
+  gap: 12px;
+  align-items: baseline;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--glass-fallback);
+  font-size: 13px;
+}
+.issue-list li.error b { color: var(--danger); }
+.issue-list li.warning b { color: var(--stale); }
+.issue-list code { overflow-wrap: anywhere; font: 12px var(--font-mono); color: var(--dim); }
+
+/* Open a show */
+.shows-open-actions { display: grid; justify-items: center; gap: 12px; }
+.shows-path { display: flex; gap: 8px; }
+.shows-path .ghost { white-space: nowrap; }
+.shows-path input {
+  min-width: 320px;
+  padding: 8px 14px;
+  border-radius: var(--pill);
+  border: 1px solid var(--line);
+  background: var(--chip);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+.shows-path input:focus { outline: 2px solid rgb(33 218 210 / 0.5); outline-offset: 1px; }
+.shows-recent button { padding: 0 4px; border: 0; background: transparent; color: var(--teal); }
+
+@media (max-width: 1180px) {
+  .olf-shot-grid,
+  .olf-two,
+  .olf-cut { grid-template-columns: minmax(0, 1fr); }
+  .olf-cut-side { padding-left: 0; border-left: 0; }
+  .olf-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .shows-page { grid-template-columns: minmax(0, 1fr); }
+  .shows-nav { display: none; }
+  .shows-main { padding: 20px 16px 56px; }
+  .shows-path input { min-width: 0; }
+}
+
+/* Authoring (COREPRODUC-543): the design's dashed "+ Add shot" card and "+ Form" row */
+.olf-add {
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  border: 1px dashed var(--line);
+  background: transparent;
+  color: var(--dim);
+  font-size: 13px;
+}
+.olf-add:hover:not(:disabled) { color: var(--ink); border-color: rgb(255 255 255 / 0.25); }
+.olf-add-form { display: grid; gap: 8px; align-content: start; padding: 12px; }
+.olf-add-form .olf-row > * { min-width: 0; }
+.olf-textarea { min-height: 64px; resize: vertical; font: inherit; line-height: 1.45; }
+.olf-add-row {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px dashed var(--line);
+  background: transparent;
+  color: var(--dim);
+  font-size: 13px;
+}
+.olf-add-row:hover { color: var(--ink); border-color: rgb(255 255 255 / 0.25); }
+.olf-add-scene { margin: 4px 0 24px; }
+.olf-add-scene-form { display: grid; gap: 8px; max-width: 640px; margin: 4px 0 24px; }
+.olf-file-btn { display: inline-flex; align-items: center; cursor: pointer; }
+.shows-list-add { margin-top: 6px; color: var(--mute) !important; font-size: 13px; }
+.shows-list-new { margin-top: 6px; }
+
+/* Sheets (COREPRODUC-545): a tab per sheet */
+.olf-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.olf-tabs button { padding: 4px 11px; border-radius: var(--pill); border: 1px solid var(--line); background: transparent; color: var(--dim); font: 12px var(--font-mono); }
+.olf-tabs button[aria-selected="true"] { color: var(--ink); border-color: var(--teal); }
+
+/* See change (COREPRODUC-549): what changed since the take was rendered */
+.olf-diff { width: 100%; margin: -6px 0 14px; border-collapse: collapse; font-size: 12.5px; }
+.olf-diff th { text-align: left; font-weight: 500; color: var(--mute); padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.olf-diff td { padding: 6px 8px; border-bottom: 1px solid var(--line); color: var(--dim); vertical-align: top; overflow-wrap: anywhere; }
+.olf-diff td:first-child { color: var(--ink); }
+
+/* Play bar (COREPRODUC-554): the design's transport under the preview */
+.olf-playbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: linear-gradient(transparent, rgb(8 10 12 / 0.88) 40%);
+}
+.olf-playbar .olf-play { flex: none; width: 36px; height: 36px; font-size: 12px; }
+.olf-scrub { flex: 1; min-width: 0; accent-color: var(--teal); }
+.olf-playbar code { font: 12px var(--font-mono); color: var(--dim); white-space: nowrap; }
+.olf-share { display: inline-flex; align-items: center; text-decoration: none; }
+
+/* Preview fades (COREPRODUC-542): two layers, the clip that fades in on top */
+.olf-cut-wide .olf-cut-layer,
+.olf-cut-tall .olf-cut-layer { position: absolute; inset: 0; }
+
+/* New show and Shot list from script (COREPRODUC-547, -548): design screen 5 */
+.shows-page.setup { grid-template-columns: 260px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+.setup-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--line);
+}
+.setup-steps { display: grid; align-content: start; gap: 8px; padding: 24px 18px; border-right: 1px solid var(--line); }
+.setup-step {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+.setup-step.is-current { background: var(--media); }
+.setup-step span:last-child { display: grid; gap: 2px; }
+.setup-step small { font-size: 12px; color: var(--mute); }
+.setup-dot {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  font-size: 12px;
+}
+.setup-step.is-current .setup-dot { background: var(--teal); border-color: var(--teal); color: var(--btn-ink); }
+.setup-step.is-done .setup-dot { color: var(--teal); border-color: rgb(33 218 210 / 0.45); }
+.setup-main { min-width: 0; overflow: auto; padding: 28px 32px 48px; display: grid; align-content: start; gap: 10px; }
+.setup-main h1 { margin: 0; font-size: 28px; }
+.setup-main > .muted { margin: 0 0 8px; }
+.setup-form { display: grid; gap: 14px; max-width: 520px; }
+.setup-sheet { max-width: 100%; max-height: 220px; border-radius: var(--radius-md); border: 1px solid var(--line); }
+.setup-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr); gap: 18px; align-items: start; }
+.setup-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
+.script-text { min-height: 360px; resize: vertical; font: 13px/1.55 var(--font-mono); white-space: pre-wrap; }
+.script-foot { justify-content: space-between; }
+.script-label { align-items: center; justify-content: space-between; gap: 12px; white-space: nowrap; }
+.script-model { display: inline-flex; align-items: center; gap: 8px; }
+.script-model select { width: auto; max-width: 220px; padding: 4px 10px; font: 12px var(--font-ui); text-transform: none; letter-spacing: normal; }
+.script-idea { margin: 4px 0; }
+.script-scene { display: grid; gap: 6px; }
+.script-scene h4 { margin: 8px 0 2px; font-size: 13px; }
+.script-scene h4 .muted { font: 12px var(--font-mono); font-weight: 400; }
+.script-shot {
+  display: grid;
+  grid-template-columns: 58px 110px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  background: var(--media);
+  font-size: 13px;
+}
+.script-shot code { font: 12px var(--font-mono); color: var(--dim); }
+.script-shot .script-frame { color: var(--teal); }
+.script-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.olf-info {
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgb(94 155 255 / 0.35);
+  background: rgb(94 155 255 / 0.1);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.script-import { margin-bottom: 22px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+@media (max-width: 1100px) {
+  .setup-two { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Add music cue (COREPRODUC-551): the form under the transport */
+.olf-add-cue { margin: 12px 0; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--media); }
+.olf-add-cue .olf-row { align-items: flex-end; flex-wrap: wrap; gap: 12px; }
+.olf-add-cue .olf-field { width: 150px; }

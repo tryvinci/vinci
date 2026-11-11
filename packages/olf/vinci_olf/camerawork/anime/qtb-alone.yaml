@@ -1,0 +1,15 @@
+# Vinci OLF camerawork library, push family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/qtb-alone
+version: 1
+family: push
+name: Quick track back
+notation: Q.T.B.
+intent: A quick pull back that makes the character small and alone. Not for an action beat.
+camera: { move: pull_out, amount: 0.5, ease: out, hold_end: 1+04, render: engine }
+framing: [wide, extreme_wide]   # the keyframe is the wide frame that the move ends on
+timing: { default: 1+12, min: 1+00, max: 3+00 }
+slots: [a]
+rules: { max_move: 0+08 }   # a quick move is 8 frames at most
+keyframe: "{a} is small in a wide, empty place."
+prompt: >          # for a shot that sets render: model
+  The camera pulls back fast from {a}, then holds. {a} looks small and alone.

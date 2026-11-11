@@ -1,0 +1,16 @@
+# Vinci OLF camerawork library, follow family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/ryuuhai-speed
+version: 1
+family: follow
+name: Speed lines
+notation: Ryuuhai
+intent: Speed lines flow behind a character at full speed.
+camera: { move: static, render: model }
+framing: [medium, medium_close, close_up]
+timing: { default: 1+12, min: 0+18, max: 3+00 }
+slots: [a]
+keyframe: "{a} at full speed, in front of a background of speed lines."
+prompt: >
+  {a} rushes forward at full speed. The background is streaks of speed lines that flow past
+  and do not stop.
+avoid: [a detailed background, camera shake]

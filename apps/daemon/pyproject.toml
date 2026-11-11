@@ -19,6 +19,8 @@ dependencies = [
 
 [project.optional-dependencies]
 gsheet = ["google-auth>=2", "gspread>=6"]
+# Studio Shows page: the OLF movie engine (Apache-2.0).
+olf = ["vinci-olf==0.1.0"]
 
 [project.scripts]
 vinci-daemon = "vinci_daemon.app:main"

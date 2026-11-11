@@ -16,6 +16,10 @@ Authored MCP tools served by the local daemon at `POST /mcp`.
 | `vinci.presets_list` | `GET /presets` (generic, partner, and custom, each tagged with `source`) |
 | `vinci.adapts_run` | `POST /adapts/batch` with one item (`asset_id` or `source_url`, plus `preset_ids`). Returns `batch_id`. |
 | `vinci.batch_status` | `GET /adapts/batch/{batch_id}` |
+| `vinci.olf_validate` | `vinci olf validate` (only when `vinci-olf` is installed, as the `/olf` routes) |
+| `vinci.olf_resolve` | `GET /olf/shot` without the prices: resolved view, hashes, prompts, references |
+| `vinci.olf_status` | `vinci olf status`: takes with kind, status and `stale` |
+| `vinci.olf_render` | `POST /olf/render`: plans first; a paid render runs only within `max_cost`, and a model with no flat price is refused (`olf_tools.py`) |
 
 `vinci mcp print-config` prints a client config whose URL is the daemon `/mcp` endpoint.
 

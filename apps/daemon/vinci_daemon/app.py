@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import html
 import json
+import logging
 import os
 import socket
 from collections.abc import AsyncIterator
@@ -1164,6 +1165,12 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
 
         return {"name": "vinci", "tools": list(TOOL_NAMES), "schemas": tool_schemas()}
 
+    try:  # OLF movie engine (Studio Shows page); off when vinci-olf is not installed
+        from vinci_daemon.olf_routes import router as olf_router
+    except ImportError:
+        logging.getLogger("vinci.olf").info("olf routes off: vinci_olf is not installed")
+    else:
+        app.include_router(olf_router)
     return app
 
 

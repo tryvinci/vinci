@@ -1,0 +1,10 @@
+asset/2f58f14cb2a5a8f639984afb5442f682133dbb253ac6a924c7c7ebd5c4f26126:
+  uri: bible/style/mood.png
+  hash: sha256:2f58f14cb2a5a8f639984afb5442f682133dbb253ac6a924c7c7ebd5c4f26126
+  type: image/png
+  source: uploaded
+  license:
+    owner: "@creator"
+    terms: CC-BY-4.0
+    attribution: "Tidewatch by @creator"
+    ai_training: disallowed

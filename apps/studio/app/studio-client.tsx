@@ -16,6 +16,7 @@ import { CanvasInspector } from "./canvas-inspector";
 import { CanvasNodeCard } from "./canvas-node-card";
 import { ImagePage } from "./image-page";
 import { LibraryPage } from "./library-page";
+import { ShowsPage } from "./shows-page";
 import { VideoPage } from "./video-page";
 import { type ComboModel } from "./model-combo";
 import { VinciLogo } from "./ui/logo";
@@ -625,6 +626,8 @@ export function StudioClient() {
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [focusAssetId, setFocusAssetId] = useState<string | null>(null);
   const [view, setView] = useState<"canvas" | "timeline">("canvas");
+  // Shows fills this top-bar slot with its own header (crumb, spec, actions), as in the Claude Design editor.
+  const [showsTop, setShowsTop] = useState<HTMLElement | null>(null);
   const [showGrid, setShowGrid] = useState(true);
   const [dockMenu, setDockMenu] = useState<null | "zoom" | "more">(null);
   const [category, setCategory] = useState("all");
@@ -2517,6 +2520,7 @@ export function StudioClient() {
     upscale: "Upscale still",
     edit: "Edit",
     canvas: "Canvas",
+    shows: "Shows",
     library: "Library",
     assets: "Assets",
     agent: "Supercomputer",
@@ -3683,6 +3687,8 @@ export function StudioClient() {
         onIngest={ingest}
       />
     );
+  } else if (page === "shows") {
+    main = <ShowsPage topSlot={showsTop} />;
   } else if (page === "assets") {
     main = (
       <AssetsPage
@@ -4547,7 +4553,7 @@ export function StudioClient() {
                 <path d="M3 5h12M3 9h12M3 13h12" stroke="currentColor" />
               </svg>
             </button>
-            <h1 className={page === "canvas" ? "sr-only" : ""}>
+            <h1 className={page === "canvas" || page === "shows" ? "sr-only" : ""}>
               {page === "speak" || page === "upscale" || page === "adapts"
                 ? getApp(effectAppId)?.name || titles[page]
                 : titles[page]}
@@ -4562,6 +4568,7 @@ export function StudioClient() {
                 </button>
               </div>
             ) : null}
+            {page === "shows" ? <div className="top-shows" ref={setShowsTop} /> : null}
           </div>
           {page === "video" ? (
             <button
