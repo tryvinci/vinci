@@ -55,6 +55,20 @@ async function addNode(page: Page, query: string, capability: string) {
   await expect(menu).toHaveCount(0);
 }
 
+test("the first node opens above the dock on a short screen", async ({ page }) => {
+  // From the board centre, the open node ran under the dock at 810 px (COREPRODUC-574).
+  await page.setViewportSize({ width: 1440, height: 810 });
+  await openCanvas(page);
+  await page.locator('[data-start="t2i"]').click();
+  const node = page.locator(".node[data-id]").first();
+  await expect(node.getByTestId("node-model-chip")).toBeVisible();
+  const box = await node.boundingBox();
+  const dock = await page.locator(".canvas-bar").boundingBox();
+  expect(box && dock && box.y + box.height <= dock.y).toBe(true);
+  await node.getByTestId("node-model-chip").click(); // a real click: fails when the dock covers the pill
+  await expect(node.locator(".node-pill-menu")).toBeVisible();
+});
+
 test("selection scopes, pages, history, minimap", async ({ page }) => {
   const errors = watchConsole(page);
   // Demo hides mock and leaves live spend off, so a page-model target refuses to start.

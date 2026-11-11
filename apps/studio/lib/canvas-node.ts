@@ -125,6 +125,8 @@ type FitConstraints = { aspect_ratios?: string[]; resolutions?: string[]; durati
  * The params a run sends for a node, fitted to its model as the node's pills show them. A value the
  * model does not list went to the provider raw: a `1K` resolution on Seedream 4.5 (the pill said
  * 1024x1024) or 5 s on a 6 s model got HTTP 400 (COREPRODUC-576). Templates and empty values stay.
+ * A duration gets the shortest listed length that covers it, else the longest: the same rule as the
+ * runtime's `fit_duration`, which also fits nodes this cannot see (COREPRODUC-580).
  *
  * Args:
  *   params: The node's params.
@@ -137,9 +139,9 @@ export function fitToModel(params: Record<string, unknown>, limits?: FitConstrai
   if (limits?.resolutions?.length && concrete(out.resolution)) out.resolution = pickListed(out.resolution, limits.resolutions);
   const seconds = Number(out.duration);
   if (out.duration !== undefined && out.duration !== "" && Number.isFinite(seconds)) {
-    const allowed = limits?.durations ?? [];
+    const allowed = [...(limits?.durations ?? [])].sort((a, b) => a - b);
     if (allowed.length && !allowed.includes(seconds)) {
-      out.duration = allowed.reduce((best, d) => (Math.abs(d - seconds) < Math.abs(best - seconds) ? d : best));
+      out.duration = allowed.find((d) => d >= seconds) ?? allowed[allowed.length - 1];
     } else if (!allowed.length && limits?.max_duration && seconds > limits.max_duration) {
       out.duration = limits.max_duration;
     }

@@ -105,7 +105,8 @@ a { color: var(--ink); }
   top: 0;
   bottom: 0;
   width: 12px;
-  pointer-events: none;
+  /* The bridge over the gap to the rail item: it takes the pointer while the flyout shows, so the
+     flyout stays open on the way to it (it had pointer-events: none and closed in the gap). */
 }
 .rail-flyout-h {
   margin: 0 0 8px;
@@ -235,17 +236,18 @@ kbd {
     display: grid;
     opacity: 0;
     visibility: hidden;
-    pointer-events: none;
     transform: translateY(4px);
-    transition: opacity 160ms ease, transform 160ms ease, visibility 160ms ease;
+    /* Close late: a pointer that cuts a corner to a lower row still reaches the flyout. A hidden
+       flyout takes no pointer (visibility), and it stays usable until it hides. */
+    transition: opacity 160ms ease 150ms, transform 160ms ease 150ms, visibility 0s linear 310ms;
   }
   .rail-entry:hover .rail-flyout,
   .rail-entry:focus-within .rail-flyout {
     display: grid;
     opacity: 1;
     visibility: visible;
-    pointer-events: auto;
     transform: none;
+    transition: opacity 160ms ease, transform 160ms ease, visibility 0s;
   }
   .shell:has(.all-tools) .rail-scrim,
   .shell:has(.command-box) .rail-scrim,
@@ -1015,10 +1017,10 @@ input[type="range"] { accent-color: var(--teal); width: 100%; padding: 0; border
 }
 .image-how-step strong { display: block; font-weight: 500; margin-bottom: 4px; }
 .image-how-step p { margin: 0; color: var(--dim); line-height: 1.4; }
-.image-feed {
-  flex: 1; overflow: auto; padding: 16px 20px 160px;
-  column-count: 3; column-gap: 12px;
-}
+.image-feed { flex: 1; overflow: auto; padding: 16px 20px 160px; }
+/* The columns sit on an inner box with no fixed height. On the fixed-height scroll box, the pictures
+   that did not fit made more columns to the right, and the feed scrolled sideways (COREPRODUC-579). */
+.image-feed-cols { column-count: 3; column-gap: 12px; }
 .image-card { break-inside: avoid; margin: 0 0 12px; }
 .image-card-thumb {
   position: relative; border-radius: 1rem; overflow: hidden;
@@ -1148,7 +1150,7 @@ input[type="range"] { accent-color: var(--teal); width: 100%; padding: 0; border
 .image-badge { background: var(--wash, rgb(33 218 210 / 0.16)); color: var(--teal, var(--accent, #21dad2)); }
 .image-generate { flex: none; white-space: nowrap; display: flex; gap: 8px; align-items: center; }
 @media (max-width: 960px) {
-  .image-feed { column-count: 2; }
+  .image-feed-cols { column-count: 2; }
   .image-how { grid-template-columns: 1fr; }
   .video-how { padding: 20px 16px 32px; }
   .video-how-row { grid-template-columns: 1fr; }
@@ -1159,7 +1161,7 @@ input[type="range"] { accent-color: var(--teal); width: 100%; padding: 0; border
   .video-how-card:hover { transform: none; }
 }
 @media (max-width: 640px) {
-  .image-feed { column-count: 1; }
+  .image-feed-cols { column-count: 1; }
   .image-bar { flex-wrap: wrap; width: calc(100% - 16px); bottom: 10px; }
   .image-bar-prompt { flex: 1 1 100%; }
   .image-picker { width: min(100vw - 32px, 420px); right: auto; left: 0; }

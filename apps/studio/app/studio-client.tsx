@@ -746,6 +746,8 @@ export function StudioClient() {
   const [tlMedia, setTlMedia] = useState<{ src: string; video: boolean } | null>(null);
   const [keyDraft, setKeyDraft] = useState<Record<string, string>>({});
   const [connectId, setConnectId] = useState("");
+  const connectIdRef = useRef(connectId); // the selection when a save ends (it can end on another one)
+  connectIdRef.current = connectId;
   const [libTab, setLibTab] = useState<LibraryTab>("characters");
   const [brief, setBrief] = useState("");
   const [plan, setPlan] = useState<PlanStep[]>([]);
@@ -2160,10 +2162,14 @@ export function StudioClient() {
   function insertNode(capability: string, from?: string, modelId?: string) {
     const src = from ? graph.nodes.find((n) => n.id === from) : undefined;
     const { w, h } = boardSize();
+    // A new node opens selected, about 520 px tall. Its top goes where the open card ends above the dock
+    // (16 px from the bottom, about 46 px tall): from the centre, its pills and Run row were under the dock
+    // on a short screen (COREPRODUC-574). At least 56 px down, so its toolbar (Up to here) stays visible.
+    const top = Math.max(56, Math.min(h / 2 - 80 * viewport.zoom, h - 520 * viewport.zoom - 80));
     const want = src
       ? { x: (src.x || 0) + NODE_W + 80, y: src.y || 0 }
       : w
-        ? { x: (w / 2 - viewport.x) / viewport.zoom - NODE_W / 2, y: (h / 2 - viewport.y) / viewport.zoom - 80 }
+        ? { x: (w / 2 - viewport.x) / viewport.zoom - NODE_W / 2, y: (top - viewport.y) / viewport.zoom }
         : { x: 60 + (graph.nodes.length % 3) * (NODE_W + 40), y: 80 }; // board not mounted (inspector on another page)
     const at = freeSpot(graph, want.x, want.y);
     const n = buildNode(capability, at.x, at.y, modelId);
@@ -2277,6 +2283,8 @@ export function StudioClient() {
     if (keyDraft[`acct-${id}`]) payload.account_id = keyDraft[`acct-${id}`];
     if (keyDraft[`label-${id}`]) payload.label = keyDraft[`label-${id}`];
     if (keyDraft[`authurl-${id}`]) payload.authorize_url = keyDraft[`authurl-${id}`];
+    const fields = [`key-${id}`, `env-${id}`, `extra-${id}`];
+    const sent = Object.fromEntries(fields.map((f) => [f, keyDraft[f]]));
     try {
       const body = await api<{ available?: boolean; test?: string }>("/providers", {
         method: "POST",
@@ -2284,14 +2292,20 @@ export function StudioClient() {
         body: JSON.stringify(payload),
       });
       await boot();
-      setLog(
-        body.available
-          ? `${id} is on.` + (doctor.live_spend ? "" : " Paid runs are off.")
-          : `${id} is saved. Add a key in Connect if it is still off.`,
-      );
+      // The fields keep nothing after a save: a filled field looked as if the save did nothing. A value
+      // typed while the save ran is not saved, so it stays.
+      setKeyDraft((d) => ({ ...d, ...Object.fromEntries(fields.filter((f) => d[f] === sent[f]).map((f) => [f, ""])) }));
+      // The result shows under the connector it is for, not under one picked while it ran.
+      if (connectIdRef.current === id) {
+        setLog(
+          body.available
+            ? `${id} is on.` + (doctor.live_spend ? "" : " Paid runs are off.")
+            : `${id} is saved. Add a key in Connect if it is still off.`,
+        );
+      }
       setPage("keys");
     } catch (err) {
-      setLog(plainError(err));
+      if (connectIdRef.current === id) setLog(plainError(err));
     }
   }
 
@@ -2312,6 +2326,8 @@ export function StudioClient() {
         body: JSON.stringify(payload),
       });
       await boot();
+      // The token is saved: the next "Another server" must not send it again.
+      setKeyDraft((d) => (d["key-mcp_new"] === payload.secret ? { ...d, "key-mcp_new": "" } : d));
       setConnectId(id);
       setLog(body.available ? id + " enabled." : id + " saved. " + (body.test || "needs URL"));
       setPage("keys");
@@ -3831,7 +3847,10 @@ export function StudioClient() {
           type="button"
           className={"connector-mark " + (on ? "on" : "off") + (connectId === id ? " pick" : "")}
           data-connector={id}
-          onClick={() => setConnectId(id)}
+          onClick={() => {
+            setConnectId(id);
+            setLog("");
+          }}
         >
           <span className="face">
             <ConnectorGlyph id={id} />
@@ -3956,13 +3975,14 @@ export function StudioClient() {
             <input
               id="key-mcp_new"
               type="password"
-              autoComplete="off"
+              autoComplete="new-password"
               value={keyDraft["key-mcp_new"] || ""}
               onChange={(ev) => setKeyDraft((d) => ({ ...d, "key-mcp_new": ev.target.value }))}
             />
             <button className="run" type="button" onClick={() => void addNamedMcp()}>
               Add server
             </button>
+            {log ? <p className="log" role="status">{log}</p> : null}
           </div>
         ) : picked ? (
           <div className="connect-sheet" id="connect-sheet">
@@ -3998,7 +4018,7 @@ export function StudioClient() {
             <input
               id={`key-${connectId}`}
               type="password"
-              autoComplete="off"
+              autoComplete="new-password"
               value={keyDraft[`key-${connectId}`] || ""}
               onChange={(ev) => setKeyDraft((d) => ({ ...d, [`key-${connectId}`]: ev.target.value }))}
               placeholder={picked.secret_name}
@@ -4027,7 +4047,7 @@ export function StudioClient() {
                 <input
                   id={`extra-${connectId}`}
                   type="password"
-                  autoComplete="off"
+                  autoComplete="new-password"
                   value={keyDraft[`extra-${connectId}`] || ""}
                   onChange={(ev) => setKeyDraft((d) => ({ ...d, [`extra-${connectId}`]: ev.target.value }))}
                   placeholder={name}
@@ -4035,9 +4055,12 @@ export function StudioClient() {
               </div>
             ))}
             <div className="file-row">
-              <button className="ghost" type="button" onClick={() => void oauthStart(connectId)}>
-                Sign in
-              </button>
+              {/* Only an MCP server signs in; a key provider answered "uses a pasted API key" here. */}
+              {mcpPicked ? (
+                <button className="ghost" type="button" onClick={() => void oauthStart(connectId)}>
+                  Sign in
+                </button>
+              ) : null}
               {picked.auth_state === "connected" || picked.auth_state === "needs_reconnect" ? (
                 <button
                   className="ghost"
@@ -4057,6 +4080,8 @@ export function StudioClient() {
                 Save {picked.display_name || connectId}
               </button>
             </div>
+            {/* The save result: before, it went to a line that the Connect page did not show. */}
+            {log ? <p className="log" role="status">{log}</p> : null}
           </div>
         ) : (
           <div className="connect-sheet idle" id="connect-sheet">

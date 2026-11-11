@@ -152,6 +152,16 @@ if (four.filter((row) => row.pending).length !== 4) throw new Error("batch pendi
     assert result.returncode == 0, result.stderr or result.stdout
 
 
+def test_image_feed_scrolls_down_not_sideways() -> None:
+    """The columns sit inside the scroll box: on it, extra pictures made new columns (COREPRODUC-579)."""
+    css = (ROOT / "apps" / "studio" / "app" / "globals.css").read_text(encoding="utf-8")
+    scroll_box = css.split(".image-feed {", 1)[1].split("}", 1)[0]
+    assert "overflow: auto" in scroll_box and "column-count" not in scroll_box
+    assert ".image-feed-cols { column-count: 3;" in css
+    feed = (ROOT / "apps" / "studio" / "app" / "image-feed.tsx").read_text(encoding="utf-8")
+    assert '<div className="image-feed" data-testid={feedTestId}>\n      <div className="image-feed-cols">' in feed
+
+
 def test_library_feed_skips_trash_and_video() -> None:
     script = """
 const items = [

@@ -629,13 +629,15 @@ def test_export_with_separate_dialogue(show: Path, tmp_path: Path, monkeypatch: 
 def test_fit_duration() -> None:
     from types import SimpleNamespace
 
-    from vinci_olf.render import fit_duration
+    from vinci_core.cost import fit_duration
 
     kling = SimpleNamespace(durations=[5.0, 10.0], max_duration=10)  # 5 or 10 s (API docs)
     assert [fit_duration(s, kling) for s in (2.5, 4, 5, 7.2, 12)] == [5, 5, 5, 10, 10]
     capped = SimpleNamespace(durations=[], max_duration=8)  # any length up to 8 s
     assert [fit_duration(s, capped) for s in (2.5, 8, 12)] == [3, 8, 8]
     assert fit_duration(4.2, None) == 5  # no constraints: the shot length, rounded up
+    halves = SimpleNamespace(durations=[2.5, 5.5], max_duration=None)  # kept as listed (#539)
+    assert [fit_duration(s, halves) for s in (2, 2.5, 3, 9)] == [2.5, 2.5, 5.5, 5.5]
 
 
 def test_render_fits_the_model_duration(show: Path, tmp_path: Path, monkeypatch: Any) -> None:

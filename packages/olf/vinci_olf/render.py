@@ -215,7 +215,7 @@ def render(
     if not 1 <= count <= MAX_VARIATIONS or (count > 1 and kind != "keyframe"):
         raise OlfError(f"count must be 1 to {MAX_VARIATIONS}, and more than 1 only for keyframes")
     from vinci_core.catalog import price_key
-    from vinci_core.cost import plan_workflow
+    from vinci_core.cost import fit_duration, plan_workflow
     from vinci_protocol.models import WorkflowSpec
 
     if engine is None:
@@ -536,21 +536,6 @@ def run_one(
     }
     log.info("%s run %s: %s, %d bytes", capability, run.get("id"), spec.id, len(result["output"]))
     return result
-
-
-def fit_duration(seconds: float, constraints: Any) -> int:
-    """Return the clip length to ask a video model for (SPEC.md leaves the "how" to engines).
-
-    The shortest length the model takes (``constraints.durations``, from its API docs) that
-    covers the shot, else its longest. A model with only ``max_duration`` gets the shot length
-    rounded up, capped there. The cut trims a longer clip, and the take records its real length.
-    """
-    want = math.ceil(seconds)
-    allowed = sorted(int(d) for d in (getattr(constraints, "durations", None) or []))
-    if allowed:
-        return next((d for d in allowed if d >= want), allowed[-1])
-    cap = getattr(constraints, "max_duration", None)
-    return min(want, int(cap)) if cap else want
 
 
 def _node(
