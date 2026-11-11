@@ -270,6 +270,42 @@ def test_wavespeed_seedream_gets_its_shape_as_size(
         assert "size" not in seen["body"], model
 
 
+def test_wavespeed_nano_banana_pro_tier_and_wan_seed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Nano Banana Pro reads `resolution`, and only a tier its row lists goes out (COREPRODUC-582).
+    Wan 2.6 is the one catalog route that takes `seed` (COREPRODUC-583)."""
+    monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
+    provider = WavespeedProvider(api_key="ws-key", cas=_mem_cas({"ref": b"\x89PNG\r\n\x1a\nref"}))
+    seen: dict[str, Any] = {}
+
+    def fake_urlopen(request: Any, timeout: int = 30) -> _FakeResp:
+        if request.full_url.endswith("/media/upload/binary"):
+            return _FakeResp({"data": {"download_url": "https://cdn.example/ref.png"}})
+        seen["url"] = request.full_url
+        seen["body"] = json.loads(request.data.decode("utf-8"))
+        return _FakeResp({"data": {"id": "job-1"}})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    def send(model: str, capability: Capability = Capability.T2I, **inputs: Any) -> dict[str, Any]:
+        req = JobRequest(capability=capability, model_id=model, inputs={"prompt": "x", **inputs})
+        provider.estimate(req)
+        provider.submit(req)
+        return dict(seen["body"])
+
+    assert send("wavespeed:nano-banana-pro:2026-09", resolution="2k")["resolution"] == "2k"
+    assert "resolution" not in send("wavespeed:nano-banana-pro:2026-09", resolution="4k")  # $0.14 row
+    assert send("wavespeed:nano-banana-pro-4k:2026-11")["resolution"] == "4k"  # its only tier
+    assert send("wavespeed:nano-banana-pro-4k:2026-11", resolution="2k")["resolution"] == "4k"
+    assert seen["url"].endswith("/google/nano-banana-pro/text-to-image")
+    edit = send("wavespeed:nano-banana-pro-edit-4k:2026-11", Capability.I2I, image="ref")
+    assert edit["resolution"] == "4k" and seen["url"].endswith("/google/nano-banana-pro/edit")
+    stale = send("wavespeed:nano-banana-pro-edit-4k:2026-11", Capability.I2I, image="ref", resolution="2k")
+    assert stale["resolution"] == "4k"  # a stale tier from another model cannot fall back to 1k
+    assert "resolution" not in send("wavespeed:nano-banana:2026-09", resolution="1k")  # no such param
+    assert send("wavespeed:wan-2.6:2026-08", Capability.T2V, seed=42, duration=5)["seed"] == 42
+    assert "seed" not in send("wavespeed:seedream-4.5:2026-08", seed=42)
+
+
 def test_wavespeed_edit_sends_every_reference(monkeypatch: pytest.MonkeyPatch) -> None:
     """OLF sends each character, prop and location reference in image_urls (COREPRODUC-541)."""
     monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")

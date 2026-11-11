@@ -11,6 +11,8 @@
     "wavespeed:nano-banana:2026-09": "google/nano-banana/text-to-image",
     "wavespeed:nano-banana-pro:2026-09": "google/nano-banana-pro/text-to-image",
     "wavespeed:nano-banana-pro-edit:2026-09": "google/nano-banana-pro/edit",
+    "wavespeed:nano-banana-pro-4k:2026-11": "google/nano-banana-pro/text-to-image",
+    "wavespeed:nano-banana-pro-edit-4k:2026-11": "google/nano-banana-pro/edit",
     "wavespeed:hailuo-2.3-t2v:2026-09": "minimax/hailuo-2.3/t2v-standard",
     "wavespeed:hailuo-2.3-fast-pro:2026-09": "minimax/hailuo-2.3/fast-pro",
     "wavespeed:infinitetalk:2026-08": "wavespeed-ai/infinitetalk",
@@ -188,13 +190,32 @@
       "capabilities": ["t2i"],
       "constraints": {
         "aspect_ratios": ["1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"],
-        "resolutions": ["1k", "2k", "4k"]
+        "resolutions": ["1k", "2k"]
       },
       "pricing": {
         "unit": "image",
-        "amount": 0.05,
+        "amount": 0.14,
         "currency": "USD",
-        "snapshot_at": "2026-09-07T00:00:00+00:00"
+        "snapshot_at": "2026-11-11T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": ["WAVESPEED_API_KEY"]
+    },
+    {
+      "id": "wavespeed:nano-banana-pro-4k:2026-11",
+      "display_name": "Nano Banana Pro 4K",
+      "provider": "wavespeed",
+      "capabilities": ["t2i"],
+      "constraints": {
+        "aspect_ratios": ["1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"],
+        "resolutions": ["4k"]
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.24,
+        "currency": "USD",
+        "snapshot_at": "2026-11-11T00:00:00+00:00"
       },
       "quality_tier": "quality",
       "status": "active",
@@ -207,14 +228,34 @@
       "capabilities": ["i2i", "edit_multi"],
       "constraints": {
         "aspect_ratios": ["1:1", "16:9", "9:16"],
-        "resolutions": ["1k", "2k", "4k"],
+        "resolutions": ["1k", "2k"],
         "max_input_images": 4
       },
       "pricing": {
         "unit": "image",
-        "amount": 0.05,
+        "amount": 0.14,
         "currency": "USD",
-        "snapshot_at": "2026-09-07T00:00:00+00:00"
+        "snapshot_at": "2026-11-11T00:00:00+00:00"
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": ["WAVESPEED_API_KEY"]
+    },
+    {
+      "id": "wavespeed:nano-banana-pro-edit-4k:2026-11",
+      "display_name": "Nano Banana Pro Edit 4K",
+      "provider": "wavespeed",
+      "capabilities": ["i2i", "edit_multi"],
+      "constraints": {
+        "aspect_ratios": ["1:1", "16:9", "9:16"],
+        "resolutions": ["4k"],
+        "max_input_images": 4
+      },
+      "pricing": {
+        "unit": "image",
+        "amount": 0.24,
+        "currency": "USD",
+        "snapshot_at": "2026-11-11T00:00:00+00:00"
       },
       "quality_tier": "quality",
       "status": "active",
