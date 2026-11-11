@@ -55,6 +55,10 @@ class Pricing(StrictModel):
     amount: float = Field(ge=0)
     currency: str = "USD"
     snapshot_at: datetime
+    # The price of a clip by its length in seconds ({"5": 0.35, "10": 0.7}), from the provider's
+    # page, for a model that bills by length. `amount` is the price of its default clip; a row with
+    # no table is one price per job (COREPRODUC-555).
+    clip_prices: dict[str, float] = Field(default_factory=dict)
 
 
 class ModelConstraints(StrictModel):

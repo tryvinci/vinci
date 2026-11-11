@@ -270,6 +270,23 @@ def test_wavespeed_seedream_gets_its_shape_as_size(
         assert "size" not in seen["body"], model
 
 
+def test_wavespeed_estimate_prices_the_clip_length() -> None:
+    """The job estimate (and so the receipt) prices the fitted clip length (COREPRODUC-555)."""
+    provider = WavespeedProvider(api_key="ws-key")
+
+    def price(model: str, capability: Capability, **inputs: Any) -> float:
+        req = JobRequest(capability=capability, model_id=model, inputs={"prompt": "x", **inputs})
+        return round(provider.estimate(req).amount, 3)
+
+    assert price("wavespeed:kling-2.6-pro:2026-08", Capability.T2V, duration=10) == 0.7
+    assert price("wavespeed:kling-3-turbo-pro-i2v:2026-09", Capability.I2V, duration=15) == 2.1
+    assert price("wavespeed:hailuo-2.3-t2v:2026-09", Capability.T2V, duration=10) == 0.56
+    assert price("wavespeed:hailuo-2.3-t2v:2026-09", Capability.T2V, duration=5) == 0.23  # 6 s
+    assert price("wavespeed:seedance-2.0-i2v:2026-09", Capability.I2V) == 1.2  # its default clip
+    assert price("wavespeed:kling-2.6-pro-sound:2026-11", Capability.T2V, duration=10) == 1.4
+    assert price("wavespeed:kling-3.0-std-sound:2026-11", Capability.T2V, duration=15) == 1.89
+
+
 def test_wavespeed_rows_send_what_they_price(monkeypatch: pytest.MonkeyPatch) -> None:
     """Each row asks for the tier and sound its price is for. Nano Banana Pro and Seedance 2.0 read
     `resolution`, and only a tier the row lists goes out (COREPRODUC-582, COREPRODUC-595). Kling
@@ -311,6 +328,10 @@ def test_wavespeed_rows_send_what_they_price(monkeypatch: pytest.MonkeyPatch) ->
     assert send("wavespeed:kling-2.6-pro:2026-08", Capability.I2V, image="ref")["sound"] is False
     assert send("wavespeed:kling-3.0-std:2026-08", Capability.T2V)["sound"] is False
     assert "sound" not in send("wavespeed:kling-3-turbo-pro-i2v:2026-09", Capability.I2V, image="ref")
+    # COREPRODUC-599: the sound rows call the same routes with sound on.
+    loud = send("wavespeed:kling-2.6-pro-sound:2026-11", Capability.T2V)
+    assert loud["sound"] is True and seen["url"].endswith("/kwaivgi/kling-v2.6-pro/text-to-video")
+    assert send("wavespeed:kling-3.0-std-sound:2026-11", Capability.I2V, image="ref")["sound"] is True
     # Seedance reads no `size`: a stale 1920x1080 chip made its 720p default, priced as 1080p.
     turbo = send("wavespeed:seedance-2.0-turbo:2026-08", Capability.T2V, resolution="1920x1080")
     assert turbo["resolution"] == "720p"
@@ -322,6 +343,18 @@ def test_wavespeed_rows_send_what_they_price(monkeypatch: pytest.MonkeyPatch) ->
     assert stale["resolution"] == "1080p"  # not "1024p", which the route refuses
     text = send("wavespeed:wan-2.6:2026-08", Capability.T2V, resolution="1920x1080")
     assert text["size"] == "1920*1080" and "resolution" not in text  # the text route reads `size`
+    # COREPRODUC-597: the size turns to match the asked aspect; the image route follows its still.
+    tall = send("wavespeed:wan-2.6:2026-08", Capability.T2V, resolution="1920x1080", aspect_ratio="9:16")
+    assert tall["size"] == "1080*1920"
+    wide = send("wavespeed:wan-2.6:2026-08", Capability.T2V, resolution="1920x1080", aspect_ratio="16:9")
+    assert wide["size"] == "1920*1080"
+    bare = send("wavespeed:wan-2.6:2026-08", Capability.T2V, aspect_ratio="9:16")  # no size asked
+    assert bare["size"] == "1080*1920"  # the row's 1080p, not Wan's 1280*720 default
+    assert send("wavespeed:wan-2.6:2026-08", Capability.T2V)["size"] == "1920*1080"
+    for stale in ("1280x720", "1024x1024"):  # a chip from another model: 720p, or a size Wan refuses
+        assert send("wavespeed:wan-2.6:2026-08", Capability.T2V, resolution=stale)["size"] == "1920*1080"
+    still = send("wavespeed:wan-2.6:2026-08", Capability.I2V, image="ref", resolution="1920x1080", aspect_ratio="9:16")
+    assert still["size"] == "1920*1080" and still["resolution"] == "1080p"
 
 
 def test_wavespeed_edit_sends_every_reference(monkeypatch: pytest.MonkeyPatch) -> None:

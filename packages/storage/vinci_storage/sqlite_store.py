@@ -138,9 +138,12 @@ class SqliteStore:
         return Job.model_validate(payload)
 
     def find_by_idempotency(self, key: str) -> Job | None:
+        """The newest completed job with outputs for this key: a result made again (the engine
+        refuses one made under an older catalog row) wins over the one it replaced, and a job
+        that came back empty does not hide an older one with outputs (COREPRODUC-596)."""
         row = self._conn.execute(
             "SELECT id FROM jobs WHERE idempotency_key=? AND state='completed' "
-            "ORDER BY created_at LIMIT 1",
+            "AND outputs != '[]' ORDER BY created_at DESC, rowid DESC LIMIT 1",
             (key,),
         ).fetchone()
         if row is None:

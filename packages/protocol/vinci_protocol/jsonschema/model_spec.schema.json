@@ -34,7 +34,8 @@
         "unit": { "type": "string" },
         "amount": { "type": "number", "minimum": 0 },
         "currency": { "type": "string" },
-        "snapshot_at": { "type": "string", "format": "date-time" }
+        "snapshot_at": { "type": "string", "format": "date-time" },
+        "clip_prices": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 } }
       }
     },
     "quality_tier": { "type": "string" },

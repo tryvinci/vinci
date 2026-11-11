@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -151,6 +152,87 @@ def test_demo_image_generate_receipt_and_cas_replay(
     assert doc["ffmpeg"] is True
     assert doc["ok"] is True
     assert doc["demo"] is True
+
+
+def test_a_clip_is_priced_by_its_length() -> None:
+    """A row with clip_prices prices the clip the model makes, in the plan from a node's duration
+    or an {{inputs.duration}} template; a row's amount is its default clip (COREPRODUC-555)."""
+    from vinci_core.cost import clip_price, fit_duration, plan_workflow
+
+    wavespeed = load_bundled_catalog("wavespeed")
+    kling = wavespeed.by_id("wavespeed:kling-2.6-pro:2026-08")
+    assert [clip_price(kling, s) for s in (None, 5, 10, 7, 30)] == [0.35, 0.35, 0.7, 0.7, 0.7]
+    node = {"id": "v", "type": "generate", "capability": "t2v", "model_id": kling.id,
+            "params": {"prompt": "x", "duration": "{{inputs.duration}}"}}
+    spec = WorkflowSpec.model_validate({"id": "t", "version": "0.1.0", "nodes": [node], "edges": []})
+    assert plan_workflow(wavespeed, spec, inputs={"duration": 10})[0]["estimate"].amount == 0.7
+    assert plan_workflow(wavespeed, spec)[0]["estimate"].amount == 0.35  # no length: default clip
+    alternative = plan_workflow(wavespeed, spec, inputs={"duration": 10})[0]["estimate"].alternative
+    assert alternative == {"model_id": "wavespeed:hailuo-2.3-t2v:2026-09", "provider": "wavespeed",
+                           "amount": 0.56, "currency": "USD"}  # the cheaper model at 10 s too
+    for name in ("wavespeed", "fal", "google", "higgsfield", "magnific"):
+        for row in load_bundled_catalog(name).models:
+            table = row.pricing.clip_prices
+            if table:  # a price for every length the row takes; amount is the default clip
+                listed = {str(fit_duration(d, row.constraints)) for d in row.constraints.durations}
+                assert listed <= set(table), row.id
+                assert table[str(fit_duration(5, row.constraints))] == row.pricing.amount, row.id
+
+
+def test_estimate_skill_uses_the_skills_input_defaults(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The preview prices a {{inputs.duration}} from the skill's default, as accept_run does
+    (CodeRabbit on #549, COREPRODUC-555)."""
+    monkeypatch.setenv("VINCI_HOME", str(tmp_path))
+    monkeypatch.setenv("WAVESPEED_API_KEY", "dummy-not-a-key")  # lists the rows; nothing is sent
+    monkeypatch.delenv("VINCI_ALLOW_LIVE_SPEND", raising=False)
+    engine = Engine(tmp_path)
+    engine.init_home(demo=False)
+    skill = engine.skills.get("@tryvinci/product-reveal-5s")  # a fresh copy on each get()
+    skill.manifest["inputs"]["duration"]["default"] = 10
+    monkeypatch.setattr(engine.skills, "get", lambda ref: skill)
+    # "quality" routes the video node to Seedance 2.0 i2v: $2.40 for 10 s, $1.20 for its 5 s.
+    est = engine.estimate_skill("@tryvinci/product-reveal-5s", {"prompt": "x"}, preference="quality")
+    assert {n["model_id"]: n["amount"] for n in est["nodes"]}["wavespeed:seedance-2.0-i2v:2026-09"] == 2.4
+
+
+def test_cache_hit_needs_the_rows_current_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A result made under an older catalog row (another price, or another request from the
+    plugin) is not reused; the job made again is (COREPRODUC-596)."""
+    counter = tmp_path / "mock-submits.txt"  # the mock provider counts each submit here
+    monkeypatch.setenv("VINCI_HOME", str(tmp_path))
+    monkeypatch.setenv("VINCI_TEST_MOCK_SUBMIT_COUNTER_PATH", str(counter))
+    engine = Engine(tmp_path)
+    engine.init_home(demo=True)
+    ask = {"prompt": "a blue cone"}
+
+    def submits() -> int:
+        return int(counter.read_text(encoding="utf-8") or 0) if counter.exists() else 0
+
+    first = engine.store.get_job(engine.start_run("@tryvinci/image-generate", ask)["job_ids"][0])
+    assert first is not None and first.receipt is not None and submits() == 1
+    old = first.receipt.model_copy(update={"pricing_snapshot_at": datetime(2020, 1, 1, tzinfo=UTC)})
+    engine.store.put_job(first.model_copy(update={"receipt": old}))  # as if made under an older row
+    engine.start_run("@tryvinci/image-generate", ask)
+    assert submits() == 2  # the result made under the older row is not reused
+    engine.start_run("@tryvinci/image-generate", ask)
+    assert submits() == 2  # the result made again is
+    # A newer job that came back empty does not hide the result (CodeRabbit on #549).
+    newest = engine.store.find_by_idempotency(first.idempotency_key or "")
+    assert newest is not None and newest.outputs
+    empty = newest.model_copy(update={"id": "empty-job", "outputs": []})
+    engine.store.put_job(empty)
+    found = engine.store.find_by_idempotency(first.idempotency_key or "")
+    assert found is not None and found.id == newest.id
+    # A connector row has one snapshot, not the time of each catalog call: a new time made every
+    # cached Higgsfield and Magnific result stale and paid again (CodeRabbit on #549).
+    from vinci_mcp.connectors import CONNECTORS, models_for
+
+    stamps = [m.pricing.snapshot_at for _ in range(2) for m in models_for(CONNECTORS["mcp_higgsfield"], None)]
+    assert len(set(stamps)) == 1
 
 
 def test_runtime_fits_a_clip_length_the_model_refuses(
