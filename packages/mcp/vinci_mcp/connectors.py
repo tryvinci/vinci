@@ -17,6 +17,11 @@ from vinci_protocol.models import JobStatus, ModelSpec, Pricing, VinciError
 
 # Confirmed against Magnific MCP docs. Higgsfield names are not yet captured live.
 HIGGSFIELD_TOOLS_PROVISIONAL = True
+# The pricing snapshot of every connector row. Fixed, not the time of the call: the job cache
+# reuses a result only under the row's current snapshot, so a new time at each catalog call made
+# each cached result stale and paid again. Change it when a connector's tools or request mapping
+# change (COREPRODUC-596).
+SNAPSHOT = datetime(2026, 11, 11, tzinfo=UTC)
 
 
 @dataclass(frozen=True)
@@ -88,7 +93,6 @@ def connector_for(provider_id: str) -> Connector | None:
 
 
 def models_for(connector: Connector, tool_names: set[str] | None) -> list[ModelSpec]:
-    now = datetime.now(tz=UTC)
     specs: list[ModelSpec] = []
     seen: set[str] = set()
     for capability, tool in connector.tools.items():
@@ -110,7 +114,7 @@ def models_for(connector: Connector, tool_names: set[str] | None) -> list[ModelS
                     unit="generation",
                     amount=1.0,
                     currency=connector.currency,
-                    snapshot_at=now,
+                    snapshot_at=SNAPSHOT,
                 ),
                 quality_tier="fast",
                 secret_names=[],

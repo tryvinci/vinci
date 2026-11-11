@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { clipPrice } from "../lib/canvas-node";
 import { daemonHasPath } from "../lib/daemon-routes";
 import { ImageFeed } from "./image-feed";
 import { VideoPanel } from "./video-panel";
@@ -454,7 +455,7 @@ export function VideoPage({
     [onAspect, onClip, onDuration, onExtendMode, onIngest, onLog, onModelId, onPrompt, onResolution, onSeed, onStart, onSteps],
   );
 
-  const cost = money(generateCost(selected?.pricing?.amount));
+  const cost = money(generateCost(clipPrice(selected, duration)));
   const blocked =
     (needsStartFrame(selected) && !extendMode && !startId) || (extendMode && !clipId && !startId);
 

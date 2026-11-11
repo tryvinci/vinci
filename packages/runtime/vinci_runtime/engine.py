@@ -29,6 +29,7 @@ from vinci_core.catalog import (
 )
 from vinci_core.config import VinciConfig, load_config, write_config
 from vinci_core.cost import (
+    asked_seconds,
     estimate_from_spec,
     fit_duration,
     idempotency_key,
@@ -1418,7 +1419,8 @@ class Engine:
         spec = _apply_model_id(spec, model_id)
         catalog = self.catalog()
         available = self.routing_providers()
-        rows = plan_workflow(catalog, spec, available_providers=available or None)
+        defaults = self._apply_input_defaults(skill, inputs)  # as accept_run does
+        rows = plan_workflow(catalog, spec, available_providers=available or None, inputs=defaults)
         total = _usd_total(rows)
         reason = should_await_approval(
             total,
@@ -1500,7 +1502,7 @@ class Engine:
             raise RuntimeError(
                 "no available providers; run vinci init --demo or add a provider key"
             )
-        rows = plan_workflow(catalog, spec, available_providers=available)
+        rows = plan_workflow(catalog, spec, available_providers=available, inputs=prepared)
         total = _usd_total(rows)
         # Pin each node to the model the estimate used. A later mode change (POST /init, a key
         # connect) then cannot re-route it to a provider the approval did not cover
@@ -2046,7 +2048,23 @@ class Engine:
         key = idempotency_key(model.id, req.inputs)
         prior = self.store.find_by_idempotency(key)
         created = now_utc()
-        if prior is not None and prior.outputs:
+        # A result made under an older catalog row (another price, or another request from the
+        # plugin) is not reused: a row's new pricing snapshot starts its cache again
+        # (COREPRODUC-596).
+        stale = prior is not None and prior.receipt is not None and (
+            prior.receipt.pricing_snapshot_at != model.pricing.snapshot_at
+        )
+        if stale and prior is not None and prior.receipt is not None:
+            LOG.info(
+                "run=%s node=%s: %s changed since job %s (row snapshot %s, now %s); running again",
+                run_id,
+                node.id,
+                model.id,
+                prior.id,
+                prior.receipt.pricing_snapshot_at.isoformat(),
+                model.pricing.snapshot_at.isoformat(),
+            )
+        if prior is not None and prior.outputs and not stale:
             job_id = uuid.uuid4().hex
             estimate = estimate_from_spec(model, cached=True)
             receipt = Receipt(
@@ -2078,7 +2096,8 @@ class Engine:
                 "job.completed", run_id=run_id, job_id=job.id, payload={"cached": True, "cost": 0}
             )
             return job
-        estimate = with_alternative(provider.estimate(req), catalog, capability.value)
+        seconds = asked_seconds(req.inputs.get("duration"))
+        estimate = with_alternative(provider.estimate(req), catalog, capability.value, seconds)
         started = now_utc()
         ref, job_id = self._durable_provider_submit(
             parent_op_id=receipt_parent_op_id,

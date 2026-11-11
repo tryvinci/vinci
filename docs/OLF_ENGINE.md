@@ -308,13 +308,13 @@ Engine choices that the spec leaves open:
 | Limit in Slice 1 | Follow-up |
 | --- | --- |
 | Higgsfield and Google video models have no exact `durations` list yet (only `max_duration` caps them) | COREPRODUC-552 |
-| The runtime prices every video as one unit (`video_5s`), so a 10 s clip shows half its price in the plan, the confirm and the receipt | COREPRODUC-555 |
+| Only the Wavespeed video rows price a clip by its length (`clip_prices`, COREPRODUC-555); the other providers' video rows are one price per job, so a longer clip can show less than its bill | COREPRODUC-603 |
 | Text models bill by token, so a text step has no estimate and always asks first | COREPRODUC-533 |
 | Agent CLIs appear only in the Shows text model menu (not in Connect or the canvas pickers), each uses its own default model, and Codex and Antigravity are tested only with fake CLIs | COREPRODUC-557 |
 | The script rules split action by sentence and read no dual dialogue, lyrics or sections; a new speaker needs a sheet before render | COREPRODUC-547 |
 | The catalog's Veo 3.1 rows: Google shut the Gemini API previews down on 2026-10-22, and fal removes `veo3.1/fast/image-to-video` on 2026-11-17 | COREPRODUC-553 |
 | The QA check compares colors, not likeness (the design's "QA identity" needs an identity model) | COREPRODUC-554 |
-| A music cue is at most 60 s and a sound effect 30 s: the runtime prices one unit per job (`elevenlabs:music-v1` counts one minute) | COREPRODUC-555 |
+| A music cue is at most 60 s and a sound effect 30 s: the runtime prices one unit per job (`elevenlabs:music-v1` counts one minute) | COREPRODUC-603 |
 | The Studio cannot move, retime or remove a placed cue (edit the `audio` list in `episode.yaml`), and a shot's `audio` cue names are checked but not placed for you | COREPRODUC-551 |
 | The Studio cannot edit a bible entry's text, outfits or variants, delete or reorder shots and scenes, or edit the cut list beyond trims, transitions and audio | COREPRODUC-543 |
 | OLF renders do not use the durable journal (the route returns 409 when it is on) | COREPRODUC-545 |

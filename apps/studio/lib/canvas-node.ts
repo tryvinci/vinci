@@ -149,6 +149,30 @@ export function fitToModel(params: Record<string, unknown>, limits?: FitConstrai
   return out;
 }
 
+/**
+ * Price of one job on a model. A row with `clip_prices` bills the clip length the model makes: the
+ * asked `duration` fitted as `fitToModel` does (the runtime's `clip_price` does the same). An
+ * `{{inputs.name}}` takes the value the run sends, and "10.0" reads as 10. With no length it is
+ * `amount`, the price of the default clip (COREPRODUC-555).
+ *
+ * Args:
+ *   model: The catalog row.
+ *   duration: The asked length: a number, a string, a template, or nothing.
+ *   inputs: The run inputs, for a template.
+ */
+export function clipPrice(
+  model: { pricing?: { amount?: number; clip_prices?: Record<string, number> }; constraints?: FitConstraints } | undefined,
+  duration?: unknown,
+  inputs?: Record<string, unknown>,
+): number | undefined {
+  const table = model?.pricing?.clip_prices;
+  const ref = typeof duration === "string" ? /^\{\{\s*inputs\.(\w+)\s*\}\}$/.exec(duration) : null;
+  const asked = ref ? inputs?.[ref[1]] : duration;
+  const fitted = table ? Number(fitToModel({ duration: asked }, model?.constraints).duration) : NaN;
+  const price = Number.isFinite(fitted) && fitted > 0 ? table?.[String(fitted)] : undefined;
+  return price ?? model?.pricing?.amount;
+}
+
 export function countValue(params: Record<string, unknown> | undefined): number {
   return clampCount(params?.count ?? params?.num_images ?? COUNT_MIN);
 }

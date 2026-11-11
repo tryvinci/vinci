@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
@@ -12,10 +14,53 @@ from vinci_protocol.models import Estimate, JobRequest, ModelSpec, WorkflowSpec
 from vinci_core.catalog import Catalog, price_key
 
 
+def asked_seconds(value: Any, inputs: Mapping[str, Any] | None = None) -> float | None:
+    """A job's clip length in seconds: a number, or an ``{{inputs.name}}`` that the run fills.
+
+    Args:
+        value: The node's or the request's ``duration``.
+        inputs: The run inputs, for a template.
+
+    Returns:
+        The length, or None when there is none (the model's default clip).
+    """
+    match = re.fullmatch(r"\{\{\s*inputs\.(\w+)\s*\}\}", value) if isinstance(value, str) else None
+    if match:
+        value = (inputs or {}).get(match.group(1))
+    if isinstance(value, bool):
+        return None
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        return None
+    return seconds if math.isfinite(seconds) and seconds > 0 else None
+
+
+def clip_price(spec: ModelSpec, seconds: float | None = None) -> float:
+    """The list price of one job on ``spec``.
+
+    A row with ``clip_prices`` bills the clip length the model makes: the asked length fitted with
+    ``fit_duration``, as the runtime sends it. With no length, or one the table lacks, it is
+    ``amount``, the price of the default clip (COREPRODUC-555).
+
+    Args:
+        spec: The model row.
+        seconds: The asked clip length, or None.
+    """
+    table = spec.pricing.clip_prices
+    if not table or seconds is None:
+        return spec.pricing.amount
+    return table.get(str(fit_duration(seconds, spec.constraints)), spec.pricing.amount)
+
+
 def estimate_from_spec(
-    spec: ModelSpec, unit_count: float = 1.0, *, cached: bool = False
+    spec: ModelSpec,
+    unit_count: float = 1.0,
+    *,
+    cached: bool = False,
+    seconds: float | None = None,
 ) -> Estimate:
-    amount = 0.0 if cached else spec.pricing.amount * unit_count
+    amount = 0.0 if cached else clip_price(spec, seconds) * unit_count
     return Estimate(
         model_id=spec.id,
         provider=spec.provider,
@@ -74,7 +119,11 @@ def resolve_model(
     return min(candidates, key=price_key)
 
 
-def with_alternative(estimate: Estimate, catalog: Catalog, capability: str) -> Estimate:
+def with_alternative(
+    estimate: Estimate, catalog: Catalog, capability: str, seconds: float | None = None
+) -> Estimate:
+    """Name the cheapest model for ``capability`` next to an estimate, priced at the same clip
+    length (``seconds``) as the estimate (COREPRODUC-555)."""
     cheap = catalog.cheapest(capability)
     if cheap is None or cheap.id == estimate.model_id:
         return estimate
@@ -83,7 +132,7 @@ def with_alternative(estimate: Estimate, catalog: Catalog, capability: str) -> E
             "alternative": {
                 "model_id": cheap.id,
                 "provider": cheap.provider,
-                "amount": cheap.pricing.amount,
+                "amount": clip_price(cheap, seconds),
                 "currency": cheap.pricing.currency,
             }
         }
@@ -112,7 +161,16 @@ def plan_workflow(
     spec: WorkflowSpec,
     *,
     available_providers: set[str] | None = None,
+    inputs: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
+    """Route each generate node and price it; a clip is priced by the node's ``duration``.
+
+    Args:
+        catalog: The active catalog.
+        spec: The workflow.
+        available_providers: When set, only models of these providers can win.
+        inputs: The run inputs, for a ``{{inputs.duration}}`` param.
+    """
     rows: list[dict[str, Any]] = []
     for node in spec.nodes:
         if node.type.value != "generate" or node.capability is None:
@@ -123,7 +181,10 @@ def plan_workflow(
             preference=spec.preference,
         )
         model = resolve_model(catalog, req, available_providers=available_providers)
-        estimate = with_alternative(estimate_from_spec(model), catalog, node.capability.value)
+        seconds = asked_seconds(node.params.get("duration"), inputs)
+        estimate = with_alternative(
+            estimate_from_spec(model, seconds=seconds), catalog, node.capability.value, seconds
+        )
         rows.append({"node_id": node.id, "model": model, "estimate": estimate})
     return rows
 

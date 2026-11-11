@@ -20,6 +20,7 @@ NAMES = [
     "pickListed",
     "listedOr",
     "fitToModel",
+    "clipPrice",
     "refsOf",
     "slotRef",
     "nextRefRole",
@@ -97,6 +98,15 @@ eq(fitToModel({ aspect_ratio: "16:9", resolution: "1K", prompt: "p" }, seedream)
 eq(fitToModel({ duration: 5 }, { durations: [6] }), { duration: 6 }, "the listed length that covers it");
 eq(fitToModel({ duration: 8 }, { durations: [10, 6] }), { duration: 10 }, "the shortest that covers it, as fit_duration");
 eq(fitToModel({ duration: 12 }, { durations: [6, 10] }), { duration: 10 }, "else the longest");
+const kling = { pricing: { amount: 0.35, clip_prices: { "5": 0.35, "10": 0.7 } }, constraints: { durations: [5, 10] } };
+eq(clipPrice(kling, 10), 0.7, "a 10 s clip on a row that bills by length (COREPRODUC-555)");
+eq(clipPrice(kling, "7"), 0.7, "the length is fitted first, as fit_duration");
+eq(clipPrice(kling, "{{inputs.duration}}"), 0.35, "a template prices the default clip");
+eq(clipPrice(kling, "{{inputs.duration}}", { duration: 10 }), 0.7, "a template takes the run's length");
+eq(clipPrice(kling, "10.0"), 0.7, "a numeric string reads as a number");
+eq(clipPrice(kling, " 10 "), 0.7, "spaces too");
+eq(clipPrice(kling, undefined), 0.35, "no length: the default clip");
+eq(clipPrice({ pricing: { amount: 0.4 } }, 8), 0.4, "a row without a table is one price per job");
 eq(fitToModel({ duration: 8 }, { max_duration: 6 }), { duration: 6 }, "no longer than the max");
 eq(fitToModel({ duration: 5 }, { max_duration: 10 }), { duration: 5 }, "a length that fits stays");
 eq(fitToModel({ aspect_ratio: "{{inputs.aspect_ratio}}" }, seedream), { aspect_ratio: "{{inputs.aspect_ratio}}" }, "templates stay");

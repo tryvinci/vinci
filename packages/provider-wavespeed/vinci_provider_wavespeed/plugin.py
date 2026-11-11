@@ -354,6 +354,17 @@ class WavespeedProvider(CatalogBackedProvider):
             elif aspect and seedream and _seedream_size(aspect):
                 # Seedream reads no aspect_ratio: a 16:9 show got 2048x2048 keyframes before.
                 payload["size"] = _seedream_size(aspect)
+            if endpoint.startswith("alibaba/wan-2.6") and not image:
+                # Wan's text route sets its shape only with `size` (1920*1080 or 1080*1920 at
+                # 1080p): the 1920x1080 chip made a landscape clip for a 9:16 ask, and a request
+                # with no size got Wan's 1280*720 for the 1080p price. It gets the row's size (as
+                # the image route gets its tier), turned to the asked aspect (COREPRODUC-597).
+                pair = _pair(next(iter(spec.constraints.resolutions), "")) or shape
+                if pair and ratio and ratio[0] != ratio[1]:
+                    if (pair[0] > pair[1]) != (ratio[0] > ratio[1]):
+                        pair = (pair[1], pair[0])
+                if pair:
+                    payload["size"] = f"{pair[0]}*{pair[1]}"
             if endpoint.startswith(("google/nano-banana-pro", "bytedance/seedance-2.0")):
                 # These read their tier from `resolution`, not `size` (Nano Banana Pro 1k/2k $0.14,
                 # 4k $0.24; Seedance 2.0 is priced at 720p). Only a tier the row lists goes out, so
@@ -373,9 +384,11 @@ class WavespeedProvider(CatalogBackedProvider):
                 if pair:
                     payload["resolution"] = f"{min(pair)}p"
             if endpoint.startswith(("kwaivgi/kling-v2.6", "kwaivgi/kling-v3.0")):
-                # The rows price a silent clip. Kling 2.6 Pro text to video adds sound unless told
-                # not to, at twice the price ($0.70 for 5 s, COREPRODUC-595).
-                payload["sound"] = False
+                # Sound is priced by the row: a silent row sends false (Kling 2.6 Pro text to video
+                # adds sound unless told not to, at twice the price, COREPRODUC-595), and a row
+                # whose unit has audio, such as "Kling 2.6 Pro (sound)", sends true
+                # (COREPRODUC-599).
+                payload["sound"] = "audio" in spec.pricing.unit
             seed = _as_int(req.inputs.get("seed"))
             if endpoint.startswith("alibaba/wan-2.6") and seed is not None:
                 # Wan 2.6 takes `seed` (-1 is random), so a take can be made again; the other

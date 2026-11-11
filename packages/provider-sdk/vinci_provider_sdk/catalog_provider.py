@@ -7,7 +7,7 @@ import urllib.request
 from typing import Any
 
 from vinci_core.catalog import Catalog, load_bundled_catalog
-from vinci_core.cost import estimate_from_spec, idempotency_key, resolve_model
+from vinci_core.cost import asked_seconds, estimate_from_spec, idempotency_key, resolve_model
 from vinci_core.paths import allow_live_spend
 from vinci_core.redact import redact_mapping
 from vinci_protocol.enums import Capability, ErrorCode, JobState
@@ -63,9 +63,14 @@ class CatalogBackedProvider(Provider):
         spec = resolve_model(self._catalog, req)
         key = req.idempotency_key or idempotency_key(spec.id, req.inputs)
         self._estimated.add(key)
-        estimate = estimate_from_spec(spec)
+        seconds = asked_seconds(req.inputs.get("duration"))  # a clip is priced by its length
+        estimate = estimate_from_spec(spec, seconds=seconds)
         log.info(
-            "estimate provider=%s model=%s amount=%s", self.provider_id, spec.id, estimate.amount
+            "estimate provider=%s model=%s seconds=%s amount=%s",
+            self.provider_id,
+            spec.id,
+            seconds,
+            estimate.amount,
         )
         return estimate
 

@@ -70,6 +70,8 @@ export interface Pricing {
   amount: number;
   currency: string;
   snapshot_at: string;
+  /** Price of a clip by its length in seconds, for a model that bills by length (COREPRODUC-555). */
+  clip_prices?: Record<string, number>;
 }
 
 export interface ModelSpec {

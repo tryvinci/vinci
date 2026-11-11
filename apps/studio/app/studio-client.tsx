@@ -38,6 +38,7 @@ import {
 import {
   addRef,
   ASPECTS,
+  clipPrice,
   countPatch,
   countValue,
   fitToModel,
@@ -2023,7 +2024,8 @@ export function StudioClient() {
     if (!targets.has(n.id) && !n.model_id) return null;
     const id = modelIdForNode(n, selected?.id || "", models, connected);
     const row = models.find((m) => m.id === id);
-    return row && !isUnpriced(row) ? (row.pricing?.amount ?? null) : null;
+    // A `{{inputs.duration}}` param takes the length this page sends with the run.
+    return row && !isUnpriced(row) ? (clipPrice(row, n.params?.duration, shotInputs({})) ?? null) : null;
   }
 
   /** Short pre-run cost of `ids` and what feeds them; `pinned` are the nodes the run pins to a model. */

@@ -16,7 +16,6 @@ import urllib.request
 import uuid
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
 from typing import Any, Protocol
 from urllib.parse import urlparse
 
@@ -39,6 +38,7 @@ from vinci_provider_sdk.base import Provider
 from vinci_provider_sdk.catalog_provider import LiveSpendDisabled
 
 from vinci_mcp.connectors import (
+    SNAPSHOT,
     connector_for,
     decode_b64,
     models_for,
@@ -417,7 +417,6 @@ def _models_from_result(result: Any) -> list[ModelSpec]:
     else:
         rows = []
     models: list[ModelSpec] = []
-    now = datetime.now(tz=UTC)
     for row in rows:
         if isinstance(row, ModelSpec):
             models.append(row)
@@ -427,8 +426,8 @@ def _models_from_result(result: Any) -> list[ModelSpec]:
         if "pricing" not in row:
             row = {
                 **row,
-                "pricing": Pricing(
-                    unit="call", amount=0.0, currency="USD", snapshot_at=now
+                "pricing": Pricing(  # a fixed snapshot, so its cached results stay reusable
+                    unit="call", amount=0.0, currency="USD", snapshot_at=SNAPSHOT
                 ).model_dump(mode="json"),
             }
         models.append(ModelSpec.model_validate(row))
