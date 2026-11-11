@@ -153,6 +153,34 @@ def test_demo_image_generate_receipt_and_cas_replay(
     assert doc["demo"] is True
 
 
+def test_runtime_fits_a_clip_length_the_model_refuses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A length over the model's max, or not listed, is fitted before the job (the provider refused
+    it with HTTP 400); a length the model takes stays, so its cache key stays (COREPRODUC-580)."""
+    from vinci_protocol.models import ModelConstraints
+    from vinci_runtime.engine import _refused_duration
+
+    monkeypatch.setenv("VINCI_HOME", str(tmp_path))
+    engine = Engine(tmp_path)
+    engine.init_home(demo=True)
+    asked = {}
+    for seconds in (12, 5, "6"):  # mock:mp4:v1 takes up to 8 s; the skill sends {{inputs.duration}}
+        run = engine.start_run(
+            "@tryvinci/video-generate",
+            {"prompt": "a lamp on a cliff", "duration": seconds},
+            model_id="mock:mp4:v1",
+        )
+        assert run["state"] == "completed", run
+        job = engine.store.get_job(run["job_ids"][0])
+        assert job is not None
+        asked[str(seconds)] = job.inputs.get("duration")
+    assert asked == {"12": 8, "5": 5, "6": "6"}, asked
+    six = ModelConstraints(durations=[6])
+    assert _refused_duration(5, six) == 5.0 and _refused_duration("6", six) is None
+    assert _refused_duration("", six) is None and _refused_duration(True, six) is None
+
+
 def test_start_run_honors_model_id(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VINCI_HOME", str(tmp_path))
     engine = Engine(tmp_path)

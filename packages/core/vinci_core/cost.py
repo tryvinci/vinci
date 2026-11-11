@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from datetime import UTC, datetime
 from typing import Any
 
@@ -125,6 +126,28 @@ def plan_workflow(
         estimate = with_alternative(estimate_from_spec(model), catalog, node.capability.value)
         rows.append({"node_id": node.id, "model": model, "estimate": estimate})
     return rows
+
+
+def fit_duration(seconds: float, constraints: Any) -> float:
+    """Return the clip length to ask a video model for.
+
+    The shortest length the model takes (``constraints.durations``, from its API docs, kept as
+    listed: 2.5 stays 2.5) that covers the ask, else its longest. A model with only
+    ``max_duration`` gets the ask rounded up, capped there. A whole number comes back as an int.
+    Used by the OLF render (a shot's length) and by the runtime (a job's ``duration`` that the
+    model would refuse, COREPRODUC-580).
+
+    Args:
+        seconds: The length asked for.
+        constraints: The model's ``ModelConstraints``, or None.
+    """
+    allowed = sorted(float(d) for d in (getattr(constraints, "durations", None) or []))
+    if allowed:
+        picked = next((d for d in allowed if d >= seconds), allowed[-1])
+        return int(picked) if picked.is_integer() else picked
+    want = math.ceil(seconds)
+    cap = getattr(constraints, "max_duration", None)
+    return min(want, int(cap)) if cap else want
 
 
 def idempotency_key(model_id: str, inputs: dict[str, object]) -> str:

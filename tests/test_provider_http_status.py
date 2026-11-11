@@ -250,15 +250,24 @@ def test_wavespeed_seedream_gets_its_shape_as_size(
         provider.estimate(req)
         provider.submit(req)
         assert seen["body"].get("size") == want and seen["body"]["aspect_ratio"] == "16:9", model
-    # A canvas node also sends its resolution pill (Seedream lists only 1024x1024). A resolution of
-    # another shape gives way to the aspect; one of the same shape stays.
+    # A canvas node also sends its resolution pill. A resolution of another shape or a tier label
+    # ("2k", the catalog value) gives way to the aspect; a pair of the same shape stays.
     for aspect, resolution, want in (("16:9", "1024x1024", "2560*1440"), ("9:16", "1024x1024", "1440*2560"),
-                                     ("1:1", "1024x1024", "1024*1024")):  # fmt: skip
+                                     ("1:1", "1024x1024", "1024*1024"), ("16:9", "2k", "2560*1440"),
+                                     ("9:16", "2k", "1440*2560")):  # fmt: skip
         inputs = {"prompt": "x", "aspect_ratio": aspect, "resolution": resolution}
         req = JobRequest(capability=Capability.T2I, model_id="wavespeed:seedream-4.5:2026-08", inputs=inputs)
         provider.estimate(req)
         provider.submit(req)
         assert seen["body"]["size"] == want, (aspect, resolution)
+    # A tier label is never sent as `size`, which Wavespeed reads as "W*H" (COREPRODUC-578).
+    for model, capability, extra in (("wavespeed:nano-banana:2026-09", Capability.T2I, {"resolution": "2k"}),
+                                     ("wavespeed:hailuo-2.3-fast-pro:2026-09", Capability.I2V,
+                                      {"resolution": "768p", "image": "ref", "duration": 6})):  # fmt: skip
+        req = JobRequest(capability=capability, model_id=model, inputs={"prompt": "x", "aspect_ratio": "16:9", **extra})
+        provider.estimate(req)
+        provider.submit(req)
+        assert "size" not in seen["body"], model
 
 
 def test_wavespeed_edit_sends_every_reference(monkeypatch: pytest.MonkeyPatch) -> None:

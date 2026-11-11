@@ -164,10 +164,12 @@
   background: var(--hover);
   color: var(--teal);
 }
+/* Full-size pickers over the page are solid: --bar is 5% white with no blur, so the page showed
+   through the Video presets and the Effects gallery, and its cards looked doubled. */
 .video-overlay,
 .video-overlay-bar,
 .effects-overlay-panel {
-  background: var(--bar);
+  background: var(--glass-fallback);
   color: var(--ink);
   border-color: var(--line);
 }
@@ -295,6 +297,8 @@
   .avatar-menu,
   .image-picker,
   .rail-flyout { animation: none; transition: none; }
+  /* No fade, but the same late close: a delay is not motion. */
+  .rail-flyout { transition: opacity 0s linear 300ms, visibility 0s linear 300ms; }
 }
 
 /* Glass is the surface. Solid fill is the fallback when blur is unavailable. */
@@ -445,6 +449,12 @@ input[type="file"]::-webkit-file-upload-button {
    inside it sees only the rail, and the page showed through these menus sharp. They get the solid
    fallback. On a narrow screen the flyout sits inside the open rail and stays as it is. */
 .rail .avatar-menu { background: var(--glass-fallback); }
+/* The same holds for each menu that opens inside another glass surface: the Image and Video model
+   pickers in their bars, the chip menus, a canvas node's pill menu, the dock and float menus. */
+:is(.top, .rail, .video-panel, .insp, .prompt-bar, .image-bar, .canvas-bar, .all-tools, .node-ui, .float-glass)
+  :is(.image-picker, .image-chip-menu, .model-combo-list, .dock-pop, .ctx-menu, .add-menu, .float-menu) {
+  background: var(--glass-fallback);
+}
 @media (min-width: 961px) {
   .rail-flyout { background: var(--glass-fallback); }
 }

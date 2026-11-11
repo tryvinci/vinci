@@ -150,7 +150,7 @@
       "capabilities": ["t2i", "i2i", "edit_multi"],
       "constraints": {
         "aspect_ratios": ["1:1", "16:9", "9:16"],
-        "resolutions": ["1024x1024"]
+        "resolutions": ["2k"]
       },
       "pricing": {
         "unit": "image",
@@ -250,7 +250,7 @@
         "aspect_ratios": ["16:9", "9:16"],
         "max_duration": 6,
         "durations": [6],
-        "resolutions": ["1920x1080"]
+        "resolutions": ["768p"]
       },
       "pricing": {
         "unit": "video_6s",

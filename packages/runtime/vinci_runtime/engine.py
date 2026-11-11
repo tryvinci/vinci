@@ -30,6 +30,7 @@ from vinci_core.catalog import (
 from vinci_core.config import VinciConfig, load_config, write_config
 from vinci_core.cost import (
     estimate_from_spec,
+    fit_duration,
     idempotency_key,
     now_utc,
     plan_workflow,
@@ -87,6 +88,7 @@ from vinci_protocol.models import (
     JobRequest,
     JobStatus,
     JobTimings,
+    ModelConstraints,
     Provenance,
     ProviderJobRef,
     Receipt,
@@ -312,6 +314,24 @@ def _topo(spec: WorkflowSpec) -> list[WorkflowNode]:
     if len(ordered) != len(spec.nodes):
         raise ValueError("workflow has a cycle")
     return ordered
+
+
+def _refused_duration(asked: object, limits: ModelConstraints) -> float | None:
+    """The asked clip length when the model would refuse it (not listed or over its max), or None.
+
+    Args:
+        asked: A job's ``duration`` input (a number, a numeric string, or empty).
+        limits: The model's constraints.
+    """
+    if asked in (None, "") or isinstance(asked, bool):
+        return None
+    try:
+        seconds = float(str(asked))
+    except ValueError:
+        return None
+    if limits.durations:
+        return None if seconds in limits.durations else seconds
+    return seconds if limits.max_duration and seconds > limits.max_duration else None
 
 
 def _apply_model_id(spec: WorkflowSpec, model_id: str | None) -> WorkflowSpec:
@@ -2008,6 +2028,21 @@ class Engine:
                 "was removed). Start the run again."
             ) from exc
         provider = self.providers[model.provider]
+        asked = _refused_duration(req.inputs.get("duration"), model.constraints)
+        if asked is not None:
+            # A length the model does not take fails at the provider (HTTP 400): an unpinned
+            # canvas node or product-reveal-5s asked 5 s of a 6 s model. Fit it as the OLF render
+            # does, before the cache key; a length the model takes stays (COREPRODUC-580).
+            fitted = fit_duration(asked, model.constraints)
+            LOG.info(
+                "run=%s node=%s: %s takes no %g s clip; asking %s s",
+                run_id,
+                node.id,
+                model.id,
+                asked,
+                fitted,
+            )
+            req = req.model_copy(update={"inputs": {**req.inputs, "duration": fitted}})
         key = idempotency_key(model.id, req.inputs)
         prior = self.store.find_by_idempotency(key)
         created = now_utc()

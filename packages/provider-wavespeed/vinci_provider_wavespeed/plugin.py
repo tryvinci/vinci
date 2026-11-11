@@ -63,13 +63,12 @@ def _seedream_size(aspect: object) -> str | None:
     return f"{width}*{round(width / shape / 16) * 16}"
 
 
-def _same_shape(size: object, aspect: object) -> bool:
-    """True when a "WxH" size has the shape of an "a:b" aspect, or when one is not such a pair."""
-    sw, _, sh = str(size or "").replace("×", "x").replace("*", "x").partition("x")
-    aw, _, ah = str(aspect).partition(":")
-    if not all(v.strip().isdigit() and int(v) for v in (sw, sh, aw, ah)):
-        return True
-    return abs(int(sw) / int(sh) - int(aw) / int(ah)) < 0.02
+def _pair(value: object, sep: str = "x") -> tuple[int, int] | None:
+    """(a, b) from "AxB", "A*B" or "A×B" (or from "a:b" with sep=":"), or None for anything else."""
+    a, _, b = str(value or "").replace("×", "x").replace("*", "x").partition(sep)
+    if a.strip().isdigit() and b.strip().isdigit() and int(a) and int(b):
+        return int(a), int(b)
+    return None
 
 
 # InfiniteTalk bills per second (720p $0.06, 480p $0.03), minimum 3s, cap 10 minutes.
@@ -341,10 +340,15 @@ class WavespeedProvider(CatalogBackedProvider):
                 payload["aspect_ratio"] = str(aspect)
             size = req.inputs.get("size") or req.inputs.get("resolution")
             seedream = endpoint.startswith("bytedance/seedream")
-            if seedream and not req.inputs.get("size") and aspect and not _same_shape(size, aspect):
-                # A canvas node sends its resolution pill, and Seedream 4.5 lists only 1024x1024:
-                # that size beat the aspect, so 16:9 and 9:16 canvas stills came back square.
+            shape, ratio = _pair(size), _pair(aspect, ":")
+            # Wavespeed's `size` is "W*H": a tier label such as "2k" or "768p" is not one
+            # (COREPRODUC-578). On Seedream, a canvas resolution pill of another shape gave square
+            # stills at 16:9 and 9:16, so it gives way to the aspect size (COREPRODUC-576).
+            if shape is None:
                 size = None
+            elif seedream and ratio and not req.inputs.get("size"):
+                if abs(shape[0] / shape[1] - ratio[0] / ratio[1]) >= 0.02:
+                    size = None
             if size:
                 payload["size"] = str(size).replace("x", "*").replace("×", "*")
             elif aspect and seedream and _seedream_size(aspect):

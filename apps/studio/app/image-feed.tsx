@@ -118,69 +118,71 @@ export function ImageFeed({
   }
   return (
     <div className="image-feed" data-testid={feedTestId}>
-      {items.map((item) =>
-        item.pending ? (
-          <article key={item.id} className="image-card pending" data-testid={pendingTestId}>
-            <div className="image-card-thumb">
-              <span className="spinner" aria-hidden="true" />
-              <span>Generating…</span>
-            </div>
-          </article>
-        ) : (
-          <article key={item.id} className="image-card">
-            <div className="image-card-thumb">
-              {item.mediaKind === "video" ? (
-                <video
-                  src={fileUrl(item.assetId)}
-                  muted
-                  loop
-                  playsInline
-                  preload="metadata"
-                  onMouseEnter={(ev) => void ev.currentTarget.play().catch(() => undefined)}
-                  onMouseLeave={(ev) => {
-                    ev.currentTarget.pause();
-                    ev.currentTarget.currentTime = 0;
-                  }}
-                />
-              ) : (
-                <img src={fileUrl(item.assetId)} alt="" />
-              )}
-              <div className="image-card-hover" data-testid={hoverTestId}>
-                <button type="button" aria-label="Favorite" onClick={() => onFavorite(item)}>
-                  {item.favorite ? "♥" : "♡"}
-                </button>
-                <a href={fileUrl(item.assetId)} download={`vinci-${item.assetId.slice(0, 12)}`} aria-label="Download">
-                  ↓
-                </a>
-                <button type="button" className="icon-btn" aria-label="Copy prompt" onClick={() => onCopyPrompt(item)}>
-                  <DockIcon d={DOCK_ICON.copy} />
-                  <span className="dock-tip">Copy prompt</span>
-                </button>
-                {onReference ? (
-                  <button type="button" className="icon-btn" aria-label="Use as reference" onClick={() => onReference(item)}>
-                    <DockIcon d={DOCK_ICON.reference} />
-                    <span className="dock-tip">Use as reference</span>
-                  </button>
-                ) : null}
-                {onAnimate ? (
-                  <button type="button" data-testid="image-animate" onClick={() => onAnimate(item)}>
-                    Animate
-                  </button>
-                ) : null}
-                {onExtend ? (
-                  <button type="button" data-testid="video-extend" onClick={() => onExtend(item)}>
-                    Extend
-                  </button>
-                ) : null}
-                <button type="button" className="icon-btn" aria-label="More" onClick={() => onMore(item)}>
-                  <DockIcon d={DOCK_ICON.more} />
-                  <span className="dock-tip">More</span>
-                </button>
+      <div className="image-feed-cols">
+        {items.map((item) =>
+          item.pending ? (
+            <article key={item.id} className="image-card pending" data-testid={pendingTestId}>
+              <div className="image-card-thumb">
+                <span className="spinner" aria-hidden="true" />
+                <span>Generating…</span>
               </div>
-            </div>
-          </article>
-        ),
-      )}
+            </article>
+          ) : (
+            <article key={item.id} className="image-card">
+              <div className="image-card-thumb">
+                {item.mediaKind === "video" ? (
+                  <video
+                    src={fileUrl(item.assetId)}
+                    muted
+                    loop
+                    playsInline
+                    preload="metadata"
+                    onMouseEnter={(ev) => void ev.currentTarget.play().catch(() => undefined)}
+                    onMouseLeave={(ev) => {
+                      ev.currentTarget.pause();
+                      ev.currentTarget.currentTime = 0;
+                    }}
+                  />
+                ) : (
+                  <img src={fileUrl(item.assetId)} alt="" />
+                )}
+                <div className="image-card-hover" data-testid={hoverTestId}>
+                  <button type="button" aria-label="Favorite" onClick={() => onFavorite(item)}>
+                    {item.favorite ? "♥" : "♡"}
+                  </button>
+                  <a href={fileUrl(item.assetId)} download={`vinci-${item.assetId.slice(0, 12)}`} aria-label="Download">
+                    ↓
+                  </a>
+                  <button type="button" className="icon-btn" aria-label="Copy prompt" onClick={() => onCopyPrompt(item)}>
+                    <DockIcon d={DOCK_ICON.copy} />
+                    <span className="dock-tip">Copy prompt</span>
+                  </button>
+                  {onReference ? (
+                    <button type="button" className="icon-btn" aria-label="Use as reference" onClick={() => onReference(item)}>
+                      <DockIcon d={DOCK_ICON.reference} />
+                      <span className="dock-tip">Use as reference</span>
+                    </button>
+                  ) : null}
+                  {onAnimate ? (
+                    <button type="button" data-testid="image-animate" onClick={() => onAnimate(item)}>
+                      Animate
+                    </button>
+                  ) : null}
+                  {onExtend ? (
+                    <button type="button" data-testid="video-extend" onClick={() => onExtend(item)}>
+                      Extend
+                    </button>
+                  ) : null}
+                  <button type="button" className="icon-btn" aria-label="More" onClick={() => onMore(item)}>
+                    <DockIcon d={DOCK_ICON.more} />
+                    <span className="dock-tip">More</span>
+                  </button>
+                </div>
+              </div>
+            </article>
+          ),
+        )}
+      </div>
     </div>
   );
 }

@@ -94,7 +94,9 @@ def test_a_run_sends_what_the_pills_show_for_the_model() -> None:
 const seedream = { aspect_ratios: ["1:1", "16:9", "9:16"], resolutions: ["1024x1024"] };
 eq(fitToModel({ aspect_ratio: "16:9", resolution: "1K", prompt: "p" }, seedream),
    { aspect_ratio: "16:9", resolution: "1024x1024", prompt: "p" }, "resolution as the pill shows it");
-eq(fitToModel({ duration: 5 }, { durations: [6] }), { duration: 6 }, "the nearest listed length");
+eq(fitToModel({ duration: 5 }, { durations: [6] }), { duration: 6 }, "the listed length that covers it");
+eq(fitToModel({ duration: 8 }, { durations: [10, 6] }), { duration: 10 }, "the shortest that covers it, as fit_duration");
+eq(fitToModel({ duration: 12 }, { durations: [6, 10] }), { duration: 10 }, "else the longest");
 eq(fitToModel({ duration: 8 }, { max_duration: 6 }), { duration: 6 }, "no longer than the max");
 eq(fitToModel({ duration: 5 }, { max_duration: 10 }), { duration: 5 }, "a length that fits stays");
 eq(fitToModel({ aspect_ratio: "{{inputs.aspect_ratio}}" }, seedream), { aspect_ratio: "{{inputs.aspect_ratio}}" }, "templates stay");
