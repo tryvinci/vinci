@@ -270,9 +270,11 @@ def test_wavespeed_seedream_gets_its_shape_as_size(
         assert "size" not in seen["body"], model
 
 
-def test_wavespeed_nano_banana_pro_tier_and_wan_seed(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Nano Banana Pro reads `resolution`, and only a tier its row lists goes out (COREPRODUC-582).
-    Wan 2.6 is the one catalog route that takes `seed` (COREPRODUC-583)."""
+def test_wavespeed_rows_send_what_they_price(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Each row asks for the tier and sound its price is for. Nano Banana Pro and Seedance 2.0 read
+    `resolution`, and only a tier the row lists goes out (COREPRODUC-582, COREPRODUC-595). Kling
+    rows are silent, and Wan's image route gets the row's 1080p (COREPRODUC-595). Wan 2.6 is the
+    one catalog route that takes `seed` (COREPRODUC-583)."""
     monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
     provider = WavespeedProvider(api_key="ws-key", cas=_mem_cas({"ref": b"\x89PNG\r\n\x1a\nref"}))
     seen: dict[str, Any] = {}
@@ -304,6 +306,22 @@ def test_wavespeed_nano_banana_pro_tier_and_wan_seed(monkeypatch: pytest.MonkeyP
     assert "resolution" not in send("wavespeed:nano-banana:2026-09", resolution="1k")  # no such param
     assert send("wavespeed:wan-2.6:2026-08", Capability.T2V, seed=42, duration=5)["seed"] == 42
     assert "seed" not in send("wavespeed:seedream-4.5:2026-08", seed=42)
+    # COREPRODUC-595: Kling 2.6 Pro text to video made sound by default ($0.70, the row says $0.35).
+    assert send("wavespeed:kling-2.6-pro:2026-08", Capability.T2V)["sound"] is False
+    assert send("wavespeed:kling-2.6-pro:2026-08", Capability.I2V, image="ref")["sound"] is False
+    assert send("wavespeed:kling-3.0-std:2026-08", Capability.T2V)["sound"] is False
+    assert "sound" not in send("wavespeed:kling-3-turbo-pro-i2v:2026-09", Capability.I2V, image="ref")
+    # Seedance reads no `size`: a stale 1920x1080 chip made its 720p default, priced as 1080p.
+    turbo = send("wavespeed:seedance-2.0-turbo:2026-08", Capability.T2V, resolution="1920x1080")
+    assert turbo["resolution"] == "720p"
+    assert send("wavespeed:seedance-2.0-i2v:2026-09", Capability.I2V, image="ref")["resolution"] == "720p"
+    wan = send("wavespeed:wan-2.6:2026-08", Capability.I2V, image="ref", resolution="1920x1080")
+    assert wan["resolution"] == "1080p" and seen["url"].endswith("/alibaba/wan-2.6/image-to-video")
+    assert send("wavespeed:wan-2.6:2026-08", Capability.I2V, image="ref")["resolution"] == "1080p"
+    stale = send("wavespeed:wan-2.6:2026-08", Capability.I2V, image="ref", resolution="1024x1024")
+    assert stale["resolution"] == "1080p"  # not "1024p", which the route refuses
+    text = send("wavespeed:wan-2.6:2026-08", Capability.T2V, resolution="1920x1080")
+    assert text["size"] == "1920*1080" and "resolution" not in text  # the text route reads `size`
 
 
 def test_wavespeed_edit_sends_every_reference(monkeypatch: pytest.MonkeyPatch) -> None:

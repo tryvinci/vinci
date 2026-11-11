@@ -91,13 +91,13 @@
         "aspect_ratios": ["16:9", "9:16"],
         "max_duration": 10,
         "durations": [4, 5, 6, 7, 8, 9, 10],
-        "resolutions": ["1920x1080"]
+        "resolutions": ["720p"]
       },
       "pricing": {
         "unit": "video_5s_audio",
-        "amount": 0.75,
+        "amount": 0.7,
         "currency": "USD",
-        "snapshot_at": "2026-08-27T00:00:00+00:00"
+        "snapshot_at": "2026-11-11T00:00:00+00:00"
       },
       "quality_tier": "fast",
       "status": "active",
@@ -112,13 +112,13 @@
         "aspect_ratios": ["16:9", "9:16"],
         "max_duration": 10,
         "durations": [4, 5, 6, 7, 8, 9, 10],
-        "resolutions": ["1920x1080"]
+        "resolutions": ["720p"]
       },
       "pricing": {
         "unit": "video_5s_audio",
-        "amount": 0.75,
+        "amount": 1.2,
         "currency": "USD",
-        "snapshot_at": "2026-09-07T00:00:00+00:00"
+        "snapshot_at": "2026-11-11T00:00:00+00:00"
       },
       "quality_tier": "quality",
       "status": "active",
@@ -175,9 +175,9 @@
       },
       "pricing": {
         "unit": "image",
-        "amount": 0.04,
+        "amount": 0.038,
         "currency": "USD",
-        "snapshot_at": "2026-09-07T00:00:00+00:00"
+        "snapshot_at": "2026-11-11T00:00:00+00:00"
       },
       "quality_tier": "fast",
       "status": "active",
@@ -274,9 +274,9 @@
       },
       "pricing": {
         "unit": "video_6s",
-        "amount": 0.30,
+        "amount": 0.23,
         "currency": "USD",
-        "snapshot_at": "2026-09-07T00:00:00+00:00"
+        "snapshot_at": "2026-11-11T00:00:00+00:00"
       },
       "quality_tier": "fast",
       "status": "active",
@@ -326,10 +326,10 @@
       "capabilities": ["upscale"],
       "constraints": { "resolutions": ["4k"] },
       "pricing": {
-        "unit": "video_5s",
-        "amount": 0.15,
+        "unit": "image",
+        "amount": 0.01,
         "currency": "USD",
-        "snapshot_at": "2026-08-27T00:00:00+00:00"
+        "snapshot_at": "2026-11-11T00:00:00+00:00"
       },
       "quality_tier": "quality",
       "status": "active",

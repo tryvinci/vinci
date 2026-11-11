@@ -354,16 +354,28 @@ class WavespeedProvider(CatalogBackedProvider):
             elif aspect and seedream and _seedream_size(aspect):
                 # Seedream reads no aspect_ratio: a 16:9 show got 2048x2048 keyframes before.
                 payload["size"] = _seedream_size(aspect)
-            if endpoint.startswith("google/nano-banana-pro"):
-                # Nano Banana Pro reads its tier from `resolution` (1k/2k $0.14, 4k $0.24), not
-                # `size`. Only a tier the row lists goes out, so the 1k/2k row cannot bill 4k, and
-                # the 4K row always asks for 4k, even when a stale "2k" is asked (COREPRODUC-582).
+            if endpoint.startswith(("google/nano-banana-pro", "bytedance/seedance-2.0")):
+                # These read their tier from `resolution`, not `size` (Nano Banana Pro 1k/2k $0.14,
+                # 4k $0.24; Seedance 2.0 is priced at 720p). Only a tier the row lists goes out, so
+                # the 1k/2k row cannot bill 4k, and a row with one tier always asks for it, even
+                # when a stale "2k" is asked (COREPRODUC-582, COREPRODUC-595).
                 tiers = [str(r).lower() for r in spec.constraints.resolutions]
                 tier = str(req.inputs.get("resolution") or "").lower()
                 if tier not in tiers and len(tiers) == 1:
                     tier = tiers[0]
                 if tier in tiers:
                     payload["resolution"] = tier
+            if image and endpoint.startswith("alibaba/wan-2.6"):
+                # Wan's image route reads a `resolution` tier, not `size`, so it made 720p ($0.10/s)
+                # for the row's 1080p price ($0.15/s). It asks for the row's tier now, also when a
+                # stale chip of another size is in the request (COREPRODUC-595).
+                pair = _pair(next(iter(spec.constraints.resolutions), ""))
+                if pair:
+                    payload["resolution"] = f"{min(pair)}p"
+            if endpoint.startswith(("kwaivgi/kling-v2.6", "kwaivgi/kling-v3.0")):
+                # The rows price a silent clip. Kling 2.6 Pro text to video adds sound unless told
+                # not to, at twice the price ($0.70 for 5 s, COREPRODUC-595).
+                payload["sound"] = False
             seed = _as_int(req.inputs.get("seed"))
             if endpoint.startswith("alibaba/wan-2.6") and seed is not None:
                 # Wan 2.6 takes `seed` (-1 is random), so a take can be made again; the other
