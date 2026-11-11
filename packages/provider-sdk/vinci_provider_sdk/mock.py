@@ -455,8 +455,10 @@ class MockProvider(Provider):
     def _blob(self, model_id: str, inputs: dict[str, object]) -> bytes:
         prompt = compose_shot_prompt(inputs) or "mock"
         width, height = mock_dimensions(inputs.get("aspect_ratio"))
-        # An OLF take is a new generation, so it gets its own picture, as on a real model.
-        seed = f"{prompt}#{inputs['olf_take']}" if inputs.get("olf_take") else prompt
+        # An OLF take or a batch seed is a new generation, so it gets its own picture, as on a real
+        # model. A seed was left out: a batch of 4 in demo mode showed 1 picture (COREPRODUC-575).
+        takes = (inputs.get("olf_take"), inputs.get("seed"))
+        seed = "#".join([prompt, *(str(v) for v in takes if v not in (None, ""))])
         if model_id == "mock:png:v1":
             return png_scene(seed, width, height)
         if model_id == "mock:mp4:v1":

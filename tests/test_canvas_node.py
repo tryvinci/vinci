@@ -19,6 +19,7 @@ NAMES = [
     "usesPagePrompt",
     "pickListed",
     "listedOr",
+    "fitToModel",
     "refsOf",
     "slotRef",
     "nextRefRole",
@@ -84,6 +85,20 @@ eq(listedOr(["1024x1024"], RESOLUTIONS), ["1024x1024"], "model list wins");
 eq(listedOr([], RESOLUTIONS), RESOLUTIONS, "empty model list uses Magnific 1K/2K/4K");
 eq(showsFrame("t2v"), true, "video");
 eq(showsFrame("tts"), false, "voice");
+""")
+
+
+def test_a_run_sends_what_the_pills_show_for_the_model() -> None:
+    """A canvas run fits its params to the model: `1K` on Seedream and 5 s on Hailuo got HTTP 400."""
+    _check("""
+const seedream = { aspect_ratios: ["1:1", "16:9", "9:16"], resolutions: ["1024x1024"] };
+eq(fitToModel({ aspect_ratio: "16:9", resolution: "1K", prompt: "p" }, seedream),
+   { aspect_ratio: "16:9", resolution: "1024x1024", prompt: "p" }, "resolution as the pill shows it");
+eq(fitToModel({ duration: 5 }, { durations: [6] }), { duration: 6 }, "the nearest listed length");
+eq(fitToModel({ duration: 8 }, { max_duration: 6 }), { duration: 6 }, "no longer than the max");
+eq(fitToModel({ duration: 5 }, { max_duration: 10 }), { duration: 5 }, "a length that fits stays");
+eq(fitToModel({ aspect_ratio: "{{inputs.aspect_ratio}}" }, seedream), { aspect_ratio: "{{inputs.aspect_ratio}}" }, "templates stay");
+eq(fitToModel({ resolution: "1K" }, undefined), { resolution: "1K" }, "no catalog row: unchanged");
 """)
 
 

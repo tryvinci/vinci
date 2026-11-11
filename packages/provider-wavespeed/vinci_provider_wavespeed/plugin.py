@@ -63,6 +63,15 @@ def _seedream_size(aspect: object) -> str | None:
     return f"{width}*{round(width / shape / 16) * 16}"
 
 
+def _same_shape(size: object, aspect: object) -> bool:
+    """True when a "WxH" size has the shape of an "a:b" aspect, or when one is not such a pair."""
+    sw, _, sh = str(size or "").replace("×", "x").replace("*", "x").partition("x")
+    aw, _, ah = str(aspect).partition(":")
+    if not all(v.strip().isdigit() and int(v) for v in (sw, sh, aw, ah)):
+        return True
+    return abs(int(sw) / int(sh) - int(aw) / int(ah)) < 0.02
+
+
 # InfiniteTalk bills per second (720p $0.06, 480p $0.03), minimum 3s, cap 10 minutes.
 # https://wavespeed.ai/docs/docs-api/wavespeed-ai/infinitetalk
 _TALK_MODEL = "wavespeed:infinitetalk:2026-08"
@@ -331,9 +340,14 @@ class WavespeedProvider(CatalogBackedProvider):
             if aspect:
                 payload["aspect_ratio"] = str(aspect)
             size = req.inputs.get("size") or req.inputs.get("resolution")
+            seedream = endpoint.startswith("bytedance/seedream")
+            if seedream and not req.inputs.get("size") and aspect and not _same_shape(size, aspect):
+                # A canvas node sends its resolution pill, and Seedream 4.5 lists only 1024x1024:
+                # that size beat the aspect, so 16:9 and 9:16 canvas stills came back square.
+                size = None
             if size:
                 payload["size"] = str(size).replace("x", "*").replace("×", "*")
-            elif aspect and endpoint.startswith("bytedance/seedream") and _seedream_size(aspect):
+            elif aspect and seedream and _seedream_size(aspect):
                 # Seedream reads no aspect_ratio: a 16:9 show got 2048x2048 keyframes before.
                 payload["size"] = _seedream_size(aspect)
         body = self._post_json(url, self._headers(), payload)

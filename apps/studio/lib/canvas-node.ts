@@ -119,6 +119,34 @@ export function listedOr(modelList: string[] | undefined, fallback: string[]): s
   return modelList && modelList.length ? modelList : fallback;
 }
 
+type FitConstraints = { aspect_ratios?: string[]; resolutions?: string[]; durations?: number[]; max_duration?: number };
+
+/**
+ * The params a run sends for a node, fitted to its model as the node's pills show them. A value the
+ * model does not list went to the provider raw: a `1K` resolution on Seedream 4.5 (the pill said
+ * 1024x1024) or 5 s on a 6 s model got HTTP 400 (COREPRODUC-576). Templates and empty values stay.
+ *
+ * Args:
+ *   params: The node's params.
+ *   limits: The model's catalog constraints.
+ */
+export function fitToModel(params: Record<string, unknown>, limits?: FitConstraints): Record<string, unknown> {
+  const out = { ...params };
+  const concrete = (v: unknown) => typeof v === "string" && v !== "" && !isTemplate(v);
+  if (limits?.aspect_ratios?.length && concrete(out.aspect_ratio)) out.aspect_ratio = pickListed(out.aspect_ratio, limits.aspect_ratios);
+  if (limits?.resolutions?.length && concrete(out.resolution)) out.resolution = pickListed(out.resolution, limits.resolutions);
+  const seconds = Number(out.duration);
+  if (out.duration !== undefined && out.duration !== "" && Number.isFinite(seconds)) {
+    const allowed = limits?.durations ?? [];
+    if (allowed.length && !allowed.includes(seconds)) {
+      out.duration = allowed.reduce((best, d) => (Math.abs(d - seconds) < Math.abs(best - seconds) ? d : best));
+    } else if (!allowed.length && limits?.max_duration && seconds > limits.max_duration) {
+      out.duration = limits.max_duration;
+    }
+  }
+  return out;
+}
+
 export function countValue(params: Record<string, unknown> | undefined): number {
   return clampCount(params?.count ?? params?.num_images ?? COUNT_MIN);
 }
