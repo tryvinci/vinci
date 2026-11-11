@@ -119,15 +119,14 @@
           "9:16"
         ],
         "resolutions": [
-          "1024x1024",
-          "4K"
+          "1k"
         ]
       },
       "pricing": {
         "unit": "image",
-        "amount": 0.05,
+        "amount": 0.15,
         "currency": "USD",
-        "snapshot_at": "2026-09-06T00:00:00+00:00"
+        "snapshot_at": "2026-11-11T00:00:00+00:00"
       },
       "quality_tier": "quality",
       "status": "active",
@@ -150,15 +149,15 @@
           "9:16"
         ],
         "resolutions": [
-          "4K"
+          "1k"
         ],
         "max_input_images": 4
       },
       "pricing": {
         "unit": "image",
-        "amount": 0.05,
+        "amount": 0.15,
         "currency": "USD",
-        "snapshot_at": "2026-09-06T00:00:00+00:00"
+        "snapshot_at": "2026-11-11T00:00:00+00:00"
       },
       "quality_tier": "quality",
       "status": "active",
