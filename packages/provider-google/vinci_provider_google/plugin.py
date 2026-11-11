@@ -89,6 +89,8 @@ class GoogleProvider(CatalogBackedProvider):
         if "t2v" in caps or "i2v" in caps:
             return self._submit_veo(req, model)
         url = f"{self._root()}/v1beta/models/{model}:generateContent"
+        if "t2t" in caps:
+            return self._submit_text(req, url)
         payload: dict[str, Any] = {
             "contents": [{"parts": [{"text": self.prompt_text(req)}]}],
         }
@@ -98,6 +100,29 @@ class GoogleProvider(CatalogBackedProvider):
             raise RuntimeError("google generateContent missing image")
         ref = str(body.get("responseId") or body.get("name") or uuid.uuid4())
         self._jobs[ref] = JobStatus(state=JobState.COMPLETED, outputs=outputs, progress=1.0)
+        return ProviderJobRef(provider="google", ref=ref)
+
+    def _submit_text(self, req: JobRequest, url: str) -> ProviderJobRef:
+        """Text in, text out with generateContent (``prompt``, optional ``system``)."""
+        import base64
+
+        payload: dict[str, Any] = {
+            "contents": [{"parts": [{"text": str(req.inputs.get("prompt") or "")}]}]
+        }
+        if req.inputs.get("system"):
+            payload["systemInstruction"] = {"parts": [{"text": str(req.inputs["system"])}]}
+        body = self._post_json(url, self._headers(), payload)
+        text = "".join(
+            str(part.get("text") or "")
+            for candidate in body.get("candidates") or []
+            for part in ((candidate or {}).get("content") or {}).get("parts") or []
+            if isinstance(part, dict) and not part.get("thought")  # thoughts are not the answer
+        )
+        if not text:
+            raise RuntimeError("google generateContent returned no text")
+        ref = str(body.get("responseId") or uuid.uuid4())
+        data = "data:text/plain;base64," + base64.b64encode(text.encode()).decode("ascii")
+        self._jobs[ref] = JobStatus(state=JobState.COMPLETED, outputs=[data], progress=1.0)
         return ProviderJobRef(provider="google", ref=ref)
 
     def _submit_veo(self, req: JobRequest, model: str) -> ProviderJobRef:

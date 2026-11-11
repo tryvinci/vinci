@@ -1,0 +1,21 @@
+id: char/mira
+name: Mira Sol
+description: Lighthouse keeper and fox spirit. Fox ears, long hair, large tail.
+voice: voice/mira
+sheet: sheet.png              # the whole sheet is the character reference
+forms:                        # whole-body looks of one character
+  winter:
+    description: White hair fading to ice blue, snowflake motifs.
+    palette: ["#eef6fb", "#7cc7e8", "#1f3a6b"]
+  ember:
+    description: Orange-red hair, maple-leaf motifs, flame-tipped tail.
+    palette: ["#ff7a1a", "#c4161c", "#3a0d0d"]
+    views: { front: forms/ember/front.png, back: forms/ember/back.png }
+outfits:                      # clothing, worn in any form
+  default: { description: "Off-shoulder kimono dress, wide sleeves, boots." }
+  night: { description: "Wool sweater, no ribbons." }
+details: { eyes: details/eyes.png }   # optional separate files, like form views
+accessories: [prop/bell, prop/fox-mask, prop/ribbon]
+textures: [textures/snowflake.png]
+credits: { design: "@artist", owner: "@creator" }
+likeness: { real_person: false }

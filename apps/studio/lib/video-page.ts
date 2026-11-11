@@ -26,6 +26,7 @@ export type VideoModel = {
     resolutions?: string[];
     max_input_images?: number | null;
     max_duration?: number;
+    durations?: number[];
   };
   quality_tier?: string;
   status?: string;
@@ -168,12 +169,20 @@ export function isVideoModel(model: VideoModel | undefined): boolean {
 }
 
 /**
- * Duration tiles for a model: Studio picks that fit `max_duration`.
+ * Duration tiles for a model: Studio picks that fit `max_duration`. A model whose catalog row
+ * lists the exact lengths it takes (`durations`, from the provider's API docs) shows only those:
+ * all of them when there are few (Kling 2.6: 5, 10), else the Studio picks among them.
  *
  * Args:
  *   max: Catalog max duration in seconds.
+ *   allowed: Catalog `durations`, the exact lengths the model takes (empty: any up to max).
  */
-export function durationOptions(max: number): number[] {
+export function durationOptions(max: number, allowed: readonly number[] = []): number[] {
+  if (allowed.length) {
+    return allowed.length <= VIDEO_DURATION_PICKS.length
+      ? [...allowed]
+      : VIDEO_DURATION_PICKS.filter((n) => allowed.includes(n));
+  }
   const cap = Number(max || 0);
   if (!cap) return [];
   const picks = VIDEO_DURATION_PICKS.filter((n) => n <= cap);
@@ -233,7 +242,7 @@ export function needsStartFrame(model: VideoModel | undefined): boolean {
  */
 export function visibleVideoControls(model: VideoModel | undefined): VideoControls {
   return {
-    duration: durationOptions(Number(model?.constraints?.max_duration || 0)).length > 0,
+    duration: durationOptions(Number(model?.constraints?.max_duration || 0), model?.constraints?.durations).length > 0,
     aspect: Boolean(model?.constraints?.aspect_ratios?.length),
     quality: Boolean(model?.constraints?.resolutions?.length),
     audio: hasAudio(model),
@@ -327,7 +336,7 @@ export function filterPresets(
  */
 export function applyPreset(model: VideoModel | undefined): VideoPresetDefaults {
   if (!model) return { modelId: "", duration: "", aspect: "", resolution: "" };
-  const durs = durationOptions(Number(model.constraints?.max_duration || 0));
+  const durs = durationOptions(Number(model.constraints?.max_duration || 0), model.constraints?.durations);
   const ratios = model.constraints?.aspect_ratios || [];
   const res = model.constraints?.resolutions || [];
   return {

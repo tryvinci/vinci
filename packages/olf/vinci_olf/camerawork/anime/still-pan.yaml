@@ -1,0 +1,14 @@
+# Vinci OLF camerawork library, pan family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/still-pan
+version: 1
+family: pan
+name: Pan across a held drawing
+notation: PAN
+intent: A pan across one held drawing of a character or a group.
+camera: { move: pan, direction: right, ease: in_out, canvas: "21:9", render: engine }
+framing: [wide, medium]
+timing: { default: 3+00, min: 2+00, max: 6+00 }
+slots: [a]
+keyframe: "A wide picture with room to pan across it. {a} is in it, and nothing moves."
+prompt: >          # for a shot that sets render: model
+  The camera pans across the picture from left to right. Nothing in the picture moves.

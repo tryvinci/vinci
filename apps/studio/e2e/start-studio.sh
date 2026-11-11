@@ -6,6 +6,8 @@ export PATH="${HOME}/.local/bin:$ROOT/.venv/bin:$PATH"
 export VINCI_HOME="${VINCI_HOME:-$(mktemp -d /tmp/vinci-e2e-home.XXXX)}"
 export VINCI_DAEMON_URL="${VINCI_DAEMON_URL:-http://127.0.0.1:4310}"
 export VINCI_STUDIO_USE_REWRITE=1
+# Agent CLIs: only the fake Claude Code in e2e/fake-cli, never a real one (and its plan).
+export VINCI_AGENT_CLI_PATH="$ROOT/apps/studio/e2e/fake-cli"
 if ! curl -sf "$VINCI_DAEMON_URL/healthz" >/dev/null 2>&1; then
   python3 -m vinci_daemon --host 127.0.0.1 --port 4310 &
   for _ in $(seq 1 40); do

@@ -1,0 +1,12 @@
+# Vinci OLF camerawork library, action family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/impact-shake
+version: 1
+family: action
+name: Impact shake
+notation: Gamen-dou
+intent: The frame shakes on a hit or a landing.
+camera: { move: shake, amount: 0.02, render: engine }
+timing: { default: 0+12, min: 0+06, max: 0+12 }
+rules: { needs_dialogue: false }
+prompt: >          # for a shot that sets render: model
+  The camera shakes hard for a moment on the impact. Then it settles.

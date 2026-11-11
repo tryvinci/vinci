@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import logging
+import math
 import os
+import random
 import shutil
 import struct
 import subprocess
 import tempfile
 import uuid
+import wave
 import zlib
 from collections.abc import Iterator
 from pathlib import Path
@@ -293,6 +297,61 @@ def mp4_scene(
     return blob
 
 
+def wav_speech(voice: str, text: str, rate: int = 16_000) -> bytes:
+    """Deterministic stand-in for speech: a mono WAV hum about as long as reading ``text`` aloud.
+
+    About 15 characters a second (0.5 s to 30 s). The pitch comes from ``voice``, so each voice
+    sounds different; a swell of 3 to 5 Hz stands in for syllables. A real WAV, so players and
+    ffmpeg read it (``mock:txt:v1`` used to answer tts with text bytes).
+    """
+    pitch = 110 + hashlib.sha256(voice.encode("utf-8")).digest()[0] % 160
+    swell = 3 + hashlib.sha256(text.encode("utf-8")).digest()[0] % 3
+    count = int(rate * min(max(len(text) / 15, 0.5), 30.0))
+    samples = (
+        int(
+            8000
+            * (0.55 + 0.45 * math.sin(2 * math.pi * swell * t))
+            * math.sin(2 * math.pi * pitch * t)
+        )
+        for t in (i / rate for i in range(count))
+    )
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(rate)
+        out.writeframes(struct.pack(f"<{count}h", *samples))
+    return buf.getvalue()
+
+
+def wav_cue(kind: str, text: str, seconds: float, rate: int = 16_000) -> bytes:
+    """Deterministic stand-in for a music cue or a sound effect: a mono WAV ``seconds`` long.
+
+    ``music`` is a soft major chord that swells in and out; ``sfx`` is a noise burst that decays.
+    The pitch and the noise come from ``text``, so each cue sounds different (OLF cues).
+    """
+    seed = hashlib.sha256(f"{kind}:{text}".encode()).digest()
+    count = int(rate * min(max(seconds, 0.5), 120.0))
+    if kind == "music":
+        root = 110 + seed[0] % 110
+        tones = [2 * math.pi * f / rate for f in (root, root * 1.25, root * 1.5)]
+        frames = (
+            int(2600 * math.sin(math.pi * i / count) * sum(math.sin(w * i) for w in tones))
+            for i in range(count)
+        )
+    else:
+        rng = random.Random(seed)  # noqa: S311 - a test sound, not a secret
+        decay = (math.exp(-6 * i / count) for i in range(count))
+        frames = (int(9000 * d * (2 * rng.random() - 1)) for d in decay)
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(rate)
+        out.writeframes(struct.pack(f"<{count}h", *frames))
+    return buf.getvalue()
+
+
 class MockProvider(Provider):
     """Deterministic fake generations + fake pricing. For CI, tests, and demo mode."""
 
@@ -396,10 +455,19 @@ class MockProvider(Provider):
     def _blob(self, model_id: str, inputs: dict[str, object]) -> bytes:
         prompt = compose_shot_prompt(inputs) or "mock"
         width, height = mock_dimensions(inputs.get("aspect_ratio"))
+        # An OLF take is a new generation, so it gets its own picture, as on a real model.
+        seed = f"{prompt}#{inputs['olf_take']}" if inputs.get("olf_take") else prompt
         if model_id == "mock:png:v1":
-            return png_scene(prompt, width, height)
+            return png_scene(seed, width, height)
         if model_id == "mock:mp4:v1":
-            return mp4_scene(prompt, width, height, mock_duration_seconds(inputs.get("duration")))
+            return mp4_scene(seed, width, height, mock_duration_seconds(inputs.get("duration")))
+        if model_id == "mock:wav:v1":
+            return wav_speech(str(inputs.get("voice_id") or "mock"), prompt)
+        if model_id in ("mock:music:v1", "mock:sfx:v1"):  # OLF cues: as long as asked
+            seconds = float(str(inputs.get("duration") or 5))
+            return wav_cue(model_id.split(":")[1], prompt, seconds)
+        if model_id == "mock:llm:v1":  # a caller may send the reply it expects (OLF demo drafts)
+            return (str(inputs.get("mock_reply") or "") or f"Mock reply to: {prompt}").encode()
         return self._blobs[model_id] + b"\n" + prompt.encode("utf-8")
 
     def _digest_for(self, model_id: str, inputs: dict[str, object]) -> str:

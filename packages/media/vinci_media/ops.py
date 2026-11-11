@@ -131,10 +131,11 @@ def cut(src: Path, dst: Path, start: float, end: float) -> Path:
     return dst
 
 
-def reframe_9x16(src: Path, dst: Path) -> Path:
+def reframe_9x16(src: Path, dst: Path, width: int = 720, height: int = 1280) -> Path:
+    """Center-crop a video to 9:16 at ``width`` x ``height`` (OLF exports use 1080 x 1920)."""
     require_ffmpeg()
     dst.parent.mkdir(parents=True, exist_ok=True)
-    vf = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"
+    vf = f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
     proc = subprocess.run(
         [
             FFMPEG,

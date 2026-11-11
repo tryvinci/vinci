@@ -22,6 +22,7 @@ from vinci_provider_sdk.catalog_provider import CatalogBackedProvider
 
 OPENAI_IMAGES_URL = "https://api.openai.com/v1/images/generations"
 OPENAI_EDITS_URL = "https://api.openai.com/v1/images/edits"
+OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 
 _ASPECT_TO_SIZE = {
     "1:1": "1024x1024",
@@ -62,6 +63,8 @@ class OpenAIProvider(CatalogBackedProvider):
         if self._cas is None:
             raise RuntimeError("openai live submit needs CAS")
         model = self._catalog.endpoint_for(spec.id) or spec.id.split(":")[1]
+        if req.capability == Capability.T2T:
+            return self._submit_text(req, model)
         size = _size_from_inputs(req.inputs)
         quality = str(req.inputs.get("quality") or "medium")
         cap = req.capability
@@ -102,6 +105,23 @@ class OpenAIProvider(CatalogBackedProvider):
         self._jobs[ref] = JobStatus(state=JobState.COMPLETED, outputs=[digest], progress=1.0)
         return ProviderJobRef(provider="openai", ref=ref)
 
+    def _submit_text(self, req: JobRequest, model: str) -> ProviderJobRef:
+        """Text in, text out with the Responses API (``prompt``, optional ``system``)."""
+        assert self._cas is not None
+        payload: dict[str, Any] = {"model": model, "input": str(req.inputs.get("prompt", ""))}
+        if req.inputs.get("system"):
+            payload["instructions"] = str(req.inputs["system"])
+        headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
+        parsed = self._open_json_body(OPENAI_RESPONSES_URL, headers, json.dumps(payload).encode())
+        text = _output_text(parsed)
+        if not text:
+            raise RuntimeError(f"openai responses returned no text (status {parsed.get('status')})")
+        ref = str(uuid.uuid4())
+        self._jobs[ref] = JobStatus(
+            state=JobState.COMPLETED, outputs=[self._cas.put(text.encode())], progress=1.0
+        )
+        return ProviderJobRef(provider="openai", ref=ref)
+
     def _status_live(self, ref: ProviderJobRef) -> JobStatus | None:
         return self._jobs.get(ref.ref)
 
@@ -133,6 +153,17 @@ def _input_image_bytes(inputs: dict[str, Any], cas: CasGet) -> bytes:
         if isinstance(value, str) and value.strip():
             return cas.get(value.strip())
     raise ValueError("i2i/edit requires inputs.media or inputs.image (asset digest)")
+
+
+def _output_text(body: dict[str, Any]) -> str:
+    """The text of a Responses API reply: each ``output_text`` part of each ``message`` item."""
+    return "".join(
+        str(part.get("text") or "")
+        for item in body.get("output") or []
+        if isinstance(item, dict) and item.get("type") == "message"
+        for part in item.get("content") or []
+        if isinstance(part, dict) and part.get("type") == "output_text"
+    )
 
 
 def _first_b64(body: dict[str, Any]) -> str:

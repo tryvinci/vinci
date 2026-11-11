@@ -1,0 +1,6 @@
+id: loc/lighthouse
+name: Lamp room
+description: Round glass room, brass lamp at the centre, sea on all sides.
+variants: [day, dusk, night, storm]
+references:
+  establishing: establishing.png

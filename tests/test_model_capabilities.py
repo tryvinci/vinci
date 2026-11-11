@@ -49,7 +49,8 @@ const unseen = [];
 for (const row of models) {
   const info = classifyModel(row);
   if (!info.functions.length) unseen.push(row.id);
-  if (info.functions.includes("text")) throw new Error("bundled text model: " + row.id);
+  // Text models are the t2t rows (OLF script drafts, COREPRODUC-548), and only those.
+  if (info.functions.includes("text") !== (row.capabilities || []).includes("t2t")) throw new Error("text model drift: " + row.id);
   if (info.id !== row.id) throw new Error("id drift " + row.id);
   const aspects = JSON.stringify(row.constraints?.aspect_ratios || []);
   if (JSON.stringify(info.aspectRatios) !== aspects) throw new Error("aspect drift " + row.id);
@@ -203,9 +204,11 @@ if (ids("video_extend", all).length !== i2vOnly.length) {
 }
 const t2i = models.filter((row) => caps(row).has("t2i"));
 if (ids("image", all).length !== t2i.length) throw new Error("image count");
-if (ids("text", all).length) throw new Error("text surface is empty until a chat model ships");
-if (ids("canvas", all, { capability: "assistant" }).length) {
-  throw new Error("assistant has no catalog model");
+const t2t = models.filter((row) => caps(row).has("t2t"));
+if (!t2t.length || ids("text", all).length !== t2t.length) throw new Error("text surface lists the t2t models");
+// The canvas Assistant ("An LLM that writes text") lists the text models.
+if (ids("canvas", all, { capability: "assistant" }).length !== t2t.length) {
+  throw new Error("assistant lists the t2t models");
 }
 const nodeImage = modelsFor("canvas", all, models, { capability: "t2i" });
 if (nodeImage.some((row) => !caps(row).has("t2i"))) throw new Error("canvas t2i");

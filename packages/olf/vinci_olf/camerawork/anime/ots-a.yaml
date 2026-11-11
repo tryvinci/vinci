@@ -1,0 +1,21 @@
+# Vinci OLF camerawork library, dialogue family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/ots-a
+version: 1
+family: dialogue
+name: Over the shoulder of the first character
+notation: Kata-name
+intent: Over the shoulder of the first character, on the second. It keeps the sides of the two-shot.
+camera: { move: static, render: model }
+framing: [medium, medium_close]
+timing: { default: 2+12, min: 1+12, max: 6+00 }
+slots: [a, b]
+layout:            # a is on the left, as in two-shot-axis: the line is not crossed
+  start:
+    - { slot: a, x: 0.18, y: 0.35, size: 0.6, facing: away }
+    - { slot: b, x: 0.66, y: 0.33, size: 0.42, look_at: a }
+keyframe: >
+  Over-the-shoulder shot. The back of {a}'s head and shoulder are at frame left, near the
+  camera. {b} is at frame right and faces {a}.
+prompt: >
+  Static camera over {a}'s shoulder. {b} faces {a} and talks.
+avoid: [the characters swap sides, camera movement]

@@ -1,0 +1,18 @@
+# Vinci OLF camerawork library, follow family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/side-scroll
+version: 1
+family: follow
+name: Side scroll
+notation: Follow
+intent: The camera moves at the side while the character crosses the frame from left to right.
+camera: { move: truck, direction: right, ease: none, render: model }
+framing: [wide, medium]
+timing: { default: 3+00, min: 2+00, max: 6+00 }
+slots: [a]
+layout:
+  start: [{ slot: a, x: 0.2, facing: right }]
+  end: [{ slot: a, x: 0.8, facing: right }]
+prompt: >
+  The camera moves sideways at a steady rate. {a} crosses the frame from left to right,
+  faster than the camera.
+avoid: [the character turns back, camera shake]

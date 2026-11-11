@@ -114,7 +114,9 @@ class FalProvider(CatalogBackedProvider):
                     payload["tail_image_url"] = as_data_uri(str(tail), self._cas)
         duration = req.inputs.get("duration")
         if duration and "video" in endpoint:
-            payload["duration"] = str(duration)
+            # fal's enums are strings: "5" for Kling and Seedance, "8s" for Veo (fal API docs).
+            text = str(duration).removesuffix("s").removesuffix(".0")  # 8, "8", 8.0, "8s" -> "8"
+            payload["duration"] = f"{text}s" if "/veo" in endpoint else text
         aspect = req.inputs.get("aspect_ratio")
         if aspect:
             payload["aspect_ratio"] = str(aspect)

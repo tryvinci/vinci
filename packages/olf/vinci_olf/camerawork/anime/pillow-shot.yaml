@@ -1,0 +1,15 @@
+# Vinci OLF camerawork library, mood family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/pillow-shot
+version: 1
+family: mood
+name: Pillow shot
+notation: BG only, jiwa T.U.
+intent: An empty sky or landscape between two scenes. It gives the story a breath.
+camera: { move: push_in, amount: 0.05, ease: none, render: engine }
+framing: [wide, extreme_wide]
+timing: { default: 2+12, min: 1+12, max: 5+00 }
+slots: []          # BG only: the shot sets `characters: []`
+keyframe: Background art only. No characters and no people are in the picture.
+prompt: >          # for a shot that sets render: model
+  A very slow push toward the landscape. Only clouds, light or leaves move.
+  No characters are in the picture.

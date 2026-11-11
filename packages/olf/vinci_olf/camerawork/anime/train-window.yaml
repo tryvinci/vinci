@@ -1,0 +1,16 @@
+# Vinci OLF camerawork library, follow family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/train-window
+version: 1
+family: follow
+name: By a train window
+notation: Follow
+intent: The character sits by a window while the landscape flows past.
+camera: { move: static, render: model }
+framing: [medium, medium_close]
+timing: { default: 4+00, min: 2+00, max: 8+00 }
+slots: [a]
+keyframe: "{a} sits by a train window. The landscape is outside the window."
+prompt: >
+  Static camera inside the train. {a} sits still by the window. Outside, the landscape
+  flows past at one steady speed.
+avoid: [a landscape speed that changes, character movement, camera movement]

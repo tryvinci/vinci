@@ -22,6 +22,7 @@ Claiming `@tryvinci` by publishing a placeholder is deferred until a human autho
 | `vinci-runtime` | Free | Scheduler / agent loop |
 | `vinci-media` | Free | FFmpeg ops |
 | `vinci-harness` | Free | Meta-install (core+runtime+providers+MCP). Unpublished; `packages/harness`. |
+| `vinci-olf` | Free (checked 2026-11-08) | OLF movie engine, Apache-2.0. Unpublished; `packages/olf`. |
 | `vinci-protocol` | Use this suffix | JSON schemas + Pydantic types |
 | `vinci-storage` | Use this suffix | Local CAS + adapters |
 | `vinci-provider-sdk` | Use this suffix | Plugin ABC + conformance |

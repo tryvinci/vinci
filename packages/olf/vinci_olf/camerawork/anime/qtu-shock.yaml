@@ -1,0 +1,14 @@
+# Vinci OLF camerawork library, push family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/qtu-shock
+version: 1
+family: push
+name: Quick track up
+notation: Q.T.U.
+intent: A snap zoom on a face for shock or for comedy.
+camera: { move: push_in, amount: 0.3, ease: out, hold_end: 0+10, render: engine }
+framing: [medium, medium_close, close_up]
+timing: { default: 0+18, min: 0+12, max: 1+12 }
+slots: [a]
+rules: { max_move: 0+08, not_twice_in_a_row: true }   # a quick move is 8 frames at most
+prompt: >          # for a shot that sets render: model
+  A sudden, fast zoom onto {a}'s face. Then the frame holds still.

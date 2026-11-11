@@ -1,0 +1,15 @@
+# Vinci OLF camerawork library, action family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/smear-attack
+version: 1
+family: action
+name: Smear attack
+notation: Obake
+intent: A fast attack with smear frames and effects.
+camera: { move: static, render: model }
+framing: [medium, wide]
+timing: { default: 1+12, min: 0+12, max: 2+12 }
+slots: [a]
+prompt: >
+  {a} attacks very fast. The arms and legs smear into streaks for a few frames, with
+  impact effects.
+avoid: [slow motion]

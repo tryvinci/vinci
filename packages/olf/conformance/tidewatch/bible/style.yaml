@@ -1,0 +1,9 @@
+id: style/main
+look:
+  medium: 2D anime          # live-action, 3D, stop-motion, ...
+  palette: ["#1b2a3a", "#e8c07d", "#c44b3a"]
+  grade: teal shadows, warm highlights, low contrast
+  grain: light
+lenses: [24mm, 35mm, 50mm, 85mm]
+references: [asset/2f58f14cb2a5a8f639984afb5442f682133dbb253ac6a924c7c7ebd5c4f26126]
+negative: [text, watermark, extra limbs]

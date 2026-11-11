@@ -1,0 +1,14 @@
+# Vinci OLF camerawork library, action family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/missile-swarm
+version: 1
+family: action
+name: Missile swarm
+notation: Itano circus
+intent: Many projectiles on curved trails, and the camera weaves through them.
+camera: { move: dolly, render: model }
+framing: [wide, extreme_wide]
+timing: { default: 3+00, min: 2+00, max: 5+00 }
+prompt: >
+  Dozens of missiles fly on curved smoke trails that cross each other. The camera weaves
+  through them at speed.
+avoid: [straight trails, a single projectile]

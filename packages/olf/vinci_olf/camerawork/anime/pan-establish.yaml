@@ -1,0 +1,14 @@
+# Vinci OLF camerawork library, pan family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/pan-establish
+version: 1
+family: pan
+name: Establishing pan
+notation: PAN, BG only
+intent: A pan across the background of a place to open a scene.
+camera: { move: pan, direction: right, ease: in_out, canvas: "21:9", render: engine }
+framing: [wide, extreme_wide]
+timing: { default: 5+00, min: 3+00, max: 8+00 }
+slots: []          # BG only: the shot sets `characters: []`
+keyframe: A wide background painting of the place. No characters and no people are in the picture.
+prompt: >          # for a shot that sets render: model
+  The camera pans slowly across the place from left to right. No characters are in the picture.

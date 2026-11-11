@@ -1,0 +1,17 @@
+# Vinci OLF camerawork library, action family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/frontal-run
+version: 1
+family: action
+name: Run at the camera
+notation: Fix
+intent: The character runs straight toward the camera.
+camera: { move: static, render: model }
+framing: [wide, medium]
+timing: { default: 2+00, min: 1+00, max: 4+00 }
+slots: [a]
+layout:
+  start: [{ slot: a, x: 0.5, y: 0.42, size: 0.07, facing: camera }]
+  end: [{ slot: a, x: 0.5, y: 0.3, size: 0.3, facing: camera }]
+prompt: >
+  Static camera. {a} runs straight toward the camera and gets larger in the frame.
+avoid: [extra limbs, camera shake]

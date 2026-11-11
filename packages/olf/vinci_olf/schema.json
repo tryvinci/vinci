@@ -1,0 +1,582 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tryvinci.com/olf/0.1/schema.json",
+  "title": "Open Lore Format (OLF) v0.1",
+  "description": "One definition per OLF object (SPEC.md). Validate a file against #/$defs/<object>: project, show, style, character, location, prop, voice, season, episode, scene, shot, take, lock.",
+  "$defs": {
+    "slug": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "charId": { "type": "string", "pattern": "^([a-z0-9-]+:)?char/[a-z0-9-]+$" },
+    "locId": { "type": "string", "pattern": "^([a-z0-9-]+:)?loc/[a-z0-9-]+$" },
+    "propId": { "type": "string", "pattern": "^([a-z0-9-]+:)?prop/[a-z0-9-]+$" },
+    "voiceId": { "type": "string", "pattern": "^([a-z0-9-]+:)?voice/[a-z0-9-]+$" },
+    "camId": { "type": "string", "pattern": "^([a-z0-9-]+:)?cam/[a-z0-9-]+$" },
+    "seasonId": { "type": "string", "pattern": "^season/[0-9]{2,}$" },
+    "episodeId": { "type": "string", "pattern": "^e[0-9]{2,}$" },
+    "sceneId": { "type": "string", "pattern": "^e[0-9]{2,}/s[0-9]{2,}$" },
+    "shotId": { "type": "string", "pattern": "^e[0-9]{2,}/s[0-9]{2,}/sh[0-9]{3,}$" },
+    "takeId": { "type": "string", "pattern": "^e[0-9]{2,}/(s[0-9]{2,}/sh[0-9]{3,}/(kf|v|a)|cue/[a-z0-9-]+/a)[0-9]+$" },
+    "cueId": { "type": "string", "pattern": "^e[0-9]{2,}/cue/[a-z0-9-]+$" },
+    "assetId": { "type": "string", "pattern": "^asset/[0-9a-f]{64}$" },
+    "hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "ref": { "type": "string", "minLength": 1, "description": "An asset ID or a relative path to a whole file (no #crop)." },
+    "refTree": {
+      "anyOf": [
+        { "$ref": "#/$defs/ref" },
+        { "type": "array", "items": { "$ref": "#/$defs/refTree" } },
+        { "type": "object", "additionalProperties": { "$ref": "#/$defs/refTree" } }
+      ]
+    },
+    "duration": {
+      "description": "Seconds (4s, 0.2s, 4) or seconds+frames (3+12: a frame is 1/24 s, frames 0 to 23).",
+      "anyOf": [
+        { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?s$" },
+        { "type": "string", "pattern": "^[0-9]+\\+([01]?[0-9]|2[0-3])$" },
+        { "type": "number", "minimum": 0 }
+      ]
+    },
+    "palette": { "type": "array", "items": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" } },
+    "extensions": {
+      "description": "Backend-specific settings. Engines ignore namespaces they do not know and keep them on rewrite.",
+      "type": "object",
+      "propertyNames": { "pattern": "^(x-)?[a-z0-9][a-z0-9-]*$" }
+    },
+    "listOp": {
+      "type": "object",
+      "properties": { "$append": { "type": "array" }, "$remove": { "type": "array" } },
+      "additionalProperties": false,
+      "minProperties": 1
+    },
+    "list": { "anyOf": [{ "type": "array" }, { "$ref": "#/$defs/listOp" }] },
+    "looks": {
+      "description": "A named form or outfit per character, for example { char/mira: ember }.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/charId" },
+      "additionalProperties": { "$ref": "#/$defs/slug" }
+    },
+    "license": {
+      "type": "object",
+      "required": ["owner", "terms"],
+      "properties": {
+        "owner": { "type": "string" },
+        "terms": { "type": "string", "description": "An SPDX ID, all-rights-reserved, or a URL." },
+        "attribution": { "type": "string" },
+        "ai_training": { "enum": ["allowed", "disallowed"] }
+      },
+      "additionalProperties": false
+    },
+    "credits": { "type": "object", "additionalProperties": { "type": "string" } },
+    "defaults": {
+      "type": "object",
+      "properties": {
+        "aspect": { "type": "string", "pattern": "^[0-9]+:[0-9]+$" },
+        "fps": { "type": "number", "exclusiveMinimum": 0 },
+        "resolution": { "type": "string", "pattern": "^[0-9]+x[0-9]+$" }
+      },
+      "additionalProperties": false
+    },
+    "look": {
+      "type": "object",
+      "properties": {
+        "medium": { "type": "string" },
+        "palette": { "$ref": "#/$defs/palette" },
+        "grade": { "type": "string" },
+        "grain": { "type": "string" }
+      },
+      "additionalProperties": { "type": "string" }
+    },
+    "camera": {
+      "type": "object",
+      "properties": {
+        "framing": { "enum": ["extreme_wide", "wide", "medium", "medium_close", "close_up", "extreme_close_up", "insert"] },
+        "angle": { "enum": ["eye_level", "low", "high", "overhead", "dutch"] },
+        "lens": { "type": "string", "description": "MUST be in style.lenses." },
+        "template": {
+          "description": "A camerawork template of the bible. It fills the camera fields that no level states.",
+          "$ref": "#/$defs/camId"
+        },
+        "move": { "enum": ["static", "pan", "tilt", "push_in", "pull_out", "dolly", "truck", "crane", "orbit", "handheld", "shake"] },
+        "direction": { "type": "string", "description": "For pan, tilt and truck: left, right, up or down." },
+        "amount": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 5,
+          "description": "Push and pull: the part of the frame the move removes (0.35: the end frame is 65% of the start frame). Pan, tilt and truck: travel in frame widths (heights for tilt). Shake: size as a part of the frame height."
+        },
+        "ease": { "enum": ["none", "in", "out", "in_out"], "description": "Fairing: slow in, slow out, or both." },
+        "hold_start": { "$ref": "#/$defs/duration", "description": "Time with no move at the start." },
+        "hold_end": { "$ref": "#/$defs/duration", "description": "Time with no move at the end." },
+        "center": {
+          "type": "array",
+          "items": { "type": "number", "minimum": 0, "maximum": 1 },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "The point a push ends on (or a pull starts from): [x, y], 0 to 1 from the top left. Default: the frame centre."
+        },
+        "canvas": {
+          "type": "string",
+          "pattern": "^[0-9]+:[0-9]+$",
+          "description": "The shape of a drawing that is larger than the frame, for example 21:9 for a pan or 9:16 for a tilt. The keyframe is drawn in this shape."
+        },
+        "render": {
+          "enum": ["engine", "model"],
+          "description": "engine: a held drawing, only the frame moves; an engine makes the video from the chosen keyframe with no video model. model (the default): a video model animates the shot."
+        }
+      },
+      "additionalProperties": false
+    },
+    "layout": {
+      "description": "Pills: where each character stands in the frame when the shot starts, and when it ends if they move. It is a plan: no take hashes it.",
+      "type": "object",
+      "required": ["start"],
+      "properties": {
+        "start": { "type": "array", "items": { "$ref": "#/$defs/pill" } },
+        "end": { "type": "array", "items": { "$ref": "#/$defs/pill" } }
+      },
+      "additionalProperties": false
+    },
+    "pill": {
+      "description": "A flat stand-in for one character of the shot.",
+      "type": "object",
+      "required": ["slot"],
+      "properties": {
+        "slot": { "enum": ["a", "b", "c"], "description": "The shot's first, second or third character." },
+        "x": { "type": "number", "minimum": 0, "maximum": 1, "description": "The centre: 0 is frame left, 1 is frame right." },
+        "y": { "type": "number", "minimum": 0, "maximum": 1, "description": "The eye line: 0 is the frame top, 1 is its bottom." },
+        "size": { "type": "number", "minimum": 0.03, "maximum": 2, "description": "The head height as a part of the frame height. The body is 7 heads tall." },
+        "facing": { "enum": ["left", "right", "camera", "away"] },
+        "look_at": { "enum": ["a", "b", "c"], "description": "The pill looks at this slot. It replaces facing." }
+      },
+      "additionalProperties": false
+    },
+    "cues": { "anyOf": [{ "$ref": "#/$defs/cueId" }, { "type": "array", "items": { "$ref": "#/$defs/cueId" } }] },
+    "direction": {
+      "description": "Fields that a scene states for all its shots and a shot can override.",
+      "type": "object",
+      "properties": {
+        "camera": { "$ref": "#/$defs/camera" },
+        "characters": { "anyOf": [{ "type": "array", "items": { "$ref": "#/$defs/charId" } }, { "$ref": "#/$defs/listOp" }] },
+        "forms": { "$ref": "#/$defs/looks" },
+        "outfits": { "$ref": "#/$defs/looks" },
+        "blocking": { "type": "object", "propertyNames": { "$ref": "#/$defs/charId" }, "additionalProperties": { "type": "string" } },
+        "dialogue": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["speaker", "line"],
+            "properties": { "speaker": { "$ref": "#/$defs/charId" }, "line": { "type": "string" }, "delivery": { "type": "string" } },
+            "additionalProperties": false
+          }
+        },
+        "props": { "anyOf": [{ "type": "array", "items": { "$ref": "#/$defs/propId" } }, { "$ref": "#/$defs/listOp" }] },
+        "control": {
+          "description": "Previs inputs: asset IDs, relative paths, or keyframe (animate from the keyframe).",
+          "type": "object",
+          "properties": {
+            "first_frame": { "$ref": "#/$defs/ref" },
+            "last_frame": { "$ref": "#/$defs/ref" },
+            "depth": { "$ref": "#/$defs/ref" },
+            "pose": { "$ref": "#/$defs/ref" },
+            "storyboard": { "$ref": "#/$defs/ref" }
+          },
+          "additionalProperties": false
+        },
+        "audio": {
+          "type": "object",
+          "properties": { "sfx": { "$ref": "#/$defs/cues" }, "music": { "$ref": "#/$defs/cues" } },
+          "additionalProperties": false
+        },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      }
+    },
+    "project": {
+      "type": "object",
+      "required": ["spec", "show"],
+      "properties": {
+        "spec": { "const": "olf/0.1" },
+        "show": { "$ref": "#/$defs/slug" },
+        "title": { "type": "string" },
+        "defaults": { "$ref": "#/$defs/defaults" },
+        "exports": { "type": "array", "items": { "type": "string", "pattern": "^[0-9]+:[0-9]+$" } },
+        "license": { "$ref": "#/$defs/license", "description": "Default license for assets the engine adds to the lock file." },
+        "upstream": {
+          "type": "object",
+          "required": ["show", "uri"],
+          "properties": { "show": { "$ref": "#/$defs/slug" }, "version": { "type": "string" }, "uri": { "type": "string" } },
+          "additionalProperties": false
+        },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "additionalProperties": false
+    },
+    "show": {
+      "description": "bible/show.yaml: logline, format, tone. v0.1 does not fix its fields.",
+      "type": "object",
+      "properties": { "title": { "type": "string" }, "logline": { "type": "string" }, "format": { "type": "string" }, "tone": { "type": "string" } }
+    },
+    "style": {
+      "type": "object",
+      "required": ["id", "look"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^style/[a-z0-9-]+$" },
+        "look": { "allOf": [{ "$ref": "#/$defs/look" }, { "required": ["medium"] }] },
+        "lenses": { "type": "array", "items": { "type": "string" } },
+        "references": { "$ref": "#/$defs/refTree" },
+        "negative": { "type": "array", "items": { "type": "string" } },
+        "credits": { "$ref": "#/$defs/credits" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "additionalProperties": false
+    },
+    "styleOverride": {
+      "description": "An episode's changes to the show style, for example a flashback palette.",
+      "type": "object",
+      "properties": {
+        "look": { "$ref": "#/$defs/look" },
+        "lenses": { "$ref": "#/$defs/list" },
+        "references": { "anyOf": [{ "$ref": "#/$defs/refTree" }, { "$ref": "#/$defs/listOp" }] },
+        "negative": { "$ref": "#/$defs/list" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "additionalProperties": false
+    },
+    "character": {
+      "type": "object",
+      "required": ["id", "name", "description"],
+      "properties": {
+        "id": { "$ref": "#/$defs/charId" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "voice": { "$ref": "#/$defs/voiceId" },
+        "sheet": { "description": "The character sheet. The whole image is the reference.", "$ref": "#/$defs/ref" },
+        "sheets": { "description": "More whole character sheets (another form, expressions).", "type": "array", "items": { "$ref": "#/$defs/ref" } },
+        "forms": {
+          "description": "Whole-body looks (hair, palette, tail).",
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/slug" },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "description": { "type": "string" },
+              "palette": { "$ref": "#/$defs/palette" },
+              "views": { "type": "object", "additionalProperties": { "$ref": "#/$defs/ref" } }
+            },
+            "additionalProperties": false
+          }
+        },
+        "outfits": {
+          "description": "Clothing, worn in any form.",
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/slug" },
+          "additionalProperties": {
+            "type": "object",
+            "properties": { "description": { "type": "string" }, "references": { "$ref": "#/$defs/refTree" } },
+            "additionalProperties": false
+          }
+        },
+        "details": { "type": "object", "additionalProperties": { "$ref": "#/$defs/ref" } },
+        "accessories": { "type": "array", "items": { "$ref": "#/$defs/propId" } },
+        "textures": { "type": "array", "items": { "$ref": "#/$defs/ref" } },
+        "references": { "$ref": "#/$defs/refTree" },
+        "credits": { "$ref": "#/$defs/credits" },
+        "likeness": {
+          "type": "object",
+          "required": ["real_person"],
+          "properties": { "real_person": { "type": "boolean" }, "consent": { "type": "string" } },
+          "additionalProperties": false
+        },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "additionalProperties": false
+    },
+    "location": {
+      "type": "object",
+      "required": ["id", "name", "description"],
+      "properties": {
+        "id": { "$ref": "#/$defs/locId" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "variants": { "type": "array", "items": { "$ref": "#/$defs/slug" } },
+        "references": { "$ref": "#/$defs/refTree" },
+        "credits": { "$ref": "#/$defs/credits" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "additionalProperties": false
+    },
+    "prop": {
+      "type": "object",
+      "required": ["id", "description"],
+      "properties": {
+        "id": { "$ref": "#/$defs/propId" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "references": { "$ref": "#/$defs/refTree" },
+        "credits": { "$ref": "#/$defs/credits" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "additionalProperties": false
+    },
+    "voice": {
+      "type": "object",
+      "required": ["id", "description"],
+      "properties": {
+        "id": { "$ref": "#/$defs/voiceId" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "sample": { "$ref": "#/$defs/ref" },
+        "credits": { "$ref": "#/$defs/credits" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "additionalProperties": false
+    },
+    "camerawork": {
+      "description": "A camera and staging template (bible/camerawork/<slug>/<slug>.yaml). A shot names it in camera.template.",
+      "type": "object",
+      "required": ["id", "family", "name", "intent", "camera", "timing"],
+      "properties": {
+        "id": { "$ref": "#/$defs/camId" },
+        "source": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+/[a-z0-9-]+@[0-9]+$",
+          "description": "The library template and version this entry was copied from, for example anime/tu-to-eyes@1."
+        },
+        "family": { "enum": ["hold", "push", "pan", "follow", "dialogue", "action", "mood"] },
+        "name": { "type": "string" },
+        "notation": { "type": "string", "description": "The production term for the move, for example T.U. (jiwa)." },
+        "intent": { "type": "string", "description": "What the shot does for the story." },
+        "camera": {
+          "description": "The camera fields the template fills. camera.render says how the shot is made (engine or model).",
+          "allOf": [{ "$ref": "#/$defs/camera" }, { "not": { "required": ["template"] } }]
+        },
+        "keyframe": { "type": "string", "description": "Words added to the keyframe prompt. {a}, {b}, {c} are the shot's characters, in order." },
+        "prompt": { "type": "string", "description": "Motion words added to the video prompt, with the same slot tokens." },
+        "avoid": { "type": "array", "items": { "type": "string" }, "description": "Words for the model: they go in the negative prompt of a video." },
+        "slots": {
+          "description": "The cast slots the template uses. An empty list is BG only: the shot has no characters.",
+          "type": "array",
+          "items": { "enum": ["a", "b", "c"] },
+          "uniqueItems": true
+        },
+        "framing": {
+          "description": "Framings the template suits. A shot with another framing gets a warning.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/camera/properties/framing" }
+        },
+        "timing": {
+          "description": "The length a shot gets when a person applies the template, and the range it suits.",
+          "type": "object",
+          "required": ["default"],
+          "properties": {
+            "default": { "anyOf": [{ "$ref": "#/$defs/duration" }, { "const": "dialogue", "description": "The length of the shot's chosen dialogue take." }] },
+            "min": { "$ref": "#/$defs/duration" },
+            "max": { "$ref": "#/$defs/duration" }
+          },
+          "additionalProperties": false
+        },
+        "rules": {
+          "description": "Checks a validator runs on each shot that uses the template. Each one gives a warning.",
+          "type": "object",
+          "properties": {
+            "needs_dialogue": { "type": "boolean", "description": "true: the shot has a dialogue line. false: it has none." },
+            "not_twice_in_a_row": { "type": "boolean", "description": "The shot before it in the scene uses another template." },
+            "max_amount": { "type": "number", "exclusiveMinimum": 0 },
+            "max_move": { "$ref": "#/$defs/duration", "description": "The longest move: the shot's length without its holds." },
+            "max_per_scene": { "type": "integer", "minimum": 1, "description": "The most shots of one scene that use the template." },
+            "needs_prop": { "type": "boolean", "description": "The shot names a prop." },
+            "sets_axis": { "type": "boolean", "description": "The shot fixes the 180° line of its scene: which side each of its characters is on." }
+          },
+          "additionalProperties": false
+        },
+        "layout": { "$ref": "#/$defs/layout" },
+        "credits": { "$ref": "#/$defs/credits" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "additionalProperties": false
+    },
+    "season": {
+      "description": "seasons/NN.yaml (optional): episodes in order, plus season-wide overrides (the same fields an episode may set).",
+      "type": "object",
+      "required": ["id", "episodes"],
+      "properties": {
+        "id": { "$ref": "#/$defs/seasonId" },
+        "title": { "type": "string" },
+        "synopsis": { "type": "string" },
+        "episodes": { "type": "array", "items": { "$ref": "#/$defs/episodeId" }, "uniqueItems": true },
+        "defaults": { "$ref": "#/$defs/defaults" },
+        "forms": { "$ref": "#/$defs/looks" },
+        "outfits": { "$ref": "#/$defs/looks" },
+        "style": { "$ref": "#/$defs/styleOverride" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "additionalProperties": false
+    },
+    "episode": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "$ref": "#/$defs/episodeId" },
+        "title": { "type": "string" },
+        "synopsis": { "type": "string" },
+        "scenes": { "type": "array", "items": { "$ref": "#/$defs/sceneId" } },
+        "cut": {
+          "description": "The saved edit: takes in order, with trims and an optional transition.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["take"],
+            "properties": {
+              "take": { "$ref": "#/$defs/takeId" },
+              "in": { "$ref": "#/$defs/duration" },
+              "out": { "$ref": "#/$defs/duration" },
+              "transition": { "enum": ["cut", "fade"] },
+              "audio": { "description": "Which sound plays: the take's own (default) or the shot's select.audio dialogue take.", "enum": ["own", "separate"] }
+            },
+            "additionalProperties": false
+          }
+        },
+        "cues": {
+          "description": "Music and SFX cues of this episode, each the cue e<NN>/cue/<slug>: a kind, a description and a length.",
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/slug" },
+          "additionalProperties": {
+            "type": "object",
+            "required": ["kind", "description"],
+            "properties": {
+              "kind": { "enum": ["music", "sfx"] },
+              "description": { "type": "string" },
+              "duration": { "$ref": "#/$defs/duration" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "audio": {
+          "description": "Music and SFX takes over the cut.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["take"],
+            "properties": {
+              "take": { "$ref": "#/$defs/takeId" },
+              "start": { "$ref": "#/$defs/duration" },
+              "volume": { "type": "number", "minimum": 0 },
+              "duck_under_dialogue": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "defaults": { "$ref": "#/$defs/defaults" },
+        "forms": { "$ref": "#/$defs/looks" },
+        "outfits": { "$ref": "#/$defs/looks" },
+        "style": { "$ref": "#/$defs/styleOverride" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "additionalProperties": false
+    },
+    "scene": {
+      "type": "object",
+      "$ref": "#/$defs/direction",
+      "required": ["id"],
+      "properties": {
+        "id": { "$ref": "#/$defs/sceneId" },
+        "heading": { "type": "string" },
+        "location": { "$ref": "#/$defs/locId" },
+        "variant": { "$ref": "#/$defs/slug" },
+        "mood": { "type": "string" },
+        "script": { "type": "string", "description": "Fountain text." },
+        "shots": { "type": "array", "items": { "$ref": "#/$defs/shot" } }
+      },
+      "unevaluatedProperties": false
+    },
+    "shot": {
+      "type": "object",
+      "$ref": "#/$defs/direction",
+      "required": ["id", "duration", "description", "camera"],
+      "properties": {
+        "id": { "$ref": "#/$defs/shotId" },
+        "duration": { "$ref": "#/$defs/duration" },
+        "description": { "type": "string" },
+        "camera": { "required": ["framing"] },
+        "layout": { "$ref": "#/$defs/layout" },
+        "select": {
+          "description": "The chosen takes of this shot.",
+          "type": "object",
+          "properties": {
+            "keyframe": { "type": "string", "pattern": "^kf[0-9]+$" },
+            "video": { "type": "string", "pattern": "^v[0-9]+$" },
+            "audio": { "type": "string", "pattern": "^a[0-9]+$" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "take": {
+      "type": "object",
+      "required": ["id", "kind", "status", "output", "provenance"],
+      "properties": {
+        "id": { "$ref": "#/$defs/takeId" },
+        "kind": { "enum": ["keyframe", "video", "audio"] },
+        "status": { "enum": ["draft", "candidate", "approved", "rejected"], "description": "Stale is calculated, never stored." },
+        "output": { "$ref": "#/$defs/assetId" },
+        "duration": { "$ref": "#/$defs/duration" },
+        "inputs_hash": { "$ref": "#/$defs/hash" },
+        "inputs": {
+          "type": "object",
+          "additionalProperties": { "anyOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] }
+        },
+        "provenance": {
+          "type": "object",
+          "required": ["provider", "model", "created"],
+          "properties": {
+            "provider": { "type": "string" },
+            "model": { "type": "string" },
+            "model_version": { "type": "string" },
+            "seed": { "type": "integer" },
+            "prompt": { "type": "string" },
+            "negative_prompt": { "type": "string" },
+            "parameters": { "type": "object" },
+            "created": { "type": "string" },
+            "cost": {
+              "type": "object",
+              "required": ["amount", "currency"],
+              "properties": { "amount": { "type": "number", "minimum": 0 }, "currency": { "type": "string" } },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "qa": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["check"],
+            "properties": { "check": { "type": "string" }, "score": { "type": "number" }, "pass": { "type": "boolean" } },
+            "additionalProperties": false
+          }
+        },
+        "notes": { "type": "string" },
+        "kept_from": { "description": "A person kept this stale take: the inputs_hash it had before.", "$ref": "#/$defs/hash" },
+        "audio_source": { "enum": ["model", "separate"] },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "additionalProperties": false
+    },
+    "lock": {
+      "description": "assets/lock.yaml: asset ID to URI, hash and license. A relative uri is relative to the project folder.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/assetId" },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["uri", "hash", "license"],
+        "properties": {
+          "uri": { "type": "string" },
+          "hash": { "$ref": "#/$defs/hash" },
+          "type": { "type": "string" },
+          "source": { "enum": ["generated", "uploaded", "licensed"] },
+          "license": { "$ref": "#/$defs/license" },
+          "extensions": { "$ref": "#/$defs/extensions" }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

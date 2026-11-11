@@ -8,7 +8,8 @@ version = "0.1.0"
 description = "FFmpeg media ops (Phase 2)."
 requires-python = ">=3.11"
 license = { text = "MIT" }
-dependencies = ["vinci-protocol==0.1.0"]
+# Pillow draws burned-in subtitles (vinci_media.episode), so exports need no ffmpeg drawtext/libass.
+dependencies = ["vinci-protocol==0.1.0", "pillow>=10.1"]
 
 [tool.setuptools.packages.find]
 include = ["vinci_media*"]

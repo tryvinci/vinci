@@ -1,0 +1,15 @@
+# Vinci OLF camerawork library, action family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/power-up-low
+version: 1
+family: action
+name: Power up from a low angle
+notation: Aori, PAN up
+intent: A tilt up from a low angle while the hair and the light rise.
+camera: { angle: low, move: tilt, direction: up, ease: in_out, render: model }
+framing: [medium, wide]
+timing: { default: 3+00, min: 2+00, max: 5+00 }
+slots: [a]
+prompt: >
+  Low angle. The camera tilts up along {a} while power gathers: the hair and the clothes
+  rise, and the light grows around {a}.
+avoid: [the face changes in the glow, camera shake]

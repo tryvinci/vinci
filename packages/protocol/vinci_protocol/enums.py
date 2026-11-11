@@ -48,6 +48,9 @@ class Capability(StrEnum):
     REFRAME = "reframe"
     CAPTION = "caption"
     EDIT_MULTI = "edit_multi"
+    T2T = "t2t"  # text in, text out (script drafts, shot lists)
+    MUSIC = "music"  # a music cue from a description and a length
+    SFX = "sfx"  # a sound effect from a description and a length
 
 
 class AssetKind(StrEnum):

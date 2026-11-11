@@ -1,0 +1,13 @@
+# Vinci OLF camerawork library, dialogue family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/pov-look
+version: 1
+family: dialogue
+name: Point of view
+notation: POV
+intent: What the character sees, after a shot of them looking.
+camera: { move: static, render: model }
+timing: { default: 2+00, min: 1+00, max: 5+00 }
+keyframe: What a character sees from the height of their eyes.
+prompt: >
+  Static camera at the height of a character's eyes, as if seen through them.
+avoid: [camera shake]

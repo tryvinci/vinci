@@ -55,6 +55,7 @@ from vinci_media.adapt import (
     safe_area_report,
     validate_output_image,
 )
+from vinci_media.camera import camera_move
 from vinci_media.custom_presets import create_custom_preset, delete_custom_preset
 from vinci_media.ops import (
     burn_captions,
@@ -100,6 +101,7 @@ from vinci_provider_google import GoogleProvider
 from vinci_provider_higgsfield import HiggsfieldProvider
 from vinci_provider_magnific import MagnificProvider
 from vinci_provider_openai import OpenAIProvider
+from vinci_provider_sdk.agent_cli import AGENT_CLIS, AgentCliProvider, find_cli
 from vinci_provider_sdk.mock import MockProvider
 from vinci_provider_wavespeed import WavespeedProvider
 from vinci_skills.loader import Skill, SkillLoader, install_skill_dir, interpolate
@@ -284,6 +286,9 @@ CAP_KIND = {
     Capability.TRANSCRIBE: (AssetKind.TEXT, "application/json"),
     Capability.REFRAME: (AssetKind.VIDEO, "video/mp4"),
     Capability.CAPTION: (AssetKind.VIDEO, "video/mp4"),
+    Capability.T2T: (AssetKind.TEXT, "text/plain"),
+    Capability.MUSIC: (AssetKind.AUDIO, "audio/mpeg"),
+    Capability.SFX: (AssetKind.AUDIO, "audio/mpeg"),
 }
 
 
@@ -411,6 +416,11 @@ class Engine:
             ),
             "magnific": MagnificProvider(api_key=resolver.resolve("MAGNIFIC_API_KEY"), cas=cas),
         }
+        # Installed agent CLIs (Claude Code, Codex...): text models that bill the person's own
+        # sign-in, so they run only when a person picks one (vinci_provider_sdk/agent_cli.py).
+        self.agent_clis = [name for name in AGENT_CLIS if find_cli(name)]
+        self.providers |= {name: AgentCliProvider(name, cas) for name in self.agent_clis}
+        LOG.info("agent CLIs found: %s", ", ".join(self.agent_clis) or "none")
         from vinci_mcp.adapter import HttpMcpTransport, McpProvider
 
         for name, cfg in self.config.providers.items():
@@ -463,6 +473,7 @@ class Engine:
             for name, body in self.config.providers.items()
             if isinstance(body, dict) and body.get("enabled")
         ]
+        extra += [name for name in self.agent_clis if name not in extra]  # on while installed
         if not self.config.demo:
             return extra
         names = ["mock"]
@@ -481,6 +492,8 @@ class Engine:
     def provider_available(self, name: str) -> bool:
         if name == "mock":
             return name in self.enabled_provider_ids() or self.config.demo
+        if name in AGENT_CLIS:
+            return name in self.agent_clis
         if name == "cloudflare":
             return (
                 bool(self.resolver.resolve("CLOUDFLARE_API_TOKEN"))
@@ -510,7 +523,7 @@ class Engine:
             names = ["mock"] if self.config.demo else []
         catalogs: list[Catalog] = []
         for name in names:
-            if is_mcp_name(name):
+            if is_mcp_name(name) or name in AGENT_CLIS:  # catalogs that come from the provider
                 extra = self._mcp_catalog(name)
                 if extra:
                     catalogs.append(extra)
@@ -1461,7 +1474,9 @@ class Engine:
         spec = _apply_model_id(spec, model_id)
         catalog = self.catalog()
         available = self.routing_providers()
-        if not available:
+        # Only a model step needs a provider: a workflow of local steps (an OLF engine move,
+        # a reframe) runs with none connected.
+        if not available and any(node.type.value == "generate" for node in spec.nodes):
             raise RuntimeError(
                 "no available providers; run vinci init --demo or add a provider key"
             )
@@ -2090,7 +2105,8 @@ class Engine:
         return job
 
     def _wait_status(self, provider: Any, ref: ProviderJobRef) -> JobStatus:
-        timeout = float(os.environ.get("VINCI_JOB_POLL_TIMEOUT", "300"))
+        # 900 s: a live video job can take several minutes (found in the 2026-11-09 live test).
+        timeout = float(os.environ.get("VINCI_JOB_POLL_TIMEOUT", "900"))
         interval = float(os.environ.get("VINCI_JOB_POLL_INTERVAL", "0.4"))
         deadline = time.monotonic() + timeout
         status: JobStatus | None = None
@@ -2862,6 +2878,8 @@ class Engine:
         return job
 
     def _run_media(self, run_id: str, node: WorkflowNode, params: dict[str, Any]) -> Job:
+        """Run a local media step (``params["op"]``: a cut, a reframe, a camera move, ...) in a
+        work folder and store its outputs. No provider runs, so it costs $0."""
         self._require_journal_writer_live()
         op = str(params.get("op") or "")
         work = self.config.home / "tmp" / uuid.uuid4().hex
@@ -2933,6 +2951,26 @@ class Engine:
                 text = json.dumps(text)
             dest = work / "captioned.mp4"
             burn_captions(src, dest, str(text))
+            outputs = [self._put_path(dest, kind=AssetKind.VIDEO, mime="video/mp4", run_id=run_id)]
+        elif op == "camera_move":
+            # A still under a camera move (an OLF engine move): no model runs, so it costs $0.
+            src = self._materialize(params.get("media"))
+            wide, _, high = str(params.get("size") or "1920x1080").partition("x")
+            # `canvas`: a pan uses the room of a drawing larger than the frame (camera.canvas).
+            how = (
+                "move", "direction", "amount", "ease", "hold_start", "hold_end", "center", "canvas"
+            )
+            dest = work / "move.mp4"
+            camera_move(
+                src,
+                dest,
+                width=int(wide),
+                height=int(high),
+                seconds=float(params.get("seconds") or 0),
+                fps=float(params.get("fps") or 24),
+                seed=str(params.get("seed") or ""),
+                **{k: params[k] for k in how if params.get(k) is not None},
+            )
             outputs = [self._put_path(dest, kind=AssetKind.VIDEO, mime="video/mp4", run_id=run_id)]
         elif op == "concat":
             paths = [self._materialize(item) for item in (params.get("media") or [])]

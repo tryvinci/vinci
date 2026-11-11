@@ -1,7 +1,7 @@
 /**
  * Studio shell navigation. One format-grouped rail, plus All tools and Ctrl+K.
  *
- * The rail is the format groups (Explore, Image, Video, Canvas, Library) with
+ * The rail is the format groups (Explore, Image, Video, Canvas, Shows, Library) with
  * Features|Models flyouts and the Skills / Find / Cost / Connect footer.
  * All tools and Ctrl+K index those same entries. They are not a second menu.
  * Home, Assets, Edit, Supercomputer, 3D, and Collab have no rail slot; they
@@ -21,6 +21,7 @@ export type PageId =
   | "upscale"
   | "edit"
   | "canvas"
+  | "shows"
   | "library"
   | "assets"
   | "agent"
@@ -148,6 +149,7 @@ export const RAIL_GROUPS: RailGroup[] = [
     label: "Workflows",
     items: [
       { id: "canvas", title: "Canvas", icon: "M3 4h5v4H3zM10 10h5v4h-5zM8 6h3v4" },
+      { id: "shows", title: "Shows", icon: "M3 3h12v12H3zM6 3v12M12 3v12M3 7h3M3 11h3M12 7h3M12 11h3" },
       { id: "library", title: "Library", icon: "M3 4h4v11H3zM8 4h3v11H8zM12.5 4.5L15 15" },
     ],
   },
@@ -193,6 +195,7 @@ const RAIL_INDEX: Tool[] = [
   { id: "video", title: "Create Video", blurb: "Make a clip from a prompt or a still", page: "video", category: "video", pinable: false },
   { id: "speak", title: "Talking Head", blurb: "A still that speaks a line", page: "speak", category: "audio", pinable: false },
   { id: "canvas", title: "Canvas", blurb: "Chain steps on the board", page: "canvas", category: "canvas", pinable: false },
+  { id: "shows", title: "Shows", blurb: "Episodes from a show bible: render shots, review takes", page: "shows", category: "video", pinable: false },
   { id: "library", title: "Library", blurb: "People, places, props, and styles to @mention", page: "library", category: "library", pinable: false },
   { id: "skills", title: "Skills", blurb: "Workflows installed on this computer", page: "skills", category: "templates", pinable: true },
   { id: "find", title: "Find", blurb: "Search files on this computer", page: "find", category: "utilities", pinable: true },

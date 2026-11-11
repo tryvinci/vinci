@@ -1,0 +1,13 @@
+# Vinci OLF camerawork library, push family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/tu-to-eyes
+version: 1
+family: push
+name: Track up to the eyes
+notation: T.U.
+intent: Push from a close-up to the eyes for a realization or a decision.
+camera: { move: push_in, amount: 0.35, ease: in_out, hold_start: 0+12, hold_end: 0+12, center: [0.5, 0.42], render: engine }
+framing: [close_up, medium_close]
+timing: { default: 3+00, min: 2+00, max: 5+00 }
+slots: [a]
+prompt: >          # for a shot that sets render: model
+  A slow, steady push toward {a}'s eyes. Only the eyes move.

@@ -1,0 +1,13 @@
+# Vinci OLF camerawork library, push family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/tu-slow
+version: 1
+family: push
+name: Slow track up
+notation: T.U. (jiwa)
+intent: A slow push that builds tension under dialogue.
+camera: { move: push_in, amount: 0.12, ease: in_out, render: engine }
+timing: { default: 4+00, min: 2+00, max: 8+00 }
+slots: [a]
+rules: { max_amount: 0.2 }
+prompt: >          # for a shot that sets render: model
+  A very slow, steady push toward {a}. {a} stays almost still.

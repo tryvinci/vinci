@@ -1,0 +1,16 @@
+# Vinci OLF camerawork library, dialogue family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/kuchipaku-hold
+version: 1
+family: dialogue
+name: Held pose, mouth only
+notation: Kuchipaku
+intent: A held pose. Only the mouth moves while the character says the line.
+camera: { move: static, render: model }
+framing: [medium, medium_close, close_up]
+timing: { default: dialogue, min: 1+00 }   # dialogue: the length of the chosen dialogue take
+slots: [a]
+rules: { needs_dialogue: true }
+prompt: >
+  Static camera, limited animation. {a} holds one pose and only the mouth moves to speak.
+  The eyes blink one time at most.
+avoid: [head movement, body movement, new gestures, camera movement]

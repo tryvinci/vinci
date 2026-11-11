@@ -25,7 +25,15 @@ make test && make conformance && make lint
 
 Demo mode (no provider spend): `make demo` or `./scripts/vinci init --demo` then `./scripts/vinci run @tryvinci/image-generate --input '{"prompt":"a red cube"}'`. Do not `npx @tryvinci/cli` from the registry until a human publishes.
 
-Do not publish `@tryvinci/*` to npm or `vinci-*` to PyPI until a human explicitly asks. Keep `tryvinci/vinci` **private** until a human opens it. `scripts/create-github-repo.sh` creates the repo `--private` and refuses `--public`. Cursor GitHub App tokens cannot create org repos; use an org-admin `gh` session or `TRYVINCI_GITHUB_TOKEN`.
+Do not publish `@tryvinci/*` to npm or `vinci-*` to PyPI until a maintainer explicitly asks.
+
+## Where to start
+
+- Browse issues labelled [`good first issue`](https://github.com/tryvinci/vinci/labels/good%20first%20issue). Each one names the files to touch and how to test.
+- **Add a skill.** A skill is a folder under `skills/` with `vinci.yaml` (inputs, outputs, cost range), `workflow.yaml` (a small node graph) and `SKILL.md`. Copy `skills/tts/` to start. `make skills-validate` checks it.
+- **Add a model to a provider.** Catalogs live in `packages/core/vinci_core/catalogs/<provider>.json`. Add the entry with its price and capabilities, then run `make conformance`.
+- **Add a provider.** Start from `packages/provider-sdk` and an existing plugin such as `packages/provider-fal`. It lands after the conformance suite passes.
+- Questions and ideas go in [Discussions](https://github.com/tryvinci/vinci/discussions).
 
 ## Protocol
 

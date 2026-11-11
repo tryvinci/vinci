@@ -1,0 +1,15 @@
+# Vinci OLF camerawork library, mood family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/transformation
+version: 1
+family: mood
+name: Transformation
+notation: Bank
+intent: A power-up or a change of outfit. One take, used again in each episode (a bank cut).
+camera: { move: orbit, render: model }
+framing: [medium, wide]
+timing: { default: 6+00, min: 3+00, max: 10+00 }
+slots: [a]
+prompt: >
+  {a} transforms. Light wraps around {a}, the outfit changes piece by piece, and {a} ends
+  in a pose. The camera circles {a} one time.
+avoid: [the face changes]

@@ -38,6 +38,8 @@ export type ModelFunction =
   | "audio_tts"
   | "audio_sts"
   | "audio_voice"
+  | "audio_music"
+  | "audio_sfx"
   | "lipsync"
   | "transcribe"
   | "reframe"
@@ -112,6 +114,8 @@ const FUNCTIONS: ModelFunction[] = [
   "audio_tts",
   "audio_sts",
   "audio_voice",
+  "audio_music",
+  "audio_sfx",
   "lipsync",
   "transcribe",
   "reframe",
@@ -160,9 +164,11 @@ const MEDIA_CAPS = new Set([
   "reframe",
   "caption",
   "edit_multi",
+  "music",
+  "sfx",
 ]);
 
-const TEXT_CAPS = new Set(["llm", "chat", "text", "assistant"]);
+const TEXT_CAPS = new Set(["llm", "chat", "text", "assistant", "t2t"]);
 
 const CAPABILITY_FUNCTIONS: Record<string, ModelFunction[]> = {
   t2i: ["image_gen"],
@@ -175,11 +181,14 @@ const CAPABILITY_FUNCTIONS: Record<string, ModelFunction[]> = {
   tts: ["audio_tts"],
   sts: ["audio_sts"],
   voice_clone: ["audio_voice"],
+  music: ["audio_music"],
+  sfx: ["audio_sfx"],
   lipsync: ["lipsync"],
   transcribe: ["transcribe"],
   reframe: ["reframe"],
   caption: ["caption"],
   llm: ["text"],
+  t2t: ["text"],
   chat: ["text"],
   text: ["text"],
   assistant: ["text"],
@@ -226,8 +235,8 @@ function hasMask(blob: string): boolean {
  * True when the row is a text model.
  *
  * Media rows that mention gpt or gemini stay media. A row is text when it
- * lists llm/chat/text/assistant, or when it has no media capability and its
- * id is a chat model. No bundled catalog row is text today.
+ * lists llm/chat/text/assistant/t2t, or when it has no media capability and its
+ * id is a chat model. Bundled text rows use t2t (OLF script drafts).
  */
 function isTextModel(model: CatalogRow, caps: Set<string>): boolean {
   for (const cap of caps) {
@@ -294,6 +303,8 @@ export function classifyModel(model: CatalogRow): ClassifiedModel {
   if (caps.has("tts")) functions.add("audio_tts");
   if (caps.has("sts")) functions.add("audio_sts");
   if (caps.has("voice_clone")) functions.add("audio_voice");
+  if (caps.has("music")) functions.add("audio_music"); // OLF cues (COREPRODUC-551)
+  if (caps.has("sfx")) functions.add("audio_sfx");
   if (caps.has("lipsync")) functions.add("lipsync");
   if (caps.has("transcribe")) functions.add("transcribe");
   if (caps.has("reframe")) functions.add("reframe");

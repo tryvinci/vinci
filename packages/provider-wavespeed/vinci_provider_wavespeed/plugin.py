@@ -34,6 +34,35 @@ def _image_input(req: JobRequest) -> str | None:
     return None
 
 
+def _references(req: JobRequest, first: str) -> list[str]:
+    """Every reference image, the primary one first (OLF sends ``image_urls``; Studio one image)."""
+    urls = req.inputs.get("image_urls")
+    more = [x for x in urls if isinstance(x, str) and x] if isinstance(urls, list) else []
+    return list(dict.fromkeys([first, *more]))
+
+
+# Edit routes that take a list of references (`images`), and the most each takes (Wavespeed API
+# docs, checked 2026-11-09): the route suffix to add for an edit, and the limit.
+_LIST_ROUTES = {"bytedance/seedream-v4.5": ("/edit", 10), "google/nano-banana-pro/edit": ("", 14)}
+# Seedream sets its shape only with `size` ("width*height", default 2048*2048); it has no
+# `aspect_ratio` (Wavespeed API docs, checked 2026-11-10). Sizes the docs suggest, else about
+# 2048*2048 pixels in the asked shape, in steps of 16 (COREPRODUC-566).
+_SEEDREAM_SIZES = {"1:1": "2048*2048", "16:9": "2560*1440", "9:16": "1440*2560", "4:3": "2688*2016",
+                   "3:4": "2016*2688", "3:2": "2688*1792", "2:3": "1792*2688"}  # fmt: skip
+
+
+def _seedream_size(aspect: object) -> str | None:
+    """The Seedream `size` for an aspect ratio such as "16:9", or None for a malformed one."""
+    w, _, h = str(aspect).partition(":")
+    if not (w.isdigit() and h.isdigit() and int(w) and int(h)):
+        return None
+    if str(aspect) in _SEEDREAM_SIZES:
+        return _SEEDREAM_SIZES[str(aspect)]
+    shape = int(w) / int(h)
+    width = round((2048 * 2048 * shape) ** 0.5 / 16) * 16
+    return f"{width}*{round(width / shape / 16) * 16}"
+
+
 # InfiniteTalk bills per second (720p $0.06, 480p $0.03), minimum 3s, cap 10 minutes.
 # https://wavespeed.ai/docs/docs-api/wavespeed-ai/infinitetalk
 _TALK_MODEL = "wavespeed:infinitetalk:2026-08"
@@ -191,11 +220,11 @@ class WavespeedProvider(CatalogBackedProvider):
         seconds = math.ceil(heard) if heard else _hint_seconds(hint)
         # Zero, NaN, and infinity are not lengths. A missing hint is rejected
         # only when a store is configured.
-        bad_hint = hint_number is not None and (
-            not math.isfinite(hint_number) or hint_number <= 0
-        )
-        remote_unpriced = _remote_audio(audio) and not heard and (
-            bad_hint or (seconds is None and self._cas is not None)
+        bad_hint = hint_number is not None and (not math.isfinite(hint_number) or hint_number <= 0)
+        remote_unpriced = (
+            _remote_audio(audio)
+            and not heard
+            and (bad_hint or (seconds is None and self._cas is not None))
         )
         if remote_unpriced:
             raise ValueError(
@@ -275,17 +304,21 @@ class WavespeedProvider(CatalogBackedProvider):
                 payload["resolution"] = resolution
         else:
             payload["prompt"] = self.prompt_text(req)
-            image = self._provider_image(_image_input(req))
+            first = _image_input(req)
+            listed = bool(first) and endpoint in _LIST_ROUTES  # these routes read every reference
+            image = None if listed else self._provider_image(first)
             if image and "/text-to-video" in endpoint:
                 # t2v+i2v models: the text route drops the still, so send it to the image route.
                 # Keeps a variant suffix (text-to-video-turbo -> image-to-video-turbo). Rewrites the
                 # endpoint only, never the base URL (WAVESPEED_API_URL can be any host).
                 route = endpoint.replace("/text-to-video", "/image-to-video", 1)
                 url = f"{self._base()}/api/v3/{route}"
-            if image and endpoint == "bytedance/seedream-v4.5":
-                # Seedream edits live on /edit and take a list of references.
-                url += "/edit"
-                payload["images"] = [image]
+            if listed and first:
+                # Seedream edits live on /edit; both routes take `images`, not `image`.
+                suffix, limit = _LIST_ROUTES[endpoint]
+                url += suffix
+                refs = _references(req, first)[:limit]
+                payload["images"] = [self._provider_image(ref) or ref for ref in refs]
             elif image:
                 payload["image"] = image
             last = req.inputs.get("last_frame_url") or req.inputs.get("tail_image_url")
@@ -300,6 +333,9 @@ class WavespeedProvider(CatalogBackedProvider):
             size = req.inputs.get("size") or req.inputs.get("resolution")
             if size:
                 payload["size"] = str(size).replace("x", "*").replace("×", "*")
+            elif aspect and endpoint.startswith("bytedance/seedream") and _seedream_size(aspect):
+                # Seedream reads no aspect_ratio: a 16:9 show got 2048x2048 keyframes before.
+                payload["size"] = _seedream_size(aspect)
         body = self._post_json(url, self._headers(), payload)
         ref = str(body.get("id") or body.get("request_id") or "")
         data = body.get("data")

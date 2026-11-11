@@ -1,0 +1,14 @@
+# Vinci OLF camerawork library, hold family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/ambient-hold
+version: 1
+family: hold
+name: Still character, moving air
+notation: Fix
+intent: The character is still while rain, dust, snow or petals move.
+camera: { move: static, render: model }
+timing: { default: 4+00, min: 2+00, max: 8+00 }
+slots: [a]
+prompt: >
+  Static camera. {a} stays still. Only the air moves: rain, dust, snow or petals
+  drift through the frame.
+avoid: [character movement, camera movement, a second effect]

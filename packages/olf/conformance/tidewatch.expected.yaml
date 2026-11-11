@@ -1,0 +1,244 @@
+# Expected output of the tidewatch conformance sample (OLF v0.1, SPEC.md).
+# An engine passes when it resolves each shot to `resolved` and gets the same `inputs_hash`.
+# Video hashes need a keyframe take, so they are tested in packages/olf/tests instead.
+# Reviewed by hand against SPEC.md. Change it only together with a reviewed spec change.
+e02/s03/sh014:
+  inputs_hash:
+    keyframe: sha256:62defcbf9889a81b66ce90a5c8565ba487da24d5b35cee6f7b8283d542f0008e
+    audio: sha256:cb6de00a21d4f17ebc28e7b26ef7e70f5963e8e303d6600ea642030a174901e4
+  resolved:
+    id: e02/s03/sh014
+    defaults:
+      aspect: 16:9
+      fps: 24
+      resolution: 1920x1080
+    style:
+      id: style/main
+      look:
+        medium: 2D anime
+        palette:
+        - '#1b2a3a'
+        - '#e8c07d'
+        - '#c44b3a'
+        grade: teal shadows, warm highlights, low contrast
+        grain: medium
+      lenses:
+      - 24mm
+      - 35mm
+      - 50mm
+      - 85mm
+      references:
+      - asset/2f58f14cb2a5a8f639984afb5442f682133dbb253ac6a924c7c7ebd5c4f26126
+      negative:
+      - text
+      - watermark
+      - extra limbs
+    heading: INT. LAMP ROOM - NIGHT
+    location:
+      id: loc/lighthouse
+      name: Lamp room
+      description: Round glass room, brass lamp at the centre, sea on all sides.
+      references:
+        establishing: asset/a3023e9cd6b69d924dd954bf67975721d00869e20152f03a220000df955b5c35
+      variant: night
+    characters:
+    - id: char/mira
+      name: Mira Sol
+      description: Lighthouse keeper and fox spirit. Fox ears, long hair, large tail.
+      voice:
+        id: voice/mira
+        description: Low, calm, slight rasp.
+        extensions:
+          elevenlabs:
+            voice_id: '...'
+      sheet: asset/28c25143e8ec48262c2febbf7468d2f77bae36a63542728e369acee3ec8bea1c
+      details:
+        eyes: asset/0da0f9d314bb5dc0823eac5315cf1b3539b150da0eef0e9a1b24c2fd56e1d581
+      accessories:
+      - prop/bell
+      - prop/fox-mask
+      - prop/ribbon
+      textures:
+      - asset/54b339047a2f2772162768a893ef8c43649e87b15b9ae8972646807346c3ad80
+      form:
+        name: winter
+        description: White hair fading to ice blue, snowflake motifs.
+        palette:
+        - '#eef6fb'
+        - '#7cc7e8'
+        - '#1f3a6b'
+      outfit:
+        name: night
+        description: Wool sweater, no ribbons.
+    mood: tense, quiet
+    script: "Mira lifts the floorboard. A brass key, wrapped in cloth.\nMIRA: You kept the key?\n"
+    duration: 4
+    description: Mira looks up from the key toward the door.
+    camera:
+      framing: close_up
+      angle: eye_level
+      lens: 50mm
+      move: push_in
+    blocking:
+      char/mira: kneeling by the open floorboard, key in right hand
+    dialogue:
+    - speaker: char/mira
+      line: You kept the key?
+      delivery: whisper
+    props:
+    - id: prop/brass-key
+      description: Old brass key, long shank, ring bow, wrapped in cloth.
+      references:
+      - asset/db233464e2835a1353f24d4b919ffa83698e29232ea9c42f73360fbc7ee64c28
+    control:
+      first_frame: keyframe
+e02/s03/sh015:
+  inputs_hash:
+    keyframe: sha256:582bf0bae05205de97bed938024f2905e86623612e7fccdc17734d58e7227416
+    audio: sha256:9b9e508aa4019fb81cd4eea48239278ac57665842a106b811b61f01579ad8468
+  resolved:
+    id: e02/s03/sh015
+    defaults:
+      aspect: 16:9
+      fps: 24
+      resolution: 1920x1080
+    style:
+      id: style/main
+      look:
+        medium: 2D anime
+        palette:
+        - '#1b2a3a'
+        - '#e8c07d'
+        - '#c44b3a'
+        grade: teal shadows, warm highlights, low contrast
+        grain: medium
+      lenses:
+      - 24mm
+      - 35mm
+      - 50mm
+      - 85mm
+      references:
+      - asset/2f58f14cb2a5a8f639984afb5442f682133dbb253ac6a924c7c7ebd5c4f26126
+      negative:
+      - text
+      - watermark
+      - extra limbs
+    heading: INT. LAMP ROOM - NIGHT
+    location:
+      id: loc/lighthouse
+      name: Lamp room
+      description: Round glass room, brass lamp at the centre, sea on all sides.
+      references:
+        establishing: asset/a3023e9cd6b69d924dd954bf67975721d00869e20152f03a220000df955b5c35
+      variant: night
+    characters:
+    - id: char/mira
+      name: Mira Sol
+      description: Lighthouse keeper and fox spirit. Fox ears, long hair, large tail.
+      voice:
+        id: voice/mira
+        description: Low, calm, slight rasp.
+        extensions:
+          elevenlabs:
+            voice_id: '...'
+      sheet: asset/28c25143e8ec48262c2febbf7468d2f77bae36a63542728e369acee3ec8bea1c
+      details:
+        eyes: asset/0da0f9d314bb5dc0823eac5315cf1b3539b150da0eef0e9a1b24c2fd56e1d581
+      accessories:
+      - prop/bell
+      - prop/fox-mask
+      - prop/ribbon
+      textures:
+      - asset/54b339047a2f2772162768a893ef8c43649e87b15b9ae8972646807346c3ad80
+      form:
+        name: ember
+        description: Orange-red hair, maple-leaf motifs, flame-tipped tail.
+        palette:
+        - '#ff7a1a'
+        - '#c4161c'
+        - '#3a0d0d'
+        views:
+          front: asset/c68aed2b2712883adf0094a1f1eb9b0dc592a27c92504b95dd3544618489ba11
+          back: asset/daa7676d336afcce229f765c62f8227303f9d3b791da90d63fc1dbd016168bc3
+      outfit:
+        name: night
+        description: Wool sweater, no ribbons.
+    mood: tense, quiet
+    script: "Mira lifts the floorboard. A brass key, wrapped in cloth.\nMIRA: You kept the key?\n"
+    duration: 2.5
+    description: The door creaks open. Mira turns, the key hidden behind her back.
+    camera:
+      framing: medium
+      angle: low
+      lens: 35mm
+      move: static
+    blocking:
+      char/mira: standing, key behind her back
+    control:
+      first_frame: keyframe
+e02/s03/sh016:
+  inputs_hash:
+    keyframe: sha256:718b406994f92db9724ac5d7453852f02bd8bc6ad341d057b6587487ba87dc5f
+    audio: sha256:262ef0d9a768cfa06bf23234a56d82967a18fdd17d1009cc01e4f60deb01ca23
+  resolved:
+    id: e02/s03/sh016
+    defaults:
+      aspect: 16:9
+      fps: 24
+      resolution: 1920x1080
+    style:
+      id: style/main
+      look:
+        medium: 2D anime
+        palette:
+        - '#1b2a3a'
+        - '#e8c07d'
+        - '#c44b3a'
+        grade: teal shadows, warm highlights, low contrast
+        grain: medium
+      lenses:
+      - 24mm
+      - 35mm
+      - 50mm
+      - 85mm
+      references:
+      - asset/2f58f14cb2a5a8f639984afb5442f682133dbb253ac6a924c7c7ebd5c4f26126
+      negative:
+      - text
+      - watermark
+      - extra limbs
+    heading: INT. LAMP ROOM - NIGHT
+    location:
+      id: loc/lighthouse
+      name: Lamp room
+      description: Round glass room, brass lamp at the centre, sea on all sides.
+      references:
+        establishing: asset/a3023e9cd6b69d924dd954bf67975721d00869e20152f03a220000df955b5c35
+      variant: night
+    characters: []
+    mood: tense, quiet
+    script: "Mira lifts the floorboard. A brass key, wrapped in cloth.\nMIRA: You kept the key?\n"
+    duration: 2
+    description: Insert. The brass key on the open floorboard, cloth falling away.
+    camera:
+      # Filled by the template cam/key-insert: the shot states only framing, angle and lens.
+      move: push_in
+      amount: 0.15
+      ease: in_out
+      hold_end: 0.5
+      framing: insert
+      angle: overhead
+      lens: 85mm
+      # Of the template, the view keeps its ID and its words for the prompts.
+      template:
+        id: cam/key-insert
+        prompt: "A slow, steady push toward the object. Nothing else moves.\n"
+        avoid:
+        - hands that change shape
+    props:
+    - id: prop/brass-key
+      description: Old brass key, long shank, ring bow, wrapped in cloth.
+      references:
+      - asset/db233464e2835a1353f24d4b919ffa83698e29232ea9c42f73360fbc7ee64c28
+    control:
+      first_frame: keyframe

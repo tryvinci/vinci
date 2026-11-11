@@ -1,0 +1,15 @@
+# Vinci OLF camerawork library, push family. CC0-1.0: copy it and change it, no credit needed.
+id: anime/tb-reveal
+version: 1
+family: push
+name: Track back to show the place
+notation: T.B.
+intent: Pull back from the character to show the place they are in.
+camera: { move: pull_out, amount: 0.4, ease: in_out, hold_end: 0+12, render: engine }
+framing: [wide, extreme_wide]   # the keyframe is the wide frame that the move ends on
+timing: { default: 4+00, min: 2+00, max: 6+00 }
+slots: [a]
+keyframe: The whole place is in the picture, with room around {a}.
+prompt: >          # for a shot that sets render: model
+  The camera pulls back from {a} at a steady rate and shows the place around them.
+  {a} stays still.

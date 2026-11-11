@@ -1,0 +1,14 @@
+# A camerawork template of this show (SPEC.md, Camerawork). A shot names it in camera.template,
+# and it fills the camera fields that the shot does not state.
+id: cam/key-insert
+family: push
+name: Slow push on an object
+notation: T.U. (jiwa)
+intent: A slow push on an object that matters to the story.
+camera: { move: push_in, amount: 0.15, ease: in_out, hold_end: 0+12 }
+framing: [insert, close_up]
+timing: { default: 2+00, min: 1+00, max: 4+00 }
+slots: []                      # no cast: the object is alone in the frame
+prompt: >
+  A slow, steady push toward the object. Nothing else moves.
+avoid: [hands that change shape]
