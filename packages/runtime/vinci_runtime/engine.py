@@ -1704,7 +1704,13 @@ class Engine:
                 params = interpolate(node.params, context)
                 if not isinstance(params, dict):
                     params = {"value": params}
-                if node.type.value == "generate":
+                seed = inputs.get("seed")
+                generate = node.type.value == "generate"
+                if generate and seed not in (None, "") and params.get("seed") in (None, ""):
+                    # The run's seed joins the job inputs, so the cache keys of a batch differ:
+                    # a batch of 4 got 1 picture and 3 cached copies of it (COREPRODUC-575).
+                    params["seed"] = seed
+                if generate:
                     job = self._run_generate(
                         run_id, node, params, spec, receipt_parent_op_id=receipt_parent_op_id
                     )

@@ -40,6 +40,7 @@ import {
   ASPECTS,
   countPatch,
   countValue,
+  fitToModel,
   listedOr,
   MOTIONS,
   nextRefRole,
@@ -320,7 +321,7 @@ type Model = {
   capabilities: string[];
   available?: boolean;
   pricing?: { amount?: number; unit?: string };
-  constraints?: { aspect_ratios?: string[]; max_duration?: number; resolutions?: string[]; max_input_images?: number | null };
+  constraints?: { aspect_ratios?: string[]; max_duration?: number; durations?: number[]; resolutions?: string[]; max_input_images?: number | null };
   quality_tier?: string;
 };
 type Skill = { id: string; tags?: string[]; workflow?: { nodes?: GraphNode[]; edges?: GraphEdge[] } };
@@ -1827,6 +1828,11 @@ export function StudioClient() {
       }
       const cap = Number(maxCost);
       if (maxCost !== "" && !Number.isNaN(cap)) payload.max_cost = cap;
+      /** A node's params as its pills show them for its model (see fitToModel). */
+      const fitNode = (n: GraphNode): GraphNode => {
+        const row = models.find((m) => m.id === n.model_id);
+        return row ? { ...n, params: fitToModel(n.params || {}, row.constraints) } : n;
+      };
       // Canvas nodes this run will show state on.
       let tracked: string[] = [];
       if (targets.size) {
@@ -1843,7 +1849,7 @@ export function StudioClient() {
           version: "1.0.0",
           preference: pref,
           nodes: runtime.nodes.map((n) =>
-            targets.has(n.id) ? { ...n, model_id: modelIdForNode(n, model.id, models, connected) } : n,
+            fitNode(targets.has(n.id) ? { ...n, model_id: modelIdForNode(n, model.id, models, connected) } : n),
           ),
           edges: runtime.edges,
         };
@@ -1854,7 +1860,7 @@ export function StudioClient() {
           id: "canvas",
           version: "1.0.0",
           preference: pref,
-          nodes: runtime.nodes,
+          nodes: runtime.nodes.map(fitNode),
           edges: runtime.edges,
         };
       } else if (!payload.workflow) {
@@ -1877,12 +1883,14 @@ export function StudioClient() {
       trackedRef.current = tracked;
       if (tracked.length) setNodeRuns((prev) => ({ ...prev, ...Object.fromEntries(tracked.map((id) => [id, { state: "running" as const }])) }));
       const times = !canvasRun && page === "image" ? (batchCount === 4 ? 4 : 1) : 1;
+      // Each picture of a batch has its own seed. Same inputs hit the cache: 4 runs gave 1 picture (COREPRODUC-575).
+      const base = times > 1 ? Number(inputs.seed) || Math.floor(Math.random() * 2 ** 31) : 0;
       let body: Run | null = null;
       for (let i = 0; i < times; i += 1) {
         body = await api<Run>("/runs", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(times > 1 ? { ...payload, inputs: { ...inputs, seed: base + i } } : payload),
         });
         setRunIds((ids) => [...ids, body!.id]);
       }

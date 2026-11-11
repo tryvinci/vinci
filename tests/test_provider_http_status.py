@@ -250,6 +250,15 @@ def test_wavespeed_seedream_gets_its_shape_as_size(
         provider.estimate(req)
         provider.submit(req)
         assert seen["body"].get("size") == want and seen["body"]["aspect_ratio"] == "16:9", model
+    # A canvas node also sends its resolution pill (Seedream lists only 1024x1024). A resolution of
+    # another shape gives way to the aspect; one of the same shape stays.
+    for aspect, resolution, want in (("16:9", "1024x1024", "2560*1440"), ("9:16", "1024x1024", "1440*2560"),
+                                     ("1:1", "1024x1024", "1024*1024")):  # fmt: skip
+        inputs = {"prompt": "x", "aspect_ratio": aspect, "resolution": resolution}
+        req = JobRequest(capability=Capability.T2I, model_id="wavespeed:seedream-4.5:2026-08", inputs=inputs)
+        provider.estimate(req)
+        provider.submit(req)
+        assert seen["body"]["size"] == want, (aspect, resolution)
 
 
 def test_wavespeed_edit_sends_every_reference(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -599,4 +599,14 @@ if wh != (960, 540):
     raise SystemExit(f"clone smoke external MCP expected 960x540 MP4, got {wh}")
 print("mcp_mp4_ftyp", data[4:8].decode("ascii"), "size", wh, "bytes", len(data))
 ' "$DEST/mcp-swatch.mp4"
+# vinci stop (COREPRODUC-571): it stops a daemon that the CLI started, and leaves this script's own.
+STOP_URL="http://127.0.0.1:$((PORT + 1))"
+VINCI_DAEMON_URL="$STOP_URL" VINCI_DAEMON_PORT="$((PORT + 1))" ./scripts/vinci doctor >/dev/null
+VINCI_DAEMON_URL="$STOP_URL" ./scripts/vinci stop | tee "$DEST/stop.txt"
+grep -q "stopped daemon" "$DEST/stop.txt"
+if curl -sf "$STOP_URL/healthz" >/dev/null; then
+  echo "clone-smoke: vinci stop left the daemon at $STOP_URL running" >&2
+  exit 1
+fi
+curl -sf "$VINCI_DAEMON_URL/healthz" >/dev/null
 echo "clone-smoke ok dest=$DEST live_usd=0"

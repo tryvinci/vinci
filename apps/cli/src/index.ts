@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { networkInterfaces } from "node:os";
-import { dirname, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, networkInterfaces } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const DAEMON = process.env.VINCI_DAEMON_URL || "http://127.0.0.1:4310";
 const PORT = process.env.VINCI_DAEMON_PORT || "4310";
 const STUDIO_PORT = process.env.VINCI_STUDIO_PORT || "4311";
+// The servers this CLI starts, one JSON file each ({pid, url}), for `vinci stop`. Same home as the
+// daemon (vinci_core.paths.default_home).
+const HOME = process.env.VINCI_HOME ? resolve(process.env.VINCI_HOME.replace(/^~(?=$|\/)/, homedir())) : join(homedir(), ".vinci");
+const RUN_DIR = join(HOME, "run");
+type Server = "daemon" | "studio";
 
 function usage(): never {
   console.log(`vinci — open-source generative media runtime
@@ -28,6 +33,7 @@ Usage:
   vinci sheets sync
   vinci mcp print-config
   vinci studio [--lan] [--host HOST] [--port PORT] [--html] [--no-open]
+  vinci stop [--force]   (stop the daemon and Studio that vinci started; --force also kills a busy daemon)
   vinci olf validate|resolve <shot>|status|render <shot>|review <take>|select <shot> [-C PROJECT]   (OLF movie engine)
 `);
   process.exit(1);
@@ -47,6 +53,11 @@ async function main(): Promise<void> {
 
   if (cmd === "studio") {
     await runStudio(argv);
+    return;
+  }
+
+  if (cmd === "stop") {
+    process.exitCode = await runStop(argv.includes("--force"));
     return;
   }
 
@@ -316,11 +327,106 @@ async function ensureStudioTs(daemonUrl: string, port: string): Promise<boolean>
     },
   });
   child.unref();
+  remember("studio", child.pid, tsUrl);
   for (let i = 0; i < 40; i++) {
     await delay(200);
     if (await pageUp(tsUrl)) return true;
   }
   return false;
+}
+
+/** Record a server this CLI started, so `vinci stop` can find it. A failure only warns. */
+function remember(name: Server, pid: number | undefined, url: string): void {
+  if (!pid) return;
+  try {
+    mkdirSync(RUN_DIR, { recursive: true });
+    writeFileSync(join(RUN_DIR, `${name}.json`), JSON.stringify({ pid, url }) + "\n");
+  } catch (err) {
+    console.warn(`vinci: cannot record the ${name} in ${RUN_DIR} (${String(err)}); vinci stop will not find it`);
+  }
+}
+
+/**
+ * Stop the Studio and the daemon that `vinci` started (`$VINCI_HOME/run/*.json`). Each gets SIGTERM
+ * to its process group (`npx next dev` has children), only while its server still answers, so a
+ * pid that the OS gave to another program is never signalled. The Studio gets SIGKILL after 10 s;
+ * the daemon only with `force`, because SIGTERM waits for open requests and a job can be paid.
+ *
+ * Returns:
+ *   The exit code: 1 when a recorded server is still up, else 0.
+ */
+async function runStop(force: boolean): Promise<number> {
+  let code = 0;
+  let said = false;
+  for (const name of ["studio", "daemon"] as Server[]) {
+    const file = join(RUN_DIR, `${name}.json`);
+    if (!existsSync(file)) continue;
+    said = true;
+    let rec: { pid?: number; url?: string } = {};
+    try {
+      rec = JSON.parse(readFileSync(file, "utf8")) as typeof rec;
+    } catch {
+      // a broken record: drop it below
+    }
+    const probe = rec.url && (name === "daemon" ? `${rec.url.replace(/\/$/, "")}/healthz` : rec.url);
+    if (!rec.pid || !probe || !(await pageUp(probe))) {
+      console.log(`${name}: not running (removed the old record)`);
+      rmSync(file, { force: true });
+      continue;
+    }
+    signal(rec.pid, "SIGTERM");
+    let down = await stopsAnswering(probe, 10_000);
+    if (!down && (name === "studio" || force)) {
+      signal(rec.pid, "SIGKILL");
+      down = await stopsAnswering(probe, 5_000);
+    }
+    if (down) {
+      console.log(`stopped ${name} (pid ${rec.pid}, ${rec.url})`);
+      rmSync(file, { force: true });
+    } else {
+      console.log(`${name} (pid ${rec.pid}, ${rec.url}) is still finishing open requests, such as a running job. Run vinci stop --force to kill it.`);
+      code = 1;
+    }
+  }
+  // A server that answers with no record was started some other way (make dev, another terminal).
+  const daemonUrl = DAEMON.replace(/\/$/, "");
+  for (const [name, probe, url] of [
+    ["daemon", `${daemonUrl}/healthz`, daemonUrl],
+    ["studio", `http://127.0.0.1:${STUDIO_PORT}`, `http://127.0.0.1:${STUDIO_PORT}`],
+  ] as const) {
+    if (!existsSync(join(RUN_DIR, `${name}.json`)) && (await pageUp(probe))) {
+      console.log(`${name} at ${url} was not started by vinci: stop it where it runs (Ctrl+C there).`);
+      said = true;
+    }
+  }
+  if (!said) console.log("nothing to stop: vinci started no daemon or Studio that is still running");
+  return code;
+}
+
+/** Send `sig` to the process group of `pid` (POSIX), or end its process tree (Windows). */
+function signal(pid: number, sig: NodeJS.Signals): void {
+  if (process.platform === "win32") {
+    spawn("taskkill", ["/pid", String(pid), "/t", ...(sig === "SIGKILL" ? ["/f"] : [])], { stdio: "ignore" });
+    return;
+  }
+  try {
+    process.kill(-pid, sig); // a detached child leads its own process group
+  } catch {
+    try {
+      process.kill(pid, sig);
+    } catch {
+      // already gone
+    }
+  }
+}
+
+/** Wait up to `ms` for `url` to stop answering. */
+async function stopsAnswering(url: string, ms: number): Promise<boolean> {
+  for (let waited = 0; waited < ms; waited += 250) {
+    if (!(await pageUp(url))) return true;
+    await delay(250);
+  }
+  return !(await pageUp(url));
 }
 
 async function pageUp(url: string): Promise<boolean> {
@@ -378,6 +484,7 @@ async function ensureDaemon(opts?: { host?: string; port?: string; url?: string 
     env: process.env,
   });
   child.unref();
+  remember("daemon", child.pid, url);
   for (let i = 0; i < 40; i++) {
     await delay(150);
     if (await healthy(url)) return;

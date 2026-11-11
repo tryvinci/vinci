@@ -135,6 +135,18 @@ def test_demo_image_generate_receipt_and_cas_replay(
     assert replay.receipt.cached is True
     assert replay.receipt.computed_cost == 0
     assert replay.outputs == first["outputs"]
+    # A seed joins the job inputs: a batch's runs are new jobs, and one seed again is a cache hit.
+    seeded = [
+        engine.start_run("@tryvinci/image-generate", {"prompt": "a red cube", "seed": seed})
+        for seed in (7, 8, 7)
+    ]
+    jobs = [engine.store.get_job(run["job_ids"][0]) for run in seeded]
+    assert [job.inputs.get("seed") for job in jobs if job] == [7, 8, 7]
+    keys = [job.idempotency_key for job in jobs if job]
+    assert keys[0] != keys[1] and keys[0] == keys[2] and job.idempotency_key not in keys
+    # In demo mode too: each seed of a batch is its own picture.
+    assert seeded[0]["outputs"] != seeded[1]["outputs"] and seeded[0]["outputs"] == seeded[2]["outputs"]
+    assert jobs[2] is not None and jobs[2].receipt is not None and jobs[2].receipt.cached is True
     doc = engine.doctor()
     assert doc["ffmpeg"] is True
     assert doc["ok"] is True

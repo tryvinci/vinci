@@ -43,7 +43,7 @@ make install
 ./scripts/vinci studio
 ```
 
-Your studio opens at `http://127.0.0.1:4311`. When you are ready for real models, open **Connect** and add a provider key.
+Your studio opens at `http://127.0.0.1:4311`. When you are ready for real models, open **Connect** and add a provider key. `./scripts/vinci stop` stops the studio and its daemon.
 
 Then pick your path:
 

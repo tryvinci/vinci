@@ -254,9 +254,9 @@
       },
       "pricing": {
         "unit": "video_6s",
-        "amount": 0.27,
+        "amount": 0.33,
         "currency": "USD",
-        "snapshot_at": "2026-09-07T00:00:00+00:00"
+        "snapshot_at": "2026-11-11T00:00:00+00:00"
       },
       "quality_tier": "fast",
       "status": "active",
