@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -146,3 +147,14 @@ def test_windows_over_a_drawing_larger_than_the_frame() -> None:
     assert windows((2048, 2048), frame, "tilt", canvas="1:1")[1] == pytest.approx(
         (0, 0, 2048, 1152)
     )
+
+
+def test_vinci_media_imports_without_pillow() -> None:
+    """The Adapts compute image installs vinci_media with no Pillow: the import must still work.
+
+    Bug fixed (first occurrence 2026-11-12, the first CI run after the Actions lock): camera.py
+    imported Pillow at module level, and `import vinci_media` failed in that image.
+    """
+    code = "import sys; sys.modules['PIL'] = None; import vinci_media.adapt, vinci_media.ops"
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr

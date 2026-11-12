@@ -600,9 +600,13 @@ if wh != (960, 540):
 print("mcp_mp4_ftyp", data[4:8].decode("ascii"), "size", wh, "bytes", len(data))
 ' "$DEST/mcp-swatch.mp4"
 # vinci stop (COREPRODUC-571): it stops a daemon that the CLI started, and leaves this script's own.
-STOP_URL="http://127.0.0.1:$((PORT + 1))"
-VINCI_DAEMON_URL="$STOP_URL" VINCI_DAEMON_PORT="$((PORT + 1))" ./scripts/vinci doctor >/dev/null
-VINCI_DAEMON_URL="$STOP_URL" ./scripts/vinci stop | tee "$DEST/stop.txt"
+# Bugs fixed (first occurrence 2026-11-12, the first CI runs after the Actions lock, COREPRODUC-625):
+# - PORT + 2: the mock MCP server holds PORT + 1, so doctor found it, started no daemon, and stop refused.
+# - Its own VINCI_HOME: a daemon locks its home, so a second daemon on this script's home exited at once.
+STOP_URL="http://127.0.0.1:$((PORT + 2))"
+STOP_HOME="$DEST/stop-home"
+VINCI_HOME="$STOP_HOME" VINCI_DAEMON_URL="$STOP_URL" VINCI_DAEMON_PORT="$((PORT + 2))" ./scripts/vinci doctor >/dev/null
+VINCI_HOME="$STOP_HOME" VINCI_DAEMON_URL="$STOP_URL" ./scripts/vinci stop | tee "$DEST/stop.txt"
 grep -q "stopped daemon" "$DEST/stop.txt"
 if curl -sf "$STOP_URL/healthz" >/dev/null; then
   echo "clone-smoke: vinci stop left the daemon at $STOP_URL running" >&2

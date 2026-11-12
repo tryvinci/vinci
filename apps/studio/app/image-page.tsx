@@ -52,6 +52,7 @@ export function ImagePage({
   onModelId,
   modelPicks,
   onPickModel,
+  hosted = false,
   prompt,
   onPrompt,
   aspect,
@@ -86,6 +87,8 @@ export function ImagePage({
   onModelId: (id: string) => void;
   /** The model a person last picked on each page (this page's picker, the rail flyout, All tools, Ctrl+K). Read in effects. */
   modelPicks: { readonly current: Partial<Record<string, string>> };
+  /** On a host (Vinci Platform): no vinci:// link button on the cards. */
+  hosted?: boolean;
   /** A person's pick in this page's model picker. */
   onPickModel: (id: string) => void;
   prompt: string;
@@ -240,7 +243,7 @@ export function ImagePage({
         onCopyPrompt={(item) => void copyPrompt(item)}
         onReference={(item) => onReference(item.assetId)}
         onAnimate={(item) => onAnimate(item.assetId)}
-        onMore={(item) => void more(item)}
+        onMore={hosted ? undefined : (item) => void more(item)}
       />
       <ImagePromptBar
         models={imageRows}

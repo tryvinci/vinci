@@ -71,4 +71,35 @@ test.describe("Rail menus", () => {
     await expect(page.getByTestId("image-page")).toBeVisible();
     await expect(chip).toContainText(want);
   });
+
+  // Live UI check fixes (2026-11-12, app.tryvinci.com): the labels pushed the rail items down as it
+  // widened, so a click hit the item below; a clicked item's flyout stayed open over the new page.
+  test("rail items stay put when the rail widens", async ({ page }) => {
+    await openImage(page);
+    const rail = page.locator("nav#studio-rail");
+    const tops = () =>
+      rail.evaluate((nav) => [...nav.querySelectorAll(".rail-entry > button, :scope > button")].map((b) => Math.round(b.getBoundingClientRect().top)).join());
+    const width = () => rail.evaluate((nav) => nav.getBoundingClientRect().width);
+    await page.mouse.move(900, 450);
+    await expect.poll(width).toBeLessThan(100);
+    const narrow = await width();
+    const before = await tops();
+    await rail.hover({ position: { x: 20, y: 300 } });
+    await expect.poll(width).toBeGreaterThan(narrow + 40);
+    expect(await tops()).toBe(before);
+  });
+
+  test("a rail click shuts its flyout until the pointer leaves", async ({ page }) => {
+    await openImage(page);
+    const video = page.locator('nav button[aria-label="Video"]');
+    const flyout = page.locator('.rail-entry:has(> button[aria-label="Video"]) .rail-flyout');
+    await video.hover();
+    await expect(flyout).toBeVisible();
+    await video.click();
+    await expect(page.getByTestId("video-page")).toBeVisible();
+    await expect(flyout).toBeHidden();
+    await page.mouse.move(900, 450);
+    await video.hover();
+    await expect(flyout).toBeVisible();
+  });
 });

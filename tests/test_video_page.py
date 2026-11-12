@@ -23,6 +23,7 @@ NAMES = [
     "modelFamily",
     "needsStartFrame",
     "presetFilterChips",
+    "presetFixes",
     "presetTabs",
     "supportsEndFrame",
     "toggleFavorite",
@@ -113,6 +114,12 @@ const filled = applyPreset({
 if (filled.modelId !== "mock:mp4:v1" || filled.duration !== "5" || filled.aspect !== "16:9" || filled.resolution !== "1280x720") {
   throw new Error(JSON.stringify(filled));
 }
+// A kept model keeps the settings it can use; only the others get its presets (live UI check, 2026-11-12).
+const kept = { id: "mock:mp4:v1", display_name: "Mock MP4", provider: "mock", capabilities: ["t2v"], constraints: { aspect_ratios: ["16:9", "9:16"], max_duration: 8, resolutions: ["1280x720"] } };
+const fixes = presetFixes(kept, { duration: "3", aspect: "9:16", resolution: "" });
+if (JSON.stringify(fixes) !== JSON.stringify({ resolution: "1280x720" })) throw new Error("fixes " + JSON.stringify(fixes));
+const wrong = presetFixes(kept, { duration: "3", aspect: "1:1", resolution: "1280x720" });
+if (JSON.stringify(wrong) !== JSON.stringify({ aspect: "16:9" })) throw new Error("wrong aspect " + JSON.stringify(wrong));
 """
     result = _run(script)
     assert result.returncode == 0, result.stderr or result.stdout
@@ -176,7 +183,7 @@ def test_studio_wires_video_page_and_reuses_image_pieces() -> None:
     assert "VideoPage" in client
     assert 'page === "video"' in client
     assert "setFirstFrameId(id)" in client
-    assert 'setPage("video")' in client
+    assert 'openPage("video")' in client
     assert "Your clip is in History." in client
     page = (ROOT / "apps" / "studio" / "app" / "video-page.tsx").read_text(encoding="utf-8")
     assert "/library?tool=video" in page

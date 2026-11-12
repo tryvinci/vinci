@@ -220,10 +220,17 @@ def test_studio_wires_image_page_and_animate_to_video() -> None:
     assert "ImagePage" in client
     assert 'page === "image"' in client
     assert "setFirstFrameId(id)" in client
-    assert 'setPage("video")' in client
+    assert 'openPage("video")' in client
     assert "Your still is in the feed." in client
     page = (ROOT / "apps" / "studio" / "app" / "image-page.tsx").read_text(encoding="utf-8")
     assert "imageModels(models, connected, availability)" in page
+    # On a host the cards have no vinci:// link button (live UI check, 2026-11-12, COREPRODUC-624).
+    assert "hosted={Boolean(doctor.host)}" in client
+    assert "onMore={hosted ? undefined" in page
+    video = (ROOT / "apps" / "studio" / "app" / "video-page.tsx").read_text(encoding="utf-8")
+    assert "onMore={hosted ? undefined" in video
+    feed = (ROOT / "apps" / "studio" / "app" / "image-feed.tsx").read_text(encoding="utf-8")
+    assert 'aria-label="Copy file link"' in feed and "{onMore ? (" in feed
     assert "isImageModel" not in page
     assert "/library?tool=image" in page
     bar = (ROOT / "apps" / "studio" / "app" / "image-prompt-bar.tsx").read_text(encoding="utf-8")

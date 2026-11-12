@@ -160,6 +160,7 @@ import {
   togglePin,
   visibleCategories,
   PIN_STORAGE_KEY,
+  TOOLS,
   type CommandHit,
   type CommandModel,
   type FlyoutKind,
@@ -421,7 +422,8 @@ async function api<T>(path: string, opts?: RequestInit): Promise<T> {
     } catch {
       /* ignore */
     }
-    throw new Error(detail);
+    // The status lets a caller tell a session that ended (401 on a host) from other errors.
+    throw Object.assign(new Error(detail), { status: res.status });
   }
   return (await res.json()) as T;
 }
@@ -662,6 +664,8 @@ export function StudioClient() {
   const [commandQuery, setCommandQuery] = useState("");
   const [commandIndex, setCommandIndex] = useState(0);
   const [avatarOpen, setAvatarOpen] = useState(false);
+  /** The rail item just clicked: its flyout stays shut until the pointer leaves it (see globals.css). */
+  const [flyoutOff, setFlyoutOff] = useState("");
   const [focusAssetId, setFocusAssetId] = useState<string | null>(null);
   const [view, setView] = useState<"canvas" | "timeline">("canvas");
   // Shows fills this top-bar slot with its own header (crumb, spec, actions), as in the Claude Design editor.
@@ -775,6 +779,8 @@ export function StudioClient() {
   }, [resetGraph]);
   const [runIds, setRunIds] = useState<string[]>([]);
   const [log, setLog] = useState("");
+  /** Set when a host answered 401 at start: the page shows this and a way to sign in again. */
+  const [sessionEnded, setSessionEnded] = useState("");
   const [busy, setBusy] = useState(false);
   const [findQ, setFindQ] = useState("pricing");
   const [findHits, setFindHits] = useState<{ uri?: string; transcript?: string }[]>([]);
@@ -862,8 +868,10 @@ export function StudioClient() {
   const connectedKey = connected.join("\0");
   /** True after the user picks a model. Auto-defaults stay false so a new key can replace mock. */
   const modelTouched = useRef(false);
-  /** The model a person last picked on each page: one modelId serves all pages, so a page restores it. */
+  /** The model each page had (picked there, or its default when it was left): one modelId serves all pages, so a page restores it. */
   const pagePicks = useRef<Partial<Record<PageId, string>>>({});
+  /** Each page's aspect, duration and resolution: one state serves all pages, so a page restores its own. */
+  const pageSettings = useRef<Partial<Record<PageId, { aspect: string; duration: string; resolution: string }>>>({});
   const seenConnected = useRef(connectedKey);
 
   const composeModels = useMemo(() => {
@@ -1152,6 +1160,13 @@ export function StudioClient() {
       setAdaptPresets(presetBody.presets || []);
       await loadMedia();
     } catch (err) {
+      // A host answers 401 when the session ended. Bug fixed (first occurrence 2026-11-12, live UI
+      // check): the Studio then showed the local Studio (all local pages, "Local", its first-run overlay).
+      if ((err as { status?: number }).status === 401) {
+        console.warn("[studio] start refused: the session ended", { detail: plainError(err) });
+        setSessionEnded(plainError(err));
+        return;
+      }
       openOnboardOnce();
       setLog(plainError(err));
     }
@@ -2648,7 +2663,12 @@ export function StudioClient() {
   const accountName = doctor.host?.name || (live.length ? live.map(([id, row]) => row.display_name || id).join(" · ") : "Local");
   const spent = projectRuns.reduce((sum, r) => sum + Number(r.estimate?.total || 0), 0);
   const popoverTools = filterTools(toolsQuery, toolsCategory).filter((tool) => served(tool.page));
-  const popoverTabs = visibleCategories(toolsQuery);
+  // Only tabs with tools this Studio serves. Bug fixed (first occurrence 2026-11-12, live UI check): on a
+  // host four tabs were empty and said "No tools match" with nothing typed.
+  const popoverTabs = visibleCategories(
+    toolsQuery,
+    TOOLS.filter((tool) => served(tool.page)),
+  );
 
   const saveOutputDestination = useCallback(async () => {
     await api("/settings", {
@@ -2746,8 +2766,21 @@ export function StudioClient() {
   /** Open a Studio page and drop every shell overlay. A page the host does not serve stays closed. */
   function openPage(next: PageId) {
     if (!served(next)) return;
+    // Keep each page's own settings. Bug fixed (first occurrence 2026-11-12, live UI check): a visit to
+    // Video put its presets in the shared aspect, so Image lost 9:16.
+    pageSettings.current[page] = { aspect: aspectRatio, duration, resolution };
+    // The page also reopens on the model it had (its own pick, or its default), so its settings stay.
+    if (modelId) pagePicks.current[page] = modelId;
+    const saved = pageSettings.current[next];
+    if (saved) {
+      setAspectRatio(saved.aspect);
+      setDuration(saved.duration);
+      setResolution(saved.resolution);
+    }
     const kept = pagePicks.current[next];
     if (kept) setModelId(kept);
+    // The log line is about the page it was set on ("You are on Video" stayed on Canvas).
+    setLog("");
     setPage(next);
     setModelsOpen(false);
     closeShellOverlays();
@@ -2840,6 +2873,7 @@ export function StudioClient() {
         onModelId={setModelId}
         modelPicks={pagePicks}
         onPickModel={pickModel}
+        hosted={Boolean(doctor.host)}
         prompt={prompt}
         onPrompt={setPrompt}
         aspect={aspectRatio || ratios[0] || ""}
@@ -2879,7 +2913,7 @@ export function StudioClient() {
           setFirstFrameId(id);
           setExtendMode(false);
           setExtendClipId(null);
-          setPage("video");
+          openPage("video"); // keeps Image's settings for the way back
           setLog("Start frame set. You are on Video.");
         }}
         onLog={setLog}
@@ -2896,6 +2930,7 @@ export function StudioClient() {
         onModelId={setModelId}
         modelPicks={pagePicks}
         onPickModel={pickModel}
+        hosted={Boolean(doctor.host)}
         prompt={prompt}
         onPrompt={setPrompt}
         aspect={aspectRatio || ratios[0] || ""}
@@ -3062,7 +3097,12 @@ export function StudioClient() {
               : undefined
           }
         >
-          {graph.nodes.length === 0 && view === "canvas" ? <CanvasEmpty onPick={(cap) => addNode(cap)} /> : null}
+          {graph.nodes.length === 0 && view === "canvas" ? (
+            <CanvasEmpty
+              onPick={(cap) => addNode(cap)}
+              canAdd={doctor.host ? (cap) => nodeModels(cap).length > 0 : undefined}
+            />
+          ) : null}
           {view === "canvas" ? (
             <div
               ref={boardRef}
@@ -4461,6 +4501,19 @@ export function StudioClient() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  if (sessionEnded) {
+    // The session ended (a host answered 401 at start). Reload the host page: it signs the person in again.
+    return (
+      <div className="session-ended" role="alert" data-testid="session-ended">
+        <VinciLogo variant="mark" />
+        <p>{sessionEnded}</p>
+        <button type="button" className="run" onClick={() => (window.top || window).location.reload()}>
+          Sign in again
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div
       className={"shell" + (wantsInsp ? " with-insp" : "")}
@@ -4493,7 +4546,10 @@ export function StudioClient() {
                 type="button"
                 className={on ? "on" : ""}
                 aria-label={item.title}
-                onClick={() => openPage(item.id)}
+                onClick={() => {
+                  openPage(item.id);
+                  if (item.flyout) setFlyoutOff(item.id);
+                }}
               >
                 <RailIcon d={item.icon} />
                 <span className="rail-label">{item.title}</span>
@@ -4502,7 +4558,11 @@ export function StudioClient() {
             if (!item.flyout) return button;
             const kind = item.flyout;
             return (
-              <div className="rail-entry" key={item.id}>
+              <div
+                className={"rail-entry" + (flyoutOff === item.id ? " flyout-off" : "")}
+                key={item.id}
+                onMouseLeave={() => setFlyoutOff("")}
+              >
                 {button}
                 <div className="rail-flyout">
                   <div>
@@ -4545,10 +4605,13 @@ export function StudioClient() {
           <button
             key={item.id}
             type="button"
-            className={(page === item.id ? "on rail-text" : "rail-text") + (item.id === "cost" ? " has-mini" : "")}
+            className={[page === item.id ? "on" : "", item.icon ? "" : "rail-text", item.id === "cost" ? "has-mini" : ""]
+              .filter(Boolean)
+              .join(" ")}
             aria-label={item.title}
             onClick={() => openPage(item.id)}
           >
+            {item.icon ? <RailIcon d={item.icon} /> : null}
             {item.id === "cost" ? <span className="rail-mini" aria-hidden="true">$</span> : null}
             <span className="rail-label">{item.title}</span>
           </button>
@@ -4780,8 +4843,13 @@ export function StudioClient() {
                   type="button"
                   className="access-pill"
                   aria-label={`${doctor.host?.name || "Local"} access`}
-                  aria-expanded={avatarOpen}
                   onClick={() => {
+                    // Open "Your accounts" (Connect). Bug fixed (first occurrence 2026-11-12, live UI check):
+                    // it opened the account menu, which sits in the rail at the bottom left, far from this pill.
+                    if (served("keys")) {
+                      openPage("keys");
+                      return;
+                    }
                     setAvatarOpen((open) => !open);
                     setCommandOpen(false);
                     setToolsOpen(false);
@@ -4801,7 +4869,10 @@ export function StudioClient() {
                 </button>
               </>
             ) : (
-              <span className="muted">≈ {money(spent)}</span>
+              // "≈ 0 credits" alone read like the balance; it is this project's estimated spend.
+              <span className="muted" title="Estimated cost of this project's runs">
+                ≈ {money(spent)} used
+              </span>
             )}
             <button
               className="ghost"
