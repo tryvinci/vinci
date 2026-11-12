@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
-import { HostKeys } from "./host-keys";
+import { HostKeys, providerName } from "./host-keys";
 import { AdaptFlowCanvas } from "./adapt-flow-canvas";
 import { AdaptsPanel, EMPTY_PRESET_DRAFT, type PresetDraft } from "./adapts-panel";
 import { EffectShell } from "./effect-shell";
@@ -372,7 +372,15 @@ type ProviderRow = {
  * A host that serves this Studio with its own backend (Vinci Platform). It bills in `currency`,
  * serves only `pages`, and adds `links` (credits, account) to the account menu.
  */
-type StudioHost = { name: string; currency?: string; pages?: PageId[]; links?: { title: string; href: string }[]; keys?: string[] };
+type StudioHost = {
+  name: string;
+  currency?: string;
+  pages?: PageId[];
+  links?: { title: string; href: string }[];
+  /** The host app's home: the Vinci logo opens it in the top window. */
+  home?: { title: string; href: string };
+  keys?: string[];
+};
 type Doctor = {
   live_spend?: boolean;
   preference?: string;
@@ -633,10 +641,10 @@ function graphFromSkill(
   };
 }
 
-function RailIcon({ d, title }: { d: string; title: string }) {
+/** No <title>: the rail shows its labels, and a tooltip covered them. The button has the aria-label. */
+function RailIcon({ d }: { d: string }) {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-      <title>{title}</title>
       <path d={d} stroke="currentColor" />
     </svg>
   );
@@ -854,6 +862,8 @@ export function StudioClient() {
   const connectedKey = connected.join("\0");
   /** True after the user picks a model. Auto-defaults stay false so a new key can replace mock. */
   const modelTouched = useRef(false);
+  /** The model a person last picked on each page: one modelId serves all pages, so a page restores it. */
+  const pagePicks = useRef<Partial<Record<PageId, string>>>({});
   const seenConnected = useRef(connectedKey);
 
   const composeModels = useMemo(() => {
@@ -2702,7 +2712,7 @@ export function StudioClient() {
       .map((row) => ({
         id: row.id,
         title: row.display_name || row.id,
-        blurb: row.provider || "Model",
+        blurb: providerName(row.provider) || "Model",
         page: modelFlyoutPage(row, kind),
         flyout: kind,
       })),
@@ -2736,6 +2746,8 @@ export function StudioClient() {
   /** Open a Studio page and drop every shell overlay. A page the host does not serve stays closed. */
   function openPage(next: PageId) {
     if (!served(next)) return;
+    const kept = pagePicks.current[next];
+    if (kept) setModelId(kept);
     setPage(next);
     setModelsOpen(false);
     closeShellOverlays();
@@ -2748,11 +2760,17 @@ export function StudioClient() {
       /* ignore */
     }
   }
+  /** A person picked a model (a page picker, the rail flyout, All tools, Ctrl+K): pages keep it. */
+  function pickModel(id: string, target: PageId = page) {
+    modelTouched.current = true;
+    pagePicks.current[target] = id;
+    setModelId(id);
+  }
   /** Same page a flyout model pick opens. */
   function pickFlyoutModel(row: Model, kind: FlyoutKind) {
-    modelTouched.current = true;
-    setModelId(row.id);
-    openPage(modelFlyoutPage(row, kind));
+    const target = modelFlyoutPage(row, kind);
+    pickModel(row.id, target);
+    openPage(target);
   }
   /** Enter on a Ctrl+K row: tool page, flyout model, asset, template, or collab session. */
   function openCommandHit(hit: CommandHit) {
@@ -2820,6 +2838,8 @@ export function StudioClient() {
         selected={selected}
         modelId={selected?.id || modelId}
         onModelId={setModelId}
+        modelPicks={pagePicks}
+        onPickModel={pickModel}
         prompt={prompt}
         onPrompt={setPrompt}
         aspect={aspectRatio || ratios[0] || ""}
@@ -2874,6 +2894,8 @@ export function StudioClient() {
         selected={selected}
         modelId={selected?.id || modelId}
         onModelId={setModelId}
+        modelPicks={pagePicks}
+        onPickModel={pickModel}
         prompt={prompt}
         onPrompt={setPrompt}
         aspect={aspectRatio || ratios[0] || ""}
@@ -4461,7 +4483,7 @@ export function StudioClient() {
         aria-label="Studio"
         data-testid="studio-sidebar"
       >
-        <VinciLogo />
+        <VinciLogo home={doctor.host?.home} />
         {RAIL_GROUPS.flatMap((group) => {
           const items = group.items.filter((item) => served(item.id)).map((item) => {
             const on = railItemOn(item, page);
@@ -4470,11 +4492,10 @@ export function StudioClient() {
                 key={item.id}
                 type="button"
                 className={on ? "on" : ""}
-                title={item.title}
                 aria-label={item.title}
                 onClick={() => openPage(item.id)}
               >
-                <RailIcon d={item.icon} title={item.title} />
+                <RailIcon d={item.icon} />
                 <span className="rail-label">{item.title}</span>
               </button>
             );
@@ -4504,7 +4525,7 @@ export function StudioClient() {
                           onClick={() => pickFlyoutModel(row, kind)}
                         >
                           <strong>{row.display_name || row.id}</strong>
-                          <span>{row.provider || "Model"}</span>
+                          <span>{providerName(row.provider) || "Model"}</span>
                         </button>
                       ))
                     ) : (
@@ -4525,7 +4546,6 @@ export function StudioClient() {
             key={item.id}
             type="button"
             className={(page === item.id ? "on rail-text" : "rail-text") + (item.id === "cost" ? " has-mini" : "")}
-            title={item.title}
             aria-label={item.title}
             onClick={() => openPage(item.id)}
           >
@@ -4537,7 +4557,6 @@ export function StudioClient() {
           <button
             type="button"
             className={avatarOpen || page === "keys" || page === "cost" ? "on" : ""}
-            title="Account"
             aria-label="Account menu"
             aria-expanded={avatarOpen}
             onClick={() => {
@@ -4681,7 +4700,7 @@ export function StudioClient() {
         <div className="top">
           <div className="top-lead">
             <span className="top-logo">
-              <VinciLogo variant="mark" />
+              <VinciLogo variant="mark" home={doctor.host?.home} />
             </span>
             <button
               type="button"

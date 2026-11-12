@@ -50,6 +50,8 @@ export function ImagePage({
   selected,
   modelId,
   onModelId,
+  modelPicks,
+  onPickModel,
   prompt,
   onPrompt,
   aspect,
@@ -82,6 +84,10 @@ export function ImagePage({
   selected?: ImageModel;
   modelId: string;
   onModelId: (id: string) => void;
+  /** The model a person last picked on each page (this page's picker, the rail flyout, All tools, Ctrl+K). Read in effects. */
+  modelPicks: { readonly current: Partial<Record<string, string>> };
+  /** A person's pick in this page's model picker. */
+  onPickModel: (id: string) => void;
   prompt: string;
   onPrompt: (value: string) => void;
   aspect: string;
@@ -112,7 +118,6 @@ export function ImagePage({
   );
   const [libraryItems, setLibraryItems] = useState<LibraryRow[] | null>(null);
   const [favs, setFavs] = useState<string[]>([]);
-  const [picked, setPicked] = useState(false);
 
   useEffect(() => {
     setFavs(readFavs());
@@ -155,13 +160,16 @@ export function ImagePage({
   }, [runs, busy]);
 
   useEffect(() => {
-    if (picked) return;
+    // Keep a model a person picked. Bug fixed (first occurrence 2026-11-12, reported in production, COREPRODUC-622):
+    // the page had its own "picked" flag, false on each open, so a rail flyout, All tools or Ctrl+K
+    // pick, or an earlier pick here, was replaced by this default.
+    if (modelPicks.current.image === modelId && imageRows.some((row) => row.id === modelId)) return;
     const next = defaultImageModelId(imageRows, ready);
     if (next && next !== modelId) {
       console.info("[image-page] default model", { id: next });
       onModelId(next);
     }
-  }, [imageRows, modelId, onModelId, picked, ready]);
+  }, [imageRows, modelId, modelPicks, onModelId, ready]);
 
   const completed = useMemo(() => {
     const rows = libraryItems ? feedFromLibrary(libraryItems) : feedFromRuns(runs, assets);
@@ -254,10 +262,7 @@ export function ImagePage({
         cost={cost}
         busy={busy}
         disabled={busy || !selected || blocked}
-        onModelId={(id) => {
-          setPicked(true);
-          onModelId(id);
-        }}
+        onModelId={onPickModel}
         onGenerate={onGenerate}
       />
     </div>

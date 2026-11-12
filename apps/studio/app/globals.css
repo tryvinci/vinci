@@ -255,6 +255,12 @@ kbd {
   .shell:has(.all-tools) .rail-scrim,
   .shell:has(.command-box) .rail-scrim,
   .shell:has(.avatar-menu) .rail-scrim { display: block; background: transparent; }
+  /* The account menu is inside the rail: lift the rail over the clear scrim, or the scrim takes the
+     menu's clicks. Bug fixed (first occurrence 2026-11-12, reported in production; since 2026-11-04;
+     COREPRODUC-622). */
+  .shell:has(.avatar-menu) .rail { z-index: 36; }
+  /* A short window scrolls the list instead of cutting it off at the bottom of the screen. */
+  .rail-flyout > div { max-height: calc(100dvh - 220px); overflow-y: auto; }
 }
 .top-lead { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .top-lead h1 { min-width: 0; }
@@ -892,6 +898,9 @@ input[type="range"] { accent-color: var(--teal); width: 100%; padding: 0; border
     visibility: hidden;
   }
   .rail.open { transform: none; visibility: visible; }
+  /* The account menu opens above its button. To the right, as on desktop, it was outside the drawer,
+     and the drawer's overflow cut it off (same bug as above, 2026-11-12). */
+  .avatar-menu { left: 0; right: 0; bottom: calc(100% + 6px); margin-left: 0; min-width: 0; }
   .rail .rail-label { max-width: 180px; opacity: 1; font-size: 13px; }
   .rail button.rail-text .rail-label,
   .rail button.rail-text:not(.has-mini) .rail-label { max-width: 180px; opacity: 1; font-size: 13px; }
