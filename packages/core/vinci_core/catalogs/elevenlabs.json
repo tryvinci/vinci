@@ -17,9 +17,9 @@
       "constraints": {},
       "pricing": {
         "unit": "1k_chars",
-        "amount": 0.06,
+        "amount": 0.04,
         "currency": "USD",
-        "snapshot_at": "2026-08-27T00:00:00+00:00"
+        "snapshot_at": "2026-11-12T00:00:00+00:00"
       },
       "quality_tier": "fast",
       "status": "active",
@@ -33,9 +33,9 @@
       "constraints": {},
       "pricing": {
         "unit": "1k_chars",
-        "amount": 0.12,
+        "amount": 0.08,
         "currency": "USD",
-        "snapshot_at": "2026-08-27T00:00:00+00:00"
+        "snapshot_at": "2026-11-12T00:00:00+00:00"
       },
       "quality_tier": "quality",
       "status": "active",
@@ -64,10 +64,10 @@
       "capabilities": ["voice_clone"],
       "constraints": {},
       "pricing": {
-        "unit": "clone",
-        "amount": 0.0,
+        "unit": "1k_chars",
+        "amount": 0.08,
         "currency": "USD",
-        "snapshot_at": "2026-08-27T00:00:00+00:00"
+        "snapshot_at": "2026-11-12T00:00:00+00:00"
       },
       "quality_tier": "fast",
       "status": "active",

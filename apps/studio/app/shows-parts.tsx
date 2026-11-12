@@ -2,7 +2,12 @@
 
 import { type ReactNode, useEffect, useState } from "react";
 import { type OlfPill, type OlfPills, type OlfShow, SLOT_COLORS, mediaUrl } from "../lib/shows";
-import { message, olf } from "./shows-api";
+import { message, olf, useOlfRoute } from "./shows-api";
+
+/** Its children only when the daemon serves `path`. A host serves fewer OLF routes for now. */
+export function OlfOnly({ path, children }: { path: string; children: ReactNode }) {
+  return useOlfRoute(path) ? <>{children}</> : null;
+}
 
 /**
  * Design: the character's Voice. An ElevenLabs voice from `GET /olf/voices` (a free call); with no

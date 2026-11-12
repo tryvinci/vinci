@@ -173,7 +173,8 @@ def test_studio_client_wires_shell() -> None:
     assert "FLYOUT_FEATURES" in body
     assert 'className="rail-flyout"' in body
     assert "SIDEBAR_CORE" not in body
-    assert "RAIL_FOOTER.map" in body
+    # The footer lists only the pages a host serves (all of them on the local daemon).
+    assert "RAIL_FOOTER.filter((item) => served(item.id)).map" in body
     assert "All tools" in body
     assert 'page === "home"' in body
     assert 'page === "assets"' in body
@@ -193,3 +194,29 @@ def test_studio_client_wires_shell() -> None:
     ):
         assert needle in body
     assert SHELL.is_file()
+
+
+def test_studio_follows_a_host() -> None:
+    """A host (Vinci Platform, COREPRODUC-585) lists its pages and price unit in /doctor; runs poll to the end."""
+    body = CLIENT.read_text(encoding="utf-8")
+    assert "setPriceUnit(host.currency)" in body
+    assert "const served = (id: PageId) => !hostPages?.length || hostPages.includes(id);" in body
+    for needle in (
+        "group.items.filter((item) => served(item.id))",
+        "FLYOUT_FEATURES[kind].filter((row) => served(row.id))",
+        "AVATAR_MENU.filter((item) => served(item.page))",
+        "filterTools(toolsQuery, toolsCategory).filter((tool) => served(tool.page))",
+        "if (!served(next)) return;",
+        'target="_top"',
+    ):
+        assert needle in body, needle
+    # A host answers POST /runs at once; startRun polls GET /runs/{id} until the state is final.
+    assert 'const RUN_GOING = new Set(["created", "queued", "running"]);' in body
+    assert body.count('api<Run>("/runs", {') == 1
+
+
+def test_page_generate_runs_the_page_not_the_canvas() -> None:
+    """After a canvas edit, Generate on Image or Video sends a page run (COREPRODUC-585): it ran the graph."""
+    body = CLIENT.read_text(encoding="utf-8")
+    assert 'const graphRun = !!opts?.graph || (page === "canvas" && graphEdited);' in body
+    assert "(graphEdited || !!opts?.graph)" not in body and "(graphEdited || opts?.graph)" not in body

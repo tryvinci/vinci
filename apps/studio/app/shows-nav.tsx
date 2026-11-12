@@ -16,7 +16,7 @@ import {
   shownKeyframe,
   takesOf,
 } from "../lib/shows";
-import { StalePill, StatusPill } from "./shows-parts";
+import { OlfOnly, StalePill, StatusPill } from "./shows-parts";
 
 /** Where the Shows page is. Storyboard and Shots belong to an episode; a shot opens its own page. */
 export type Route =
@@ -256,9 +256,11 @@ export function ShowTop({
           ↻
         </button>
         {/* Design "Share": the show folder as one .olf.zip of plain OLF files (exports left out). */}
-        <a className="ghost olf-small olf-share" href={`${OLF_API}/share?path=${encodeURIComponent(show.path)}`} download data-testid="share">
-          Share
-        </a>
+        <OlfOnly path="/olf/share">
+          <a className="ghost olf-small olf-share" href={`${OLF_API}/share?path=${encodeURIComponent(show.path)}`} download data-testid="share">
+            Share
+          </a>
+        </OlfOnly>
         <button type="button" className="ghost olf-small" onClick={onClose}>
           Close show
         </button>

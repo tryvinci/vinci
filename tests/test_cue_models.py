@@ -18,7 +18,7 @@ def test_catalog_rows_price_one_generation() -> None:
     eleven = load_bundled_catalog("elevenlabs")
     sfx = eleven.by_id("elevenlabs:sound-effects-v2:2026-11")
     music = eleven.by_id("elevenlabs:music-v1:2026-11")
-    # elevenlabs.io/pricing/api, 2026-11-09: $0.12 and $0.15 a minute; one job is one unit.
+    # elevenlabs.io/pricing/api, 2026-11-09: $0.12 and $0.15 a minute; a job is priced by its length.
     assert (sfx.capabilities, sfx.pricing.amount, sfx.constraints.max_duration) == (
         [Capability.SFX],
         0.06,

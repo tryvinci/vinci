@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import html
 import http.client
 import ipaddress
 import json
@@ -23,7 +24,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any
 
 from vinci_core.credentials import CredentialResolver
@@ -65,6 +66,21 @@ def oauth_secret_name(provider_id: str) -> str:
     raise ValueError("oauth secret name requires an mcp provider id")
 
 
+def pending_export(state: str) -> dict[str, Any] | None:
+    """A pending sign-in as a plain dict, for a host that runs more than one process.
+
+    The callback can reach another process than the start (Cloud Run instances): the host keeps
+    this dict (sealed) and gives it back with ``pending_import`` (COREPRODUC-614).
+    """
+    item = _PENDING.get(state)
+    return asdict(item) if item else None
+
+
+def pending_import(state: str, data: dict[str, Any]) -> None:
+    """Put back a pending sign-in that ``pending_export`` gave, before ``finish``."""
+    _PENDING[state] = _Pending(**data)
+
+
 def clear_pending() -> None:
     _PENDING.clear()
 
@@ -100,6 +116,57 @@ def callback_block_reason(state: str) -> str | None:
         _PENDING.pop(state, None)
         return "OAuth state expired"
     return None
+
+
+# The sign-in result page in the Studio's dark tokens (apps/studio/app/theme.css: --bg, --panel,
+# --line, --ink, --dim, --accent, --danger). No script and no files, so it works on any origin.
+_RESULT_CSS = (
+    ":root{color-scheme:dark}"
+    "body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0c0e12;"
+    'color:#f4f4f5;font:15px/1.55 "Inter Tight",Inter,system-ui,sans-serif}'
+    "main{box-sizing:border-box;width:min(440px,calc(100vw - 32px));padding:28px 28px 22px;"
+    "border-radius:16px;background:#12141a;border:1px solid rgb(255 255 255/.08);"
+    "box-shadow:inset 0 1px 0 rgb(255 255 255/.06)}"
+    "p{margin:0}"
+    ".eyebrow{margin-bottom:6px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;"
+    "color:#21dad2}"
+    'h1{margin:0 0 10px;font:italic 400 34px/1.1 "Instrument Serif",Georgia,serif}'
+    ".dot{display:inline-block;width:8px;height:8px;margin-right:9px;border-radius:50%;"
+    "vertical-align:1px;background:#21dad2}"
+    ".bad .eyebrow{color:#f07167}.bad .dot{background:#f07167}"
+    "small{display:block;margin-top:18px;padding-top:14px;"
+    "border-top:1px solid rgb(255 255 255/.08);color:#a1a1aa;font-size:12.5px}"
+)
+
+
+def result_page(provider: str, problem: str = "") -> str:
+    """The page the sign-in tab shows after the provider sends the browser back.
+
+    The local daemon and the hosted backend send this same page, so a sign-in ends in the
+    Studio's look on both.
+
+    Args:
+        provider: The provider's name, such as "Higgsfield". Empty when it is not known.
+        problem: Why the sign-in did not finish. Empty when it finished.
+
+    Returns:
+        A complete HTML document. Both values are escaped.
+    """
+    name = html.escape(provider)
+    if problem:
+        title, line = "Sign-in did not finish", html.escape(problem[:1].upper() + problem[1:])
+    else:
+        title = f"Signed in to {name}" if name else "Signed in"
+        line = f"Your {name + ' ' if name else ''}models are in the studio now."
+    tone = "bad" if problem else "ok"
+    return (
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        f"<title>{title} · Vinci</title><style>{_RESULT_CSS}</style></head>"
+        f'<body><main class="{tone}"><p class="eyebrow">Vinci · {name or "Sign-in"}</p>'
+        f'<h1>{title}</h1><p><span class="dot"></span>{line}</p>'
+        "<small>You can close this tab.</small></main></body></html>"
+    )
 
 
 def secret_material(raw: str) -> list[str]:
@@ -403,8 +470,12 @@ def _discover(server_url: str, *, allow_loopback: bool) -> dict[str, Any]:
             break
     auth_base = origin
     resource = None
+    resource_scopes: list[str] = []
     if resource_doc:
         resource = _optional_str(resource_doc.get("resource"))
+        listed = resource_doc.get("scopes_supported")
+        if isinstance(listed, list):
+            resource_scopes = [item for item in listed if isinstance(item, str) and item]
         servers = resource_doc.get("authorization_servers")
         if isinstance(servers, list) and servers and isinstance(servers[0], str):
             auth_base = servers[0].rstrip("/")
@@ -437,6 +508,8 @@ def _discover(server_url: str, *, allow_loopback: bool) -> dict[str, Any]:
         )
     if resource:
         metadata["resource"] = resource
+    if resource_scopes:
+        metadata["resource_scopes"] = resource_scopes
     return metadata
 
 
@@ -531,10 +604,28 @@ def _is_blocked_ip(address: str) -> bool:
 
 
 def _scope(metadata: dict[str, Any]) -> str:
-    supported = metadata.get("scopes_supported")
-    if not isinstance(supported, list):
-        return ""
-    wanted = [item for item in ("openid", "offline_access") if item in supported]
+    """Scopes of the authorize request.
+
+    The MCP authorization spec asks for the protected resource's ``scopes_supported``
+    (Higgsfield: openid email offline_access; Magnific: openid profile email
+    mcp:custom-audience). Before, only openid and offline_access went out, so a server could
+    refuse the token: no audience for Magnific, no email for Higgsfield (COREPRODUC-610, found by
+    discovery on 2026-11-12 before any live sign-in). offline_access is added when the
+    authorization server lists it, so the sign-in gets a refresh token.
+
+    Args:
+        metadata: Authorization server metadata from ``_discover``, with ``resource_scopes``.
+
+    Returns:
+        A space-separated scope, or "" when the servers list none.
+    """
+    raw = metadata.get("scopes_supported")
+    supported = raw if isinstance(raw, list) else []
+    wanted = list(metadata.get("resource_scopes") or [])
+    if not wanted:
+        wanted = [item for item in ("openid",) if item in supported]
+    if "offline_access" in supported and "offline_access" not in wanted:
+        wanted.append("offline_access")
     return " ".join(wanted)
 
 

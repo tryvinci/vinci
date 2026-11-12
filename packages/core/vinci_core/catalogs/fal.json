@@ -245,7 +245,8 @@
         "unit": "video_5s",
         "amount": 0.35,
         "currency": "USD",
-        "snapshot_at": "2026-09-06T00:00:00+00:00"
+        "snapshot_at": "2026-11-11T00:00:00+00:00",
+        "clip_prices": {"5": 0.35, "10": 0.7}
       },
       "quality_tier": "quality",
       "status": "active",
@@ -275,7 +276,8 @@
         "unit": "video_5s",
         "amount": 0.35,
         "currency": "USD",
-        "snapshot_at": "2026-09-06T00:00:00+00:00"
+        "snapshot_at": "2026-11-11T00:00:00+00:00",
+        "clip_prices": {"5": 0.35, "10": 0.7}
       },
       "quality_tier": "quality",
       "status": "active",
@@ -302,10 +304,11 @@
         ]
       },
       "pricing": {
-        "unit": "video_5s",
-        "amount": 0.28,
+        "unit": "video_5s_audio",
+        "amount": 0.259,
         "currency": "USD",
-        "snapshot_at": "2026-09-06T00:00:00+00:00"
+        "snapshot_at": "2026-11-11T00:00:00+00:00",
+        "clip_prices": {"4": 0.207, "5": 0.259, "6": 0.311, "7": 0.363, "8": 0.415, "9": 0.467, "10": 0.518}
       },
       "quality_tier": "quality",
       "status": "active",
@@ -332,10 +335,11 @@
         ]
       },
       "pricing": {
-        "unit": "video_5s",
-        "amount": 0.4,
+        "unit": "video_5s_audio",
+        "amount": 1.2,
         "currency": "USD",
-        "snapshot_at": "2026-09-06T00:00:00+00:00"
+        "snapshot_at": "2026-11-11T00:00:00+00:00",
+        "clip_prices": {"4": 0.6, "6": 0.9, "8": 1.2}
       },
       "quality_tier": "fast",
       "status": "active",
@@ -363,9 +367,10 @@
       },
       "pricing": {
         "unit": "video_5s",
-        "amount": 0.35,
+        "amount": 0.56,
         "currency": "USD",
-        "snapshot_at": "2026-09-06T00:00:00+00:00"
+        "snapshot_at": "2026-11-11T00:00:00+00:00",
+        "clip_prices": {"3": 0.336, "4": 0.448, "5": 0.56, "6": 0.672, "7": 0.784, "8": 0.896, "9": 1.008, "10": 1.12}
       },
       "quality_tier": "quality",
       "status": "active",
@@ -408,9 +413,9 @@
       "constraints": {},
       "pricing": {
         "unit": "1k_chars",
-        "amount": 0.12,
+        "amount": 0.1,
         "currency": "USD",
-        "snapshot_at": "2026-09-06T00:00:00+00:00"
+        "snapshot_at": "2026-11-12T00:00:00+00:00"
       },
       "quality_tier": "quality",
       "status": "active",

@@ -859,6 +859,44 @@ def test_fal_duration_matches_the_model_enum(
     assert seen["body"]["duration"] == sent
 
 
+def test_fal_video_rows_send_what_they_price(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Each fal video row asks for the sound its price is for, Kling O1 gets its frames as
+    start_image_url and end_image_url, and the estimate prices the clip length (COREPRODUC-603)."""
+    monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
+    provider = FalProvider(api_key="fal-key")
+    seen: dict[str, Any] = {}
+
+    def fake_urlopen(request: Any, timeout: int = 30) -> _FakeResp:
+        if request.get_method() == "POST":
+            seen["body"] = json.loads(request.data.decode("utf-8"))
+            return _FakeResp({"request_id": "req-1"})
+        return _FakeResp({"status": "IN_QUEUE"})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    def send(model: str, capability: Capability, **inputs: Any) -> tuple[dict[str, Any], float]:
+        req = JobRequest(capability=capability, model_id=model, inputs={"prompt": "x", **inputs})
+        price = round(provider.estimate(req).amount, 3)
+        provider.submit(req)
+        return dict(seen["body"]), price
+
+    still = {"image_url": "https://cdn.example/start.png"}
+    body, price = send("fal:kling-2.6-pro:2026-09", Capability.T2V, duration=10)
+    assert body["generate_audio"] is False and price == 0.7  # silent: $0.07 a second, not $0.14
+    body, price = send("fal:kling-2.6-pro-i2v:2026-09", Capability.I2V, duration=5, **still)
+    assert body["generate_audio"] is False and price == 0.35
+    body, price = send("fal:veo-3.1-fast-i2v:2026-09", Capability.I2V, duration=6, **still)
+    assert body["generate_audio"] is True and price == 0.9  # Veo keeps its sound: $0.15 a second
+    assert send("fal:veo-3.1-fast-i2v:2026-09", Capability.I2V, duration="6s", **still)[1] == 0.9
+    body, price = send("fal:seedance-1.5-pro-i2v:2026-09", Capability.I2V, duration=10, **still)
+    assert body["generate_audio"] is True and price == 0.518
+    frames = {**still, "last_frame_url": "https://cdn.example/end.png"}
+    body, price = send("fal:kling-o1-i2v:2026-09", Capability.I2V, duration=10, **frames)
+    assert body["start_image_url"] == "https://cdn.example/start.png" and "image_url" not in body
+    assert body["end_image_url"] == "https://cdn.example/end.png" and "generate_audio" not in body
+    assert price == 1.12
+
+
 def test_higgsfield_flf_submit_sends_frame_urls(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
     provider = HiggsfieldProvider(api_key="key-id", api_secret="key-secret")

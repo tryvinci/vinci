@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "next dev -p 4311",
     "build": "NODE_ENV=production next build",
+    "build:static": "VINCI_STUDIO_EXPORT=1 NODE_ENV=production next build",
     "start": "next start -p 4311",
     "typecheck": "tsc --noEmit",
     "e2e": "playwright test",

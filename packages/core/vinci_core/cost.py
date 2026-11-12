@@ -29,6 +29,8 @@ def asked_seconds(value: Any, inputs: Mapping[str, Any] | None = None) -> float 
         value = (inputs or {}).get(match.group(1))
     if isinstance(value, bool):
         return None
+    if isinstance(value, str):
+        value = value.strip().removesuffix("s")  # "6s", as fal's Veo takes it
     try:
         seconds = float(value)
     except (TypeError, ValueError):
@@ -36,21 +38,63 @@ def asked_seconds(value: Any, inputs: Mapping[str, Any] | None = None) -> float 
     return seconds if math.isfinite(seconds) and seconds > 0 else None
 
 
-def clip_price(spec: ModelSpec, seconds: float | None = None) -> float:
+def asked_chars(params: Mapping[str, Any], inputs: Mapping[str, Any] | None = None) -> int | None:
+    """How many characters a job's text has: its ``prompt`` or ``text``, each ``{{inputs.name}}``
+    filled from the run inputs (COREPRODUC-603).
+
+    Args:
+        params: The node's params or the request's inputs.
+        inputs: The run inputs, for a template.
+
+    Returns:
+        The length, or None when there is no text yet: none, or a template that a run fills later
+        (another node's output). The job is then priced as ``amount`` (1,000 characters).
+    """
+    value = params.get("prompt") or params.get("text")
+    if not isinstance(value, str):
+        return None
+    filled = {key: str(v) for key, v in (inputs or {}).items() if v is not None}
+    text = re.sub(
+        r"\{\{\s*inputs\.(\w+)\s*\}\}", lambda m: filled.get(m.group(1), m.group(0)), value
+    )
+    return len(text) if text and "{{" not in text else None
+
+
+# Units billed by how much a job asks for, as (measure, size): a job costs amount × measure / size
+# (ElevenLabs and fal bill speech per character, music and sound effects per second). With no
+# measure it costs `amount`: one 1,000 characters, one minute, or 30 s (COREPRODUC-603).
+_MEASURED = {
+    "1k_chars": ("chars", 1000.0),
+    "minute": ("seconds", 60.0),
+    "generation_30s": ("seconds", 30.0),
+}
+
+
+def clip_price(spec: ModelSpec, seconds: float | None = None, chars: int | None = None) -> float:
     """The list price of one job on ``spec``.
 
     A row with ``clip_prices`` bills the clip length the model makes: the asked length fitted with
-    ``fit_duration``, as the runtime sends it. With no length, or one the table lacks, it is
-    ``amount``, the price of the default clip (COREPRODUC-555).
+    ``fit_duration``, as the runtime sends it (COREPRODUC-555). A row whose unit names a measure
+    (``1k_chars``, ``minute``, ``generation_30s``) bills the job's characters or seconds
+    (COREPRODUC-603). With no length or text, or a length the table lacks, it is ``amount``.
 
     Args:
         spec: The model row.
-        seconds: The asked clip length, or None.
+        seconds: The asked length, or None.
+        chars: The length of the job's text, or None.
     """
-    table = spec.pricing.clip_prices
-    if not table or seconds is None:
-        return spec.pricing.amount
-    return table.get(str(fit_duration(seconds, spec.constraints)), spec.pricing.amount)
+    pricing = spec.pricing
+    if pricing.clip_prices:
+        if seconds is None:
+            return pricing.amount
+        return pricing.clip_prices.get(str(fit_duration(seconds, spec.constraints)), pricing.amount)
+    measure = _MEASURED.get(pricing.unit)
+    if measure is None:
+        return pricing.amount
+    kind, size = measure
+    fitted = fit_duration(seconds, spec.constraints) if seconds else None  # as the runtime asks
+    value = chars if kind == "chars" else fitted
+    return pricing.amount if value is None else round(pricing.amount * value / size, 6)
 
 
 def estimate_from_spec(
@@ -59,8 +103,9 @@ def estimate_from_spec(
     *,
     cached: bool = False,
     seconds: float | None = None,
+    chars: int | None = None,
 ) -> Estimate:
-    amount = 0.0 if cached else clip_price(spec, seconds) * unit_count
+    amount = 0.0 if cached else clip_price(spec, seconds, chars) * unit_count
     return Estimate(
         model_id=spec.id,
         provider=spec.provider,
@@ -82,8 +127,9 @@ def resolve_model(
 ) -> ModelSpec:
     """Pick the model a request runs on.
 
-    A pinned `req.model_id` wins. Otherwise the preference ranks the active USD candidates,
-    and an unpriced model ranks after priced ones (see `price_key`).
+    A pinned `req.model_id` wins. Otherwise the preference ranks the active candidates priced
+    in the catalog's currency (USD, or credits on a host), and an unpriced model ranks after
+    priced ones (see `price_key`).
 
     Args:
         catalog: The active catalog.
@@ -105,7 +151,7 @@ def resolve_model(
     candidates = active_candidates(catalog, req.capability.value)
     if available_providers is not None:
         candidates = [m for m in candidates if m.provider in available_providers]
-    candidates = [m for m in candidates if m.pricing.currency.upper() == "USD"]
+    candidates = [m for m in candidates if m.pricing.currency.upper() == catalog.currency.upper()]
     if not candidates:
         raise KeyError(f"no model for {req.capability}")
     if req.preference == RoutePreference.QUALITY:
@@ -120,10 +166,14 @@ def resolve_model(
 
 
 def with_alternative(
-    estimate: Estimate, catalog: Catalog, capability: str, seconds: float | None = None
+    estimate: Estimate,
+    catalog: Catalog,
+    capability: str,
+    seconds: float | None = None,
+    chars: int | None = None,
 ) -> Estimate:
-    """Name the cheapest model for ``capability`` next to an estimate, priced at the same clip
-    length (``seconds``) as the estimate (COREPRODUC-555)."""
+    """Name the cheapest model for ``capability`` next to an estimate, priced for the same clip
+    length (``seconds``) and text (``chars``) as the estimate (COREPRODUC-555, COREPRODUC-603)."""
     cheap = catalog.cheapest(capability)
     if cheap is None or cheap.id == estimate.model_id:
         return estimate
@@ -132,7 +182,7 @@ def with_alternative(
             "alternative": {
                 "model_id": cheap.id,
                 "provider": cheap.provider,
-                "amount": clip_price(cheap, seconds),
+                "amount": clip_price(cheap, seconds, chars),
                 "currency": cheap.pricing.currency,
             }
         }
@@ -182,8 +232,13 @@ def plan_workflow(
         )
         model = resolve_model(catalog, req, available_providers=available_providers)
         seconds = asked_seconds(node.params.get("duration"), inputs)
+        chars = asked_chars(node.params, inputs)
         estimate = with_alternative(
-            estimate_from_spec(model, seconds=seconds), catalog, node.capability.value, seconds
+            estimate_from_spec(model, seconds=seconds, chars=chars),
+            catalog,
+            node.capability.value,
+            seconds,
+            chars,
         )
         rows.append({"node_id": node.id, "model": model, "estimate": estimate})
     return rows

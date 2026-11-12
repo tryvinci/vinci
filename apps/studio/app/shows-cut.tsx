@@ -22,7 +22,7 @@ import {
   timelineTicks,
 } from "../lib/shows";
 import { message, olf, send } from "./shows-api";
-import { Confirm, Field, StalePill } from "./shows-parts";
+import { Confirm, Field, OlfOnly, StalePill } from "./shows-parts";
 
 type ClipFields = Record<string, string | number | null>;
 
@@ -147,9 +147,11 @@ export function CutView({
           <button type="button" className="ghost" disabled={Boolean(busy)} onClick={onUseApproved} data-testid="cut-use-approved">
             {busy === "approved" ? "Building the cut…" : "Use approved takes"}
           </button>
-          <button type="button" className="ghost" aria-pressed={adding} onClick={() => setAdding(!adding)} data-testid="cut-add-cue">
-            Add music cue
-          </button>
+          <OlfOnly path="/olf/cue">
+            <button type="button" className="ghost" aria-pressed={adding} onClick={() => setAdding(!adding)} data-testid="cut-add-cue">
+              Add music cue
+            </button>
+          </OlfOnly>
         </div>
         {adding ? (
           <AddCue

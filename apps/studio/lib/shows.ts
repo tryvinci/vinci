@@ -141,7 +141,11 @@ export type OlfShow = {
   takes: Record<string, OlfTake>;
   /** Bible file -> short content hash: a replaced image keeps its name but gets a new URL. */
   hashes?: Record<string, string>;
+  /** Renders a host runs after its answer (202): the page polls each run, also after a reload. */
+  renders?: { run_id: string; shot: string; kind: RenderKind }[];
 };
+/** A row of `GET /olf/shows`: the open screen lists the daemon's (or the host's) shows. */
+export type OlfShowRow = { path: string; title: string; updated_at?: string };
 /**
  * A model a person may pick for a step (design: the video model menu). Currency `PLAN` is an agent
  * CLI (Claude Code, Codex...): it bills the person's own sign-in, so Vinci shows no price for it.
@@ -503,9 +507,20 @@ export function busyText(kind: string | undefined): string {
   return kind === "video" ? "Rendering video…" : kind === "audio" ? "Speaking dialogue…" : "Drawing keyframe…";
 }
 
+/** True on a host that bills in credits (Vinci Platform): every Shows price is in credits. */
+let inCredits = false;
+
+/** Set from `host.currency` in `GET /doctor`, as `setPriceUnit` does for the other pages. */
+export function setShowsCredits(on: boolean): void {
+  inCredits = on;
+}
+
 export function price(amount: number | undefined): string {
   const value = Number(amount || 0);
-  return value === 0 ? "$0" : `$${value.toFixed(2)}`;
+  if (inCredits) return `${Number(value.toFixed(2))} ${value === 1 ? "credit" : "credits"}`;
+  if (value === 0) return "$0";
+  // A short spoken line costs less than a cent (priced by its characters, COREPRODUC-603).
+  return value < 0.01 ? "$" + value.toFixed(5).replace(/0+$/, "") : `$${value.toFixed(2)}`;
 }
 
 /**

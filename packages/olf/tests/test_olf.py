@@ -227,6 +227,77 @@ def test_paid_render_stops_without_yes(show: Path, monkeypatch: Any) -> None:
         render(load(show), "e02/s03/sh014", engine=engine)
 
 
+def _credits_engine() -> Any:
+    """What a host that bills in credits plans with: its own catalog and no runtime."""
+    from datetime import UTC, datetime
+    from types import SimpleNamespace
+
+    from vinci_core.catalog import Catalog
+    from vinci_protocol.models import ModelSpec
+
+    def spec(model_id: str, caps: list[str], credits: int) -> ModelSpec:
+        price = {"unit": "call", "amount": credits, "currency": "credits"}
+        return ModelSpec.model_validate(
+            {
+                "id": model_id,
+                "display_name": model_id,
+                "provider": "vinci",
+                "capabilities": caps,
+                "pricing": price | {"snapshot_at": datetime.now(UTC)},
+                "constraints": {"durations": [5]},
+            }
+        )
+
+    models = [spec("vinci:still", ["t2i", "i2i"], 2), spec("vinci:clip", ["t2v", "i2v"], 9)]
+    catalog = Catalog(models=models, snapshot_id="hosted", currency="credits")
+    return SimpleNamespace(
+        catalog=lambda: catalog,
+        routing_providers=lambda: {"vinci"},
+        config=SimpleNamespace(preference="cheapest"),
+    )
+
+
+def test_a_host_plans_in_credits_and_records_the_takes_later(show: Path) -> None:
+    """The hosted Studio's render (COREPRODUC-588): plan, run the nodes itself, then record.
+
+    Its working folder holds empty stand-ins for media, and ``load`` gets their hashes.
+    """
+    import base64
+    import hashlib
+    import json
+
+    from vinci_olf.render import plan_render, record_render, take_license
+
+    hashes = {}
+    for path in sorted(show.rglob("*.png")):  # the sample's media files
+        hashes[path.relative_to(show).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+        path.write_bytes(b"")  # the bytes stay in object storage
+    p = load(show, hashes=hashes)
+    assert [str(i) for i in validate(p) if i.level == "error"] == []  # the lock check used them
+    result, job = plan_render(p, "e02/s03/sh014", engine=_credits_engine())
+    plan = [(row["model"], row["amount"]) for row in result["plan"]]
+    assert plan == [("vinci:still", 2), ("vinci:clip", 9)] and result["total"] == 11
+    assert not (show / "takes").exists()  # a plan writes nothing
+    job = json.loads(json.dumps(job)) | {"license": take_license(p)}  # as the host stores it
+    still = base64.b64decode(_png("#3a6"))
+    clip = b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2"  # an MP4 header is enough here
+    paid = {
+        "keyframe": {"provider": "vinci", "model": "vinci:still", "cost": 2, "currency": "credits"}
+    }
+    outputs = {"keyframe": still, "video": clip}
+    takes = record_render(load(show, hashes=hashes), job, outputs, paid)
+    assert takes == ["e02/s03/sh014/kf1", "e02/s03/sh014/v1"]
+    p = load(show, hashes=hashes)
+    kf, video = p.docs["e02/s03/sh014/kf1"].data, p.docs["e02/s03/sh014/v1"].data
+    assert video["inputs"] == {"first_frame": "e02/s03/sh014/kf1"}
+    assert kf["provenance"]["cost"] == {"amount": 2, "currency": "credits"}
+    assert video["provenance"]["model"] == "unknown"  # the host gave no receipt for it
+    assert not stale(p, "e02/s03/sh014/kf1") and not stale(p, "e02/s03/sh014/v1")
+    # The sheet is locked by its file name: the stand-in has no bytes to sniff.
+    assert p.lock[kf["inputs"]["references"][0]]["type"] == "image/png"
+    assert [str(i) for i in validate(p) if i.level == "error"] == []
+
+
 def test_edits_change_one_line(show: Path) -> None:
     from vinci_olf.edit import set_select, set_take
 

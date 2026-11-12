@@ -134,6 +134,9 @@ if (merged.aspect_ratio !== "16:9") throw new Error("aspect");
 if (merged.resolution !== "4k") throw new Error("resolution");
 const label = generateButtonLabel(up, [], false, (n) => `$${n ?? 0}`);
 if (!label.startsWith("Generate ·")) throw new Error(label);
+const flash = { id: "elevenlabs:flash-v2.5:2026-08", provider: "elevenlabs", available: true, pricing: { amount: 0.04, unit: "1k_chars", clip_prices: {} } };
+const said = generateButtonLabel(getApp("voiceover"), [flash], true, (n) => `$${n ?? 0}`, { script: "x".repeat(500) });
+if (said !== "Generate · $0.02") throw new Error(`a line is priced by its text (COREPRODUC-603): ${said}`);
 """,
     )
 

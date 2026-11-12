@@ -54,7 +54,7 @@ export type EffectShellProps = {
   liveSpend: boolean;
   runs: EffectRunRow[];
   assets: AssetRow[];
-  money: (amount?: number) => string;
+  money: (amount?: number, currency?: string) => string;
   onOpenConnect: () => void;
   onRunComplete?: () => void;
   /** Adapts batch outputs shown in history when page is adapts. */
@@ -200,7 +200,7 @@ export function EffectShell(props: EffectShellProps) {
     });
   }, [adaptOutputIds, historyIds, sessionOutputs]);
 
-  const generateLabel = app ? generateButtonLabel(app, models, liveSpend, money) : "Generate";
+  const generateLabel = app ? generateButtonLabel(app, models, liveSpend, money, values) : "Generate";
   const modelChoices = useMemo(
     () => (app ? appModelChoices(app, models, connected) : []),
     [app, connected, models],

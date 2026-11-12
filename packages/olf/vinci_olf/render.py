@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import math
+import mimetypes
 import os
 import re
 import tempfile
@@ -188,6 +189,7 @@ def render(
     The engine never writes ``select``: picking a take is a human choice.
     Each node also gets ``extensions.<provider>`` of the planned model as parameters: the
     speaker's voice entry first, then the shot's levels (``_extensions``).
+    This is ``plan_render``, the price check, a run on ``engine``, then ``record_render``.
 
     Args:
         p: The loaded project.
@@ -209,6 +211,136 @@ def render(
 
     Raises:
         OlfError: The project, the price, or the run stops the render.
+    """
+    from vinci_protocol.models import WorkflowSpec
+
+    if engine is None:
+        from vinci_runtime.engine import Engine
+
+        engine = Engine()
+    result, job = plan_render(
+        p,
+        shot_id,
+        kind=kind,
+        model=model,
+        keyframe_model=keyframe_model,
+        count=count,
+        engine=engine,
+    )
+    if dry_run:
+        return result
+    text = ", ".join(f"{r['node']}: {r['model']} ${r['amount']:.2f}" for r in result["plan"])
+    if max_total is not None and result["total"] > max_total + 1e-9:
+        raise OlfError(
+            f"the price changed: this render costs ${result['total']:.2f}, more than the "
+            f"${max_total:.2f} you confirmed. Check the price again"
+        )
+    if (result["total"] > 0 or result["unpriced"]) and not yes:
+        more = (
+            f", plus {', '.join(result['unpriced'])} with no flat price"
+            if result["unpriced"]
+            else ""
+        )
+        raise OlfError(
+            f"this render costs ${result['total']:.2f}{more} ({text}). "
+            "Run again with --yes to spend it"
+        )
+    job["license"] = take_license(p)
+    staged: dict[str, str] = {}
+    nodes: list[dict[str, Any]] = []
+    for node in job["nodes"]:  # the run gets runtime CAS IDs; the job keeps the asset IDs
+        for key in ("image", "image_urls", "last_frame_url", "media"):
+            value = node["params"].get(key)
+            for ref in value if isinstance(value, list) else [value]:
+                if isinstance(ref, str) and ref.startswith("asset/") and ref not in staged:
+                    staged[ref] = _stage(engine, p, ref)
+        params = {
+            k: [staged.get(x, x) for x in v] if isinstance(v, list) else staged.get(v, v)
+            for k, v in node["params"].items()
+        }
+        nodes.append(node | {"params": params})
+    shape = {"id": f"olf:{shot_id}", "version": "0.1.0", "edges": job["edges"]}
+    run = engine.start_run(
+        None,
+        {},
+        workflow=WorkflowSpec.model_validate(
+            shape | {"preference": job["preference"], "nodes": nodes}
+        ),
+        preference=job["preference"],
+        max_cost=job["max_cost"],
+    )
+    if run.get("state") != "completed":
+        reason = run.get("awaiting_reason") or run.get("error") or "unknown"
+        raise OlfError(f"run {run.get('id')} is {run.get('state')}: {reason}")
+    log.info("render %s: run %s completed", shot_id, run.get("id"))
+    outputs: dict[str, bytes] = {}
+    receipts: dict[str, dict[str, Any]] = {}
+    for node in nodes:
+        info = run["nodes"][node["id"]]
+        outputs[node["id"]] = engine.cas.get(str(info["output"]))
+        found = engine.store.get_job(info["job_id"])
+        receipt = found.receipt if found is not None else None
+        receipts[node["id"]] = {"model": found.model_id if found is not None else None} | (
+            {
+                "provider": receipt.provider,
+                "cost": receipt.computed_cost,
+                "currency": receipt.currency,
+            }
+            if receipt is not None
+            else {}
+        )
+    result["takes"] = record_render(p, job, outputs, receipts)
+    return result
+
+
+def take_license(p: Project) -> dict[str, Any]:
+    """The license every generated take gets: ``license`` in project.yaml (owner and terms).
+
+    Raises:
+        OlfError: project.yaml has no license with an owner and terms.
+    """
+    license_ = p.manifest.get("license")
+    if not isinstance(license_, dict) or not {"owner", "terms"} <= license_.keys():
+        raise OlfError(
+            "project.yaml needs license.owner and license.terms: every generated take gets them"
+        )
+    return dict(license_)
+
+
+def plan_render(
+    p: Project,
+    shot_id: str,
+    *,
+    kind: str = "video",
+    model: str | None = None,
+    keyframe_model: str | None = None,
+    count: int = 1,
+    engine: Any = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Plan a shot render: its price, and the job that a run executes and ``record_render`` writes.
+
+    ``render`` joins the plan, the run and the record on the local runtime. A host that runs the
+    nodes itself (the hosted Studio starts one paid node per poll) calls this, runs
+    ``job["nodes"]`` (``asset/<sha256>`` params name show files), then calls ``record_render``.
+
+    Args:
+        p: The loaded project.
+        shot_id: The shot to render.
+        kind: ``keyframe``, ``video`` or ``audio``, as in ``render``.
+        model: Model ID for the last step. Default: routing by preference.
+        keyframe_model: Model ID for a new keyframe inside a video render.
+        count: Keyframe variations to draw at once (1 to 4).
+        engine: Anything with ``catalog()``, ``routing_providers()`` and ``config.preference``.
+            Default: the ``vinci_runtime.engine.Engine`` for ``$VINCI_HOME``.
+
+    Returns:
+        ``(result, job)``. ``result`` is ``render``'s answer before the run (``takes`` empty).
+        ``job`` holds ``shot``, ``kind``, ``nodes`` (models pinned), ``edges``, ``preference``,
+        ``max_cost``, ``view`` (the resolved shot the takes are hashed from), ``refs``,
+        ``ref_files`` (reference -> project file) and ``ids``.
+
+    Raises:
+        OlfError: The project or the connected models cannot make the render.
     """
     if kind not in KINDS:  # an empty workflow would run and write nothing
         raise OlfError(f"kind must be keyframe, video or audio, not {kind!r}")
@@ -406,45 +538,20 @@ def render(
     } | ({"notes": notes} if notes else {})
     text = ", ".join(f"{r['node']}: {r['model']} ${r['amount']:.2f}" for r in plan)
     log.info("render %s plan: %s (total $%.2f)", shot_id, text, result["total"])
-    if dry_run:
-        return result
-    if max_total is not None and result["total"] > max_total + 1e-9:
-        raise OlfError(
-            f"the price changed: this render costs ${result['total']:.2f}, more than the "
-            f"${max_total:.2f} you confirmed. Check the price again"
-        )
-    if (result["total"] > 0 or unpriced) and not yes:
-        more = f", plus {', '.join(unpriced)} with no flat price" if unpriced else ""
-        raise OlfError(
-            f"this render costs ${result['total']:.2f}{more} ({text}). "
-            "Run again with --yes to spend it"
-        )
-    license_ = p.manifest.get("license")
-    if not isinstance(license_, dict) or not {"owner", "terms"} <= license_.keys():
-        raise OlfError(
-            "project.yaml needs license.owner and license.terms: every generated take gets them"
-        )
-    staged: dict[str, str] = {}
-    for node in nodes:
-        for key in ("image", "image_urls", "last_frame_url", "media"):
-            value = node["params"].get(key)
-            for ref in value if isinstance(value, list) else [value]:
-                if isinstance(ref, str) and ref.startswith("asset/") and ref not in staged:
-                    staged[ref] = _stage(engine, p, ref)
-        node["params"] = {
-            k: [staged.get(x, x) for x in v] if isinstance(v, list) else staged.get(v, v)
-            for k, v in node["params"].items()
-        }
-    spec = WorkflowSpec.model_validate(shape | {"nodes": nodes})
-    run = engine.start_run(
-        None, {}, workflow=spec, preference=pref, max_cost=router.get("max_cost_usd")
-    )
-    if run.get("state") != "completed":
-        reason = run.get("awaiting_reason") or run.get("error") or "unknown"
-        raise OlfError(f"run {run.get('id')} is {run.get('state')}: {reason}")
-    log.info("render %s: run %s completed", shot_id, run.get("id"))
-    result["takes"] = _write_takes(p, engine, run, nodes, view, refs, ids, license_)
-    return result
+    job = {
+        "shot": shot_id,
+        "kind": kind,
+        "nodes": nodes,
+        "edges": edges,
+        "preference": pref,
+        "max_cost": router.get("max_cost_usd"),
+        "view": view,
+        "refs": refs,
+        # Reference files this plan hashed: the record locks them if they are still the same.
+        "ref_files": {a: p.rel(p.files[a[6:]]) for a in refs if a[6:] in p.files},
+        "ids": ids,
+    }
+    return result, job
 
 
 def run_one(
@@ -662,38 +769,49 @@ def _stage(engine: Any, p: Project, ref: str) -> str:
     return staged
 
 
-def _write_takes(
+def record_render(
     p: Project,
-    engine: Any,
-    run: dict[str, Any],
-    nodes: list[dict[str, Any]],
-    view: dict[str, Any],
-    refs: list[str],
-    ids: dict[str, Any],
-    license_: dict[str, Any],
+    job: dict[str, Any],
+    outputs: dict[str, bytes],
+    receipts: dict[str, dict[str, Any]] | None = None,
 ) -> list[str]:
-    """Write each take's output into ``takes/`` with its take file, and add both to the lock file.
+    """Write a finished render job: each output into ``takes/`` with its take file, and the lock.
 
     A keyframe or video node is one take. The dialogue nodes (``line1``, ``line2``, ...) are
     one audio take together: their audio is joined in order (``_speech``).
+
+    Args:
+        p: The project, loaded again when time passed since the plan. The takes keep the plan's
+            view, so a take made while the show changed shows as stale, not as fresh.
+        job: ``plan_render``'s job. Its ``license`` (``take_license``) goes on every take; a job
+            without one gets the show's license now.
+        outputs: Node ID -> the node's output bytes.
+        receipts: Node ID -> ``{"provider", "model", "cost", "currency"}``, for provenance.
+
+    Returns:
+        The new take IDs.
     """
     from vinci_provider_sdk.local_image import sniff_media_mime
 
+    nodes, view, refs, ids = job["nodes"], job["view"], job["refs"], job["ids"]
+    license_, receipts = job.get("license") or take_license(p), receipts or {}
     created, written, lock = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), [], {}
     # The input files this render used (SPEC.md: the engine adds them to the lock file).
-    for asset in refs:
-        digest = asset.removeprefix("asset/")
-        if digest in p.files and f"asset/{digest}" not in p.lock:
-            path = p.files[digest]
-            mime = sniff_media_mime(path.read_bytes()) or "application/octet-stream"
-            lock[f"asset/{digest}"] = _lock_entry(p.rel(path), digest, mime, "uploaded", license_)
+    for asset, rel in (job.get("ref_files") or {}).items():
+        digest, path = asset.removeprefix("asset/"), p.root / rel
+        if asset in p.lock or not path.is_file() or p.sha256(path) != digest:
+            continue  # locked already, or the file changed after the plan
+        # A hosted show's stand-in file has no bytes to sniff, so its name gives the type.
+        mime = sniff_media_mime(path.read_bytes()) or mimetypes.guess_type(rel)[0]
+        lock[asset] = _lock_entry(
+            rel, digest, mime or "application/octet-stream", "uploaded", license_
+        )
     speech = nodes and nodes[0].get("capability") == "tts"
     kinds = [("video" if node["id"] == "video" else "keyframe", [node]) for node in nodes]
     groups = [("audio", nodes)] if speech else kinds
     for kind, group in groups:
-        infos = [run["nodes"][node["id"]] for node in group]
         take_id = str(group[0]["params"]["olf_take"])  # each node names its take
-        blob = _speech(engine, infos) if speech else engine.cas.get(str(infos[0]["output"]))
+        blob = _speech([outputs[n["id"]] for n in group]) if speech else outputs[group[0]["id"]]
         digest = hashlib.sha256(blob).hexdigest()  # the CAS digest too: CAS keys are SHA-256
         mime = sniff_media_mime(blob) or "application/octet-stream"
         rel = Path("takes", f"{take_id}.{EXT.get(mime, 'bin')}")
@@ -712,22 +830,24 @@ def _write_takes(
         if kind != "keyframe" and (duration := _duration(p.root / rel, exact=moved)):
             take["duration"] = duration
         if kind == "video" and from_keyframe(view):
-            new = run["nodes"].get("keyframe")
+            new = outputs.get("keyframe")  # drawn in this render, else the chosen keyframe
             frames = {
-                "first_frame": f"asset/{new['output']}" if new else _output(p, ids["keyframe"])
+                "first_frame": f"asset/{hashlib.sha256(new).hexdigest()}"
+                if new is not None
+                else _output(p, ids["keyframe"])
             }
             inputs = {"first_frame": ids["keyframe"]}
         take["inputs_hash"] = inputs_hash(view, kind, frames)
         save_inputs(p, take_id, hash_view(view, kind, frames))  # explains a later stale state
         if inputs:
             take["inputs"] = inputs
-        jobs = [engine.store.get_job(info["job_id"]) for info in infos]
-        receipts = [job.receipt for job in jobs if job is not None and job.receipt is not None]
-        job, params = jobs[0], group[0]["params"]
+        got = [receipts.get(node["id"]) or {} for node in group]
+        paid = [row for row in got if row.get("cost") is not None]
+        params = group[0]["params"]
         prompts = [node["params"]["prompt"] for node in group if "prompt" in node["params"]]
         take["provenance"] = {
-            "provider": receipts[0].provider if receipts else "unknown",
-            "model": job.model_id if job is not None else "unknown",
+            "provider": (paid[0].get("provider") if paid else None) or "unknown",
+            "model": got[0].get("model") or "unknown",
             **({"prompt": "\n".join(prompts)} if prompts else {}),  # one per line; none for a move
             **(
                 {"negative_prompt": params["negative_prompt"]}
@@ -741,11 +861,11 @@ def _write_takes(
             **(
                 {
                     "cost": {
-                        "amount": round(sum(r.computed_cost for r in receipts), 6),
-                        "currency": receipts[0].currency,
+                        "amount": round(sum(row["cost"] for row in paid), 6),
+                        "currency": paid[0].get("currency"),
                     }
                 }
-                if receipts
+                if paid
                 else {}
             ),
         }
@@ -758,14 +878,14 @@ def _write_takes(
     return written
 
 
-def _speech(engine: Any, infos: list[dict[str, Any]]) -> bytes:
+def _speech(blobs: list[bytes]) -> bytes:
     """Join the audio of each dialogue line, in order, into one WAV (``LINE_GAP`` s between)."""
     from vinci_media import join_audio
 
     with tempfile.TemporaryDirectory(prefix="olf-audio-") as raw:
-        parts = [Path(raw, f"line{i}") for i in range(len(infos))]
-        for part, info in zip(parts, infos, strict=True):
-            part.write_bytes(engine.cas.get(str(info["output"])))
+        parts = [Path(raw, f"line{i}") for i in range(len(blobs))]
+        for part, blob in zip(parts, blobs, strict=True):
+            part.write_bytes(blob)
         return join_audio(parts, Path(raw, "dialogue.wav"), gap=LINE_GAP).read_bytes()
 
 

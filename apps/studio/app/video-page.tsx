@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { clipPrice } from "../lib/canvas-node";
 import { daemonHasPath } from "../lib/daemon-routes";
+import { money } from "../lib/model-capabilities";
 import { ImageFeed } from "./image-feed";
 import { VideoPanel } from "./video-panel";
 import { VideoPresetOverlay } from "./video-preset-overlay";
@@ -31,12 +32,6 @@ import {
 
 const FAV_KEY = "vinci-video-favorites";
 const API = "/vinci-api";
-
-function money(n: number): string {
-  if (n === 0) return "$0";
-  if (n < 0.01) return "$" + n.toFixed(5).replace(/0+$/, "").replace(/\.$/, "");
-  return "$" + n.toFixed(3);
-}
 
 function readFavs(): string[] {
   try {
@@ -455,7 +450,7 @@ export function VideoPage({
     [onAspect, onClip, onDuration, onExtendMode, onIngest, onLog, onModelId, onPrompt, onResolution, onSeed, onStart, onSteps],
   );
 
-  const cost = money(generateCost(clipPrice(selected, duration)));
+  const cost = money(generateCost(clipPrice(selected, duration)), selected?.pricing?.currency);
   const blocked =
     (needsStartFrame(selected) && !extendMode && !startId) || (extendMode && !clipId && !startId);
 

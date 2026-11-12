@@ -29,6 +29,7 @@ from vinci_core.catalog import (
 )
 from vinci_core.config import VinciConfig, load_config, write_config
 from vinci_core.cost import (
+    asked_chars,
     asked_seconds,
     estimate_from_spec,
     fit_duration,
@@ -321,13 +322,14 @@ def _refused_duration(asked: object, limits: ModelConstraints) -> float | None:
     """The asked clip length when the model would refuse it (not listed or over its max), or None.
 
     Args:
-        asked: A job's ``duration`` input (a number, a numeric string, or empty).
+        asked: A job's ``duration`` input (a number, a numeric string such as ``"6"`` or ``"6s"``,
+            or empty).
         limits: The model's constraints.
     """
     if asked in (None, "") or isinstance(asked, bool):
         return None
     try:
-        seconds = float(str(asked))
+        seconds = float(str(asked).strip().removesuffix("s"))  # "7s": the price reads it so too
     except ValueError:
         return None
     if limits.durations:
@@ -2096,8 +2098,10 @@ class Engine:
                 "job.completed", run_id=run_id, job_id=job.id, payload={"cached": True, "cost": 0}
             )
             return job
-        seconds = asked_seconds(req.inputs.get("duration"))
-        estimate = with_alternative(provider.estimate(req), catalog, capability.value, seconds)
+        seconds, chars = asked_seconds(req.inputs.get("duration")), asked_chars(req.inputs)
+        estimate = with_alternative(
+            provider.estimate(req), catalog, capability.value, seconds, chars
+        )
         started = now_utc()
         ref, job_id = self._durable_provider_submit(
             parent_op_id=receipt_parent_op_id,
@@ -2803,11 +2807,13 @@ class Engine:
             return [self._ingest_value(item) for item in value]
         if isinstance(value, str) and value.startswith("vinci://assets/"):
             return value.removeprefix("vinci://assets/")
-        if isinstance(value, str):
+        # os.path.isfile, not Path.is_file: a text of more than 255 characters is no file name,
+        # and Path.is_file raised ENAMETOOLONG for it, so a run with a long prompt failed with
+        # HTTP 400 (COREPRODUC-605).
+        if isinstance(value, str) and os.path.isfile(value):
             path = Path(value)
-            if path.is_file():
-                mime = _mime_from_path(path)
-                return self.ingest_bytes(path.read_bytes(), mime=mime, filename=path.name).id
+            mime = _mime_from_path(path)
+            return self.ingest_bytes(path.read_bytes(), mime=mime, filename=path.name).id
         return value
 
     def _index_asset(self, asset: Asset, extra_text: str = "") -> None:

@@ -173,10 +173,50 @@ def test_a_clip_is_priced_by_its_length() -> None:
     for name in ("wavespeed", "fal", "google", "higgsfield", "magnific"):
         for row in load_bundled_catalog(name).models:
             table = row.pricing.clip_prices
-            if table:  # a price for every length the row takes; amount is the default clip
+            if table:  # a price for every length the row takes; amount is its default clip's
                 listed = {str(fit_duration(d, row.constraints)) for d in row.constraints.durations}
                 assert listed <= set(table), row.id
-                assert table[str(fit_duration(5, row.constraints))] == row.pricing.amount, row.id
+                assert row.pricing.amount in table.values(), row.id  # fal Veo's default is 8 s
+
+
+def test_speech_and_music_are_priced_by_their_measure() -> None:
+    """Speech is billed per character and music and sound effects per second, not per job
+    (COREPRODUC-603): the plan and the job estimate price the text and the length."""
+    from vinci_core.cost import asked_chars, clip_price, plan_workflow
+
+    eleven = load_bundled_catalog("elevenlabs")
+    speech = eleven.by_id("elevenlabs:multilingual-v2:2026-08")  # $0.08 per 1,000 characters
+    assert [clip_price(speech, chars=n) for n in (None, 500, 2000)] == [0.08, 0.04, 0.16]
+    assert asked_chars({"text": "Say {{inputs.line}}"}, {"line": "hi"}) == 6
+    assert asked_chars({"prompt": "{{nodes.script.text}}"}) is None  # not known yet: 1,000
+    music = eleven.by_id("elevenlabs:music-v1:2026-11")  # $0.15 a minute, at most 60 s
+    assert [clip_price(music, s) for s in (None, 30, 90)] == [0.15, 0.075, 0.15]
+    sfx = eleven.by_id("elevenlabs:sound-effects-v2:2026-11")  # $0.06 for its 30 s maximum
+    assert round(clip_price(sfx, 10), 4) == 0.02
+    node = {"id": "say", "type": "generate", "capability": "tts", "model_id": speech.id,
+            "params": {"prompt": "{{inputs.line}}"}}
+    spec = WorkflowSpec.model_validate({"id": "t", "version": "0.1.0", "nodes": [node], "edges": []})
+    assert plan_workflow(eleven, spec, inputs={"line": "x" * 250})[0]["estimate"].amount == 0.02
+    req = JobRequest(capability=Capability.TTS, model_id=speech.id, inputs={"prompt": "x" * 1500})
+    assert round(ElevenLabsProvider(api_key="k").estimate(req).amount, 4) == 0.12
+
+
+def test_a_long_prompt_is_text_not_a_file_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A run input of more than 255 characters is text: the check for a local file raised
+    ENAMETOOLONG for it, and POST /runs failed with HTTP 400 (COREPRODUC-605)."""
+    monkeypatch.setenv("VINCI_HOME", str(tmp_path))
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "dummy-not-a-key")  # lists the rows; nothing is sent
+    monkeypatch.delenv("VINCI_ALLOW_LIVE_SPEND", raising=False)
+    engine = Engine(tmp_path)
+    engine.init_home(demo=False)
+    line = "Tonight, the shop stays open late. " * 10  # 350 characters, no slash
+    run = engine.start_run(
+        "@tryvinci/tts", {"prompt": line}, max_cost=0.0001, model_id="elevenlabs:flash-v2.5:2026-08"
+    )
+    assert run["state"] == "awaiting_approval"
+    assert run["estimate"]["total"] == 0.014  # $0.04 per 1,000 characters (COREPRODUC-603)
 
 
 def test_estimate_skill_uses_the_skills_input_defaults(
@@ -261,6 +301,8 @@ def test_runtime_fits_a_clip_length_the_model_refuses(
     six = ModelConstraints(durations=[6])
     assert _refused_duration(5, six) == 5.0 and _refused_duration("6", six) is None
     assert _refused_duration("", six) is None and _refused_duration(True, six) is None
+    kling = ModelConstraints(durations=[5, 10])  # "7s" was priced as 10 s but sent as "7" (#553)
+    assert _refused_duration("7s", kling) == 7.0 and _refused_duration("10s", kling) is None
 
 
 def test_start_run_honors_model_id(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

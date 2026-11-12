@@ -2,7 +2,7 @@
 
 import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { daemonHasPath } from "../lib/daemon-routes";
+import { daemonPaths } from "../lib/daemon-routes";
 import {
   RECENT_KEY,
   type OlfBatch,
@@ -13,6 +13,7 @@ import {
   type OlfPrevis,
   type OlfShotDetail,
   type OlfShow,
+  type OlfShowRow,
   type OlfStaleCause,
   type OlfTake,
   type RenderKind,
@@ -27,7 +28,7 @@ import {
   runtimeText,
   takeName,
 } from "../lib/shows";
-import { message, olf, runJobs, send } from "./shows-api";
+import { OlfRoutes, message, olf, polling, runJobs, send, waitRun } from "./shows-api";
 import { BibleView, IssuesView } from "./shows-bible";
 import { CutView } from "./shows-cut";
 import { type Route, ShowNav, ShowTop, routeEpisode } from "./shows-nav";
@@ -52,9 +53,13 @@ function firstRoute(show: OlfShow): Route {
  *
  * Args:
  *   topSlot: The Studio top-bar element that shows the show's header (crumb, spec, actions).
+ *   hosted: A host serves the shows (Vinci Platform): they live in its storage, so there is no
+ *     folder to open and the open screen lists the host's shows only.
  */
-export function ShowsPage({ topSlot }: { topSlot?: HTMLElement | null }) {
+export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement | null; hosted?: boolean }) {
   const [available, setAvailable] = useState<boolean | null>(null);
+  const [routes, setRoutes] = useState<Set<string> | null>(null); // the OLF routes this daemon serves
+  const [shows, setShows] = useState<OlfShowRow[]>([]); // GET /olf/shows, for the open screen
   const [recent, setRecent] = useState<string[]>([]);
   const [show, setShow] = useState<OlfShow | null>(null);
   const [loading, setLoading] = useState(false);
@@ -123,11 +128,45 @@ export function ShowsPage({ topSlot }: { topSlot?: HTMLElement | null }) {
 
   useEffect(() => {
     let live = true;
-    void daemonHasPath("/vinci-api", "/olf/project").then((ok) => live && setAvailable(ok));
+    void daemonPaths("/vinci-api").then((paths) => {
+      if (!live) return;
+      setRoutes(paths);
+      setAvailable(paths.has("/olf/project"));
+    });
     return () => {
       live = false;
     };
   }, []);
+
+  useEffect(() => {
+    // The open screen lists the shows; it loads again each time a show closes.
+    if (!available || show || !routes?.has("/olf/shows")) return;
+    let live = true;
+    olf<{ shows: OlfShowRow[] }>("/shows")
+      .then((body) => live && setShows(body.shows || []))
+      .catch((err) => console.warn("[shows] list failed", message(err)));
+    return () => {
+      live = false;
+    };
+  }, [available, show, routes]);
+
+  useEffect(() => {
+    // A host runs renders after its answer: poll the ones that are still running (after a reload
+    // too). A render this page started is polled already (`polling`).
+    if (!show) return;
+    for (const row of show.renders || []) {
+      if (polling.has(row.run_id)) continue;
+      setBusy((rows) => ({ ...rows, [row.shot]: row.kind }));
+      console.info("[shows] polling a render", row);
+      void waitRun(row.run_id)
+        .then((done) => setNotice(`Rendered ${andList(done.takes.map(takeName))} for ${row.shot} · ${price(done.total)}`))
+        .catch((err) => setNotice(message(err)))
+        .finally(() => {
+          setBusy(({ [row.shot]: _done, ...rest }) => rest);
+          void open(show.path, true);
+        });
+    }
+  }, [show, open]);
 
   useEffect(() => {
     if (!available) return;
@@ -341,8 +380,9 @@ export function ShowsPage({ topSlot }: { topSlot?: HTMLElement | null }) {
   }
 
   // The show's header goes into the Studio top bar (as Canvas puts its view switch there).
+  const has = (path: string) => !routes || routes.has(path);
   const top = (node: ReactNode) => (
-    <>
+    <OlfRoutes.Provider value={has}>
       {topSlot
         ? createPortal(
             <ShowTop
@@ -356,7 +396,7 @@ export function ShowsPage({ topSlot }: { topSlot?: HTMLElement | null }) {
           )
         : null}
       {node}
-    </>
+    </OlfRoutes.Provider>
   );
 
   if (available === false) {
@@ -388,7 +428,9 @@ export function ShowsPage({ topSlot }: { topSlot?: HTMLElement | null }) {
         busy={loading}
         ready={available !== null}
         error={error}
-        recent={recent}
+        recent={hosted ? [] : recent.filter((path) => !shows.some((row) => row.path === path))}
+        shows={shows}
+        folders={!hosted}
         onOpen={(path) => void open(path)}
         onSample={() => void openSample()}
         onNew={() => setCreating(true)}
@@ -539,6 +581,8 @@ function OpenShow({
   ready,
   error,
   recent,
+  shows,
+  folders,
   onOpen,
   onSample,
   onNew,
@@ -547,6 +591,10 @@ function OpenShow({
   ready: boolean;
   error: string;
   recent: readonly string[];
+  /** `GET /olf/shows`. */
+  shows: readonly OlfShowRow[];
+  /** Shows are folders on this computer (a local daemon), so a path opens one. */
+  folders: boolean;
   onOpen: (path: string) => void;
   onSample: () => void;
   onNew: () => void;
@@ -570,30 +618,46 @@ function OpenShow({
             <button className="ghost" type="button" disabled={busy || !ready} onClick={onSample} data-testid="shows-open-sample">
               {busy ? "Opening…" : "Open the sample show"}
             </button>
-            <form className="shows-path" onSubmit={submit}>
-              <input
-                value={path}
-                onChange={(ev) => setPath(ev.target.value)}
-                placeholder="/path/to/my-show"
-                aria-label="Show folder"
-                data-testid="shows-path"
-              />
-              <button className="ghost" type="submit" disabled={busy || !ready || !path.trim()}>
-                Open folder
-              </button>
-            </form>
+            {folders ? (
+              <form className="shows-path" onSubmit={submit}>
+                <input
+                  value={path}
+                  onChange={(ev) => setPath(ev.target.value)}
+                  placeholder="/path/to/my-show"
+                  aria-label="Show folder"
+                  data-testid="shows-path"
+                />
+                <button className="ghost" type="submit" disabled={busy || !ready || !path.trim()}>
+                  Open folder
+                </button>
+              </form>
+            ) : null}
           </div>
         }
         hint={
-          recent.length ? (
-            <span className="shows-recent">
-              Recent:{" "}
-              {recent.map((row) => (
-                <button key={row} type="button" title={row} onClick={() => onOpen(row)}>
-                  {folderName(row)}
-                </button>
-              ))}
-            </span>
+          shows.length || recent.length ? (
+            <>
+              {shows.length ? (
+                <span className="shows-recent" data-testid="shows-list">
+                  Your shows:{" "}
+                  {shows.map((row) => (
+                    <button key={row.path} type="button" title={row.title} onClick={() => onOpen(row.path)}>
+                      {row.title}
+                    </button>
+                  ))}
+                </span>
+              ) : null}
+              {recent.length ? (
+                <span className="shows-recent">
+                  Recent:{" "}
+                  {recent.map((row) => (
+                    <button key={row} type="button" title={row} onClick={() => onOpen(row)}>
+                      {folderName(row)}
+                    </button>
+                  ))}
+                </span>
+              ) : null}
+            </>
           ) : (
             "A show is a folder in the Open Lore Format, with project.yaml at the top. The sample is a short anime show called Tidewatch."
           )

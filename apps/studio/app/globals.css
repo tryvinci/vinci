@@ -149,10 +149,13 @@ a { color: var(--ink); }
   box-shadow: var(--glass-shadow);
   backdrop-filter: blur(18px) saturate(140%);
 }
-.avatar-menu button {
+.avatar-menu button,
+.avatar-menu a {
   width: 100%; height: auto; padding: 8px 10px; border-radius: 8px; justify-content: flex-start;
   color: var(--rail-ink);
 }
+/* Host links (Vinci Platform credits, account) are anchors that look like the menu buttons. */
+.avatar-menu a { display: flex; box-sizing: border-box; text-decoration: none; }
 .all-tools {
   position: fixed; left: 50%; top: 72px; z-index: 50;
   width: min(440px, calc(100vw - 32px)); max-height: min(72vh, 640px);
@@ -292,6 +295,7 @@ kbd {
 .top h1 { margin: 0; font-size: 16px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .top-meta { display: flex; gap: 8px; align-items: center; flex: none; }
 .top-meta .muted { white-space: nowrap; }
+.top-log { max-width: min(46ch, 40vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); font-size: 13px; }
 .chip, .ghost {
   border: 1px solid var(--line); background: transparent; border-radius: var(--pill); padding: 7px 14px;
   transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
@@ -626,6 +630,9 @@ label { display: block; font-size: 11px; color: var(--mute); margin: 0 0 4px; le
   box-shadow: var(--card-shadow);
 }
 .connect-sheet.idle { background: transparent; box-shadow: none; }
+/* Connect on a host (own API keys, COREPRODUC-613): the provider cards side by side when there is room. */
+.keys.host-keys { max-width: 84rem; }
+.host-key-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 26rem)); gap: 14px; align-items: start; }
 .connect-sheet .kind { font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--teal); }
 .connect-routing { margin-top: 28px; padding-top: 4px; max-width: 26rem; }
 .lib-tabs { display: flex; gap: 6px; margin: 0 0 16px; }
@@ -1290,6 +1297,8 @@ input[type="range"] { accent-color: var(--teal); width: 100%; padding: 0; border
   background: var(--hover, rgb(33 218 210 / 0.12)); color: var(--ink, #f6f3ee);
 }
 .video-panel .image-generate { width: 100%; justify-content: space-between; }
+/* A long price ("150 Magnific credits", COREPRODUC-614) wraps in the narrow panel; it was cut off. */
+.video-panel .image-generate span:last-child { white-space: normal; text-align: right; line-height: 1.15; }
 .video-advanced button { border: 0; background: transparent; color: var(--dim); font-size: 12px; padding: 0; }
 .video-advanced-fields { display: grid; gap: 8px; margin-top: 8px; }
 .video-advanced-fields label { display: grid; gap: 4px; font-size: 11px; color: var(--dim); }

@@ -25,7 +25,7 @@ import {
   takeName,
   takesSummary,
 } from "../lib/shows";
-import { Confirm, Pick, PillFrame, StalePill, StatusPill } from "./shows-parts";
+import { Confirm, OlfOnly, Pick, PillFrame, StalePill, StatusPill } from "./shows-parts";
 import { ScriptStep } from "./shows-setup";
 
 type Mode = "stale" | "animate";
@@ -123,36 +123,38 @@ export function StoryboardView({
               >
                 Shot list from script
               </button>
-              <button
-                type="button"
-                className="ghost"
-                disabled={Boolean(previs.busy) || !stats.shots}
-                title="A PDF with 5 cuts a page: picture, action, dialogue and time. $0."
-                onClick={() => onPrevis("sheet")}
-                data-testid="previs-sheet"
-              >
-                {previs.busy === "sheet" ? "Drawing…" : "E-conte sheet"}
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                disabled={Boolean(previs.busy) || !stats.shots}
-                title="One MP4 of the episode from the best picture of each shot: video, keyframe, else pills. $0."
-                onClick={() => onPrevis("animatic")}
-                data-testid="previs-animatic"
-              >
-                {previs.busy === "animatic" ? "Making…" : "Animatic"}
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                disabled={Boolean(previs.busy) || !stats.shots}
-                title="One MP4 of the episode with one look: every shot from its pills, no sound, the lines as subtitles. $0."
-                onClick={() => onPrevis("mock")}
-                data-testid="previs-mock"
-              >
-                {previs.busy === "mock" ? "Rendering…" : "Mock render"}
-              </button>
+              <OlfOnly path="/olf/previs">
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={Boolean(previs.busy) || !stats.shots}
+                  title="A PDF with 5 cuts a page: picture, action, dialogue and time. $0."
+                  onClick={() => onPrevis("sheet")}
+                  data-testid="previs-sheet"
+                >
+                  {previs.busy === "sheet" ? "Drawing…" : "E-conte sheet"}
+                </button>
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={Boolean(previs.busy) || !stats.shots}
+                  title="One MP4 of the episode from the best picture of each shot: video, keyframe, else pills. $0."
+                  onClick={() => onPrevis("animatic")}
+                  data-testid="previs-animatic"
+                >
+                  {previs.busy === "animatic" ? "Making…" : "Animatic"}
+                </button>
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={Boolean(previs.busy) || !stats.shots}
+                  title="One MP4 of the episode with one look: every shot from its pills, no sound, the lines as subtitles. $0."
+                  onClick={() => onPrevis("mock")}
+                  data-testid="previs-mock"
+                >
+                  {previs.busy === "mock" ? "Rendering…" : "Mock render"}
+                </button>
+              </OlfOnly>
               <button
                 type="button"
                 className="ghost olf-stale-btn"

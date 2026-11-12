@@ -20,19 +20,13 @@ import {
   type MentionRow,
 } from "../lib/image-page";
 import { daemonHasPath } from "../lib/daemon-routes";
-import { isUnpriced, PRICE_VARIES } from "../lib/model-capabilities";
+import { isUnpriced, money, PRICE_VARIES } from "../lib/model-capabilities";
 import { ImageFeed } from "./image-feed";
 import { ImagePromptBar } from "./image-prompt-bar";
 import { plainError } from "./ui/plain-text";
 
 const FAV_KEY = "vinci-image-favorites";
 const API = "/vinci-api";
-
-function money(n: number): string {
-  if (n === 0) return "$0";
-  if (n < 0.01) return "$" + n.toFixed(5).replace(/0+$/, "").replace(/\.$/, "");
-  return "$" + n.toFixed(3);
-}
 
 function readFavs(): string[] {
   try {
@@ -227,7 +221,7 @@ export function ImagePage({
     [onLog],
   );
 
-  const cost = selected && isUnpriced(selected) ? PRICE_VARIES : money(generateCost(selected?.pricing?.amount, batch));
+  const cost = selected && isUnpriced(selected) ? PRICE_VARIES : money(generateCost(selected?.pricing?.amount, batch), selected?.pricing?.currency);
   const blocked = needsReference(selected) && refs.length === 0;
 
   return (

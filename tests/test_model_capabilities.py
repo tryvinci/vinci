@@ -16,6 +16,8 @@ NAMES = [
     "modelsForNodeTypes",
     "isUnpriced",
     "PRICE_VARIES",
+    "money",
+    "setPriceUnit",
 ]
 STUDIO = ROOT / "apps" / "studio" / "app" / "studio-client.tsx"
 
@@ -335,6 +337,57 @@ if (only !== "openai:tokens") throw new Error("an unpriced model still lists alo
 if (defaultModelFor("image", ["openai", "fal"], rows).id !== "fal:priced") throw new Error("live default");
 if (defaultModelFor("image", ["mock"], rows).id !== "mock:png:v1") throw new Error("demo default is mock");
 if (PRICE_VARIES !== "price varies") throw new Error("copy");
+"""
+    result = _run(script)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_money_uses_the_host_price_unit() -> None:
+    """USD by default; a host that bills in credits (Vinci Platform, COREPRODUC-585) shows credits."""
+    script = """
+const want = (got, exp) => { if (got !== exp) throw new Error(got + " != " + exp); };
+want(money(0.16), "$0.160");
+want(money(0), "$0");
+want(money(undefined), "$0");
+want(money(0.0004), "$0.0004");
+setPriceUnit("credits");
+want(money(2), "2 credits");
+want(money(1), "1 credit");
+want(money(0), "0 credits");
+want(money(14.5), "14.5 credits");
+// A row's own currency wins: a model on the user's own key is in USD on a credits host (COREPRODUC-613).
+want(money(0.9, "USD"), "$0.900");
+want(money(2, "credits"), "2 credits");
+setPriceUnit(undefined);
+want(money(0.33), "$0.330");
+want(money(3, "credits"), "3 credits");
+// A sign-in connector prices in the provider's own credits (COREPRODUC-614).
+want(money(4, "Higgsfield credits"), "4 Higgsfield credits");
+want(money(1, "Magnific credits"), "1 Magnific credit");
+"""
+    result = _run(script)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_own_key_models_rank_after_the_hosts_models() -> None:
+    """On a credits host, a model on the user's own key (USD) is listed after the host's models and is
+    not the default by a smaller number: 0.04 dollars and 2 credits do not compare (COREPRODUC-613)."""
+    script = """
+const hosted = { id: "bytedance/seedream-v4.5", provider: "vinci", capabilities: ["t2i"], quality_tier: "quality", status: "ready", pricing: { amount: 2, unit: "image", currency: "credits" } };
+const ownKey = { id: "higgsfield:soul-standard:2026-09", provider: "higgsfield", capabilities: ["t2i"], quality_tier: "quality", status: "ready", pricing: { amount: 0.04, unit: "image", currency: "USD" } };
+setPriceUnit("credits");
+const picked = defaultModelFor("image", ["vinci", "higgsfield"], [ownKey, hosted]);
+if (picked.id !== hosted.id) throw new Error("host default should stay the host model, got " + picked.id);
+const order = modelsFor("image", ["vinci", "higgsfield"], [ownKey, hosted]).map((row) => row.id);
+if (order.join() !== [hosted.id, ownKey.id].join()) throw new Error("order " + order.join());
+// With a Wavespeed key every row is in USD: the prices compare again.
+const hostedOnKey = { ...hosted, pricing: { amount: 0.05, unit: "image", currency: "USD" } };
+if (defaultModelFor("image", ["vinci", "higgsfield"], [hostedOnKey, ownKey]).id !== ownKey.id) throw new Error("USD rows compare by price");
+setPriceUnit(undefined);
+// Higgsfield credits (a sign-in connector, COREPRODUC-614) do not compare with dollars either.
+const signIn = { id: "mcp_higgsfield:seedream_v4_5", provider: "mcp_higgsfield", capabilities: ["t2i"], quality_tier: "quality", status: "ready", pricing: { amount: 1, unit: "generation", currency: "Higgsfield credits" } };
+const local = { id: "wavespeed:seedream-4.5:2026-08", provider: "wavespeed", capabilities: ["t2i"], quality_tier: "quality", status: "ready", pricing: { amount: 0.04, unit: "image", currency: "USD" } };
+if (defaultModelFor("image", ["wavespeed", "mcp_higgsfield"], [signIn, local]).id !== local.id) throw new Error("the USD row should be the default");
 """
     result = _run(script)
     assert result.returncode == 0, result.stderr or result.stdout

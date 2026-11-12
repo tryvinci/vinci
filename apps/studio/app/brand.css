@@ -241,7 +241,8 @@
 .command-list button:hover,
 .all-tools-tabs button.on,
 .all-tools-open:hover,
-.avatar-menu button:hover {
+.avatar-menu button:hover,
+.avatar-menu a:hover {
   background: var(--hover);
   color: var(--ink);
 }

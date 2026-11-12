@@ -91,6 +91,8 @@ export type ClassifiedModel = {
   generatesAudio: boolean;
   status: string;
   price: number;
+  /** The row's own `pricing.currency`, when it has one (a model on the user's own key on a host). */
+  currency?: string;
 };
 
 export type ModelsForOptions = {
@@ -262,6 +264,52 @@ export function isUnpriced(model: { provider?: string; pricing?: { amount?: numb
   return model.provider !== "mock" && !(Number(model.pricing?.amount) > 0);
 }
 
+/** Unit of every price in this Studio: USD (local daemon) or credits (a host that bills in credits). */
+let priceUnit: "usd" | "credits" = "usd";
+
+/**
+ * Set the price unit from `host.currency` in `GET /doctor`. Any other value means USD.
+ *
+ * Args:
+ *   unit: "credits" for a host such as Vinci Platform, otherwise undefined.
+ */
+export function setPriceUnit(unit?: string): void {
+  priceUnit = unit === "credits" ? "credits" : "usd";
+}
+
+/**
+ * The unit of a price: "usd", "credits" (a host's), or a provider's own credits such as
+ * "higgsfield credits" on a sign-in connector (COREPRODUC-614). No currency: the Studio's unit.
+ */
+export function unitOf(currency?: string): string {
+  const c = (currency || "").toLowerCase();
+  return !c ? priceUnit : c.endsWith("credits") ? c : "usd";
+}
+
+/**
+ * Price text: "$0.160" in USD, "2 credits" when the host bills in credits, "4 Higgsfield credits"
+ * for a provider's own credits.
+ *
+ * Args:
+ *   n: Amount in the current unit (catalog `pricing.amount` or a sum of them).
+ *   currency: The row's own `pricing.currency`, when it can differ from the Studio's unit: on a
+ *     host, a model on the user's own key is priced in USD (COREPRODUC-613); a sign-in connector
+ *     prices in the provider's credits (COREPRODUC-614).
+ * Returns:
+ *   The label for Generate buttons, model rows, run bars and totals.
+ */
+export function money(n: number | undefined, currency?: string): string {
+  const v = Number(n || 0);
+  const unit = unitOf(currency);
+  if (unit.endsWith("credits")) {
+    const brand = unit === "credits" ? "" : `${(currency || "").replace(/\s*credits$/i, "")} `;
+    return `${Number(v.toFixed(2))} ${brand}${v === 1 ? "credit" : "credits"}`;
+  }
+  if (v === 0) return "$0";
+  if (v < 0.01) return "$" + v.toFixed(5).replace(/0+$/, "").replace(/\.$/, "");
+  return "$" + v.toFixed(3);
+}
+
 function ordered<T extends string>(all: readonly T[], picked: Set<T>): T[] {
   return all.filter((item) => picked.has(item));
 }
@@ -382,6 +430,7 @@ export function classifyModel(model: CatalogRow): ClassifiedModel {
     generatesAudio,
     status: model.status || "active",
     price,
+    currency: (model.pricing as { currency?: string } | undefined)?.currency,
   };
 }
 
@@ -401,7 +450,12 @@ function overlaps(have: readonly string[], want: readonly string[]): boolean {
 }
 
 function rankOf(info: ClassifiedModel, surface: string): [number, number, number, number, string] {
-  const mock = info.provider.toLowerCase() === "mock" ? 1 : 0;
+  // On a host, a model on the user's own key is priced in another unit (USD next to credits); a
+  // sign-in connector prices in the provider's credits. Two units do not compare, so such a row ranks
+  // after the Studio's own and never becomes the default by a lower number (COREPRODUC-613, 614).
+  // Mock stays last.
+  const unit = unitOf(info.currency);
+  const mock = info.provider.toLowerCase() === "mock" ? 2 : unit !== priceUnit ? 1 : 0;
   let role = 0;
   if (surface === "upscale") role = info.functions.includes("image_upscale") ? 0 : 1;
   else if (surface === "video" || surface === "video_t2v") {

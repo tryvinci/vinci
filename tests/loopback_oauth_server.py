@@ -42,6 +42,8 @@ class OAuthServer:
                         {
                             "resource": owner.origin + "/mcp",
                             "authorization_servers": [owner.origin],
+                            # As Magnific lists them (COREPRODUC-610).
+                            "scopes_supported": ["openid", "email", "mcp:custom-audience"],
                         }
                     )
                     return

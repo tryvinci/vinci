@@ -16,6 +16,9 @@ from vinci_protocol.models import (
 )
 from vinci_provider_sdk.catalog_provider import CatalogBackedProvider
 
+# fal video routes that make sound unless `generate_audio` is false (fal API pages, 2026-11-11).
+_SOUND_ROUTES = ("fal-ai/kling-video/v2.6", "fal-ai/veo3.1", "fal-ai/bytedance/seedance/v1.5")
+
 
 def _image_input(req: JobRequest) -> str | None:
     for key in (
@@ -107,6 +110,13 @@ class FalProvider(CatalogBackedProvider):
                 payload["image_urls"] = [image]
             elif "kling-video/v2.6" in endpoint and "image-to-video" in endpoint:
                 payload["start_image_url"] = image
+            elif "kling-video/o1" in endpoint:
+                # Kling O1's API requires start_image_url and takes the end frame as end_image_url
+                # (fal API page, 2026-11-11); it was sent image_url (COREPRODUC-603).
+                payload["start_image_url"] = image
+                tail = req.inputs.get("tail_image_url") or req.inputs.get("last_frame_url")
+                if tail:
+                    payload["end_image_url"] = as_data_uri(str(tail), self._cas)
             elif "upscale" in endpoint or "image-to-video" in endpoint:
                 payload["image_url"] = image
                 tail = req.inputs.get("tail_image_url") or req.inputs.get("last_frame_url")
@@ -120,6 +130,11 @@ class FalProvider(CatalogBackedProvider):
         aspect = req.inputs.get("aspect_ratio")
         if aspect:
             payload["aspect_ratio"] = str(aspect)
+        if endpoint.startswith(_SOUND_ROUTES):
+            # fal makes sound by default on these, and sound changes the bill (Kling 2.6 Pro $0.14 a
+            # second, not $0.07): a row whose unit has audio asks for it, a silent row turns it off
+            # (COREPRODUC-603).
+            payload["generate_audio"] = "audio" in spec.pricing.unit
         body = self._post_json(url, self._headers(), payload)
         request_id = str(body.get("request_id") or body.get("id") or "")
         if not request_id:

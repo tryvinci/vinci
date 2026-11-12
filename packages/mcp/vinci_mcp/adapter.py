@@ -36,14 +36,17 @@ from vinci_protocol.models import (
 )
 from vinci_provider_sdk.base import Provider
 from vinci_provider_sdk.catalog_provider import LiveSpendDisabled
+from vinci_provider_sdk.local_image import sniff_media_mime
 
 from vinci_mcp.connectors import (
     SNAPSHOT,
     connector_for,
     decode_b64,
     models_for,
+    parse_cost,
     parse_generate,
     parse_status,
+    payload_from_tool,
 )
 
 log = logging.getLogger("vinci.mcp.adapter")
@@ -59,7 +62,13 @@ class McpTransport(Protocol):
 
 
 class CasPut(Protocol):
+    """The content store: ``put`` keeps outputs; ``get`` and ``exists`` read a start frame."""
+
     def put(self, data: bytes) -> str: ...
+
+    def get(self, digest: str) -> bytes: ...
+
+    def exists(self, digest: str) -> bool: ...
 
 
 class HttpMcpTransport:
@@ -125,7 +134,6 @@ class HttpMcpTransport:
 
     async def _sdk_call(self, method: str, params: dict[str, Any]) -> Any:
         import httpx
-        from mcp.client.streamable_http import streamable_http_client
 
         from mcp import ClientSession
 
@@ -137,7 +145,7 @@ class HttpMcpTransport:
         async with httpx.AsyncClient(
             headers=headers, timeout=timeout, follow_redirects=False
         ) as http:
-            async with streamable_http_client(self.url, http_client=http) as streams:
+            async with _streams(self.url, http, headers, self.timeout) as streams:
                 read, write = streams[0], streams[1]
                 async with ClientSession(read, write) as session:
                     await session.initialize()
@@ -306,20 +314,98 @@ class McpProvider(Provider):
         return ProviderJobRef(provider=self._provider_id, ref=ref)
 
     def _submit_connector(self, req: JobRequest, spec: ModelSpec) -> ProviderJobRef:
-        if self._connector is None or self._cas is None:
+        """Run one connector row: upload the start frame, check the live price, then generate.
+
+        The provider's free price preview runs first. A run whose live price is above its row's
+        price stops before any spend (the Studio showed the row's price).
+        """
+        connector = self._connector
+        if connector is None or self._cas is None:
             raise RuntimeError("mcp connector is not configured")
-        result = self._transport.call(
-            "tools/call",
-            {
-                "name": self._connector.tool_for(req.capability),
-                "arguments": self._connector.arguments(req.capability, req.inputs),
-            },
+        row = connector.row(spec.id)
+        tool = connector.tool_for(Capability(row.capability))
+        start = self._start_frame(req.inputs) if row.capability == "i2v" else None
+        args = connector.arguments(row, req.inputs, start)
+        preview_tool, preview = connector.cost_call(tool, args)
+        live = parse_cost(self._call(preview_tool, preview))
+        log.info(
+            "mcp price provider=%s model=%s live=%s row=%s",
+            connector.id,
+            row.model,
+            live,
+            row.credits,
         )
-        ref, status, b64 = parse_generate(result)
+        if live is not None and live > row.credits + 1e-9:
+            raise ValueError(
+                f"{spec.display_name} costs {live:g} {connector.currency} now, "
+                f"not {row.credits:g}. Nothing ran."
+            )
+        ref, status, b64 = parse_generate(self._call(tool, args))
+        log.info(
+            "mcp submitted provider=%s model=%s ref=%s state=%s",
+            connector.id,
+            row.model,
+            ref,
+            status.state.value,
+        )
         status = self._attach_bytes(status, b64)
         self._jobs[ref] = status
-        del spec
         return ProviderJobRef(provider=self._provider_id, ref=ref)
+
+    def _call(self, name: str, arguments: dict[str, Any]) -> Any:
+        """One tools/call. A tool error raises with the provider's message (no secrets in it)."""
+        result = self._transport.call("tools/call", {"name": name, "arguments": arguments})
+        if isinstance(result, dict) and result.get("isError"):
+            texts = [b.get("text") for b in result.get("content") or [] if isinstance(b, dict)]
+            message = next((t for t in texts if isinstance(t, str) and t), f"{name} failed")
+            raise RuntimeError(f"{self._provider_id} {name}: {message[:300]}")
+        return result
+
+    def _start_frame(self, inputs: dict[str, Any]) -> str:
+        """Put the start frame in the provider's storage and return its id there.
+
+        A public https link is imported by the provider. A content digest or a ``data:`` URI is
+        uploaded: Higgsfield ``media_upload`` + PUT + ``media_confirm``; Magnific
+        ``creations_request_upload`` + PUT + ``creations_finalize_upload`` (not in the library).
+        """
+        ref = _image_ref(inputs)
+        if not ref:
+            raise ValueError("this model needs a start frame")
+        higgsfield = self._provider_id == "mcp_higgsfield"
+        if ref.startswith("https://"):
+            if higgsfield:
+                imported = self._call("media_import_url", {"url": ref, "type": "image"})
+                return _need(imported, "media_id")
+            uploaded = self._call(
+                "creations_upload_image", {"url": ref, "fileName": "vinci-start.png"}
+            )
+            return _need(uploaded, "identifier")
+        blob = self._image_bytes(ref)
+        mime = sniff_media_mime(blob) or "image/png"
+        name = "vinci-start." + mime.split("/")[-1].replace("jpeg", "jpg")
+        if higgsfield:
+            asked = self._call("media_upload", {"filename": name, "content_type": mime})
+            uploads = payload_from_tool(asked)
+            upload = (uploads.get("uploads") or [{}])[0] if isinstance(uploads, dict) else {}
+            media_id = _need(upload, "media_id")
+            _put(_need(upload, "upload_url"), blob, str(upload.get("content_type") or mime))
+            self._call("media_confirm", {"type": "image", "media_id": media_id})
+            return media_id
+        ticket = payload_from_tool(self._call("creations_request_upload", {"mimeType": mime}))
+        _put(_need(ticket, "proxyUploadUrl"), blob, mime)
+        done = self._call(
+            "creations_finalize_upload",
+            {"path": _need(ticket, "path"), "fileName": name, "visible": False},
+        )
+        return _need(done, "identifier")
+
+    def _image_bytes(self, ref: str) -> bytes:
+        if ref.startswith("data:"):
+            return base64.b64decode(ref.split(",", 1)[-1], validate=False)
+        cas = self._cas
+        if cas is not None and cas.exists(ref):
+            return cas.get(ref)
+        raise ValueError("the start frame is not in this studio's store")
 
     def _attach_bytes(self, status: JobStatus, b64: str | None) -> JobStatus:
         if not b64 or self._cas is None:
@@ -339,11 +425,9 @@ class McpProvider(Provider):
         }:
             return cached
         if self._connector is not None and self._connector.status_tool:
-            result = self._transport.call(
-                "tools/call",
-                {"name": self._connector.status_tool, "arguments": {"id": ref.ref}},
-            )
-            status, b64 = parse_status(result)
+            connector = self._connector
+            polled = self._call(connector.status_tool, {connector.status_arg: ref.ref})
+            status, b64 = parse_status(polled)
             status = self._attach_bytes(status, b64)
             self._jobs[ref.ref] = status
             return status
@@ -470,6 +554,66 @@ class _RefuseRedirect(urllib.request.HTTPRedirectHandler):
     ) -> None:
         del self, req, fp, code, msg, headers, newurl
         raise RuntimeError("mcp redirect refused")
+
+
+def _streams(url: str, http: Any, headers: dict[str, str], timeout: float) -> Any:
+    """The SDK's streamable-HTTP client on any mcp 1.x, with redirects off.
+
+    ``streamable_http_client`` (mcp 1.26+) takes our client. The older ``streamablehttp_client``
+    gets a factory for the same client: the hosted backend pins mcp 1.12 through fastapi-mcp
+    (COREPRODUC-614).
+    """
+    from mcp.client import streamable_http as sdk
+
+    if hasattr(sdk, "streamable_http_client"):
+        return sdk.streamable_http_client(url, http_client=http)
+    import httpx
+
+    def factory(headers: Any = None, timeout: Any = None, auth: Any = None) -> httpx.AsyncClient:
+        return httpx.AsyncClient(
+            headers=headers, timeout=timeout, auth=auth, follow_redirects=False
+        )
+
+    return sdk.streamablehttp_client(
+        url, headers=headers, timeout=timeout, httpx_client_factory=factory
+    )
+
+
+_START_KEYS = ("image", "first_frame_url", "start_image_url", "image_url", "media")
+
+
+def _image_ref(inputs: dict[str, Any]) -> str | None:
+    """The start frame of a run: the first image input (a digest, a ``data:`` URI or a link)."""
+    for key in _START_KEYS:
+        value = inputs.get(key)
+        if isinstance(value, str) and value:
+            return value
+    listed = inputs.get("image_urls")
+    if isinstance(listed, list) and listed and isinstance(listed[0], str):
+        return listed[0]
+    return None
+
+
+def _need(payload: Any, key: str) -> str:
+    """A required string field of a tool result or a plain object."""
+    data = payload_from_tool(payload)
+    value = data.get(key) if isinstance(data, dict) else None
+    if not isinstance(value, str) or not value:
+        raise RuntimeError(f"mcp upload returned no {key}")
+    return value
+
+
+def _put(url: str, data: bytes, content_type: str) -> None:
+    """PUT bytes to a provider's presigned upload link: https only, no redirects."""
+    if not url.startswith("https://"):
+        raise RuntimeError("the upload link is not https")
+    # A named client: Higgsfield's upload host (Cloudflare) refuses Python's default User-Agent
+    # with error 1010 (first seen in the live check, 2026-11-12).
+    headers = {"Content-Type": content_type, "User-Agent": "vinci-studio/1.0"}
+    request = urllib.request.Request(url, data=data, method="PUT", headers=headers)
+    with urllib.request.build_opener(_RefuseRedirect).open(request, timeout=120) as response:
+        if response.status >= 300:
+            raise RuntimeError(f"upload failed: HTTP {response.status}")
 
 
 def _transport_url(transport: McpTransport) -> str | None:
