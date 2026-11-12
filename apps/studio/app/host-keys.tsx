@@ -17,10 +17,16 @@ type KeyRow = {
 };
 
 const NAMES: Record<string, string> = {
+  vinci: "Vinci",
   wavespeed: "Wavespeed",
   mcp_higgsfield: "Higgsfield",
   mcp_magnific: "Magnific",
 };
+
+/** A provider's name for menus ("mcp_higgsfield" → "Higgsfield"); other ids stay as they are. */
+export function providerName(id = ""): string {
+  return NAMES[id] || id;
+}
 const NOTES: Record<string, string> = {
   wavespeed: "The Studio's models run on your key and show its dollar price.",
   mcp_higgsfield:

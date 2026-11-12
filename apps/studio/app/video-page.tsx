@@ -129,6 +129,8 @@ export function VideoPage({
   selected,
   modelId,
   onModelId,
+  modelPicks,
+  onPickModel,
   prompt,
   onPrompt,
   aspect,
@@ -180,6 +182,10 @@ export function VideoPage({
   selected?: VideoModel;
   modelId: string;
   onModelId: (id: string) => void;
+  /** The model a person last picked on each page (this page, the rail flyout, All tools, Ctrl+K). Read in effects. */
+  modelPicks: { readonly current: Partial<Record<string, string>> };
+  /** A person's pick on this page (picker, preset, Extend). */
+  onPickModel: (id: string) => void;
   prompt: string;
   onPrompt: (value: string) => void;
   aspect: string;
@@ -229,7 +235,6 @@ export function VideoPage({
   );
   const [libraryItems, setLibraryItems] = useState<LibraryRow[] | null>(null);
   const [favs, setFavs] = useState<string[]>([]);
-  const [picked, setPicked] = useState(false);
   const [overlay, setOverlay] = useState(false);
   const didDefault = useRef(false);
 
@@ -274,8 +279,12 @@ export function VideoPage({
   }, [runs, busy]);
 
   useEffect(() => {
-    if (picked || didDefault.current || !videoRows.length) return;
-    const next = defaultVideoModelId(videoRows, ready);
+    if (didDefault.current || !videoRows.length) return;
+    // A model a person picked stays and gets its presets. Bug fixed (first occurrence 2026-11-12,
+    // reported in production, COREPRODUC-622): the page had its own "picked" flag, false on each open, so a rail
+    // flyout, All tools or Ctrl+K pick, or an earlier pick here, was replaced by this default.
+    const kept = modelPicks.current.video === modelId && videoRows.some((row) => row.id === modelId);
+    const next = kept ? modelId : defaultVideoModelId(videoRows, ready);
     if (!next) return;
     didDefault.current = true;
     const defaults = applyPreset(videoRows.find((row) => row.id === next));
@@ -286,7 +295,7 @@ export function VideoPage({
     if (defaults.duration) onDuration(defaults.duration);
     if (defaults.aspect && !startId) onAspect(defaults.aspect);
     if (defaults.resolution) onResolution(defaults.resolution);
-  }, [modelId, onAspect, onDuration, onModelId, onResolution, picked, ready, startId, videoRows]);
+  }, [modelId, modelPicks, onAspect, onDuration, onModelId, onResolution, ready, startId, videoRows]);
 
   const ratioKey = (selected?.constraints?.aspect_ratios || []).join(",");
   useEffect(() => {
@@ -375,8 +384,7 @@ export function VideoPage({
     (id: string) => {
       const row = videoRows.find((item) => item.id === id);
       const next = applyPreset(row);
-      setPicked(true);
-      onModelId(next.modelId);
+      onPickModel(next.modelId);
       onDuration(next.duration);
       onAspect(next.aspect);
       onResolution(next.resolution);
@@ -384,7 +392,7 @@ export function VideoPage({
       console.info("[video-page] preset", { id: next.modelId, duration: next.duration, aspect: next.aspect });
       onLog(`Using ${row?.display_name || id}.`);
     },
-    [onAspect, onDuration, onLog, onModelId, onResolution, videoRows],
+    [onAspect, onDuration, onLog, onPickModel, onResolution, videoRows],
   );
 
   const addFile = useCallback(
@@ -428,10 +436,7 @@ export function VideoPage({
       onExtendMode(true);
       onClip(next.clipId);
       onPrompt(next.prompt);
-      if (next.modelId) {
-        setPicked(true);
-        onModelId(next.modelId);
-      }
+      if (next.modelId) onPickModel(next.modelId);
       if (next.duration) onDuration(next.duration);
       if (next.aspect) onAspect(next.aspect);
       if (next.resolution) onResolution(next.resolution);
@@ -447,7 +452,7 @@ export function VideoPage({
         onLog("Extend filled the settings. Add a last frame if it is still empty.");
       }
     },
-    [onAspect, onClip, onDuration, onExtendMode, onIngest, onLog, onModelId, onPrompt, onResolution, onSeed, onStart, onSteps],
+    [onAspect, onClip, onDuration, onExtendMode, onIngest, onLog, onPickModel, onPrompt, onResolution, onSeed, onStart, onSteps],
   );
 
   const cost = money(generateCost(clipPrice(selected, duration)), selected?.pricing?.currency);
@@ -493,10 +498,7 @@ export function VideoPage({
         cost={cost}
         busy={busy}
         disabled={busy || !selected || blocked}
-        onModelId={(id) => {
-          setPicked(true);
-          pickPreset(id);
-        }}
+        onModelId={pickPreset}
         onGenerate={onGenerate}
         onOpenPresets={() => setOverlay(true)}
       />

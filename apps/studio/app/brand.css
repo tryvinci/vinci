@@ -20,6 +20,13 @@
 }
 .vinci-logo-word { display: none; height: 28px; width: auto; object-fit: contain; }
 .vinci-logo-mark-only { width: 28px; margin: 0; }
+/* On a host the logo is a link to the host app (VinciLogo `home`). In the rail the link takes the
+   logo's spacing, so its hover fill is the logo's box, as on the rail buttons. */
+.vinci-logo-home { display: block; border-radius: 12px; }
+.rail > .vinci-logo-home { width: 100%; margin: 4px 0 12px; flex: none; }
+.vinci-logo-home > .vinci-logo { margin: 0; }
+.vinci-logo-home:hover,
+.vinci-logo-home:focus-visible { background: var(--hover); outline: none; }
 .top-logo { display: none; }
 .rail { container-type: inline-size; container-name: studio-rail; }
 @container studio-rail (min-width: 140px) {
