@@ -1297,6 +1297,8 @@ input[type="range"] { accent-color: var(--teal); width: 100%; padding: 0; border
   background: var(--hover, rgb(33 218 210 / 0.12)); color: var(--ink, #f6f3ee);
 }
 .video-panel .image-generate { width: 100%; justify-content: space-between; }
+/* A long price ("150 Magnific credits", COREPRODUC-614) wraps in the narrow panel; it was cut off. */
+.video-panel .image-generate span:last-child { white-space: normal; text-align: right; line-height: 1.15; }
 .video-advanced button { border: 0; background: transparent; color: var(--dim); font-size: 12px; padding: 0; }
 .video-advanced-fields { display: grid; gap: 8px; margin-top: 8px; }
 .video-advanced-fields label { display: grid; gap: 4px; font-size: 11px; color: var(--dim); }

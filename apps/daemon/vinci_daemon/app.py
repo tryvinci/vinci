@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import html
 import json
 import logging
 import os
@@ -1044,18 +1043,15 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
         state: str = "",
         error: str = "",
     ) -> HTMLResponse:
-        from vinci_mcp.oauth import callback_block_reason, discard_pending
+        from vinci_mcp.connectors import connector_for
+        from vinci_mcp.oauth import callback_block_reason, discard_pending, result_page
 
         blocked = callback_block_reason(state)
         if error:
             discard_pending(state)
             blocked = blocked or "authorization was denied"
         if blocked:
-            page = (
-                "<!doctype html><meta charset=utf-8><title>Vinci</title>"
-                f"<p>{html.escape(blocked)}</p>"
-            )
-            return HTMLResponse(page, status_code=400)
+            return HTMLResponse(result_page("", blocked), status_code=400)
 
         def _finish() -> dict[str, Any]:
             try:
@@ -1071,15 +1067,11 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
             blob_keys=[],
             build_response=_finish,
         )
-        if body.get("ok"):
-            message = "Connected. You can close this tab."
-        else:
-            message = str(body.get("detail") or "Sign-in failed.")
-        page = (
-            "<!doctype html><meta charset=utf-8><title>Vinci</title>"
-            f"<p>{html.escape(message)}</p>"
-        )
-        return HTMLResponse(page)
+        if not body.get("ok"):
+            return HTMLResponse(result_page("", str(body.get("detail") or "Sign-in failed.")))
+        # A preset (Higgsfield, Magnific) has a name; another server gets "Signed in".
+        connector = connector_for(str(body.get("id") or ""))
+        return HTMLResponse(result_page(connector.label if connector else ""))
 
     @app.post("/agent/plan")
     def agent_plan(body: AgentPlanBody) -> dict[str, Any]:

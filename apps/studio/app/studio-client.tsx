@@ -34,6 +34,7 @@ import {
   money,
   PRICE_VARIES,
   setPriceUnit,
+  unitOf,
   surfaceForPage,
   tieBreakAvailability,
   withoutMockWhenConnected,
@@ -2067,25 +2068,31 @@ export function StudioClient() {
     return row && !isUnpriced(row) ? (clipPrice(row, n.params?.duration, runInputs(selected), text) ?? null) : null;
   }
 
-  /**
-   * Price of a node that runs on the user's own key: on a host, its row is priced in another unit
-   * than the host's (USD next to credits, COREPRODUC-613). 0 for every other node.
-   */
-  function ownKeyPrice(n: GraphNode, targets: Set<string>): number | null {
-    const unit = (doctor.host?.currency || "").toLowerCase();
-    if (!unit || (!targets.has(n.id) && !n.model_id)) return 0;
-    const row = models.find((m) => m.id === modelIdForNode(n, selected?.id || "", models, connected));
-    const currency = (row?.pricing?.currency || "").toLowerCase();
-    return currency && currency !== unit ? nodePrice(n, targets) : 0;
+  /** The `pricing.currency` of the model a node runs on ("" when it has none). */
+  function nodeCurrency(n: GraphNode): string {
+    return models.find((m) => m.id === modelIdForNode(n, selected?.id || "", models, connected))?.pricing?.currency || "";
   }
 
-  /** Short pre-run cost of `ids` and what feeds them; `pinned` are the nodes the run pins to a model. */
+  /**
+   * Short pre-run cost of `ids` and what feeds them; `pinned` are the nodes the run pins to a model.
+   * Units do not add up, so each one has its own total: the Studio's own first, then USD on a host's
+   * own keys (COREPRODUC-613) and a provider's credits on a sign-in connector (COREPRODUC-614).
+   */
   function runCost(ids: string[], pinned = new Set(ids), solo = false): { nodes: number; text: string } {
     const e = estimateRun(graph, ids, (n) => nodePrice(n, pinned), solo);
-    const own = estimateRun(graph, ids, (n) => ownKeyPrice(n, pinned), solo).total;
+    const others = new Map<string, string>();
+    for (const n of graph.nodes) {
+      const currency = nodeCurrency(n);
+      if (unitOf(currency) !== unitOf()) others.set(unitOf(currency), currency);
+    }
+    const extra = [...others].map(([unit, currency]) => {
+      const total = estimateRun(graph, ids, (n) => (unitOf(nodeCurrency(n)) === unit ? nodePrice(n, pinned) : 0), solo).total;
+      return { total, text: total ? `${money(total, currency)}${unit === "usd" ? " on your keys" : ""}` : "" };
+    });
+    const own = e.total - extra.reduce((sum, x) => sum + x.total, 0);
     const parts = [
-      e.nodes > e.unpriced && (e.total > own || !own) ? `up to ${money(e.total - own)}` : "",
-      own ? `${money(own, "USD")} on your keys` : "",
+      e.nodes > e.unpriced && (own > 1e-9 || extra.every((x) => !x.total)) ? `up to ${money(own)}` : "",
+      ...extra.map((x) => x.text),
       e.unpriced ? `${e.unpriced} not estimated` : "",
     ];
     return { nodes: e.nodes, text: parts.filter(Boolean).join(" + ") };
@@ -2367,13 +2374,17 @@ export function StudioClient() {
     }
   }
 
-  /** Forget a key on a host (`DELETE /providers/{id}`): its models go back to the host's credits. */
+  /**
+   * Forget a key or a sign-in on a host (`DELETE /providers/{id}`): Wavespeed models go back to the
+   * host's credits; a signed-out provider's models leave the lists.
+   */
   async function removeProvider(id: string) {
     setConnectId(id);
+    const name = doctor.providers?.[id]?.display_name || id;
     try {
       await api(`/providers/${encodeURIComponent(id)}`, { method: "DELETE" });
       await boot();
-      setLog(`${id} key removed.`);
+      setLog(id.startsWith("mcp_") ? `Signed out of ${name}.` : `${name} key removed.`);
     } catch (err) {
       setLog(plainError(err));
     }
@@ -2423,8 +2434,9 @@ export function StudioClient() {
       }
       setLog("Finish sign-in in the browser.");
       const attempt = ++oauthAttemptRef.current;
-      for (let i = 0; i < 60; i += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Five minutes, not one: a person can miss the new sign-in tab for a while (seen 2026-11-12, COREPRODUC-614).
+      for (let i = 0; i < 150; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
         if (attempt !== oauthAttemptRef.current) return;
         let next: Doctor;
         try {
@@ -2440,7 +2452,7 @@ export function StudioClient() {
         }
         if (row?.auth_state === "connected") {
           await boot();
-          setLog(`${id} is connected.`);
+          setLog(`${row.display_name || id} is connected.`);
           return;
         }
       }
@@ -3907,6 +3919,10 @@ export function StudioClient() {
           void saveProvider(id);
         }}
         onRemove={(id) => void removeProvider(id)}
+        onSignIn={(id) => {
+          setConnectId(id);
+          void oauthStart(id);
+        }}
       />
     );
   } else if (page === "keys") {

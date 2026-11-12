@@ -361,6 +361,9 @@ want(money(2, "credits"), "2 credits");
 setPriceUnit(undefined);
 want(money(0.33), "$0.330");
 want(money(3, "credits"), "3 credits");
+// A sign-in connector prices in the provider's own credits (COREPRODUC-614).
+want(money(4, "Higgsfield credits"), "4 Higgsfield credits");
+want(money(1, "Magnific credits"), "1 Magnific credit");
 """
     result = _run(script)
     assert result.returncode == 0, result.stderr or result.stdout
@@ -381,6 +384,10 @@ if (order.join() !== [hosted.id, ownKey.id].join()) throw new Error("order " + o
 const hostedOnKey = { ...hosted, pricing: { amount: 0.05, unit: "image", currency: "USD" } };
 if (defaultModelFor("image", ["vinci", "higgsfield"], [hostedOnKey, ownKey]).id !== ownKey.id) throw new Error("USD rows compare by price");
 setPriceUnit(undefined);
+// Higgsfield credits (a sign-in connector, COREPRODUC-614) do not compare with dollars either.
+const signIn = { id: "mcp_higgsfield:seedream_v4_5", provider: "mcp_higgsfield", capabilities: ["t2i"], quality_tier: "quality", status: "ready", pricing: { amount: 1, unit: "generation", currency: "Higgsfield credits" } };
+const local = { id: "wavespeed:seedream-4.5:2026-08", provider: "wavespeed", capabilities: ["t2i"], quality_tier: "quality", status: "ready", pricing: { amount: 0.04, unit: "image", currency: "USD" } };
+if (defaultModelFor("image", ["wavespeed", "mcp_higgsfield"], [signIn, local]).id !== local.id) throw new Error("the USD row should be the default");
 """
     result = _run(script)
     assert result.returncode == 0, result.stderr or result.stdout

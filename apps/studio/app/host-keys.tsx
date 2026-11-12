@@ -1,10 +1,11 @@
 "use client";
 
 /**
- * Connect on a host such as Vinci Platform: the user's own API keys for the providers the host
- * takes (`doctor.host.keys`). A run on one of these keys costs no host credits, because the
- * provider bills the user's account. The host stores the key encrypted and shows only its last
- * 4 characters (hosted own keys, COREPRODUC-613).
+ * Connect on a host such as Vinci Platform: the user's own provider accounts (`doctor.host.keys`).
+ * Wavespeed takes a pasted API key (COREPRODUC-613); Higgsfield and Magnific sign in with the
+ * user's account (MCP OAuth, COREPRODUC-614). A run on the user's account costs no host credits,
+ * because the provider bills the user. The host stores keys and sign-ins encrypted and shows only
+ * the last 4 characters of a key.
  */
 
 type KeyRow = {
@@ -12,21 +13,27 @@ type KeyRow = {
   available?: boolean;
   display_name?: string;
   key_hint?: string;
+  auth_state?: string;
 };
 
 const NAMES: Record<string, string> = {
   wavespeed: "Wavespeed",
-  magnific: "Magnific",
-  higgsfield: "Higgsfield",
+  mcp_higgsfield: "Higgsfield",
+  mcp_magnific: "Magnific",
 };
 const NOTES: Record<string, string> = {
   wavespeed: "The Studio's models run on your key and show its dollar price.",
-  magnific: "Adds the Magnific image and video models.",
-  higgsfield:
-    "Adds the Higgsfield image and video models. Higgsfield needs the key and the secret.",
+  mcp_higgsfield:
+    "Adds Higgsfield models. They run on your Higgsfield credits.",
+  mcp_magnific: "Adds Magnific models. They run on your Magnific credits.",
 };
-// Providers whose sign-in has a second secret (the daemon's extra_secret).
-const EXTRA: Record<string, string> = { higgsfield: "API secret" };
+
+/** The status line of a sign-in card. */
+function signInState(row?: KeyRow): string {
+  if (row?.auth_state === "connected") return "Signed in";
+  if (row?.auth_state === "needs_reconnect") return "Sign in again";
+  return "Not signed in";
+}
 
 export function HostKeys(props: {
   hostName: string;
@@ -38,26 +45,57 @@ export function HostKeys(props: {
   ) => void;
   onSave: (id: string) => void;
   onRemove: (id: string) => void;
+  onSignIn: (id: string) => void;
   log: string;
 }) {
   const { draft, setDraft } = props;
   return (
     <div className="keys connect host-keys" data-testid="host-keys">
       <p className="eyebrow">{props.hostName}</p>
-      <h2>Your API keys</h2>
+      <h2>Your accounts</h2>
       <p className="muted lede">
-        Run models on your own provider account. Runs on your key cost no
-        credits: the provider bills you. The key is stored encrypted, and this
-        page shows only its last 4 characters.
+        Run models on your own provider account: paste a Wavespeed key, or sign
+        in to Higgsfield or Magnific. Runs on your account cost no credits: the
+        provider bills you. Keys and sign-ins are stored encrypted, and this
+        page shows only the last 4 characters of a key.
       </p>
       <div className="host-key-list">
         {props.keys.map((id) => {
           const row = props.providers[id];
           const name = row?.display_name || NAMES[id] || id;
+          if (id.startsWith("mcp_")) {
+            const signedIn = row?.auth_state === "connected";
+            return (
+              <div className="connect-sheet" key={id} data-host-key={id}>
+                <span className="kind">Sign-in</span>
+                <strong>{name}</strong>
+                <div className="muted">{signInState(row)}</div>
+                <p className="muted">{NOTES[id] || ""}</p>
+                <div className="file-row">
+                  {row?.configured ? (
+                    <button
+                      className="ghost"
+                      type="button"
+                      onClick={() => props.onRemove(id)}
+                    >
+                      Sign out
+                    </button>
+                  ) : null}
+                  {signedIn ? null : (
+                    <button
+                      className="run"
+                      type="button"
+                      onClick={() => props.onSignIn(id)}
+                    >
+                      Sign in to {name}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          }
           const ready = Boolean(row?.configured);
-          const missing =
-            !(draft[`key-${id}`] || "").trim() ||
-            (EXTRA[id] ? !(draft[`extra-${id}`] || "").trim() : false);
+          const missing = !(draft[`key-${id}`] || "").trim();
           return (
             <div className="connect-sheet" key={id} data-host-key={id}>
               <span className="kind">Provider</span>
@@ -81,24 +119,6 @@ export function HostKeys(props: {
                 }
                 placeholder={`${name} API key`}
               />
-              {EXTRA[id] ? (
-                <>
-                  <label htmlFor={`extra-${id}`}>{EXTRA[id]}</label>
-                  <input
-                    id={`extra-${id}`}
-                    type="password"
-                    autoComplete="new-password"
-                    value={draft[`extra-${id}`] || ""}
-                    onChange={(ev) =>
-                      setDraft((d) => ({
-                        ...d,
-                        [`extra-${id}`]: ev.target.value,
-                      }))
-                    }
-                    placeholder={`${name} ${EXTRA[id]}`}
-                  />
-                </>
-              ) : null}
               <div className="file-row">
                 {ready ? (
                   <button

@@ -278,19 +278,33 @@ export function setPriceUnit(unit?: string): void {
 }
 
 /**
- * Price text in the Studio's unit: "$0.160" in USD, "2 credits" when the host bills in credits.
+ * The unit of a price: "usd", "credits" (a host's), or a provider's own credits such as
+ * "higgsfield credits" on a sign-in connector (COREPRODUC-614). No currency: the Studio's unit.
+ */
+export function unitOf(currency?: string): string {
+  const c = (currency || "").toLowerCase();
+  return !c ? priceUnit : c.endsWith("credits") ? c : "usd";
+}
+
+/**
+ * Price text: "$0.160" in USD, "2 credits" when the host bills in credits, "4 Higgsfield credits"
+ * for a provider's own credits.
  *
  * Args:
  *   n: Amount in the current unit (catalog `pricing.amount` or a sum of them).
  *   currency: The row's own `pricing.currency`, when it can differ from the Studio's unit: on a
- *     host, a model on the user's own key is priced in USD (COREPRODUC-613).
+ *     host, a model on the user's own key is priced in USD (COREPRODUC-613); a sign-in connector
+ *     prices in the provider's credits (COREPRODUC-614).
  * Returns:
  *   The label for Generate buttons, model rows, run bars and totals.
  */
 export function money(n: number | undefined, currency?: string): string {
   const v = Number(n || 0);
-  const unit = currency ? (currency.toLowerCase() === "credits" ? "credits" : "usd") : priceUnit;
-  if (unit === "credits") return `${Number(v.toFixed(2))} ${v === 1 ? "credit" : "credits"}`;
+  const unit = unitOf(currency);
+  if (unit.endsWith("credits")) {
+    const brand = unit === "credits" ? "" : `${(currency || "").replace(/\s*credits$/i, "")} `;
+    return `${Number(v.toFixed(2))} ${brand}${v === 1 ? "credit" : "credits"}`;
+  }
   if (v === 0) return "$0";
   if (v < 0.01) return "$" + v.toFixed(5).replace(/0+$/, "").replace(/\.$/, "");
   return "$" + v.toFixed(3);
@@ -436,10 +450,11 @@ function overlaps(have: readonly string[], want: readonly string[]): boolean {
 }
 
 function rankOf(info: ClassifiedModel, surface: string): [number, number, number, number, string] {
-  // On a host, a model on the user's own key is priced in another unit (USD next to credits). Two
-  // units do not compare, so it ranks after the host's models and never becomes the default by a
-  // lower number (COREPRODUC-613). Mock stays last.
-  const unit = info.currency ? (info.currency.toLowerCase() === "credits" ? "credits" : "usd") : priceUnit;
+  // On a host, a model on the user's own key is priced in another unit (USD next to credits); a
+  // sign-in connector prices in the provider's credits. Two units do not compare, so such a row ranks
+  // after the Studio's own and never becomes the default by a lower number (COREPRODUC-613, 614).
+  // Mock stays last.
+  const unit = unitOf(info.currency);
   const mock = info.provider.toLowerCase() === "mock" ? 2 : unit !== priceUnit ? 1 : 0;
   let role = 0;
   if (surface === "upscale") role = info.functions.includes("image_upscale") ? 0 : 1;
