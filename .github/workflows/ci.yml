@@ -1,8 +1,8 @@
 name: ci
 
+# PRs and manual runs only. Pushes to this repo come from the monorepo sync, where
+# .github/workflows/vinci-oss.yml already ran the same jobs on the same tree.
 on:
-  push:
-    branches: [main, dev]
   pull_request:
   workflow_dispatch:
 
