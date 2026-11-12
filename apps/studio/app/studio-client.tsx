@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { HostKeys } from "./host-keys";
 import { AdaptFlowCanvas } from "./adapt-flow-canvas";
 import { AdaptsPanel, EMPTY_PRESET_DRAFT, type PresetDraft } from "./adapts-panel";
 import { EffectShell } from "./effect-shell";
@@ -324,7 +325,7 @@ type Model = {
   provider: string;
   capabilities: string[];
   available?: boolean;
-  pricing?: { amount?: number; unit?: string };
+  pricing?: { amount?: number; unit?: string; currency?: string };
   constraints?: { aspect_ratios?: string[]; max_duration?: number; durations?: number[]; resolutions?: string[]; max_input_images?: number | null };
   quality_tier?: string;
 };
@@ -370,7 +371,7 @@ type ProviderRow = {
  * A host that serves this Studio with its own backend (Vinci Platform). It bills in `currency`,
  * serves only `pages`, and adds `links` (credits, account) to the account menu.
  */
-type StudioHost = { name: string; currency?: string; pages?: PageId[]; links?: { title: string; href: string }[] };
+type StudioHost = { name: string; currency?: string; pages?: PageId[]; links?: { title: string; href: string }[]; keys?: string[] };
 type Doctor = {
   live_spend?: boolean;
   preference?: string;
@@ -454,7 +455,7 @@ async function startRun(payload: object): Promise<Run> {
 function comboModels(rows: Model[], withPrice: boolean, suffix: (row: Model) => string): ComboModel[] {
   return rows.map((row) => {
     const who = withPrice && row.provider === "mock" ? "Local" : row.provider;
-    const price = withPrice ? ` · ${isUnpriced(row) ? PRICE_VARIES : money(row.pricing?.amount)}` : "";
+    const price = withPrice ? ` · ${isUnpriced(row) ? PRICE_VARIES : money(row.pricing?.amount, row.pricing?.currency)}` : "";
     const label = `${row.display_name} · ${who}${price}${suffix(row)}`;
     return { id: row.id, display_name: row.display_name, provider: row.provider, label };
   });
@@ -2066,10 +2067,27 @@ export function StudioClient() {
     return row && !isUnpriced(row) ? (clipPrice(row, n.params?.duration, runInputs(selected), text) ?? null) : null;
   }
 
+  /**
+   * Price of a node that runs on the user's own key: on a host, its row is priced in another unit
+   * than the host's (USD next to credits, COREPRODUC-613). 0 for every other node.
+   */
+  function ownKeyPrice(n: GraphNode, targets: Set<string>): number | null {
+    const unit = (doctor.host?.currency || "").toLowerCase();
+    if (!unit || (!targets.has(n.id) && !n.model_id)) return 0;
+    const row = models.find((m) => m.id === modelIdForNode(n, selected?.id || "", models, connected));
+    const currency = (row?.pricing?.currency || "").toLowerCase();
+    return currency && currency !== unit ? nodePrice(n, targets) : 0;
+  }
+
   /** Short pre-run cost of `ids` and what feeds them; `pinned` are the nodes the run pins to a model. */
   function runCost(ids: string[], pinned = new Set(ids), solo = false): { nodes: number; text: string } {
     const e = estimateRun(graph, ids, (n) => nodePrice(n, pinned), solo);
-    const parts = [e.nodes > e.unpriced ? `up to ${money(e.total)}` : "", e.unpriced ? `${e.unpriced} not estimated` : ""];
+    const own = estimateRun(graph, ids, (n) => ownKeyPrice(n, pinned), solo).total;
+    const parts = [
+      e.nodes > e.unpriced && (e.total > own || !own) ? `up to ${money(e.total - own)}` : "",
+      own ? `${money(own, "USD")} on your keys` : "",
+      e.unpriced ? `${e.unpriced} not estimated` : "",
+    ];
     return { nodes: e.nodes, text: parts.filter(Boolean).join(" + ") };
   }
 
@@ -2346,6 +2364,18 @@ export function StudioClient() {
       setPage("keys");
     } catch (err) {
       if (connectIdRef.current === id) setLog(plainError(err));
+    }
+  }
+
+  /** Forget a key on a host (`DELETE /providers/{id}`): its models go back to the host's credits. */
+  async function removeProvider(id: string) {
+    setConnectId(id);
+    try {
+      await api(`/providers/${encodeURIComponent(id)}`, { method: "DELETE" });
+      await boot();
+      setLog(`${id} key removed.`);
+    } catch (err) {
+      setLog(plainError(err));
     }
   }
 
@@ -3860,6 +3890,24 @@ export function StudioClient() {
         {!sessions.length ? <p className="muted">No sessions yet. Name one and press New session.</p> : null}
         {log ? <p className="log">{log}</p> : null}
       </div>
+    );
+  } else if (page === "keys" && doctor.host) {
+    // A host takes own keys only for the providers it lists; the local Connect page is not served there.
+    const hostKeys = doctor.host.keys || [];
+    main = (
+      <HostKeys
+        hostName={doctor.host.name}
+        keys={hostKeys}
+        providers={doctor.providers || {}}
+        draft={keyDraft}
+        setDraft={setKeyDraft}
+        log={hostKeys.includes(connectId) ? log : ""}
+        onSave={(id) => {
+          setConnectId(id);
+          void saveProvider(id);
+        }}
+        onRemove={(id) => void removeProvider(id)}
+      />
     );
   } else if (page === "keys") {
     const rows = doctor.providers || {};

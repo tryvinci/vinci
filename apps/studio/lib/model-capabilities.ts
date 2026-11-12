@@ -91,6 +91,8 @@ export type ClassifiedModel = {
   generatesAudio: boolean;
   status: string;
   price: number;
+  /** The row's own `pricing.currency`, when it has one (a model on the user's own key on a host). */
+  currency?: string;
 };
 
 export type ModelsForOptions = {
@@ -280,12 +282,15 @@ export function setPriceUnit(unit?: string): void {
  *
  * Args:
  *   n: Amount in the current unit (catalog `pricing.amount` or a sum of them).
+ *   currency: The row's own `pricing.currency`, when it can differ from the Studio's unit: on a
+ *     host, a model on the user's own key is priced in USD (COREPRODUC-613).
  * Returns:
  *   The label for Generate buttons, model rows, run bars and totals.
  */
-export function money(n: number | undefined): string {
+export function money(n: number | undefined, currency?: string): string {
   const v = Number(n || 0);
-  if (priceUnit === "credits") return `${Number(v.toFixed(2))} ${v === 1 ? "credit" : "credits"}`;
+  const unit = currency ? (currency.toLowerCase() === "credits" ? "credits" : "usd") : priceUnit;
+  if (unit === "credits") return `${Number(v.toFixed(2))} ${v === 1 ? "credit" : "credits"}`;
   if (v === 0) return "$0";
   if (v < 0.01) return "$" + v.toFixed(5).replace(/0+$/, "").replace(/\.$/, "");
   return "$" + v.toFixed(3);
@@ -411,6 +416,7 @@ export function classifyModel(model: CatalogRow): ClassifiedModel {
     generatesAudio,
     status: model.status || "active",
     price,
+    currency: (model.pricing as { currency?: string } | undefined)?.currency,
   };
 }
 
@@ -430,7 +436,11 @@ function overlaps(have: readonly string[], want: readonly string[]): boolean {
 }
 
 function rankOf(info: ClassifiedModel, surface: string): [number, number, number, number, string] {
-  const mock = info.provider.toLowerCase() === "mock" ? 1 : 0;
+  // On a host, a model on the user's own key is priced in another unit (USD next to credits). Two
+  // units do not compare, so it ranks after the host's models and never becomes the default by a
+  // lower number (COREPRODUC-613). Mock stays last.
+  const unit = info.currency ? (info.currency.toLowerCase() === "credits" ? "credits" : "usd") : priceUnit;
+  const mock = info.provider.toLowerCase() === "mock" ? 2 : unit !== priceUnit ? 1 : 0;
   let role = 0;
   if (surface === "upscale") role = info.functions.includes("image_upscale") ? 0 : 1;
   else if (surface === "video" || surface === "video_t2v") {

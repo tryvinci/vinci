@@ -221,7 +221,7 @@ export function ImagePage({
     [onLog],
   );
 
-  const cost = selected && isUnpriced(selected) ? PRICE_VARIES : money(generateCost(selected?.pricing?.amount, batch));
+  const cost = selected && isUnpriced(selected) ? PRICE_VARIES : money(generateCost(selected?.pricing?.amount, batch), selected?.pricing?.currency);
   const blocked = needsReference(selected) && refs.length === 0;
 
   return (

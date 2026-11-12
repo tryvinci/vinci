@@ -630,6 +630,9 @@ label { display: block; font-size: 11px; color: var(--mute); margin: 0 0 4px; le
   box-shadow: var(--card-shadow);
 }
 .connect-sheet.idle { background: transparent; box-shadow: none; }
+/* Connect on a host (own API keys, COREPRODUC-613): the provider cards side by side when there is room. */
+.keys.host-keys { max-width: 84rem; }
+.host-key-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 26rem)); gap: 14px; align-items: start; }
 .connect-sheet .kind { font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--teal); }
 .connect-routing { margin-top: 28px; padding-top: 4px; max-width: 26rem; }
 .lib-tabs { display: flex; gap: 6px; margin: 0 0 16px; }

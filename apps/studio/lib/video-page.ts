@@ -20,7 +20,7 @@ export type VideoModel = {
   provider: string;
   capabilities: string[];
   available?: boolean;
-  pricing?: { amount?: number; unit?: string };
+  pricing?: { amount?: number; unit?: string; currency?: string };
   constraints?: {
     aspect_ratios?: string[];
     resolutions?: string[];

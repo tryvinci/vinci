@@ -54,7 +54,7 @@ export type EffectShellProps = {
   liveSpend: boolean;
   runs: EffectRunRow[];
   assets: AssetRow[];
-  money: (amount?: number) => string;
+  money: (amount?: number, currency?: string) => string;
   onOpenConnect: () => void;
   onRunComplete?: () => void;
   /** Adapts batch outputs shown in history when page is adapts. */

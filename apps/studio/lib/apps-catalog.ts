@@ -524,7 +524,7 @@ export function applyEffectParams(
   return next;
 }
 
-type ModelRow = { id: string; provider?: string; available?: boolean; pricing?: { amount?: number; unit?: string } };
+type ModelRow = { id: string; provider?: string; available?: boolean; pricing?: { amount?: number; unit?: string; currency?: string } };
 
 /** Label for the Generate button (cost on every button). A spoken line is priced by the text the
  * form sends, as the runtime prices it (COREPRODUC-603). */
@@ -532,13 +532,13 @@ export function generateButtonLabel(
   app: StudioApp,
   models: readonly ModelRow[],
   liveSpend: boolean,
-  money: (amount?: number) => string,
+  money: (amount?: number, currency?: string) => string,
   values: Record<string, string | number> = {},
 ): string {
   const modelId = resolveAppModel(app, models, liveSpend);
   const row = modelId ? models.find((m) => m.id === modelId) : models.find((m) => m.provider === app.provider);
   const inputs = buildRunPayload(app, values).inputs;
   const amount = clipPrice(row, inputs.duration, inputs, inputs.prompt);
-  const price = amount !== undefined ? money(amount) : money(0);
+  const price = money(amount ?? 0, row?.pricing?.currency);
   return `Generate · ${price}`;
 }

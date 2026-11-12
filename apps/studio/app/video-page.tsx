@@ -450,7 +450,7 @@ export function VideoPage({
     [onAspect, onClip, onDuration, onExtendMode, onIngest, onLog, onModelId, onPrompt, onResolution, onSeed, onStart, onSteps],
   );
 
-  const cost = money(generateCost(clipPrice(selected, duration)));
+  const cost = money(generateCost(clipPrice(selected, duration)), selected?.pricing?.currency);
   const blocked =
     (needsStartFrame(selected) && !extendMode && !startId) || (extendMode && !clipId && !startId);
 
