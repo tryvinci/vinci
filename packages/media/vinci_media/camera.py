@@ -15,8 +15,6 @@ from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
-from PIL import Image
-
 from vinci_media.encoders import pick_video_encoder
 from vinci_media.episode import BITRATE
 from vinci_media.ops import FFMPEG, MediaError, require_ffmpeg
@@ -133,6 +131,11 @@ def drawing_size(path: Path) -> tuple[int, int]:
     Raises:
         OSError: The file is not an image that Pillow reads.
     """
+    # Imported here, as in episode.py: `import vinci_media` must work without Pillow. Bug fixed
+    # (first occurrence 2026-11-12, the first CI run after the Actions lock): the Adapts compute
+    # image installs vinci_media with no Pillow, and its self-test failed (no module named PIL).
+    from PIL import Image
+
     with Image.open(path) as image:
         return image.size
 
@@ -280,6 +283,8 @@ def camera_move(
         MediaError: A wrong move or ease, a size or length over the limits (``check``), or
             ffmpeg fails.
     """
+    from PIL import Image  # imported here: see drawing_size
+
     require_ffmpeg()
     check(width, height, fps, seconds)
     with Image.open(src) as opened:

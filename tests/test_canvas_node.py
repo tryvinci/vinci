@@ -171,7 +171,9 @@ def test_studio_wires_card_and_inspector_to_the_same_params() -> None:
     empty_src = empty.read_text(encoding="utf-8")
     assert "Choose your first node" in empty_src
     assert "data-start={card.capability}" in empty_src
-    assert "START_CARDS.map" in empty_src
+    # On a host, only the cards a listed model can run (live UI check, 2026-11-12, COREPRODUC-624).
+    assert "START_CARDS.filter((card) => !canAdd || canAdd(card.capability)).map" in empty_src
+    assert "canAdd={doctor.host ? (cap) => nodeModels(cap).length > 0 : undefined}" in body
 
 
 def test_studio_wires_typed_ports_and_add_popover() -> None:

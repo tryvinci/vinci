@@ -347,6 +347,29 @@ export function applyPreset(model: VideoModel | undefined): VideoPresetDefaults 
   };
 }
 
+/**
+ * Preset values only for the settings the model cannot use, so the settings a person chose stay.
+ *
+ * Args:
+ *   model: The video model.
+ *   current: The duration, aspect and resolution set now.
+ * Returns:
+ *   applyPreset's value for each setting that is empty or not in the model's lists; nothing for the others.
+ */
+export function presetFixes(
+  model: VideoModel | undefined,
+  current: { duration: string; aspect: string; resolution: string },
+): Partial<VideoPresetDefaults> {
+  const preset = applyPreset(model);
+  const durs = durationOptions(Number(model?.constraints?.max_duration || 0), model?.constraints?.durations).map(String);
+  const fits = (value: string, list: readonly string[]) => Boolean(value) && (!list.length || list.includes(value));
+  return {
+    ...(fits(current.duration, durs) ? {} : { duration: preset.duration }),
+    ...(fits(current.aspect, model?.constraints?.aspect_ratios || []) ? {} : { aspect: preset.aspect }),
+    ...(fits(current.resolution, model?.constraints?.resolutions || []) ? {} : { resolution: preset.resolution }),
+  };
+}
+
 /** New / Beta badges from the catalog id or display name. */
 export function modelBadges(model: VideoModel | undefined): string[] {
   const blob = `${model?.id || ""} ${model?.display_name || ""}`.toLowerCase();

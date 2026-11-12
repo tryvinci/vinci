@@ -156,11 +156,16 @@ export const RAIL_GROUPS: RailGroup[] = [
 ];
 
 /** Text buttons under the format groups. Same pages as the daemon rail. */
-export const RAIL_FOOTER: { id: PageId; title: string }[] = [
-  { id: "skills", title: "Skills" },
-  { id: "find", title: "Find" },
+/** Footer items. An icon shows in the narrow rail, as for the items above; without one the label was cut to "Conn…". */
+export const RAIL_FOOTER: { id: PageId; title: string; icon?: string }[] = [
+  { id: "skills", title: "Skills", icon: "M4 4h4v4H4zM10 4h4v4h-4zM4 10h4v4H4zM10 10h4v4h-4z" },
+  { id: "find", title: "Find", icon: "M8 3a5 5 0 1 1 0 10A5 5 0 0 1 8 3zM11.5 11.5L15 15" },
   { id: "cost", title: "Cost report" },
-  { id: "keys", title: "Connect" },
+  {
+    id: "keys",
+    title: "Connect",
+    icon: "M7.5 10.5l3-3M8.5 5.5l1.2-1.2a2.6 2.6 0 0 1 3.7 3.7l-1.2 1.2M9.5 12.5l-1.2 1.2a2.6 2.6 0 0 1-3.7-3.7l1.2-1.2",
+  },
 ];
 
 /** Feature column of the Image and Video flyouts. All tools lists these rows. */

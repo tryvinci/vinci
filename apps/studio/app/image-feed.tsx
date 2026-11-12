@@ -98,7 +98,8 @@ export function ImageFeed({
   onReference?: (item: ImageFeedItem) => void;
   onAnimate?: (item: ImageFeedItem) => void;
   onExtend?: (item: ImageFeedItem) => void;
-  onMore: (item: ImageFeedItem) => void;
+  /** Copy the file's vinci:// link. Off on a host: the link means nothing there, and Download is beside it. */
+  onMore?: (item: ImageFeedItem) => void;
 }) {
   if (!items.length && emptyLayout === "stage") {
     return <VideoHow steps={steps} testId={emptyTestId} />;
@@ -173,10 +174,13 @@ export function ImageFeed({
                       Extend
                     </button>
                   ) : null}
-                  <button type="button" className="icon-btn" aria-label="More" onClick={() => onMore(item)}>
-                    <DockIcon d={DOCK_ICON.more} />
-                    <span className="dock-tip">More</span>
-                  </button>
+                  {onMore ? (
+                    // It copies the file's vinci:// link, so it says so (it read "More" and opened nothing).
+                    <button type="button" className="icon-btn" aria-label="Copy file link" onClick={() => onMore(item)}>
+                      <DockIcon d={DOCK_ICON.link} />
+                      <span className="dock-tip">Copy file link</span>
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </article>

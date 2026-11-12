@@ -66,8 +66,14 @@ a { color: var(--ink); }
   max-width: 36px; opacity: 1; font-size: 10px; text-overflow: ellipsis;
 }
 .rail-mini { font-size: 14px; line-height: 1; }
+/* Section labels keep their space in the narrow rail and only show when it widens, so the rail items do
+   not move under the pointer. Bug fixed (first occurrence 2026-11-12, live UI check): with display: none
+   the labels pushed the items down on hover, and a click on an icon opened the page below it. */
 .rail-section {
-  display: none;
+  display: block;
+  visibility: hidden;
+  white-space: nowrap;
+  overflow: hidden;
   width: 100%;
   margin: 10px 0 2px;
   padding: 0 12px;
@@ -149,13 +155,22 @@ a { color: var(--ink); }
   box-shadow: var(--glass-shadow);
   backdrop-filter: blur(18px) saturate(140%);
 }
-.avatar-menu button,
+/* The id outranks the rail's own button rules (narrow, hover, keyboard focus, phone drawer), so the rows keep
+   one layout: the Connect row and the host links line up, and a row does not move under a click that ends
+   keyboard focus (fixed 2026-11-12, live UI check). */
+#studio-rail .avatar-menu button,
 .avatar-menu a {
-  width: 100%; height: auto; padding: 8px 10px; border-radius: 8px; justify-content: flex-start;
+  width: 100%; height: auto; padding: 8px 10px; border-radius: 8px; justify-content: flex-start; gap: 0;
   color: var(--rail-ink);
 }
 /* Host links (Vinci Platform credits, account) are anchors that look like the menu buttons. */
 .avatar-menu a { display: flex; box-sizing: border-box; text-decoration: none; }
+/* A host answered 401 at start: the session ended. Say so instead of showing the local Studio. */
+.session-ended {
+  min-height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 14px;
+  padding: 24px; text-align: center; background: var(--bg); color: var(--ink);
+}
+.session-ended p { margin: 0; max-width: 28rem; color: var(--dim); line-height: 1.5; }
 .all-tools {
   position: fixed; left: 50%; top: 72px; z-index: 50;
   width: min(440px, calc(100vw - 32px)); max-height: min(72vh, 640px);
@@ -232,7 +247,7 @@ kbd {
   .rail:hover .rail-mini,
   .rail:has(button:focus-visible) .rail-mini { display: none; }
   .rail:hover .rail-section,
-  .rail:has(button:focus-visible) .rail-section { display: block; }
+  .rail:has(button:focus-visible) .rail-section { visibility: visible; }
   .rail:hover .rail-entry,
   .rail:has(button:focus-visible) .rail-entry { width: 100%; align-items: stretch; }
   .rail-flyout {
@@ -244,14 +259,19 @@ kbd {
        flyout takes no pointer (visibility), and it stays usable until it hides. */
     transition: opacity 160ms ease 150ms, transform 160ms ease 150ms, visibility 0s linear 310ms;
   }
+  /* Keyboard focus opens it (:focus-visible); a mouse click's focus does not keep it open over the page. */
   .rail-entry:hover .rail-flyout,
-  .rail-entry:focus-within .rail-flyout {
+  .rail-entry:has(:focus-visible) .rail-flyout {
     display: grid;
     opacity: 1;
     visibility: visible;
     transform: none;
     transition: opacity 160ms ease, transform 160ms ease, visibility 0s;
   }
+  /* After a click on the rail item, its flyout stays shut until the pointer leaves the item. Bug fixed
+     (first occurrence 2026-11-12, live UI check): it stayed open over the page's left panel (focus and
+     hover), so the pointer on its way to the Video controls landed on the flyout. */
+  .rail-entry.flyout-off .rail-flyout { visibility: hidden; opacity: 0; transition: none; }
   .shell:has(.all-tools) .rail-scrim,
   .shell:has(.command-box) .rail-scrim,
   .shell:has(.avatar-menu) .rail-scrim { display: block; background: transparent; }
@@ -905,7 +925,7 @@ input[type="range"] { accent-color: var(--teal); width: 100%; padding: 0; border
   .rail button.rail-text .rail-label,
   .rail button.rail-text:not(.has-mini) .rail-label { max-width: 180px; opacity: 1; font-size: 13px; }
   .rail .rail-mini { display: none; }
-  .rail .rail-section { display: block; }
+  .rail .rail-section { visibility: visible; }
   .rail .rail-entry { width: 100%; align-items: stretch; }
   .rail button:not(.flyout-row) {
     width: auto;

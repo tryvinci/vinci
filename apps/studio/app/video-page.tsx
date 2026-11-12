@@ -19,6 +19,7 @@ import {
   feedFromRuns,
   generateCost,
   needsStartFrame,
+  presetFixes,
   toggleFavorite,
   videoModels,
   withPendingCards,
@@ -131,6 +132,7 @@ export function VideoPage({
   onModelId,
   modelPicks,
   onPickModel,
+  hosted = false,
   prompt,
   onPrompt,
   aspect,
@@ -184,6 +186,8 @@ export function VideoPage({
   onModelId: (id: string) => void;
   /** The model a person last picked on each page (this page, the rail flyout, All tools, Ctrl+K). Read in effects. */
   modelPicks: { readonly current: Partial<Record<string, string>> };
+  /** On a host (Vinci Platform): no vinci:// link button on the cards. */
+  hosted?: boolean;
   /** A person's pick on this page (picker, preset, Extend). */
   onPickModel: (id: string) => void;
   prompt: string;
@@ -287,7 +291,10 @@ export function VideoPage({
     const next = kept ? modelId : defaultVideoModelId(videoRows, ready);
     if (!next) return;
     didDefault.current = true;
-    const defaults = applyPreset(videoRows.find((row) => row.id === next));
+    // A kept model keeps the settings chosen with it; only the ones it cannot use get its presets.
+    // Bug fixed (first occurrence 2026-11-12, live UI check): each visit set the presets again.
+    const row = videoRows.find((item) => item.id === next);
+    const defaults = kept ? presetFixes(row, { duration, aspect, resolution }) : applyPreset(row);
     if (next !== modelId) {
       console.info("[video-page] default model", { id: next });
       onModelId(next);
@@ -295,27 +302,37 @@ export function VideoPage({
     if (defaults.duration) onDuration(defaults.duration);
     if (defaults.aspect && !startId) onAspect(defaults.aspect);
     if (defaults.resolution) onResolution(defaults.resolution);
-  }, [modelId, modelPicks, onAspect, onDuration, onModelId, onResolution, ready, startId, videoRows]);
+  }, [aspect, duration, modelId, modelPicks, onAspect, onDuration, onModelId, onResolution, ready, resolution, startId, videoRows]);
 
   const ratioKey = (selected?.constraints?.aspect_ratios || []).join(",");
+  // Match a new start frame's aspect once (per frame and model); then a person's pick stays. Bug fixed
+  // (first occurrence 2026-11-12, live UI check): onAspect is a new function on each render, so this
+  // effect ran on each render and put every aspect click back.
+  const onAspectRef = useRef(onAspect);
+  useEffect(() => {
+    onAspectRef.current = onAspect;
+  }, [onAspect]);
+  const aspectFor = useRef("");
   useEffect(() => {
     if (!startId) return;
-    const asset = assets.find((row) => row.id === startId);
     const ratios = ratioKey ? ratioKey.split(",") : [];
-    if (!ratios.length) return;
+    const key = `${startId}|${ratioKey}`;
+    if (!ratios.length || aspectFor.current === key) return;
+    const asset = assets.find((row) => row.id === startId);
     let cancelled = false;
     void stillSize(fileUrl(startId), asset).then((size) => {
       if (cancelled || !size) return;
+      aspectFor.current = key;
       const next = closestAspect(size.width, size.height, ratios);
       if (next) {
         console.info("[video-page] start frame set aspect", { startId, next, w: size.width, h: size.height });
-        onAspect(next);
+        onAspectRef.current(next);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [assets, onAspect, ratioKey, startId]);
+  }, [assets, ratioKey, startId]);
 
   const completed = useMemo(() => {
     const rows = libraryItems ? feedFromLibrary(libraryItems) : feedFromRuns(runs, assets);
@@ -514,7 +531,7 @@ export function VideoPage({
           onFavorite={(item) => void favorite(item)}
           onCopyPrompt={(item) => void copyPrompt(item)}
           onExtend={(item) => void extend(item)}
-          onMore={(item) => void more(item)}
+          onMore={hosted ? undefined : (item) => void more(item)}
         />
       </div>
       {overlay ? (
