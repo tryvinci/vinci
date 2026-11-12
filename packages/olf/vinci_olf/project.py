@@ -158,6 +158,7 @@ class Project:
     problems: list[str] = field(default_factory=list)  # load errors (duplicate IDs, bad files)
     files: dict[str, Path] = field(default_factory=dict)  # asset hash -> local file
     _hashes: dict[Path, str] = field(default_factory=dict)
+    known: dict[str, str] = field(default_factory=dict)  # relative path -> SHA-256 from a host
 
     @property
     def manifest(self) -> dict[str, Any]:
@@ -217,8 +218,11 @@ class Project:
 
     def sha256(self, path: Path) -> str:
         if path not in self._hashes:
-            with path.open("rb") as handle:  # in chunks: takes can be large videos
-                self._hashes[path] = hashlib.file_digest(handle, "sha256").hexdigest()
+            if known := self.known.get(self.rel(path)):  # a hosted show: the bytes live elsewhere
+                self._hashes[path] = known
+            else:
+                with path.open("rb") as handle:  # in chunks: takes can be large videos
+                    self._hashes[path] = hashlib.file_digest(handle, "sha256").hexdigest()
         return self._hashes[path]
 
     def inside(self, path: Path) -> Path:
@@ -317,16 +321,19 @@ class Project:
         log.info("lock: removed %s (%s was replaced)", ", ".join(old), uri)
 
 
-def load(root: Path | str) -> Project:
+def load(root: Path | str, *, hashes: dict[str, str] | None = None) -> Project:
     """Load an OLF project folder.
 
     Args:
         root: The project folder (it holds ``project.yaml``).
+        hashes: SHA-256 hex digests by project-relative path, used as given instead of reading
+            those files. A host that keeps a show's media in object storage passes them, and its
+            working folder holds empty stand-ins. A local folder passes none: every file is read.
 
     Raises:
         OlfError: There is no manifest.
     """
-    project = Project(Path(root).resolve())
+    project = Project(Path(root).resolve(), known=dict(hashes or {}))
     top = project.root
     manifest = _find(top / "project")
     if manifest is None:

@@ -15,6 +15,7 @@ NAMES = [
     "templateLabel",
     "cameraworkMenu",
     "price",
+    "setShowsCredits",
     "parseRecent",
     "pushRecent",
     "folderName",
@@ -102,7 +103,10 @@ eq([frames(4), frames("2.5"), frames("4s"), frames(3.5), frames("0+18"), frames(
    ["4+00", "2+12", "4+00", "3+12", "0+18", "0+10", ""], "a length as seconds+frames");
 eq([durationSeconds("3+12"), durationSeconds("0+06"), durationSeconds("4s"), durationSeconds(2.5), durationSeconds("x")],
    [3.5, 0.25, 4, 2.5, 0], "seconds of each form");
-eq([price(0), price(0.42), price(undefined)], ["$0", "$0.42", "$0"], "price");
+eq([price(0), price(0.42), price(undefined), price(0.0024)], ["$0", "$0.42", "$0", "$0.0024"], "price");
+setShowsCredits(true);  // a host that bills in credits (COREPRODUC-588)
+eq([price(0), price(1), price(11)], ["0 credits", "1 credit", "11 credits"], "price in credits");
+setShowsCredits(false);
 eq(shortHash("sha256:" + "a".repeat(56) + "12345678"), "sha256:aaaaaaaa…12345678", "short hash");
 eq(fileUrl("/my shows/t", "takes/e02/s03/sh014/kf1.png"),
    "/vinci-api/olf/file?path=%2Fmy%20shows%2Ft&rel=takes%2Fe02%2Fs03%2Fsh014%2Fkf1.png", "file url");

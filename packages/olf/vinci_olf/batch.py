@@ -169,7 +169,7 @@ def render_batch(
         )
     for job in ready:  # synchronous: one shot after another, in play order
         try:
-            fresh = load(p.root)  # sees the takes and lock entries the jobs before it wrote
+            fresh = load(p.root, hashes=p.known)  # sees the takes and lock entries before it
             done = render(
                 fresh,
                 job["shot"],

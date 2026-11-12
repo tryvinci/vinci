@@ -12,6 +12,7 @@ import shutil
 import tempfile
 import zipfile
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypeVar
 
@@ -42,6 +43,7 @@ from vinci_olf.cut import cut_view, use_approved
 from vinci_olf.edit import set_clip, set_select, set_take
 from vinci_olf.explain import explain, keep_take
 from vinci_olf.export import export
+from vinci_olf.project import read
 from vinci_olf.provenance import available as c2pa_available
 from vinci_olf.render import render, run_one
 from vinci_olf.script import bible_names, draft, import_script, preview, split_with_model
@@ -277,6 +279,32 @@ def _olf(fn: Callable[[], T]) -> T:
         return fn()
     except OlfError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/shows")
+def list_shows(request: Request) -> dict[str, list[dict[str, str]]]:
+    """The shows in ``$VINCI_HOME/shows``, last changed first, for the open screen's list.
+
+    A folder counts when it has ``project.yaml``; its ``title`` names it. A show in another
+    folder still opens by its path.
+    """
+    rows = []
+    for manifest in (Path(request.app.state.engine.config.home) / "shows").glob("*/project.yaml"):
+        try:
+            title = (read(manifest) or {}).get("title")
+        except Exception:  # noqa: BLE001 - a broken manifest still lists, by its folder name
+            title = None
+        changed = max(manifest.stat().st_mtime, manifest.parent.stat().st_mtime)
+        rows.append(
+            {
+                "path": str(manifest.parent),
+                "title": str(title or manifest.parent.name),
+                "updated_at": datetime.fromtimestamp(changed, UTC).isoformat(),
+            }
+        )
+    rows.sort(key=lambda row: row["updated_at"], reverse=True)
+    log.info("olf: %d shows in %s", len(rows), Path(request.app.state.engine.config.home))
+    return {"shows": rows}
 
 
 @router.post("/sample")

@@ -107,6 +107,14 @@ eq(clipPrice(kling, "10.0"), 0.7, "a numeric string reads as a number");
 eq(clipPrice(kling, " 10 "), 0.7, "spaces too");
 eq(clipPrice(kling, undefined), 0.35, "no length: the default clip");
 eq(clipPrice({ pricing: { amount: 0.4 } }, 8), 0.4, "a row without a table is one price per job");
+const speech = { pricing: { amount: 0.08, unit: "1k_chars" } };
+eq(clipPrice(speech, undefined, {}, "x".repeat(500)), 0.04, "speech is priced by its characters (COREPRODUC-603)");
+eq(clipPrice(speech, undefined, { prompt: "x".repeat(250) }, "{{inputs.prompt}}"), 0.02, "a template takes the run's text");
+eq(clipPrice(speech, undefined, {}, ""), 0.08, "no text: one 1,000 characters");
+const listed = { pricing: { amount: 0.08, unit: "1k_chars", clip_prices: {} } }; // as GET /models sends it
+eq(clipPrice(listed, undefined, {}, "x".repeat(500)), 0.04, "an empty clip table is no table");
+const music = { pricing: { amount: 0.15, unit: "minute" }, constraints: { max_duration: 60 } };
+eq(clipPrice(music, 30), 0.075, "music is priced by its seconds");
 eq(fitToModel({ duration: 8 }, { max_duration: 6 }), { duration: 6 }, "no longer than the max");
 eq(fitToModel({ duration: 5 }, { max_duration: 10 }), { duration: 5 }, "a length that fits stays");
 eq(fitToModel({ aspect_ratio: "{{inputs.aspect_ratio}}" }, seedream), { aspect_ratio: "{{inputs.aspect_ratio}}" }, "templates stay");

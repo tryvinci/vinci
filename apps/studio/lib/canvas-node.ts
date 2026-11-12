@@ -153,25 +153,44 @@ export function fitToModel(params: Record<string, unknown>, limits?: FitConstrai
  * Price of one job on a model. A row with `clip_prices` bills the clip length the model makes: the
  * asked `duration` fitted as `fitToModel` does (the runtime's `clip_price` does the same). An
  * `{{inputs.name}}` takes the value the run sends, and "10.0" reads as 10. With no length it is
- * `amount`, the price of the default clip (COREPRODUC-555).
+ * `amount`, the price of the default clip (COREPRODUC-555). A row whose unit names a measure
+ * (`1k_chars`, `minute`, `generation_30s`) bills the job's characters or seconds; with no text or
+ * length it is `amount` (COREPRODUC-603).
  *
  * Args:
  *   model: The catalog row.
  *   duration: The asked length: a number, a string, a template, or nothing.
  *   inputs: The run inputs, for a template.
+ *   text: The job's text (its prompt), for a row billed by characters.
  */
 export function clipPrice(
-  model: { pricing?: { amount?: number; clip_prices?: Record<string, number> }; constraints?: FitConstraints } | undefined,
+  model: { pricing?: { amount?: number; unit?: string; clip_prices?: Record<string, number> }; constraints?: FitConstraints } | undefined,
   duration?: unknown,
   inputs?: Record<string, unknown>,
+  text?: unknown,
 ): number | undefined {
-  const table = model?.pricing?.clip_prices;
+  const pricing = model?.pricing;
   const ref = typeof duration === "string" ? /^\{\{\s*inputs\.(\w+)\s*\}\}$/.exec(duration) : null;
-  const asked = ref ? inputs?.[ref[1]] : duration;
-  const fitted = table ? Number(fitToModel({ duration: asked }, model?.constraints).duration) : NaN;
-  const price = Number.isFinite(fitted) && fitted > 0 ? table?.[String(fitted)] : undefined;
-  return price ?? model?.pricing?.amount;
+  const fitted = Number(fitToModel({ duration: ref ? inputs?.[ref[1]] : duration }, model?.constraints).duration);
+  const seconds = Number.isFinite(fitted) && fitted > 0 ? fitted : undefined;
+  // A `/models` row has `clip_prices: {}` when it lists no table; `{}` is truthy here, not in Python.
+  const table = pricing?.clip_prices ?? {};
+  if (Object.keys(table).length) return (seconds === undefined ? undefined : table[String(seconds)]) ?? pricing?.amount;
+  // A unit that names a measure bills it, as the runtime's `clip_price` (COREPRODUC-603). Text that
+  // another node makes is not known yet (`{{` stays): it is priced as `amount`.
+  const measure = MEASURED[pricing?.unit || ""];
+  const said = typeof text === "string" ? text.replace(/\{\{\s*inputs\.(\w+)\s*\}\}/g, (all, key) => String(inputs?.[key] ?? all)) : "";
+  const chars = said && !said.includes("{{") ? said.length : undefined;
+  const value = measure?.[0] === "chars" ? chars : seconds && Math.ceil(seconds); // the runtime rounds a length up
+  return measure && value && pricing?.amount !== undefined ? (pricing.amount * value) / measure[1] : pricing?.amount;
 }
+
+/** Units billed by how much a job asks for, as [measure, size] (the runtime's `_MEASURED`). */
+const MEASURED: Record<string, ["chars" | "seconds", number]> = {
+  "1k_chars": ["chars", 1000],
+  minute: ["seconds", 60],
+  generation_30s: ["seconds", 30],
+};
 
 export function countValue(params: Record<string, unknown> | undefined): number {
   return clampCount(params?.count ?? params?.num_images ?? COUNT_MIN);

@@ -150,7 +150,7 @@ def add_character(
         )
     log.info("added character char/%s (%s), sheet: %s", slug, name, image is not None)
     if voice_id:
-        set_voice(load(p.root), f"char/{slug}", voice_id, voice_name)
+        set_voice(load(p.root, hashes=p.known), f"char/{slug}", voice_id, voice_name)
     return f"char/{slug}"
 
 
@@ -277,7 +277,7 @@ def clone_voice(
             row = _lock_entry(rel, digest, mime, "uploaded", license_)
             p.add_to_lock({f"asset/{digest}": row})
         log.info("%s: cloned %s from %s (%d bytes)", char_id, voice_id, p.rel(target), len(data))
-        voice = set_voice(load(p.root), char_id, voice_id, name, sample=target.name)
+        voice = set_voice(load(p.root, hashes=p.known), char_id, voice_id, name, sample=target.name)
     except Exception as exc:
         # The clone exists and holds a voice slot: name it, so it is picked, not made again.
         # It is not deleted: the voice entry may already point to it.

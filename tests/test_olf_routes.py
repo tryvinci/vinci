@@ -38,8 +38,24 @@ def test_routes_are_listed_for_the_studio(client: TestClient) -> None:
         "/olf/file",
         "/olf/camerawork",
         "/olf/previs",
+        "/olf/shows",
     ):
         assert path in paths  # the Studio feature-detects the Shows page with /olf/project
+
+
+def test_the_open_screen_lists_the_shows(client: TestClient) -> None:
+    """``GET /olf/shows``: each show in ``$VINCI_HOME/shows`` with its title, newest first."""
+    assert client.get("/olf/shows").json() == {"shows": []}
+    sample = client.post("/olf/sample").json()["path"]
+    made = client.post("/olf/new", json={"title": "Night Ferry"}).json()["path"]
+    rows = client.get("/olf/shows").json()["shows"]
+    assert {(row["path"], row["title"]) for row in rows} == {
+        (sample, "Tidewatch"),
+        (made, "Night Ferry"),
+    }
+    assert [row["updated_at"] for row in rows] == sorted(
+        (r["updated_at"] for r in rows), reverse=True
+    )
 
 
 def test_shows_flow(client: TestClient) -> None:

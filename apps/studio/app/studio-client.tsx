@@ -17,6 +17,7 @@ import { CanvasNodeCard } from "./canvas-node-card";
 import { ImagePage } from "./image-page";
 import { LibraryPage } from "./library-page";
 import { ShowsPage } from "./shows-page";
+import { setShowsCredits } from "../lib/shows";
 import { VideoPage } from "./video-page";
 import { type ComboModel } from "./model-combo";
 import { VinciLogo } from "./ui/logo";
@@ -29,7 +30,9 @@ import {
   isUnpriced,
   modelsFor,
   modelsForNodeTypes,
+  money,
   PRICE_VARIES,
+  setPriceUnit,
   surfaceForPage,
   tieBreakAvailability,
   withoutMockWhenConnected,
@@ -363,11 +366,17 @@ type ProviderRow = {
   auth?: string;
   auth_state?: string;
 };
+/**
+ * A host that serves this Studio with its own backend (Vinci Platform). It bills in `currency`,
+ * serves only `pages`, and adds `links` (credits, account) to the account menu.
+ */
+type StudioHost = { name: string; currency?: string; pages?: PageId[]; links?: { title: string; href: string }[] };
 type Doctor = {
   live_spend?: boolean;
   preference?: string;
   providers?: Record<string, ProviderRow>;
   budget?: { monthly_cap_usd?: number };
+  host?: StudioHost;
 };
 type AdaptEstimateBody = {
   total: number;
@@ -407,11 +416,28 @@ async function api<T>(path: string, opts?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-function money(n: number | undefined): string {
-  const v = Number(n || 0);
-  if (v === 0) return "$0";
-  if (v < 0.01) return "$" + v.toFixed(5).replace(/0+$/, "").replace(/\.$/, "");
-  return "$" + v.toFixed(3);
+/** Run states that are not final. The local daemon answers POST /runs when the run ends; a host may answer at once. */
+const RUN_GOING = new Set(["created", "queued", "running"]);
+
+/**
+ * Start a run and wait for its final state. While the run is still going, poll GET /runs/{id}.
+ *
+ * Args:
+ *   payload: The POST /runs body.
+ * Returns:
+ *   The run in a final state (completed, failed, cancelled or awaiting_approval).
+ */
+async function startRun(payload: object): Promise<Run> {
+  let run = await api<Run>("/runs", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  while (run.state && RUN_GOING.has(run.state)) {
+    await new Promise((done) => setTimeout(done, 2000));
+    run = await api<Run>(`/runs/${encodeURIComponent(run.id)}`);
+  }
+  return run;
 }
 
 /**
@@ -1091,6 +1117,15 @@ export function StudioClient() {
         }>("/settings"),
       ]);
       setDoctor(doc);
+      const host = doc.host;
+      if (host) {
+        // A host bills in its own unit, serves some pages only, and has its own onboarding.
+        setPriceUnit(host.currency);
+        setShowsCredits(host.currency === "credits");
+        if (host.pages?.length) setPage((now) => (host.pages!.includes(now) ? now : host.pages![0]));
+      } else {
+        openOnboardOnce();
+      }
       setPref(doc.preference || "cheapest");
       setMonthlyCap(doc.budget?.monthly_cap_usd != null ? String(doc.budget.monthly_cap_usd) : "");
       const od = settingsBody.output_destination || { kind: "none" };
@@ -1105,6 +1140,7 @@ export function StudioClient() {
       setAdaptPresets(presetBody.presets || []);
       await loadMedia();
     } catch (err) {
+      openOnboardOnce();
       setLog(plainError(err));
     }
   }, [loadMedia]);
@@ -1113,13 +1149,14 @@ export function StudioClient() {
     void boot();
   }, [boot]);
 
-  useEffect(() => {
+  /** First-run overlay of the local Studio. Boot opens it once it knows that no host serves this Studio. */
+  function openOnboardOnce() {
     try {
       if (localStorage.getItem(ONBOARD_KEY) !== "done") setOnboardOpen(true);
     } catch {
       setOnboardOpen(true);
     }
-  }, []);
+  }
 
   useEffect(() => {
     try {
@@ -1328,7 +1365,11 @@ export function StudioClient() {
 
   function shotInputs(base: Record<string, unknown>) {
     const inputs = { ...base };
-    if (aspectRatio && ratios.length) inputs.aspect_ratio = aspectRatio;
+    // Send the aspect the chip shows: the picked one, else the model's first ratio. Bug fixed (first
+    // occurrence 2026-11-11, hosted Studio check, COREPRODUC-585): with no pick the chip showed 16:9
+    // but the run sent no aspect, so Seedream 4.5 made a square still.
+    const aspect = aspectRatio || ratios[0];
+    if (aspect && ratios.length) inputs.aspect_ratio = aspect;
     if (duration && mode.showMotion) inputs.duration = Number(duration);
     // Send the resolution the pills show. A value from another model is not on this list.
     const shown = shownResolution();
@@ -1753,7 +1794,11 @@ export function StudioClient() {
     }
     const generateNodes = graph.nodes.filter((n) => n.type === "generate");
     // A canvas run can get its image from an upstream node, so only page runs need one up front.
-    const canvasRun = !animating && (!!opts?.nodeIds?.length || ((graphEdited || !!opts?.graph) && generateNodes.length > 0));
+    // An edited canvas runs only from the Canvas page. Bug fixed (first occurrence 2026-11-11, hosted
+    // Studio check, COREPRODUC-585): after a canvas edit, Generate on Image or Video ran the whole canvas
+    // graph; the button showed 2 credits and the run asked for up to 17.
+    const graphRun = !!opts?.graph || (page === "canvas" && graphEdited);
+    const canvasRun = !animating && (!!opts?.nodeIds?.length || (graphRun && generateNodes.length > 0));
     // Canvas nodes run on their pinned model or one the runtime picks: only page runs, targets that fall
     // back to the page model, and nodes pinned to it need it to be usable.
     const targets = new Set(opts?.nodeIds || []);
@@ -1856,7 +1901,7 @@ export function StudioClient() {
           ),
           edges: runtime.edges,
         };
-      } else if (!payload.workflow && (graphEdited || opts?.graph) && generateNodes.length) {
+      } else if (!payload.workflow && graphRun && generateNodes.length) {
         tracked = generateNodes.map((n) => n.id);
         const runtime = runtimeGraph(withMentionRefs(graph, model));
         payload.workflow = {
@@ -1890,11 +1935,7 @@ export function StudioClient() {
       const base = times > 1 ? Number(inputs.seed) || Math.floor(Math.random() * 2 ** 31) : 0;
       let body: Run | null = null;
       for (let i = 0; i < times; i += 1) {
-        body = await api<Run>("/runs", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(times > 1 ? { ...payload, inputs: { ...inputs, seed: base + i } } : payload),
-        });
+        body = await startRun(times > 1 ? { ...payload, inputs: { ...inputs, seed: base + i } } : payload);
         setRunIds((ids) => [...ids, body!.id]);
       }
       if (!body) throw new Error("Generate did not start a run.");
@@ -1970,15 +2011,11 @@ export function StudioClient() {
     setBusy(true);
     setLog("Running it again…");
     try {
-      const body = await api<Run>("/runs", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          skill: item.rerun_skill,
-          model_id: item.model_id || undefined,
-          inputs: { ...params, prompt: promptText },
-          preference: pref,
-        }),
+      const body = await startRun({
+        skill: item.rerun_skill,
+        model_id: item.model_id || undefined,
+        inputs: { ...params, prompt: promptText },
+        preference: pref,
       });
       setRunIds((ids) => [...ids, body.id]);
       await loadMedia();
@@ -2024,8 +2061,9 @@ export function StudioClient() {
     if (!targets.has(n.id) && !n.model_id) return null;
     const id = modelIdForNode(n, selected?.id || "", models, connected);
     const row = models.find((m) => m.id === id);
-    // A `{{inputs.duration}}` param takes the length this page sends with the run.
-    return row && !isUnpriced(row) ? (clipPrice(row, n.params?.duration, shotInputs({})) ?? null) : null;
+    // A `{{inputs.x}}` param takes what this page sends with the run; speech is priced by its text.
+    const text = n.params?.prompt ?? n.params?.text;
+    return row && !isUnpriced(row) ? (clipPrice(row, n.params?.duration, runInputs(selected), text) ?? null) : null;
   }
 
   /** Short pre-run cost of `ids` and what feeds them; `pinned` are the nodes the run pins to a model. */
@@ -2419,16 +2457,12 @@ export function StudioClient() {
           // A lip-sync or audio step must not inherit a still model's resolution.
           delete inputs.resolution;
         }
-        const body = await api<Run>("/runs", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            skill: step.skill,
-            inputs,
-            model_id: pinnable ? selected?.id : undefined,
-            preference: pref,
-            max_cost: 0,
-          }),
+        const body = await startRun({
+          skill: step.skill,
+          inputs,
+          model_id: pinnable ? selected?.id : undefined,
+          preference: pref,
+          max_cost: 0,
         });
         setRunIds((ids) => [...ids, body.id]);
       }
@@ -2446,15 +2480,11 @@ export function StudioClient() {
     setBusy(true);
     const text = (prompt.trim() || brief.trim() || "north-light oak cube") + ", 3D turntable plate";
     try {
-      const body = await api<Run>("/runs", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          skill: "@tryvinci/image-generate",
-          inputs: shotInputs({ prompt: text }),
-          preference: pref,
-          max_cost: 0,
-        }),
+      const body = await startRun({
+        skill: "@tryvinci/image-generate",
+        inputs: shotInputs({ prompt: text }),
+        preference: pref,
+        max_cost: 0,
       });
       setRunIds((ids) => [...ids, body.id]);
       await loadMedia();
@@ -2560,8 +2590,12 @@ export function StudioClient() {
   };
 
   const live = Object.entries(doctor.providers || {}).filter(([id, row]) => id !== "mock" && row && row.available);
+  // A host (Vinci Platform) serves only the pages it lists; the local daemon serves them all.
+  const hostPages = doctor.host?.pages;
+  const served = (id: PageId) => !hostPages?.length || hostPages.includes(id);
+  const accountName = doctor.host?.name || (live.length ? live.map(([id, row]) => row.display_name || id).join(" · ") : "Local");
   const spent = projectRuns.reduce((sum, r) => sum + Number(r.estimate?.total || 0), 0);
-  const popoverTools = filterTools(toolsQuery, toolsCategory);
+  const popoverTools = filterTools(toolsQuery, toolsCategory).filter((tool) => served(tool.page));
   const popoverTabs = visibleCategories(toolsQuery);
 
   const saveOutputDestination = useCallback(async () => {
@@ -2621,13 +2655,15 @@ export function StudioClient() {
     return talk ? "speak" : "video";
   }
   const shellModels: CommandModel[] = (["image", "video"] as const).flatMap((kind) =>
-    flyoutModels(kind).map((row) => ({
-      id: row.id,
-      title: row.display_name || row.id,
-      blurb: row.provider || "Model",
-      page: modelFlyoutPage(row, kind),
-      flyout: kind,
-    })),
+    flyoutModels(kind)
+      .filter((row) => served(modelFlyoutPage(row, kind)))
+      .map((row) => ({
+        id: row.id,
+        title: row.display_name || row.id,
+        blurb: row.provider || "Model",
+        page: modelFlyoutPage(row, kind),
+        flyout: kind,
+      })),
   );
   const modelQuery = toolsQuery.trim().toLowerCase();
   const popoverModels = shellModels.filter((row) => {
@@ -2644,7 +2680,7 @@ export function StudioClient() {
       ...templates.map((row) => ({ id: row.id, title: row.title, blurb: row.blurb, page: (row.page || "canvas") as PageId })),
       ...sessions.map((row) => ({ id: row.id, title: row.name, blurb: "Collab session", page: "collab" as const })),
     ],
-  });
+  }).filter((hit) => !hit.page || served(hit.page));
   /** Close All tools, Ctrl+K, the avatar menu, and the mobile drawer. */
   function closeShellOverlays() {
     setToolsOpen(false);
@@ -2655,8 +2691,9 @@ export function StudioClient() {
       (document.activeElement as HTMLElement | null)?.blur();
     }
   }
-  /** Open a Studio page and drop every shell overlay. */
+  /** Open a Studio page and drop every shell overlay. A page the host does not serve stays closed. */
   function openPage(next: PageId) {
+    if (!served(next)) return;
     setPage(next);
     setModelsOpen(false);
     closeShellOverlays();
@@ -3714,7 +3751,7 @@ export function StudioClient() {
       />
     );
   } else if (page === "shows") {
-    main = <ShowsPage topSlot={showsTop} />;
+    main = <ShowsPage topSlot={showsTop} hosted={Boolean(doctor.host)} />;
   } else if (page === "assets") {
     main = (
       <AssetsPage
@@ -4362,7 +4399,7 @@ export function StudioClient() {
       >
         <VinciLogo />
         {RAIL_GROUPS.flatMap((group) => {
-          const items = group.items.map((item) => {
+          const items = group.items.filter((item) => served(item.id)).map((item) => {
             const on = railItemOn(item, page);
             const button = (
               <button
@@ -4385,7 +4422,7 @@ export function StudioClient() {
                 <div className="rail-flyout">
                   <div>
                     <p className="rail-flyout-h">Features</p>
-                    {FLYOUT_FEATURES[kind].map((row) => (
+                    {FLYOUT_FEATURES[kind].filter((row) => served(row.id)).map((row) => (
                       <button key={row.id} className="flyout-row" type="button" onClick={() => openPage(row.id)}>
                         <strong>{row.title}</strong>
                         <span>{row.blurb}</span>
@@ -4414,12 +4451,12 @@ export function StudioClient() {
               </div>
             );
           });
-          return group.label
+          return group.label && items.length
             ? [<span key={group.label} className="rail-section">{group.label}</span>, ...items]
             : items;
         })}
         <span className="spacer" />
-        {RAIL_FOOTER.map((item) => (
+        {RAIL_FOOTER.filter((item) => served(item.id)).map((item) => (
           <button
             key={item.id}
             type="button"
@@ -4446,16 +4483,22 @@ export function StudioClient() {
             }}
           >
             <span className="avatar-face" aria-hidden="true">
-              {live.length ? (live[0][1].display_name || live[0][0]).slice(0, 1).toUpperCase() : "V"}
+              {accountName === "Local" ? "V" : accountName.slice(0, 1).toUpperCase()}
             </span>
-            <span className="rail-label">{live.length ? live.map(([id, row]) => row.display_name || id).join(" · ") : "Local"}</span>
+            <span className="rail-label">{accountName}</span>
           </button>
           {avatarOpen ? (
             <div className="avatar-menu" role="menu">
-              {AVATAR_MENU.map((item) => (
+              {AVATAR_MENU.filter((item) => served(item.page)).map((item) => (
                 <button key={item.id} type="button" role="menuitem" onClick={() => openPage(item.page)}>
                   {item.title}
                 </button>
+              ))}
+              {(doctor.host?.links || []).map((link) => (
+                // Host pages (credits, account) open in the host window, outside this Studio frame.
+                <a key={link.href} role="menuitem" href={link.href} target="_top">
+                  {link.title}
+                </a>
               ))}
             </div>
           ) : null}
@@ -4641,12 +4684,19 @@ export function StudioClient() {
             <span />
           )}
           <div className="top-meta">
+            {/* These pages have no log line of their own. Bug fixed (first occurrence 2026-11-11, hosted
+                Studio check, COREPRODUC-585): a refused or failed run on them showed no reason. */}
+            {log && (page === "image" || page === "video" || page === "canvas") ? (
+              <span className="top-log" role="status" aria-live="polite" title={log}>
+                {log}
+              </span>
+            ) : null}
             {page === "canvas" ? (
               <>
                 <button
                   type="button"
                   className="access-pill"
-                  aria-label="Local access"
+                  aria-label={`${doctor.host?.name || "Local"} access`}
                   aria-expanded={avatarOpen}
                   onClick={() => {
                     setAvatarOpen((open) => !open);
@@ -4655,7 +4705,7 @@ export function StudioClient() {
                   }}
                 >
                   <span className="access-dot" aria-hidden="true" />
-                  Local
+                  {doctor.host?.name || "Local"}
                 </button>
                 <button
                   className="run canvas-generate"

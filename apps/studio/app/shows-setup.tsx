@@ -21,7 +21,7 @@ import {
   textStepQuestion,
 } from "../lib/shows";
 import { message, olf, runJobs, send } from "./shows-api";
-import { Confirm, VoicePick, fileData } from "./shows-parts";
+import { Confirm, OlfOnly, VoicePick, fileData } from "./shows-parts";
 
 const MEDIUMS = ["2D anime", "3D animation", "Live-action", "Stop-motion"];
 const ASPECTS = ["16:9", "9:16", "1:1"];
@@ -408,10 +408,12 @@ export function NewShow({ onCancel, onOpen }: { onCancel: () => void; onOpen: (p
           {cast.sheet ? <img className="setup-sheet" src={cast.sheet} alt="Character sheet" /> : null}
           <p className="muted olf-small-text">The whole sheet is the character reference. You can add more sheets, form views and details later in the bible.</p>
         </div>
-        <div className="olf-field">
-          <span className="olf-label">Voice</span>
-          <VoicePick value={cast.voice} onPick={(voice, voiceName) => setCast({ ...cast, voice, voiceName })} testId="setup-voice" />
-        </div>
+        <OlfOnly path="/olf/voices">
+          <div className="olf-field">
+            <span className="olf-label">Voice</span>
+            <VoicePick value={cast.voice} onPick={(voice, voiceName) => setCast({ ...cast, voice, voiceName })} testId="setup-voice" />
+          </div>
+        </OlfOnly>
       </div>
     );
   } else {

@@ -2,6 +2,20 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
+
+// `npm run build:static` writes plain files to out/ for a host that serves this Studio (Vinci
+// Platform) under VINCI_STUDIO_BASE_PATH and answers /vinci-api itself. pageExtensions drops the
+// .ts files that need a Node server (middleware.ts, the route.ts proxies). "js" stays because
+// Next.js builds its own not-found page from a .js file.
+const basePath = process.env.VINCI_STUDIO_BASE_PATH || "";
+const staticExport = {
+  output: "export",
+  basePath,
+  env: { NEXT_PUBLIC_VINCI_STUDIO_BASE_PATH: basePath },
+  pageExtensions: ["tsx", "js"],
+  outputFileTracingRoot: path.join(dir, "../.."),
+};
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
@@ -18,4 +32,4 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default process.env.VINCI_STUDIO_EXPORT === "1" ? staticExport : nextConfig;

@@ -200,7 +200,7 @@ export function EffectShell(props: EffectShellProps) {
     });
   }, [adaptOutputIds, historyIds, sessionOutputs]);
 
-  const generateLabel = app ? generateButtonLabel(app, models, liveSpend, money) : "Generate";
+  const generateLabel = app ? generateButtonLabel(app, models, liveSpend, money, values) : "Generate";
   const modelChoices = useMemo(
     () => (app ? appModelChoices(app, models, connected) : []),
     [app, connected, models],

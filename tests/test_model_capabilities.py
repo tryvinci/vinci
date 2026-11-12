@@ -16,6 +16,8 @@ NAMES = [
     "modelsForNodeTypes",
     "isUnpriced",
     "PRICE_VARIES",
+    "money",
+    "setPriceUnit",
 ]
 STUDIO = ROOT / "apps" / "studio" / "app" / "studio-client.tsx"
 
@@ -335,6 +337,26 @@ if (only !== "openai:tokens") throw new Error("an unpriced model still lists alo
 if (defaultModelFor("image", ["openai", "fal"], rows).id !== "fal:priced") throw new Error("live default");
 if (defaultModelFor("image", ["mock"], rows).id !== "mock:png:v1") throw new Error("demo default is mock");
 if (PRICE_VARIES !== "price varies") throw new Error("copy");
+"""
+    result = _run(script)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_money_uses_the_host_price_unit() -> None:
+    """USD by default; a host that bills in credits (Vinci Platform, COREPRODUC-585) shows credits."""
+    script = """
+const want = (got, exp) => { if (got !== exp) throw new Error(got + " != " + exp); };
+want(money(0.16), "$0.160");
+want(money(0), "$0");
+want(money(undefined), "$0");
+want(money(0.0004), "$0.0004");
+setPriceUnit("credits");
+want(money(2), "2 credits");
+want(money(1), "1 credit");
+want(money(0), "0 credits");
+want(money(14.5), "14.5 credits");
+setPriceUnit(undefined);
+want(money(0.33), "$0.330");
 """
     result = _run(script)
     assert result.returncode == 0, result.stderr or result.stdout

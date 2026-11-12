@@ -262,6 +262,35 @@ export function isUnpriced(model: { provider?: string; pricing?: { amount?: numb
   return model.provider !== "mock" && !(Number(model.pricing?.amount) > 0);
 }
 
+/** Unit of every price in this Studio: USD (local daemon) or credits (a host that bills in credits). */
+let priceUnit: "usd" | "credits" = "usd";
+
+/**
+ * Set the price unit from `host.currency` in `GET /doctor`. Any other value means USD.
+ *
+ * Args:
+ *   unit: "credits" for a host such as Vinci Platform, otherwise undefined.
+ */
+export function setPriceUnit(unit?: string): void {
+  priceUnit = unit === "credits" ? "credits" : "usd";
+}
+
+/**
+ * Price text in the Studio's unit: "$0.160" in USD, "2 credits" when the host bills in credits.
+ *
+ * Args:
+ *   n: Amount in the current unit (catalog `pricing.amount` or a sum of them).
+ * Returns:
+ *   The label for Generate buttons, model rows, run bars and totals.
+ */
+export function money(n: number | undefined): string {
+  const v = Number(n || 0);
+  if (priceUnit === "credits") return `${Number(v.toFixed(2))} ${v === 1 ? "credit" : "credits"}`;
+  if (v === 0) return "$0";
+  if (v < 0.01) return "$" + v.toFixed(5).replace(/0+$/, "").replace(/\.$/, "");
+  return "$" + v.toFixed(3);
+}
+
 function ordered<T extends string>(all: readonly T[], picked: Set<T>): T[] {
   return all.filter((item) => picked.has(item));
 }

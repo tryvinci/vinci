@@ -83,7 +83,7 @@ All commands take `-C <project folder>` (default: the current folder) and `-v` (
 
 The flow is keyframes first: **the bible locks the look, the storyboard reviews keyframes (cheap stills), and the shot page draws keyframes, approves them and renders video from the chosen keyframe.** Stale takes are calculated, never stored: an orange `stale` mark means an input changed after the render.
 
-- **Open:** **New show**, open the sample show (the daemon copies `tidewatch` into `$VINCI_HOME/shows/` once), or type a show folder. Recent shows stay in `localStorage` (`vinci-shows-recent-v1`). The newest one opens again on the next visit, on the storyboard of its first episode.
+- **Open:** **New show**, open the sample show (the daemon copies `tidewatch` into `$VINCI_HOME/shows/` once), a show from **Your shows** (`GET /olf/shows`), or type a show folder. Recent shows stay in `localStorage` (`vinci-shows-recent-v1`). The newest one opens again on the next visit, on the storyboard of its first episode. On a host (see [On a host](#on-a-host-vinci-platform)) there is no folder box and no recent paths.
 - **Top bar** (`ShowTop` in `shows-nav.tsx`, rendered into the `.top-shows` slot of the Studio top bar): the crumb (`Tidewatch / E02 · The Second Light`, or `Bible · Characters · Mira Sol`), then the spec (or the entry's YAML file on a bible page), a health pill (`Valid OLF v0.1` or the error count; it opens the issues page), Reload, the design's **Share** (the show as one `.olf.zip`) and Close show. The design's Credits is the Studio's own ≈ $ meter. On the shot page: `‹ Storyboard / e02/s03/sh014` with the take status and stale mark, and the previous and next shot.
 - **Left panel** (`ShowNav`): the sections as a list (Bible, Storyboard, Shots, Cut), then the episodes by season (episodes in no season come last, under Episodes), and the design's **+ New episode** (it joins the last season). In the Bible: Style, Characters, Locations, then Props · Voices. The shot page and the Cut screen have no left panel and use the full width, as in the design.
 - **Storyboard** (`shows-storyboard.tsx`): the header has the design's batch buttons: **Re-render N stale** (in the stale colour) and **Animate approved · est. $X**. Both come from dry runs of `POST /olf/batch` for the episode; the tooltip lists each job and why. A paid batch, or one with a model that has no flat price, asks "Spend $X on N renders?" once. The Studio then runs the batch one job per `POST /olf/render`, each job bounded by its planned price (`runJobs` in `shows-api.ts`), so no request outlives the proxy. A whole episode in one request did, in the live test of 2026-11-09. The notice counts the jobs (`Rendering 2 of 6: e01/s01/sh020 · video…`), the card of the running job shows what it renders, the board reloads after each job, and a higher price stops the rest. Then four counts (shots, keyframes approved, stale takes, runtime), then each scene with its heading, location, variant and cast looks (`Mira Sol (winter, night outfit)`). Each scene ends with the design's dashed **+ Add shot** card (what happens, length, framing); **+ Add scene** follows the last scene, and an episode with no scenes asks for its first scene. A card shows the shown keyframe (`select.keyframe`, else the newest) with its status at the top left and the stale mark at the top right, and words such as `kf1 · v1 approved`. The cards are for review: a card opens its shot page. A card and a Shots row show the length as seconds+frames (`4+00`, `2+12`), the notation of storyboards (COREPRODUC-564).
@@ -102,6 +102,7 @@ The flow is keyframes first: **the bible locks the look, the storyboard reviews 
 
 | Route | Does |
 | --- | --- |
+| `GET /olf/shows` | The shows in `$VINCI_HOME/shows` (`path`, `title` from `project.yaml`, `updated_at`), last changed first, for the open screen |
 | `POST /olf/sample` | Copy the sample show into `$VINCI_HOME/shows/tidewatch` once; return its folder |
 | `GET /olf/project?path=` | The whole show as JSON (`vinci_olf.api.summary`): issues; bible entries with their file, assets, usage, edit impact, license and (characters) shots per form; seasons; episodes with each scene's cast looks; shots; takes with `stale` |
 | `GET /olf/shot?path=&shot=` | Resolved view, `origins` (the level that set each field), hashes, prompts, references, and a dry-run plan per render kind (`video`, `keyframe`, `audio`; a shot without dialogue gets an `error` plan for audio). Each plan lists `choices`: the connected models for its last step, cheapest first (the model menu) |
@@ -209,7 +210,19 @@ Effects, tested on the sample: an edit to a character description or a sheet ima
 8. Check each keyframe and video with the palette check (`vinci_olf.qa`): the take's twelve main colors against the palettes of the shot's character forms. Each palette color counts by how close the nearest main color is (an RGB distance of 120 counts as missing); 0.6 passes. It writes `qa: [{ check: palette, score, pass }]` (the Studio shows `QA palette 0.82 pass`). It is a cheap signal that a render kept the forms' colors, not a likeness check: no identity model runs locally.
 9. Write each output to `takes/`, write its take file with provenance (provider, model, prompt, parameters, created, cost) and `inputs_hash`, and add the outputs and the input files to `assets/lock.yaml` with the license from `project.yaml`. Existing lock entries and their comments stay as they are. An audio take records the lines it spoke as its prompt (one per line), its length as `duration`, and the cost of all its lines.
 
+`render` is three steps a host can also call apart (COREPRODUC-588): `plan_render` (steps 1 to 5: the price, and a JSON job with the nodes, the resolved view and the reference files), the price check and the run, then `record_render` (steps 8 and 9, from the outputs' bytes and receipts). The local runtime joins them in one call.
+
 The sample renders at $0 in demo mode: `mock:png:v1` for the keyframe, `mock:mp4:v1` for the video, and `mock:wav:v1` for dialogue (a WAV hum about as long as the line, with a pitch per voice). Each mock take is a new picture (the mock seeds by take, as a real model gives a new image for each call), so variations differ. The sample art is flat placeholder boxes, so live renders of the sample are not useful.
+
+## On a host (Vinci Platform)
+
+The hosted Studio on app.tryvinci.com runs these pages on its own backend (`apps/vinci-backend`, COREPRODUC-588). The pages are the same; a host differs here:
+
+- **Paths:** a show is `show:<id>`, never a folder. `GET /olf/shows` lists the user's shows.
+- **Fewer routes in v1:** no speech, music, sound effects, voices, previs or share. The Studio hides a control when `/openapi.json` does not list its route (`OlfRoutes` in `shows-api.ts`): Share, Add music cue, the Voice field and the previs buttons.
+- **Prices in credits:** `host.currency` is `credits`, so `price()` shows credits (`setShowsCredits`). The host plans with `vinci_core` on a catalog in credits (`Catalog.currency`).
+- **Long steps answer at once (HTTP 202):** `POST /olf/render` gives `run_id`, and the Studio polls `GET /runs/{id}` until the run ends and its takes are recorded (`olf.recorded`). `POST /olf/export` gives `export_id`, and the Studio polls `GET /olf/exports/{id}`. `olf()` waits for both, so callers get the finished answer. `GET /olf/project` lists the renders still running (`renders`), so a reload polls them again.
+- **Media stays in storage:** the host builds the show folder per request with empty stand-ins for media and passes their hashes to `load(root, hashes=...)`, so no media is read; a project file only changes on a write.
 
 ## How batch renders work
 
@@ -308,13 +321,13 @@ Engine choices that the spec leaves open:
 | Limit in Slice 1 | Follow-up |
 | --- | --- |
 | Higgsfield and Google video models have no exact `durations` list yet (only `max_duration` caps them) | COREPRODUC-552 |
-| Only the Wavespeed video rows price a clip by its length (`clip_prices`, COREPRODUC-555); the other providers' video rows are one price per job, so a longer clip can show less than its bill | COREPRODUC-603 |
+| Only the Wavespeed and fal video rows price a clip by its length (`clip_prices`, COREPRODUC-555 and COREPRODUC-603); the Higgsfield and Magnific video rows are one price per job (they bill credits), so a longer clip can show less than its bill | COREPRODUC-598 |
 | Text models bill by token, so a text step has no estimate and always asks first | COREPRODUC-533 |
 | Agent CLIs appear only in the Shows text model menu (not in Connect or the canvas pickers), each uses its own default model, and Codex and Antigravity are tested only with fake CLIs | COREPRODUC-557 |
 | The script rules split action by sentence and read no dual dialogue, lyrics or sections; a new speaker needs a sheet before render | COREPRODUC-547 |
 | The catalog's Veo 3.1 rows: Google shut the Gemini API previews down on 2026-10-22, and fal removes `veo3.1/fast/image-to-video` on 2026-11-17 | COREPRODUC-553 |
 | The QA check compares colors, not likeness (the design's "QA identity" needs an identity model) | COREPRODUC-554 |
-| A music cue is at most 60 s and a sound effect 30 s: the runtime prices one unit per job (`elevenlabs:music-v1` counts one minute) | COREPRODUC-603 |
+| A music cue is at most 60 s and a sound effect 30 s; both are priced by their length. A music job with no length (only a direct API workflow sends one) is priced as one minute, and ElevenLabs picks its length | COREPRODUC-604 |
 | The Studio cannot move, retime or remove a placed cue (edit the `audio` list in `episode.yaml`), and a shot's `audio` cue names are checked but not placed for you | COREPRODUC-551 |
 | The Studio cannot edit a bible entry's text, outfits or variants, delete or reorder shots and scenes, or edit the cut list beyond trims, transitions and audio | COREPRODUC-543 |
 | OLF renders do not use the durable journal (the route returns 409 when it is on) | COREPRODUC-545 |

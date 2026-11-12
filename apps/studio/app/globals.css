@@ -149,10 +149,13 @@ a { color: var(--ink); }
   box-shadow: var(--glass-shadow);
   backdrop-filter: blur(18px) saturate(140%);
 }
-.avatar-menu button {
+.avatar-menu button,
+.avatar-menu a {
   width: 100%; height: auto; padding: 8px 10px; border-radius: 8px; justify-content: flex-start;
   color: var(--rail-ink);
 }
+/* Host links (Vinci Platform credits, account) are anchors that look like the menu buttons. */
+.avatar-menu a { display: flex; box-sizing: border-box; text-decoration: none; }
 .all-tools {
   position: fixed; left: 50%; top: 72px; z-index: 50;
   width: min(440px, calc(100vw - 32px)); max-height: min(72vh, 640px);
@@ -292,6 +295,7 @@ kbd {
 .top h1 { margin: 0; font-size: 16px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .top-meta { display: flex; gap: 8px; align-items: center; flex: none; }
 .top-meta .muted { white-space: nowrap; }
+.top-log { max-width: min(46ch, 40vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); font-size: 13px; }
 .chip, .ghost {
   border: 1px solid var(--line); background: transparent; border-radius: var(--pill); padding: 7px 14px;
   transition: border-color 140ms ease, background 140ms ease, color 140ms ease;

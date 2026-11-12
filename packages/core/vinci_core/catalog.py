@@ -47,6 +47,9 @@ class Catalog:
     snapshot_id: str
     endpoints: dict[str, str] = field(default_factory=dict)
     source: str = "bundled"
+    # The unit routing ranks prices in: USD here; a host that bills in credits (the hosted
+    # Studio) lists its models in "credits" and sets this to match.
+    currency: str = "USD"
 
     def by_id(self, model_id: str) -> ModelSpec:
         for model in self.models:
@@ -58,18 +61,18 @@ class Catalog:
         return [m for m in self.models if capability in [c.value for c in m.capabilities]]
 
     def cheapest(self, capability: str) -> ModelSpec | None:
-        """Return the cheapest active USD model for a capability, ranked by `price_key`.
+        """Return the cheapest active model priced in `currency`, ranked by `price_key`.
 
         Args:
             capability: Capability value, such as `t2i`.
 
         Returns:
-            The cheapest model, or `None` when no active USD model has the capability.
+            The cheapest model, or `None` when no active model in `currency` has the capability.
         """
         candidates = [
             m
             for m in self.by_capability(capability)
-            if m.status.value == "active" and m.pricing.currency.upper() == "USD"
+            if m.status.value == "active" and m.pricing.currency.upper() == self.currency.upper()
         ]
         if not candidates:
             return None

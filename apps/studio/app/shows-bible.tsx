@@ -12,7 +12,7 @@ import {
   sheetsOf,
   words,
 } from "../lib/shows";
-import { Chips, Field, Panel, RefThumb, Swatches, VoicePick, fileData } from "./shows-parts";
+import { Chips, Field, OlfOnly, Panel, RefThumb, Swatches, VoicePick, fileData } from "./shows-parts";
 
 export type FormFields = { name: string; description: string; palette: string[]; front?: string };
 
@@ -239,12 +239,16 @@ export function BibleView({
           ) : null}
           <Panel title="Linked">
             {kind === "character" ? (
-              <div className="olf-field">
-                <span className="olf-label">Voice</span>
-                {/* key: a new clone is a new voice ID, so the menu loads the account's list again */}
-                <VoicePick key={voiceId} value={voiceId} onPick={onSetVoice} testId="voice-pick" />
-                <CloneVoice who={entryName(entry)} onClone={onCloneVoice} />
-              </div>
+              <OlfOnly path="/olf/voices">
+                <div className="olf-field">
+                  <span className="olf-label">Voice</span>
+                  {/* key: a new clone is a new voice ID, so the menu loads the account's list again */}
+                  <VoicePick key={voiceId} value={voiceId} onPick={onSetVoice} testId="voice-pick" />
+                  <OlfOnly path="/olf/voice/clone">
+                    <CloneVoice who={entryName(entry)} onClone={onCloneVoice} />
+                  </OlfOnly>
+                </div>
+              </OlfOnly>
             ) : null}
             {links.length ? (
               <span className="olf-chips">
