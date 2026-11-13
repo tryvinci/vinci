@@ -21,7 +21,7 @@ import { ShowsPage } from "./shows-page";
 import { setShowsCredits } from "../lib/shows";
 import { VideoPage } from "./video-page";
 import { imageBlock } from "../lib/image-page";
-import { videoBlock } from "../lib/video-page";
+import { nodeDurations, videoBlock } from "../lib/video-page";
 import { type ComboModel } from "./model-combo";
 import { VinciLogo } from "./ui/logo";
 import { DockIcon, DOCK_ICON } from "./ui/icons";
@@ -1981,7 +1981,7 @@ export function StudioClient() {
       /** A node's params as its pills show them for its model (see fitToModel). */
       const fitNode = (n: GraphNode): GraphNode => {
         const row = models.find((m) => m.id === n.model_id);
-        return row ? { ...n, params: fitToModel(n.params || {}, row.constraints) } : n;
+        return row ? { ...n, params: fitToModel(n.params || {}, row.constraints, n.capability === "t2v" || n.capability === "i2v") } : n;
       };
       // Canvas nodes this run will show state on.
       let tracked: string[] = [];
@@ -2185,6 +2185,27 @@ export function StudioClient() {
     const one = row && !isUnpriced(row) ? clipPrice(row, n.params?.duration, runInputs(selected), text) : null;
     // A node with count N runs N jobs (expandCounts), so it costs N times one (COREPRODUC-642).
     return one == null ? null : one * countValue(n.params);
+  }
+
+  /**
+   * Aspect, resolution and duration pills of a node from its model's catalog row (card and inspector).
+   * A video model that lists no resolution shows none: the image sizes 1K/2K/4K were offered and "4K"
+   * was sent to Kling 3.0 Standard (COREPRODUC-649). Durations are the Video page's tiles.
+   */
+  function framePills(n: GraphNode) {
+    const model = models.find((m) => m.id === (n.model_id || modelIdForNode(n, selected?.id || "", models, connected)));
+    const video = n.capability === "t2v" || n.capability === "i2v";
+    const aspects = listedOr(model?.constraints?.aspect_ratios, ASPECTS);
+    const resolutions = listedOr(model?.constraints?.resolutions, video ? [] : RESOLUTIONS);
+    const durations = video ? nodeDurations(model, n.params?.duration) : { options: [], value: "" };
+    return {
+      aspects,
+      resolutions,
+      durations: durations.options,
+      aspect: pickListed(n.params?.aspect_ratio, aspects),
+      resolution: pickListed(n.params?.resolution, resolutions),
+      duration: durations.value,
+    };
   }
 
   /** The `pricing.currency` of the model a node runs on ("" when it has none). */
@@ -3480,11 +3501,6 @@ export function StudioClient() {
                       ) : null}
                       {(() => {
                         const modelRows = comboModels(nodeModels(n.capability || "t2i"), true, statusSuffix);
-                        const model = models.find((m) => m.id === (n.model_id || modelIdForNode(n, selected?.id || "", models, connected)));
-                        const aspects = listedOr(model?.constraints?.aspect_ratios, ASPECTS);
-                        const resolutions = listedOr(model?.constraints?.resolutions, RESOLUTIONS);
-                        const aspectChip = pickListed(n.params?.aspect_ratio, aspects);
-                        const resolutionChip = pickListed(n.params?.resolution, resolutions);
                         const runText = runCost([n.id]).text;
                         const runBlock = n.type === "generate" ? runBlocker([n.id]) : null;
                         return (
@@ -3502,11 +3518,8 @@ export function StudioClient() {
                             needs={needs}
                             models={modelRows}
                             modelId={n.model_id || ""}
-                            aspects={aspects}
-                            resolutions={resolutions}
+                            {...framePills(n)}
                             count={countValue(n.params)}
-                            aspect={aspectChip}
-                            resolution={resolutionChip}
                             costText={runText}
                             runDisabled={Boolean(runBlock) || busy}
                             runTitle={runBlock || `Run · ${runText || "cost unknown"}`}
@@ -3523,6 +3536,7 @@ export function StudioClient() {
                             onCount={(value) => setGraph((g) => setParams(g, n.id, countPatch(value)))}
                             onAspect={(v) => setGraph((g) => setParams(g, n.id, { aspect_ratio: v }))}
                             onResolution={(v) => setGraph((g) => setParams(g, n.id, { resolution: v }))}
+                            onDuration={(v) => setGraph((g) => setParams(g, n.id, { duration: Number(v) }))}
                             onModel={(value) => setGraph((g) => updateNode(g, n.id, { model_id: value || undefined }))}
                             onGear={() => {
                               if (inspectorOpen && selectedNode === n.id) {
@@ -5094,9 +5108,6 @@ export function StudioClient() {
         (() => {
           const n = canvasSelected;
           const modelRows = comboModels(nodeModels(n.capability || "t2i"), true, statusSuffix);
-          const model = models.find((m) => m.id === (n.model_id || modelIdForNode(n, selected?.id || "", models, connected)));
-          const aspects = listedOr(model?.constraints?.aspect_ratios, ASPECTS);
-          const resolutions = listedOr(model?.constraints?.resolutions, RESOLUTIONS);
           const runText = runCost([n.id]).text;
           const runBlock = n.type === "generate" ? runBlocker([n.id]) : null;
           return (
@@ -5107,11 +5118,8 @@ export function StudioClient() {
               prompt={promptValue(n.params)}
               models={modelRows}
               modelId={n.model_id || ""}
-              aspects={aspects}
-              resolutions={resolutions}
+              {...framePills(n)}
               count={countValue(n.params)}
-              aspect={pickListed(n.params?.aspect_ratio, aspects)}
-              resolution={pickListed(n.params?.resolution, resolutions)}
               costText={runText}
               runDisabled={Boolean(runBlock) || busy}
               runTitle={runBlock || `Run · ${runText || "cost unknown"}`}
@@ -5128,6 +5136,7 @@ export function StudioClient() {
               onCount={(value) => setGraph((g) => setParams(g, n.id, countPatch(value)))}
               onAspect={(v) => setGraph((g) => setParams(g, n.id, { aspect_ratio: v }))}
               onResolution={(v) => setGraph((g) => setParams(g, n.id, { resolution: v }))}
+              onDuration={(v) => setGraph((g) => setParams(g, n.id, { duration: Number(v) }))}
               onModel={(value) => setGraph((g) => updateNode(g, n.id, { model_id: value || undefined }))}
               onSeed={(v) => {
                 const seed = v.trim();

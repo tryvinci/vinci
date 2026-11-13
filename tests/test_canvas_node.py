@@ -100,6 +100,10 @@ eq(fitToModel({ aspect_ratio: "16:9", resolution: "1K", prompt: "p" }, seedream)
 eq(fitToModel({ duration: 5 }, { durations: [6] }), { duration: 6 }, "the listed length that covers it");
 eq(fitToModel({ duration: 8 }, { durations: [10, 6] }), { duration: 10 }, "the shortest that covers it, as fit_duration");
 eq(fitToModel({ duration: 12 }, { durations: [6, 10] }), { duration: 10 }, "else the longest");
+// COREPRODUC-649: a video model that lists no resolution gets none ("4K" went to Kling); an image model keeps 1K/2K/4K.
+eq(fitToModel({ resolution: "4K", duration: 10 }, { resolutions: [], durations: [5, 10] }, true), { duration: 10 }, "no hidden resolution on video");
+eq(fitToModel({ resolution: "{{inputs.resolution}}" }, { resolutions: [] }, true), { resolution: "{{inputs.resolution}}" }, "a template stays");
+eq(fitToModel({ resolution: "2K" }, { resolutions: [] }), { resolution: "2K" }, "an image node keeps its size");
 const kling = { pricing: { amount: 0.35, clip_prices: { "5": 0.35, "10": 0.7 } }, constraints: { durations: [5, 10] } };
 eq(clipPrice(kling, 10), 0.7, "a 10 s clip on a row that bills by length (COREPRODUC-555)");
 eq(clipPrice(kling, "7"), 0.7, "the length is fitted first, as fit_duration");

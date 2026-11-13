@@ -32,9 +32,12 @@ type Props = {
   modelId: string;
   aspects: string[];
   resolutions: string[];
+  /** Video lengths in seconds ("5", "10"); empty for other nodes. */
+  durations: string[];
   count: number;
   aspect: string;
   resolution: string;
+  duration: string;
   costText: string;
   runDisabled: boolean;
   runTitle: string;
@@ -46,6 +49,7 @@ type Props = {
   onCount: (n: number) => void;
   onAspect: (v: string) => void;
   onResolution: (v: string) => void;
+  onDuration: (v: string) => void;
   onModel: (id: string) => void;
   onSeed: (v: string) => void;
   /** Merge a shot patch (camera, lens, look, ...) into the node params. */
@@ -61,7 +65,7 @@ type Props = {
 
 /**
  * Magnific gear inspector: model, references 0/8 (Style + Character), prompt, seed,
- * aspect, resolution, shot (camera, lens, look, ...), Run. Same params object as the card.
+ * aspect, resolution, duration (video), shot (camera, lens, look, ...), Run. Same params object as the card.
  */
 export function CanvasInspector({
   node,
@@ -72,9 +76,11 @@ export function CanvasInspector({
   modelId,
   aspects,
   resolutions,
+  durations,
   count,
   aspect,
   resolution,
+  duration,
   costText,
   runDisabled,
   runTitle,
@@ -86,6 +92,7 @@ export function CanvasInspector({
   onCount,
   onAspect,
   onResolution,
+  onDuration,
   onModel,
   onSeed,
   onShot,
@@ -235,6 +242,18 @@ export function CanvasInspector({
                 {resolutions.map((v) => (
                   <button key={v} type="button" className={v === resolution ? "on" : ""} onClick={() => onResolution(v)}>
                     {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {durations.length ? (
+            <div>
+              <label>Duration</label>
+              <div className="pills" id="node-duration-pills">
+                {durations.map((v) => (
+                  <button key={v} type="button" className={v === duration ? "on" : ""} onClick={() => onDuration(v)}>
+                    {v}s
                   </button>
                 ))}
               </div>

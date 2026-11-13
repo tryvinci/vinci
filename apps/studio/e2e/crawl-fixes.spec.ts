@@ -190,6 +190,57 @@ test.describe("Production crawl fixes", () => {
     await expect(gen.locator(".node-sub")).toContainText("not available for free users");
     await page.screenshot({ path: path.join(shots, "crawl_canvas_refusal.png") });
   });
+
+  test("COREPRODUC-649: a Video Gen node picks its duration; the run sends it and the price follows", async ({ page }) => {
+    // Kling 2.6 Standard as the host lists it: 5 or 10 s, a price per length, no resolution.
+    const kling = {
+      id: "mock:kling-26-std",
+      display_name: "Kling 2.6 Standard",
+      provider: "mock",
+      capabilities: ["t2v", "i2v"],
+      available: true,
+      status: "ready",
+      pricing: { amount: 0.21, unit: "video", currency: "USD", clip_prices: { "5": 0.21, "10": 0.42 } },
+      constraints: { aspect_ratios: ["16:9", "9:16", "1:1"], resolutions: [], durations: [5, 10], max_duration: 10 },
+    };
+    await page.route("**/vinci-api/models", async (route) => {
+      const body = (await (await route.fetch()).json()) as { models: unknown[] };
+      await route.fulfill({ json: { ...body, models: [...body.models, kling] } });
+    });
+    const bodies: { workflow?: { nodes: { model_id?: string; params: Record<string, unknown> }[] } }[] = [];
+    await page.route("**/vinci-api/runs", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      bodies.push(route.request().postDataJSON());
+      await route.fulfill({ json: { id: `run-${bodies.length}`, state: "completed", outputs: [], nodes: {}, estimate: { total: 0 } } });
+    });
+    await boot(page);
+    await page.getByRole("button", { name: "Canvas", exact: true }).first().click();
+    await page.locator('[data-start="t2v"]').click();
+    const gen = page.locator(".node[data-id]").first();
+    await gen.locator("[data-node-prompt]").fill("a kite over the sea");
+    await gen.getByTestId("node-resolution-chip").click(); // a resolution picked on the first model…
+    await gen.getByRole("option").last().click();
+    await gen.getByTestId("node-model-chip").click();
+    await gen.getByRole("option", { name: /Kling 2.6 Standard/ }).click();
+    await expect(gen.getByTestId("node-resolution-chip")).toHaveCount(0); // no image sizes on a video model
+    await expect(gen.getByTestId("node-duration-chip")).toHaveText("5s");
+    await expect(gen.getByTestId("node-run")).toHaveAttribute("title", /0\.21/);
+    await gen.getByTestId("node-duration-chip").click();
+    await expect(gen.getByRole("option")).toHaveText(["5s", "10s"]);
+    await gen.getByRole("option", { name: "10s" }).click();
+    await expect(gen.getByTestId("node-run")).toHaveAttribute("title", /0\.42/);
+    await gen.getByTestId("node-gear").click();
+    await page.getByTestId("inspector-advanced").click();
+    await expect(page.locator("#node-duration-pills button.on")).toHaveText("10s");
+    await expect(page.locator("#node-resolution-pills")).toHaveCount(0);
+    await page.screenshot({ path: path.join(shots, "canvas_video_duration.png") });
+    await gen.getByTestId("node-run").click();
+    await expect.poll(() => bodies.length).toBe(1);
+    const node = (bodies[0].workflow?.nodes || [])[0];
+    expect(node.model_id).toBe("mock:kling-26-std");
+    expect(node.params.duration).toBe(10);
+    expect(node.params.resolution).toBeUndefined(); // …is not sent to a model that lists none
+  });
 });
 
 const HOST = {
