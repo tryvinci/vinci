@@ -3,7 +3,8 @@ import { expect, test, type Page } from "@playwright/test";
 // The Studio inside a host (Vinci Platform): the doctor's host block names the pages it serves. Bugs fixed
 // on 2026-11-12 (live UI check on app.tryvinci.com): a 401 at start showed the local Studio, All tools had
 // empty tabs, the canvas offered starters no model could run, the access pill opened a menu at the far side,
-// and image cards had a button that copied a vinci:// link.
+// and image cards had a button that copied a vinci:// link. On 2026-11-13 (COREPRODUC-629): the account
+// menu showed only the host name, not the signed-in user, and had no Sign out.
 
 const HOST = {
   name: "Vinci Platform",
@@ -14,13 +15,13 @@ const HOST = {
 };
 
 /** Serve the demo daemon as a host: its doctor gets the host block, and the voice model is gone. */
-async function openHosted(page: Page) {
+async function openHosted(page: Page, host: object = HOST) {
   await page.addInitScript(() => {
     localStorage.setItem("vinci-onboard-v1", "done");
   });
   await page.route(/\/vinci-api\/doctor(\?|$)/, async (route) => {
     const res = await route.fetch();
-    await route.fulfill({ response: res, json: { ...(await res.json()), host: HOST } });
+    await route.fulfill({ response: res, json: { ...(await res.json()), host } });
   });
   await page.route(/\/vinci-api\/models(\?|$)/, async (route) => {
     const res = await route.fetch();
@@ -41,6 +42,25 @@ test.describe("Hosted shell", () => {
     await expect(page.getByTestId("session-ended")).toContainText("Your session ended");
     await expect(page.getByRole("button", { name: "Sign in again" })).toBeVisible();
     await expect(page.locator("nav#studio-rail")).toHaveCount(0);
+  });
+
+  test("the account menu shows the host's signed-in user and a Sign out link", async ({ page }) => {
+    const photo = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="#e85"/></svg>');
+    await openHosted(page, {
+      ...HOST,
+      links: [...HOST.links, { title: "Sign out", href: "/sign-out" }],
+      user: { name: "Ada Lovelace", email: "ada@example.com", image: photo },
+    });
+    const account = page.getByRole("button", { name: "Account menu" });
+    await expect(account.locator(".rail-label")).toHaveText("Ada Lovelace");
+    await expect(account.locator(".rail-label")).toHaveAttribute("title", "ada@example.com");
+    await expect.poll(() => account.locator(".avatar-face img").evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+    // Keyboard, not a click: in `next dev` the Next.js dev indicator covers the bottom-left account button.
+    await account.focus();
+    await page.keyboard.press("Enter");
+    const signOut = page.getByRole("menuitem", { name: "Sign out" });
+    await expect(signOut).toHaveAttribute("href", "/sign-out");
+    await expect(signOut).toHaveAttribute("target", "_top");
   });
 
   test("All tools shows only tabs with tools the host serves", async ({ page }) => {
