@@ -579,7 +579,8 @@ def _streams(url: str, http: Any, headers: dict[str, str], timeout: float) -> An
     )
 
 
-_START_KEYS = ("image", "first_frame_url", "start_image_url", "image_url", "media")
+# Start-frame keys first: only video runs send them, and they win over `image` (COREPRODUC-644).
+_START_KEYS = ("first_frame_url", "start_image_url", "image", "image_url", "media")
 
 
 def _image_ref(inputs: dict[str, Any]) -> str | None:

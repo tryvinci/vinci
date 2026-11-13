@@ -34,6 +34,25 @@ const NOTES: Record<string, string> = {
   mcp_magnific: "Adds Magnific models. They run on your Magnific credits.",
 };
 
+/** Where to get a key or read the provider's docs (COREPRODUC-650 shell-15: Connect had no link). */
+const LINKS: Record<string, [string, string]> = {
+  wavespeed: ["Get a Wavespeed key", "https://wavespeed.ai/accesskey"],
+  mcp_higgsfield: ["Higgsfield docs", "https://docs.higgsfield.ai"],
+  mcp_magnific: ["Magnific docs", "https://docs.magnific.com/introduction"],
+};
+
+/** The provider's link, under its note. */
+function ProviderLink({ id }: { id: string }) {
+  const link = LINKS[id];
+  return link ? (
+    <p className="muted">
+      <a href={link[1]} target="_blank" rel="noreferrer">
+        {link[0]}
+      </a>
+    </p>
+  ) : null;
+}
+
 /** The status line of a sign-in card. */
 function signInState(row?: KeyRow): string {
   if (row?.auth_state === "connected") return "Signed in";
@@ -79,6 +98,7 @@ export function HostKeys(props: {
                 <strong>{name}</strong>
                 <div className="muted">{signInState(row)}</div>
                 <p className="muted">{NOTES[id] || ""}</p>
+                <ProviderLink id={id} />
                 <div className="file-row">
                   {row?.configured ? (
                     <button
@@ -114,6 +134,7 @@ export function HostKeys(props: {
                   : "Not connected"}
               </div>
               <p className="muted">{NOTES[id] || ""}</p>
+              <ProviderLink id={id} />
               <label htmlFor={`key-${id}`}>
                 {ready ? "Paste a new key" : "Paste key"}
               </label>

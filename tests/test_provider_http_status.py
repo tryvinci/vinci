@@ -1541,3 +1541,17 @@ def test_wavespeed_reroute_leaves_the_base_url_alone(monkeypatch: pytest.MonkeyP
     assert seen["url"] == (
         "https://proxy.example/text-to-video/api/v3/bytedance/seedance-2.0/image-to-video-turbo"
     )
+
+
+def test_video_start_frame_wins_over_a_stray_reference() -> None:
+    """COREPRODUC-644 (STU-02 defence): a client that sends a reference in `image` next to the
+    start frame must still get the start frame. Image runs never send the start-frame keys."""
+    from vinci_mcp.adapter import _image_ref
+    from vinci_provider_fal.plugin import _image_input as fal_image
+    from vinci_provider_wavespeed.plugin import _image_input as wavespeed_image
+
+    both = {"image": "ref", "media": "ref", "first_frame_url": "start", "start_image_url": "start"}
+    req = JobRequest(capability=Capability.I2V, model_id="x", inputs=both)
+    assert wavespeed_image(req) == fal_image(req) == _image_ref(both) == "start"
+    still = JobRequest(capability=Capability.I2I, model_id="x", inputs={"image": "ref"})
+    assert wavespeed_image(still) == fal_image(still) == _image_ref({"image": "ref"}) == "ref"

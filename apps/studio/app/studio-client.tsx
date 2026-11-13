@@ -1560,6 +1560,8 @@ export function StudioClient() {
     const next = dir === "undo" ? undo(graphHistory) : redo(graphHistory);
     if (next === graphHistory) return;
     setGraphHistory(next);
+    // The delete notice is done once the delete is undone (COREPRODUC-650 canvas-8).
+    setLog((cur) => (cur.endsWith("Undo with ⌘Z.") ? "" : cur));
     // Undoing an insert or duplicate must not leave its id selected (Delete and the drawer would point at nothing).
     const ids = new Set(next.present.nodes.map((n) => n.id));
     setSelection((sel) => sel.filter((id) => ids.has(id)));
@@ -1840,9 +1842,15 @@ export function StudioClient() {
   }
 
   async function ingest(file: File): Promise<Asset> {
+    // COREPRODUC-650 image-14: a 4 s upload showed nothing. The line goes when the upload ends;
+    // callers then say what they did with the file.
+    const uploading = `Uploading ${file.name}…`;
+    setLog(uploading);
     const data = new FormData();
     data.append("file", file);
-    const res = await fetch(API + "/assets", { method: "POST", body: data });
+    const res = await fetch(API + "/assets", { method: "POST", body: data }).finally(() =>
+      setLog((cur) => (cur === uploading ? "" : cur)),
+    );
     if (!res.ok) throw new Error(await res.text());
     const asset = (await res.json()) as Asset;
     const mime = asset.mime && asset.mime !== "application/octet-stream" ? asset.mime : file.type || asset.mime;
@@ -3004,7 +3012,7 @@ export function StudioClient() {
             })
             .catch((err) => setLog(plainError(err)));
         }}
-        onRemoveRef={() => setUploadId(null)}
+        onRemoveRef={() => (setUploadId(null), setLog("Reference removed."))}
         cast={mentionItems.map(asCastRow)}
         busy={busy}
         pendingCount={batchCount === 4 ? 4 : 1}
@@ -3069,11 +3077,12 @@ export function StudioClient() {
         onClip={setExtendClipId}
         onAudio={setAudioId}
         onExtra={(id) => setVideoExtraIds((rows) => (rows.includes(id) ? rows : [...rows, id]))}
-        onRemoveStart={() => setFirstFrameId(null)}
-        onRemoveEnd={() => setLastFrameId(null)}
-        onRemoveClip={() => setExtendClipId(null)}
-        onRemoveAudio={() => setAudioId(null)}
-        onRemoveExtra={(id) => setVideoExtraIds((rows) => rows.filter((row) => row !== id))}
+        // Each remove says so: the "… added." line stayed after it (COREPRODUC-650 video-8).
+        onRemoveStart={() => (setFirstFrameId(null), setLog("Start frame removed."))}
+        onRemoveEnd={() => (setLastFrameId(null), setLog("End frame removed."))}
+        onRemoveClip={() => (setExtendClipId(null), setLog("Clip removed."))}
+        onRemoveAudio={() => (setAudioId(null), setLog("Audio removed."))}
+        onRemoveExtra={(id) => (setVideoExtraIds((rows) => rows.filter((row) => row !== id)), setLog("Reference removed."))}
         audioOn={audioOn}
         onAudioOn={setAudioOn}
         motion={motion}

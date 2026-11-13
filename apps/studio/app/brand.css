@@ -546,6 +546,9 @@ input[type="file"]::-webkit-file-upload-button {
 }
 .icon-btn:hover,
 .icon-btn:focus-visible { color: var(--ink); background: var(--hover); }
+/* The + tip starts at the button: a long reason ("FLUX Dev does not use references") stays on screen. */
+.image-bar-refs .dock-tip { left: 0; transform: none; z-index: 5; }
 .icon-btn .dock-tip { display: none; }
 .icon-btn:hover .dock-tip,
 .icon-btn:focus-visible .dock-tip { display: flex; }
+.icon-btn[aria-disabled="true"] { color: var(--mute); cursor: not-allowed; background: transparent; }

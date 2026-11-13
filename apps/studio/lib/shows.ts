@@ -376,6 +376,14 @@ export function episodeStats(
   return { shots: ids.length, approved, stale: countTakes(show, ids).stale, runtime };
 }
 
+/**
+ * True when a shot of the episode has an approved keyframe or video: what "Use approved takes"
+ * needs (`cut.use_approved` refuses with "no approved takes yet" otherwise, COREPRODUC-650 shows-11).
+ */
+export function hasApprovedTakes(show: OlfShow, episode: OlfEpisode | undefined): boolean {
+  return episodeShots(episode).some((id) => takesOf(show, id).some((take) => take.kind !== "audio" && take.status === "approved"));
+}
+
 /** The keyframe a video renders from: only `select.keyframe` (keyframes first). */
 export function chosenKeyframe(show: OlfShow, shotId: string): OlfTake | undefined {
   const name = show.shots[shotId]?.select?.keyframe;

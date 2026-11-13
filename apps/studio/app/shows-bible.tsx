@@ -107,7 +107,7 @@ export function BibleView({
           {kind === "character" ? (
             // The new image keeps the sheet's file name, so the character file does not change.
             <label className="ghost olf-file-btn" data-testid="replace-sheet" title={current ? `Replace ${current.image}` : "Add a sheet"}>
-              Replace sheet
+              {current ? "Replace sheet" : "Add a sheet"}
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/webp"

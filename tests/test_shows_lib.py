@@ -53,6 +53,7 @@ NAMES = [
     "choiceLabel",
     "autoLabel",
     "textStepQuestion",
+    "hasApprovedTakes",
 ]
 SHOW = """
 const take = (id, kind, stale, file) => ({ id, kind, status: "draft", stale, file });
@@ -93,6 +94,24 @@ eq(shownKeyframe(show, "e02/s03/sh016"), undefined, "no takes");
 eq(["e02/s03/sh014", "e02/s03/sh015", "e02/s03/sh016", "e02/s03/sh017"].map((id) => shotState(show, id)),
    ["stale", "fresh", "empty", "error"], "card states");
 eq(countTakes(show, Object.keys(show.shots)), { shots: 4, takes: 4, stale: 1 }, "counts");
+"""
+    )
+
+
+def test_has_approved_takes() -> None:
+    """COREPRODUC-650 shows-11: "Use approved takes" is off until a keyframe or video is approved."""
+    _run(
+        """
+const episode = { id: "e02", scenes: [{ id: "e02/s03", shots: Object.keys(show.shots) }] };
+eq(hasApprovedTakes(show, episode), false, "nothing approved");
+show.takes["e02/s03/sh015/kf1"].status = "approved";
+eq(hasApprovedTakes(show, episode), true, "an approved keyframe");
+eq(hasApprovedTakes(show, { id: "e01", scenes: [] }), false, "another episode");
+eq(hasApprovedTakes(show, undefined), false, "no episode");
+show.takes["e02/s03/sh015/kf1"].status = "draft";
+show.takes["e02/s03/sh014/a1"] = { id: "e02/s03/sh014/a1", kind: "audio", status: "approved" };
+show.shots["e02/s03/sh014"].takes.push("e02/s03/sh014/a1");
+eq(hasApprovedTakes(show, episode), false, "an approved dialogue take alone makes no cut");
 """
     )
 

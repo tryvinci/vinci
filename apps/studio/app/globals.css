@@ -188,7 +188,8 @@ a { color: var(--ink); }
   width: 100%; border: 1px solid hsl(160 18% 16%); background: hsl(160 22% 10%);
   color: var(--rail-ink); border-radius: 10px; padding: 9px 12px;
 }
-.all-tools-tabs { display: flex; flex-wrap: nowrap; gap: 4px; overflow-x: auto; }
+/* flex: none: the column squeezed the row to 13 px and cut the labels (COREPRODUC-650 image-12). */
+.all-tools-tabs { display: flex; flex: none; flex-wrap: nowrap; gap: 4px; overflow-x: auto; }
 .all-tools-tabs button {
   height: auto; padding: 4px 8px; border-radius: 999px; font-size: 11px; text-transform: capitalize;
   color: hsl(200 6% 70%);
@@ -572,8 +573,13 @@ textarea { min-height: 64px; max-height: 88px; resize: vertical; }
 .node-ref-add:disabled { color: var(--mute); cursor: not-allowed; }
 .node-ref-count { font-size: 11px; color: var(--dim); }
 .node-pills {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px 14px;
+  display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; padding: 12px 14px 14px;
 }
+/* One row: Count, Aspect and Resolution keep their size and the model chip gives way (ellipsis; its
+   title has the full name). With wrap, Kling 2.6 put 16:9 and 1K on a second row (COREPRODUC-650 canvas-7). */
+.node-pills > * { flex: none; }
+.node-pills > .node-pill:has([data-testid="node-model-chip"]) { flex: 0 1 auto; min-width: 0; }
+.node-pills .node-pill-btn { max-width: 100%; }
 .node-stepper {
   display: inline-flex; align-items: center; gap: 4px;
   border: 1px solid var(--line); border-radius: var(--pill); padding: 2px 4px; font-size: 12px;
@@ -584,7 +590,6 @@ textarea { min-height: 64px; max-height: 88px; resize: vertical; }
 }
 .node-stepper button:disabled { color: var(--mute); }
 .node-pill { position: relative; max-width: 9.5rem; }
-.node-pill-btn { max-width: 9.5rem; }
 .node-pill-menu {
   left: 0; right: auto; min-width: 168px; max-height: 220px; overflow: auto; z-index: 6;
 }
@@ -664,7 +669,12 @@ label { display: block; font-size: 11px; color: var(--mute); margin: 0 0 4px; le
 .connect-sheet.idle { background: transparent; box-shadow: none; }
 /* Connect on a host (own API keys, COREPRODUC-613): the provider cards side by side when there is room. */
 .keys.host-keys { max-width: 84rem; }
-.host-key-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 26rem)); gap: 14px; align-items: start; }
+/* auto-fit on the min size, capped at 3 cards: the open rail shrinks the cards and does not move one
+   to a second row (it did with tracks counted at 26rem, COREPRODUC-650 shell-10). */
+.host-key-list {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 14px; align-items: start;
+  max-width: calc(3 * 26rem + 28px);
+}
 .connect-sheet .kind { font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--teal); }
 .connect-routing { margin-top: 28px; padding-top: 4px; max-width: 26rem; }
 .lib-tabs { display: flex; gap: 6px; margin: 0 0 16px; }
@@ -1082,6 +1092,10 @@ input[type="range"] { accent-color: var(--teal); width: 100%; padding: 0; border
   gap: 6px; padding: 10px; opacity: 0; pointer-events: none;
   background: linear-gradient(180deg, transparent 28%, rgb(8 10 10 / 0.88));
   transition: opacity 120ms;
+}
+.image-card-hover a.image-card-open,
+.image-card-hover a.image-card-open:hover {
+  position: absolute; inset: 0; z-index: -1; padding: 0; border: 0; border-radius: 0; background: none; cursor: zoom-in;
 }
 .image-card:hover .image-card-hover,
 .image-card:focus-within .image-card-hover { opacity: 1; pointer-events: auto; }

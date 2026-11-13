@@ -6,6 +6,7 @@ import { asLibraryItem, mentionableItems, type LibraryItem } from "../lib/librar
 import {
   IMAGE_BATCH,
   qualityOptions,
+  takesReference,
   visibleControls,
   type ImageModel,
   type MentionRow,
@@ -81,6 +82,10 @@ export function ImagePromptBar({
   const resolutions = selected?.constraints?.resolutions || [];
   const qualities = qualityOptions(selected);
   const items: LibraryItem[] = mentionableItems(cast.map(asLibraryItem));
+  // A text-only model drops references, so do not take one (COREPRODUC-648). aria-disabled keeps the
+  // button focusable, so keyboard users see the reason in its tip too.
+  const refOff = Boolean(selected) && !takesReference(selected);
+  const refTip = refOff ? `${selected?.display_name || "This model"} does not use references` : "Add reference";
 
   const closeMenu = useCallback(() => setMenu(null), []);
   useMenuEscape(rootRef, closeMenu);
@@ -143,11 +148,12 @@ export function ImagePromptBar({
           type="button"
           className="icon-btn"
           data-testid="image-ref"
-          aria-label="Add reference"
-          onClick={() => fileRef.current?.click()}
+          aria-label={refTip}
+          aria-disabled={refOff}
+          onClick={() => !refOff && fileRef.current?.click()}
         >
           <DockIcon d={DOCK_ICON.add} />
-          <span className="dock-tip">Add reference</span>
+          <span className="dock-tip">{refTip}</span>
         </button>
         {refs.map((id) => (
           <button key={id} type="button" className="image-ref-chip" onClick={() => onRemoveRef(id)} title="Remove reference">

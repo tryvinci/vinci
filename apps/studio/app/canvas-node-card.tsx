@@ -141,6 +141,7 @@ function NodePill({
         className={"image-chip node-pill-btn" + (open ? " on" : "")}
         data-testid={testId}
         aria-label={label}
+        title={current?.label || placeholder}
         aria-haspopup="listbox"
         aria-expanded={open}
         onKeyDown={onKey}
