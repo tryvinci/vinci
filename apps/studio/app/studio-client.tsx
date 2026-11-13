@@ -381,6 +381,8 @@ type StudioHost = {
   /** The host app's home: the Vinci logo opens it in the top window. */
   home?: { title: string; href: string };
   keys?: string[];
+  /** The signed-in user of the host (COREPRODUC-629): the account menu shows them, not the host name. */
+  user?: { name?: string; email?: string; image?: string };
 };
 type Doctor = {
   live_spend?: boolean;
@@ -2660,7 +2662,7 @@ export function StudioClient() {
   // A host (Vinci Platform) serves only the pages it lists; the local daemon serves them all.
   const hostPages = doctor.host?.pages;
   const served = (id: PageId) => !hostPages?.length || hostPages.includes(id);
-  const accountName = doctor.host?.name || (live.length ? live.map(([id, row]) => row.display_name || id).join(" · ") : "Local");
+  const accountName = doctor.host?.user?.name || doctor.host?.name || (live.length ? live.map(([id, row]) => row.display_name || id).join(" · ") : "Local");
   const spent = projectRuns.reduce((sum, r) => sum + Number(r.estimate?.total || 0), 0);
   const popoverTools = filterTools(toolsQuery, toolsCategory).filter((tool) => served(tool.page));
   // Only tabs with tools this Studio serves. Bug fixed (first occurrence 2026-11-12, live UI check): on a
@@ -4629,9 +4631,15 @@ export function StudioClient() {
             }}
           >
             <span className="avatar-face" aria-hidden="true">
-              {accountName === "Local" ? "V" : accountName.slice(0, 1).toUpperCase()}
+              {doctor.host?.user?.image ? (
+                <img src={doctor.host.user.image} alt="" referrerPolicy="no-referrer" />
+              ) : accountName === "Local" ? (
+                "V"
+              ) : (
+                accountName.slice(0, 1).toUpperCase()
+              )}
             </span>
-            <span className="rail-label">{accountName}</span>
+            <span className="rail-label" title={doctor.host?.user?.email}>{accountName}</span>
           </button>
           {avatarOpen ? (
             <div className="avatar-menu" role="menu">
