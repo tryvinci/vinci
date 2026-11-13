@@ -80,4 +80,17 @@ test.describe("Hosted shell", () => {
     await expect(page.locator(".top h1")).toHaveText("Connect");
     await expect(page.locator(".avatar-menu")).toHaveCount(0);
   });
+
+  // Bug fixed (first occurrence 2026-11-13, 1 report, phone screenshot): each flyout in the phone drawer
+  // was a glass card with a "Features" heading on its edge, and "Create Image" repeated "Image".
+  test("on a phone the drawer has no flyout cards and no repeated rows", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openHosted(page);
+    await page.locator(".rail-menu").click();
+    const drawer = page.locator("nav#studio-rail");
+    await expect(drawer.getByRole("button", { name: "Video" })).toBeVisible();
+    await expect(drawer.locator(".rail-flyout-h:visible")).toHaveCount(0);
+    await expect(drawer.locator(".flyout-row:visible")).toHaveCount(0);
+    await expect(drawer.locator(".rail-flyout").first()).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  });
 });

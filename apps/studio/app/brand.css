@@ -455,7 +455,8 @@ input[type="file"]::-webkit-file-upload-button {
 }
 /* A menu that opens from the rail cannot be glass. The rail blurs its own backdrop, so a blur
    inside it sees only the rail, and the page showed through these menus sharp. They get the solid
-   fallback. On a narrow screen the flyout sits inside the open rail and stays as it is. */
+   fallback. On a narrow screen the rail is a drawer over the page: it is solid too (the page showed
+   through it), and the flyout inside it is plain rows with no fill of its own. */
 .rail .avatar-menu { background: var(--glass-fallback); }
 /* The same holds for each menu that opens inside another glass surface: the Image and Video model
    pickers in their bars, the chip menus, a canvas node's pill menu, the dock and float menus. */
@@ -465,6 +466,10 @@ input[type="file"]::-webkit-file-upload-button {
 }
 @media (min-width: 961px) {
   .rail-flyout { background: var(--glass-fallback); }
+}
+@media (max-width: 960px) {
+  .rail { background: var(--glass-fallback); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .rail-flyout { background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 .space-switch {
   display: flex; gap: 2px; padding: 3px; border-radius: 16px;
