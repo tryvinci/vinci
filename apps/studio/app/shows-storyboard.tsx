@@ -22,7 +22,7 @@ import {
   shotState,
   shownKeyframe,
   spendText,
-  takeName,
+  shotLabel,
   takesSummary,
 } from "../lib/shows";
 import { Confirm, OlfOnly, Pick, PillFrame, StalePill, StatusPill } from "./shows-parts";
@@ -90,6 +90,7 @@ export function StoryboardView({
   const [script, setScript] = useState<string | null>(null); // null: the script panel is closed
   const [view, setView] = useState<OlfScriptPreview | null>(null);
   const blocked = locked || !batches || Object.keys(busy).length > 0;
+  const [adding, setAdding] = useState(false); // the script's scenes are being written: one click only
   const stale = readyJobs(batches?.stale).length;
   const animate = readyJobs(batches?.animate).length;
   /** Start a batch. A paid batch, or one with a model that has no flat price, asks once for the whole batch. */
@@ -117,6 +118,7 @@ export function StoryboardView({
                 type="button"
                 className="ghost"
                 disabled={locked}
+                title={locked ? LOCKED : undefined}
                 aria-pressed={script !== null}
                 onClick={() => setScript(script === null ? "" : null)}
                 data-testid="script-open"
@@ -179,6 +181,11 @@ export function StoryboardView({
           )}
         </div>
       </header>
+      {locked ? (
+        <p className="olf-locked" role="status" data-testid="shows-locked">
+          {LOCKED}
+        </p>
+      ) : null}
       {previs.result ? (
         <ul className="olf-export-files olf-previs" data-testid="previs-files">
           {previs.result.files.map((file) => (
@@ -200,9 +207,15 @@ export function StoryboardView({
             <button
               type="button"
               className="run"
-              disabled={!view?.shots}
+              disabled={!view?.shots || adding}
               onClick={async () => {
-                if (await onImportScript(script)) setScript(null);
+                // A second click while the first one writes would add the scenes twice (COREPRODUC-642).
+                setAdding(true);
+                try {
+                  if (await onImportScript(script)) setScript(null);
+                } finally {
+                  setAdding(false);
+                }
               }}
               data-testid="script-add"
             >
@@ -259,7 +272,7 @@ function AddShot({ locked, onAdd }: { locked: boolean; onAdd: (fields: ShotField
   const [framing, setFraming] = useState("medium");
   if (!open) {
     return (
-      <button type="button" className="olf-card olf-add" disabled={locked} onClick={() => setOpen(true)} data-testid="add-shot">
+      <button type="button" className="olf-card olf-add" disabled={locked} title={locked ? LOCKED : undefined} onClick={() => setOpen(true)} data-testid="add-shot">
         + Add shot
       </button>
     );
@@ -295,7 +308,7 @@ function AddScene({ locked, first, onAdd }: { locked: boolean; first: boolean; o
   const [heading, setHeading] = useState("");
   if (!open && !first) {
     return (
-      <button type="button" className="ghost olf-small olf-add-scene" disabled={locked} onClick={() => setOpen(true)} data-testid="add-scene">
+      <button type="button" className="ghost olf-small olf-add-scene" disabled={locked} title={locked ? LOCKED : undefined} onClick={() => setOpen(true)} data-testid="add-scene">
         + Add scene
       </button>
     );
@@ -311,10 +324,16 @@ function AddScene({ locked, first, onAdd }: { locked: boolean; first: boolean; o
       }}
       data-testid="add-scene-form"
     >
-      {first ? <p className="muted">This episode has no scenes yet. Add the first scene, then its shots.</p> : null}
+      {first ? <p className="muted">This episode has no scenes yet. Write its heading (where and when), then Add scene.</p> : null}
       <div className="olf-row">
         <input className="olf-input olf-grow" value={heading} onChange={(e) => setHeading(e.target.value)} placeholder="INT. LAMP ROOM - NIGHT" aria-label="Scene heading" autoFocus={!first} />
-        <button type="submit" className="run olf-small" disabled={locked || !heading.trim()}>
+        <button
+          type="submit"
+          className="run olf-small"
+          disabled={locked || !heading.trim()}
+          title={locked ? LOCKED : heading.trim() ? undefined : "Write the scene heading first, for example INT. LAMP ROOM - NIGHT."}
+          data-testid="add-scene-submit"
+        >
           Add scene
         </button>
         {first ? null : (
@@ -326,6 +345,10 @@ function AddScene({ locked, first, onAdd }: { locked: boolean; first: boolean; o
     </form>
   );
 }
+
+// A show with errors is locked: say why, on the page and on each locked control. Bug fixed (first
+// occurrence, 2026-11-13 production crawl, COREPRODUC-642): Add shot and Add scene were off with no reason.
+const LOCKED = "This show has errors. Fix them on the Issues page to add or render shots.";
 
 /** One shot on the storyboard: its keyframe (else its framing), its state and its tags. A click opens it. */
 function ShotCard({ show, id, busy, onOpen }: { show: OlfShow; id: string; busy?: string; onOpen: () => void }) {
@@ -371,7 +394,7 @@ function ShotCard({ show, id, busy, onOpen }: { show: OlfShow; id: string; busy?
       </span>
       <span className="olf-card-body">
         <span className="olf-card-line">
-          <code>{takeName(id)}</code>
+          <code>{shotLabel(id)}</code>
           <span>{frames(shot.duration)}</span>
         </span>
         <span className="olf-card-desc">{shot.error || shot.description}</span>
@@ -421,7 +444,7 @@ export function ShotsTable({
                   <td>
                     {/* A button for the keyboard; its click reaches the row's handler. */}
                     <button type="button" className="olf-link" aria-label={`Open shot ${id}`}>
-                      <code>{takeName(id)}</code>
+                      <code>{shotLabel(id)}</code>
                     </button>
                   </td>
                   <td>{scene.heading || scene.id}</td>

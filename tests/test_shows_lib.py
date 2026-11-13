@@ -6,6 +6,7 @@ from ts_module import run_ts
 
 LIB = "apps/studio/lib/shows.ts"
 NAMES = [
+    "shotLabel",
     "takesOf",
     "shownKeyframe",
     "shotState",
@@ -331,3 +332,12 @@ eq(cameraworkMenu(mine, [tu, talk]).map((g) => [g.label, g.rows.map((r) => r.val
 eq(cameraworkMenu(mine, []).length, 1, "an older daemon has no library: the show's own templates stay");
 """
     )
+
+
+def test_shot_label_keeps_the_scene() -> None:
+    """COREPRODUC-642 (STU-05): two shots of one episode both read "sh010" in the Shots table."""
+    _run("""
+if (shotLabel("e01/s01/sh010") !== "s01/sh010") throw new Error("s01");
+if (shotLabel("e01/s02/sh010") === shotLabel("e01/s01/sh010")) throw new Error("labels must differ");
+if (shotLabel("sh010") !== "sh010") throw new Error("bare id");
+""")

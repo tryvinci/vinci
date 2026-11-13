@@ -53,6 +53,8 @@ export function HostKeys(props: {
   onRemove: (id: string) => void;
   onSignIn: (id: string) => void;
   log: string;
+  /** The log is an error (the last save failed). */
+  error?: boolean;
 }) {
   const { draft, setDraft } = props;
   return (
@@ -149,7 +151,7 @@ export function HostKeys(props: {
         })}
       </div>
       {props.log ? (
-        <p className="log" role="status">
+        <p className={props.error ? "log error" : "log"} role={props.error ? "alert" : "status"} data-testid="host-keys-log">
           {props.log}
         </p>
       ) : null}

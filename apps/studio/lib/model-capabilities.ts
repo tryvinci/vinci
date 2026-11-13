@@ -264,6 +264,18 @@ export function isUnpriced(model: { provider?: string; pricing?: { amount?: numb
   return model.provider !== "mock" && !(Number(model.pricing?.amount) > 0);
 }
 
+/**
+ * A model's price for lists and cards: "$0.040", "from $0.210" (a clip with a price per length), or
+ * "price varies". Bug fixed (first occurrence, 2026-11-13 production crawl, COREPRODUC-642): only the
+ * Generate button showed a price, so a model was picked blind.
+ */
+export function priceText(model: { provider?: string; pricing?: { amount?: number; currency?: string; clip_prices?: Record<string, number> } }): string {
+  if (isUnpriced(model)) return PRICE_VARIES;
+  const table = Object.values(model.pricing?.clip_prices || {}).map(Number).filter((n) => n > 0);
+  const from = table.length > 1 ? Math.min(...table) : undefined;
+  return from !== undefined ? `from ${money(from, model.pricing?.currency)}` : money(model.pricing?.amount, model.pricing?.currency);
+}
+
 /** Unit of every price in this Studio: USD (local daemon) or credits (a host that bills in credits). */
 let priceUnit: "usd" | "credits" = "usd";
 

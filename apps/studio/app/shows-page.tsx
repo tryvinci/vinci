@@ -85,11 +85,31 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
   const cutEpisode = route.view === "cut" ? route.episode : null;
   const boardEpisode = route.view === "storyboard" ? route.episode : null;
 
-  const open = useCallback(async (path: string, keepView = false) => {
+  // The newest load wins. Bug fixed (first occurrence, 2026-11-13 production crawl, COREPRODUC-642): a
+  // new episode showed only after Reload; an older /project answer (a render poll) could land last.
+  // A reload (`keepView`) is for the show on screen only: it never replaces a show being opened.
+  const openRun = useRef(0);
+  const shownPath = useRef<string | null>(null);
+  const opening = useRef(false);
+  useEffect(() => {
+    shownPath.current = show?.path ?? null;
+  }, [show]);
+  /** Load a show; returns true when its answer was shown. */
+  const open = useCallback(async (path: string, keepView = false): Promise<boolean> => {
+    if (keepView && (opening.current || path !== shownPath.current)) {
+      console.info("[shows] reload skipped: another show is on screen or opening", { path });
+      return false;
+    }
+    const run = ++openRun.current;
+    if (!keepView) opening.current = true;
     setLoading(true);
     setError("");
     try {
       const body = await olf<OlfShow>(`/project?path=${encodeURIComponent(path)}`);
+      if (run !== openRun.current) {
+        console.info("[shows] older load dropped", { path, run });
+        return false;
+      }
       setShow(body);
       setRecent((rows) => pushRecent(rows, body.path));
       if (!keepView) setRoute(firstRoute(body));
@@ -99,15 +119,21 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
         takes: Object.keys(body.takes).length,
         issues: body.issues.length,
       });
+      return true;
     } catch (err) {
+      if (run !== openRun.current) return false; // a newer load owns the page
       // With a show open, the open screen (which shows `error`) is hidden, so a reload uses the notice.
       if (keepView) setNotice(message(err));
       else {
         setError(message(err));
         setShow(null);
       }
+      return false;
     } finally {
-      setLoading(false);
+      if (run === openRun.current) {
+        setLoading(false);
+        opening.current = false;
+      }
     }
   }, []);
 
@@ -345,8 +371,8 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
     try {
       const out = await olf<T>(route, send(method, { path: show.path, ...body }));
       console.info("[shows] authored", method, route, Object.keys(body)); // keys only: images are base64
-      if (done) setNotice(done(out));
-      await open(show.path, true);
+      // After the reload: the notice and the new item show together. A failed reload keeps its own notice.
+      if ((await open(show.path, true)) && done) setNotice(done(out));
       return out;
     } catch (err) {
       setNotice(message(err));

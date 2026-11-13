@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKey } from "react";
 import type { ComboModel } from "./model-combo";
 import { DockIcon, DOCK_ICON } from "./ui/icons";
-import { REF_LIMIT, showsCount, showsFrame, usesPagePrompt } from "../lib/canvas-node";
+import { REF_LIMIT, showsCount, showsFrame, usesPagePrompt, wiredPrompt } from "../lib/canvas-node";
 import type { GraphNode } from "../lib/canvas-graph";
 import type { LibraryItem } from "../lib/library";
 import { PromptMention } from "./prompt-mention";
@@ -224,6 +224,7 @@ export function CanvasNodeCard({
   const cap = node.capability;
   const generate = node.type === "generate";
   const pagePrompt = usesPagePrompt(node.params);
+  const wired = wiredPrompt(node.params);
   return (
     <>
       <div className="thumb">
@@ -234,7 +235,7 @@ export function CanvasNodeCard({
       <div className="node-caption">
         <strong className="node-title">{label}</strong>
         <p className="node-sub" title={runState?.state === "error" ? runState.error : undefined}>
-          {needs ? <span className="needs">{needs}</span> : runState?.state === "error" ? "Run failed. Check the prompt and try again." : subtitle}
+          {needs ? <span className="needs">{needs}</span> : runState?.state === "error" ? runState.error || "Run failed. Check the prompt and try again." : subtitle}
         </p>
       </div>
       {cap === "media" && onUpload ? (
@@ -264,7 +265,7 @@ export function CanvasNodeCard({
             mentionTestId="canvas-mention"
             value={prompt}
             items={library}
-            placeholder={pagePrompt ? "Using the page prompt. Type here to override it." : placeholder || "Describe what to generate"}
+            placeholder={wired ? "Using the wired text. Type here to add to it." : pagePrompt ? "Using the page prompt. Type here to override it." : placeholder || "Describe what to generate"}
             textareaRef={promptRef}
             onPointerDown={(ev) => ev.stopPropagation()}
             onFocus={onPromptFocus}
@@ -272,6 +273,7 @@ export function CanvasNodeCard({
             onChange={onPromptChange}
             onPick={(item) => onMention?.(item)}
           />
+          {wired && prompt ? <span className="node-wired">+ text from the wired node</span> : null}
         </label>
       ) : null}
       {generate ? (
@@ -321,7 +323,7 @@ export function CanvasNodeCard({
           onChange={onModel}
           options={models.map((row) => ({
             id: row.id,
-            label: row.display_name || row.label || row.id,
+            label: row.label || row.display_name || row.id, // the label carries the price (comboModels)
           }))}
         />
         {showsFrame(cap) && aspects.length ? (

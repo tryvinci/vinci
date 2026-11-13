@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useMenuEscape } from "./ui/focus";
 import { asLibraryItem, mentionableItems, type LibraryItem } from "../lib/library";
 import {
   IMAGE_BATCH,
@@ -42,6 +43,7 @@ export function ImagePromptBar({
   cost,
   busy,
   disabled,
+  hint,
   onModelId,
   onGenerate,
 }: {
@@ -64,6 +66,8 @@ export function ImagePromptBar({
   cost: string;
   busy: boolean;
   disabled: boolean;
+  /** Why Generate is off (shown above the button and as its title). */
+  hint?: string;
   onModelId: (id: string) => void;
   onGenerate: () => void;
 }) {
@@ -77,6 +81,9 @@ export function ImagePromptBar({
   const resolutions = selected?.constraints?.resolutions || [];
   const qualities = qualityOptions(selected);
   const items: LibraryItem[] = mentionableItems(cast.map(asLibraryItem));
+
+  const closeMenu = useCallback(() => setMenu(null), []);
+  useMenuEscape(rootRef, closeMenu);
 
   useEffect(() => {
     const onDown = (ev: PointerEvent) => {
@@ -164,6 +171,7 @@ export function ImagePromptBar({
           mentionTestId="image-mention"
           rows={2}
           placeholder="Describe the still. Type @ to mention someone."
+          aria-label="Image prompt"
           value={prompt}
           items={items}
           textareaRef={(el) => {
@@ -202,6 +210,7 @@ export function ImagePromptBar({
           <ChipMenu
             testId="image-aspect"
             label={aspect || "Aspect"}
+            ariaLabel={`Aspect ratio: ${aspect || "not set"}`}
             open={menu === "aspect"}
             onToggle={() => setMenu(menu === "aspect" ? null : "aspect")}
             values={aspects}
@@ -217,6 +226,7 @@ export function ImagePromptBar({
             <ChipMenu
               testId="image-quality"
               label={quality || "Quality"}
+              ariaLabel={`Quality: ${quality || "not set"}`}
               open={menu === "quality"}
               onToggle={() => setMenu(menu === "quality" ? null : "quality")}
               values={qualities}
@@ -232,6 +242,7 @@ export function ImagePromptBar({
           <ChipMenu
             testId="image-resolution"
             label={resolution || "Resolution"}
+            ariaLabel={`Resolution: ${resolution || "not set"}`}
             open={menu === "resolution"}
             onToggle={() => setMenu(menu === "resolution" ? null : "resolution")}
             values={resolutions}
@@ -245,6 +256,7 @@ export function ImagePromptBar({
         <ChipMenu
           testId="image-batch"
           label={String(batch)}
+          ariaLabel={`Images per run: ${batch}`}
           open={menu === "batch"}
           onToggle={() => setMenu(menu === "batch" ? null : "batch")}
           values={IMAGE_BATCH.map(String)}
@@ -260,11 +272,17 @@ export function ImagePromptBar({
         type="button"
         data-testid="image-generate"
         disabled={disabled}
+        title={hint || undefined}
         onClick={onGenerate}
       >
         <span>{busy ? "Generating…" : "Generate"}</span>
         <span>{cost}</span>
       </button>
+      {hint && !busy ? (
+        <p className="run-hint" role="status" data-testid="image-blocked">
+          {hint}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -272,6 +290,7 @@ export function ImagePromptBar({
 function ChipMenu({
   testId,
   label,
+  ariaLabel,
   open,
   onToggle,
   values,
@@ -280,6 +299,8 @@ function ChipMenu({
 }: {
   testId: string;
   label: string;
+  /** Name for screen readers when the visible label is only a value ("1", "16:9"). */
+  ariaLabel?: string;
   open: boolean;
   onToggle: () => void;
   values: string[];
@@ -288,7 +309,7 @@ function ChipMenu({
 }) {
   return (
     <div className="image-chip-wrap">
-      <button type="button" className={"image-chip" + (open ? " on" : "")} data-testid={testId} aria-expanded={open} onClick={onToggle}>
+      <button type="button" className={"image-chip" + (open ? " on" : "")} data-testid={testId} aria-expanded={open} aria-label={ariaLabel} onClick={onToggle}>
         {label}
       </button>
       {open ? (

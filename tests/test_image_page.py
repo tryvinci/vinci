@@ -16,6 +16,7 @@ NAMES = [
     "feedFromRuns",
     "filterMentions",
     "generateCost",
+    "imageBlock",
     "imageModels",
     "insertMention",
     "isImageModel",
@@ -243,3 +244,41 @@ def test_studio_wires_image_page_and_animate_to_video() -> None:
     assert "Use as reference" in feed
     assert "Animate" in feed
     assert "Copy prompt" in feed
+
+
+def test_image_block_reasons() -> None:
+    """An empty prompt keeps Generate off with a reason (COREPRODUC-638: it ran "north-light oak cube")."""
+    script = """
+const eq = (a, b, m) => { if (a !== b) throw new Error(m + ": " + JSON.stringify(a)); };
+const t2i = { id: "s", capabilities: ["t2i", "i2i"] };
+const edit = { id: "e", capabilities: ["i2i"] };
+eq(imageBlock(t2i, "", 0), "Describe the still first.", "empty");
+eq(imageBlock(t2i, "", 1), "Describe the still first.", "empty with a reference");
+eq(imageBlock(t2i, "a cat", 0), "", "prompt");
+eq(imageBlock(edit, "a cat", 0), "This model edits a still. Add a reference first.", "edit, no reference");
+eq(imageBlock(edit, "", 1), "", "edit model with its reference");
+"""
+    result = _run(script)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_keyboard_escape_focus_and_names() -> None:
+    """COREPRODUC-642 (STU-12, 13, 23): Escape, focus return, and accessible names."""
+    app = ROOT / "apps" / "studio" / "app"
+    bar = (app / "image-prompt-bar.tsx").read_text(encoding="utf-8")
+    assert "useMenuEscape(rootRef, closeMenu)" in bar
+    assert 'aria-label="Image prompt"' in bar and "Images per run: ${batch}" in bar
+    assert "useMenuEscape(rootRef, closeMenu)" in (app / "video-panel.tsx").read_text(encoding="utf-8")
+    assert "useDialogFocus(rootRef)" in (app / "video-preset-overlay.tsx").read_text(encoding="utf-8")
+    assert "toolsBtnRef.current?.focus()" in (app / "studio-client.tsx").read_text(encoding="utf-8")
+
+
+def test_cards_show_the_length_range() -> None:
+    """COREPRODUC-642 (STU-18): the Seedance card said "30s" while tiles stopped at 15s."""
+    script = """
+const chips = capabilityChips({ id: "s", capabilities: ["t2v"], constraints: { max_duration: 30, durations: [4, 5, 30] } });
+if (!chips.includes("4–30s")) throw new Error(JSON.stringify(chips));
+if (!capabilityChips({ id: "k", capabilities: ["t2v"], constraints: { max_duration: 10 } }).includes("10s")) throw new Error("max only");
+"""
+    result = _run(script)
+    assert result.returncode == 0, result.stderr or result.stdout

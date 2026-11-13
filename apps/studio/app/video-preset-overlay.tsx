@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useDialogFocus } from "./ui/focus";
 import {
   filterPresets,
   modelFamily,
@@ -10,6 +11,7 @@ import {
   type VideoModel,
 } from "../lib/video-page";
 import { capabilityChips, modelBadges, modelBlurb } from "../lib/image-page";
+import { priceText } from "../lib/model-capabilities";
 
 const FILE = "/vinci-api/assets";
 
@@ -44,6 +46,8 @@ export function VideoPresetOverlay({
   const tabs = presetTabs(models);
   const chips = presetFilterChips(models);
   const cards = filterPresets(models, tab, chip, query);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(rootRef);
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
@@ -54,7 +58,7 @@ export function VideoPresetOverlay({
   }, [onClose]);
 
   return (
-    <div className="video-overlay" data-testid="video-preset-overlay" role="dialog" aria-label="Video presets">
+    <div className="video-overlay" data-testid="video-preset-overlay" role="dialog" aria-modal="true" aria-label="Video presets" ref={rootRef}>
       <div className="video-overlay-bar">
         <div className="video-overlay-tabs">
           {tabs.map((name) => (
@@ -129,6 +133,9 @@ export function VideoPresetOverlay({
                 )}
               </div>
               <strong>{row.display_name}</strong>
+              <span className="image-picker-price" data-testid="model-price">
+                {priceText(row)}
+              </span>
               <span className="video-preset-blurb">{modelBlurb(row)}</span>
               <span className="image-picker-chips">
                 {badges.map((b) => (

@@ -72,6 +72,9 @@ NAMES = [
     "scopeNodes",
     "instanceNodes",
     "isEdited",
+    "inlineText",
+    "unrunnableSource",
+    "expandCounts",
 ]
 
 # Shared fixture: a t2i still feeding nothing yet, plus an upscale and an i2v.
@@ -739,4 +742,57 @@ const straight = wirePath(a, b, "media", "straight");
 if (!straight.includes("L") || straight.includes("C") || straight.includes("Q")) throw new Error("straight path " + straight);
 eq(shortcutFor({ key: "c" }), "comment", "c places a comment");
 eq(shortcutFor({ key: "d" }), "fit", "plain d still fits");
+""")
+
+
+def test_text_nodes_are_inlined_before_a_run() -> None:
+    """COREPRODUC-640: a Text node wired into Image Gen failed ("needs the output of text-…")."""
+    _check("""
+const text = { id: "text-1", type: "transform", capability: "text", params: { prompt: "a red fox" } };
+const img = gen("img", "t2i", { prompt: "{{inputs.prompt}}" });
+let g = connect({ nodes: [text, img], edges: [] }, "text-1", "img").graph;
+eq(param(g, "img", "prompt"), nodeRef("text-1"), "wire into an empty prompt");
+const filled = inlineText(g);
+eq(param(filled, "img", "prompt"), "a red fox", "text is in the prompt");
+eq(runtimeGraph(filled).nodes.map((n) => n.id), ["img"], "the Text node stays off the runtime");
+eq(param(g, "img", "prompt"), nodeRef("text-1"), "the canvas keeps the wire");
+eq(unrunnableSource(filled, ["img"]), null, "nothing left to run on the canvas");
+const ask = { id: "ask", type: "transform", capability: "assistant", params: { prompt: "write" } };
+const g2 = { nodes: [ask, gen("v", "t2i", { prompt: nodeRef("ask") })], edges: [{ src: "ask", dst: "v" }] };
+eq(unrunnableSource(inlineText(g2), ["v"])?.id, "ask", "an Assistant cannot feed a run yet");
+""")
+
+
+def test_text_wire_keeps_the_typed_prompt() -> None:
+    """COREPRODUC-642 (STU-21): wiring a Text node replaced the prompt typed in Image Gen."""
+    _check("""
+const text = { id: "t", type: "transform", capability: "text", params: { prompt: "at dusk" } };
+const img = gen("img", "t2i", { prompt: "a lighthouse" });
+let g = connect({ nodes: [text, img], edges: [] }, "t", "img").graph;
+eq(param(g, "img", "prompt"), "a lighthouse\\n" + nodeRef("t"), "typed text stays, wire after it");
+eq(connect(g, "t", "img").graph, g, "same wire again is a no-op");
+eq(param(inlineText(g), "img", "prompt"), "a lighthouse\\nat dusk", "the run reads both");
+const cut = disconnect(g, "t", "img");
+eq(param(cut, "img", "prompt"), "a lighthouse", "unwire keeps the typed text");
+eq(cut.edges, [], "no edge left");
+const made = addNode({ nodes: [text], edges: [] }, gen("new", "t2i", { prompt: "seeded page prompt" }), "t");
+eq(param(made, "new", "prompt"), nodeRef("t"), "a node made from the Text output takes the wire alone");
+""")
+
+
+def test_count_expands_into_seeded_copies() -> None:
+    """COREPRODUC-642 (STU-06): count 2 sent one job, gave 1 picture and showed the price of 1."""
+    _check("""
+const src = gen("src", "t2i", { prompt: "p" });
+const two = gen("two", "i2v", { image: nodeRef("src"), count: 2, num_images: 2 });
+const out = expandCounts({ nodes: [src, two], edges: [{ src: "src", dst: "two", input_key: "image" }] }, 100);
+eq(out.nodes.map((n) => n.id), ["src", "two", "two-copy2"], "one node per output");
+eq(out.nodes.slice(1).map((n) => n.params.seed), [100, 101], "own seeds");
+eq(out.nodes[1].params.count, undefined, "count is gone");
+eq(out.nodes[2].params.num_images, undefined, "num_images is gone");
+eq(out.edges.map((e) => e.dst), ["two", "two-copy2"], "copies keep their inputs");
+const seeded = expandCounts({ nodes: [gen("s", "t2i", { seed: 7, count: 2 })], edges: [] }, 100);
+eq(seeded.nodes.map((n) => n.params.seed), [7, 8], "a set seed counts up");
+const one = gen("one", "t2i", { count: 1 });
+eq(expandCounts({ nodes: [one], edges: [] }, 1).nodes[0], one, "count 1 is unchanged");
 """)

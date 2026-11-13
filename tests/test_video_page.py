@@ -27,6 +27,7 @@ NAMES = [
     "presetTabs",
     "supportsEndFrame",
     "toggleFavorite",
+    "videoBlock",
     "videoModels",
     "visibleVideoControls",
     "withPendingCards",
@@ -65,6 +66,9 @@ if (durationOptions(10, [5, 10]).join() !== "5,10") throw new Error("kling 2.6: 
 if (durationOptions(8, [4, 6, 8]).join() !== "4,6,8") throw new Error("veo 3.1 fast");
 const kling3 = Array.from({ length: 13 }, (_, i) => i + 3); // 3..15 s
 if (durationOptions(15, kling3).join() !== "3,5,6,8,10,15") throw new Error("kling 3: Studio picks among them");
+// Seedance 2.5 prices 4 to 30 s: the longest stays a tile (COREPRODUC-642, STU-18).
+const seedance = Array.from({ length: 27 }, (_, i) => i + 4);
+if (durationOptions(30, seedance).join() !== "5,6,8,10,15,30") throw new Error("seedance: " + durationOptions(30, seedance));
 if (closestAspect(960, 540, ["16:9", "9:16", "1:1"]) !== "16:9") throw new Error("landscape");
 if (closestAspect(540, 960, ["16:9", "9:16"]) !== "9:16") throw new Error("portrait");
 const mock = {
@@ -160,6 +164,8 @@ if (lib.length !== 1 || lib[0].assetId !== "vid") throw new Error("library filte
 def test_how_steps_cost_and_demo_default() -> None:
     script = """
 if (VIDEO_HOW_STEPS.length !== 3) throw new Error("how steps");
+// Card 2 said "Pick a preset" over "Press Change to pick a model" (COREPRODUC-642, STU-24).
+if (VIDEO_HOW_STEPS[1].title !== "Pick a model") throw new Error("step 2 title");
 if (VIDEO_TABS.join() !== "Create,Edit,Motion control") throw new Error("tabs");
 if (generateCost(0.35) !== 0.35) throw new Error("cost");
 if (toggleFavorite(["a"], "a").length !== 0) throw new Error("unfav");
@@ -201,3 +207,34 @@ def test_studio_wires_video_page_and_reuses_image_pieces() -> None:
     feed = (ROOT / "apps" / "studio" / "app" / "image-feed.tsx").read_text(encoding="utf-8")
     assert "onExtend" in feed
     assert "Extend" in feed
+
+
+def test_video_block_reasons() -> None:
+    """Generate is off with a reason: no hidden default prompt, no silent i2v block (COREPRODUC-638)."""
+    script = """
+const eq = (a, b, m) => { if (a !== b) throw new Error(m + ": " + JSON.stringify(a)); };
+const t2v = { id: "t", capabilities: ["t2v"] };
+const both = { id: "b", capabilities: ["t2v", "i2v"] };
+const i2v = { id: "h", capabilities: ["i2v"] };
+eq(videoBlock(t2v, { prompt: "  " }), "Describe the shot first.", "empty prompt");
+eq(videoBlock(t2v, { prompt: "a cat" }), "", "prompt");
+eq(videoBlock(i2v, { prompt: "a cat" }), "This model needs a start frame. Add one above.", "i2v no frame");
+eq(videoBlock(i2v, { prompt: "", startId: "f" }), "", "animate a frame with no prompt");
+eq(videoBlock(both, { prompt: "", startId: "f" }), "", "both caps, frame");
+eq(videoBlock(both, { prompt: "" }), "Describe the shot first.", "both caps, nothing");
+eq(videoBlock(t2v, { prompt: "", extendMode: true }), "Add a clip or its last frame.", "extend empty");
+eq(videoBlock(t2v, { prompt: "", extendMode: true, clipId: "c" }), "", "extend clip");
+"""
+    result = _run(script)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_video_page_runs_only_its_own_inputs() -> None:
+    """COREPRODUC-639/641: Video animates its start frame only; Motion control has no Generate."""
+    client = (ROOT / "apps" / "studio" / "app" / "studio-client.tsx").read_text(encoding="utf-8")
+    assert "oak cube" not in client
+    assert 'page === "video" ? imageAssetId(firstFrameId)' in client
+    assert "const still = pageStill() || previous;" in client
+    panel = (ROOT / "apps" / "studio" / "app" / "video-panel.tsx").read_text(encoding="utf-8")
+    assert 'tab === "Create" ? (' in panel and 'data-testid="video-generate"' in panel
+    assert 'data-testid="video-blocked"' in panel

@@ -20,6 +20,8 @@ import { LibraryPage } from "./library-page";
 import { ShowsPage } from "./shows-page";
 import { setShowsCredits } from "../lib/shows";
 import { VideoPage } from "./video-page";
+import { imageBlock } from "../lib/image-page";
+import { videoBlock } from "../lib/video-page";
 import { type ComboModel } from "./model-combo";
 import { VinciLogo } from "./ui/logo";
 import { DockIcon, DOCK_ICON } from "./ui/icons";
@@ -53,6 +55,7 @@ import {
   OPTICAL_NEUTRAL,
   pickListed,
   promptValue,
+  typedPrompt,
   REF_LIMIT,
   refsOf,
   removeRef,
@@ -100,6 +103,9 @@ import {
   runSet,
   RUN_SCOPES,
   runtimeGraph,
+  expandCounts,
+  inlineText,
+  unrunnableSource,
   setEdgeStyle,
   setParams,
   settle,
@@ -153,6 +159,8 @@ import {
   isCommandHotkey,
   moveCommandIndex,
   parsePinned,
+  pageFromUrl,
+  DRAFT_STORAGE_KEY,
   pickCommandHit,
   railItemOn,
   serializePinned,
@@ -348,8 +356,8 @@ type Run = {
     steps?: unknown;
   };
   exported_outputs?: ExportedOutputRow[];
-  estimate?: { total?: number };
-  nodes?: Record<string, { output?: string; outputs?: string[]; job_id?: string }>;
+  estimate?: { total?: number; usd?: number }; // usd: runs on the user's own key, on a host that bills in credits
+  nodes?: Record<string, { output?: string; outputs?: string[]; job_id?: string; error?: string }>;
   error?: unknown;
   workflow?: { nodes?: { model_id?: string; capability?: string }[] };
 };
@@ -442,11 +450,21 @@ const RUN_GOING = new Set(["created", "queued", "running"]);
  *   The run in a final state (completed, failed, cancelled or awaiting_approval).
  */
 async function startRun(payload: object): Promise<Run> {
-  let run = await api<Run>("/runs", {
+  return waitRun(await postRun(payload));
+}
+
+/** POST /runs: a host answers at once (its admission checks credits); the local daemon when the run ends. */
+async function postRun(payload: object): Promise<Run> {
+  return api<Run>("/runs", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+/** Poll a run until it reaches a final state. */
+async function waitRun(first: Run): Promise<Run> {
+  let run = first;
   while (run.state && RUN_GOING.has(run.state)) {
     await new Promise((done) => setTimeout(done, 2000));
     run = await api<Run>(`/runs/${encodeURIComponent(run.id)}`);
@@ -646,6 +664,22 @@ function graphFromSkill(
 }
 
 /** No <title>: the rail shows its labels, and a tooltip covered them. The button has the aria-label. */
+/** The window whose URL the user sees: the host page around the Studio frame (same origin), else this one. */
+function topWindow(): Window {
+  try {
+    return window.top && window.top.location.href ? window.top : window;
+  } catch {
+    return window; // a frame from another origin
+  }
+}
+
+/** The page the visible URL names (`#video`, `?page=video`), or "". */
+function urlPage(): PageId | "" {
+  if (typeof window === "undefined") return "";
+  const { search, hash } = topWindow().location;
+  return pageFromUrl(search, hash);
+}
+
 function RailIcon({ d }: { d: string }) {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
@@ -660,6 +694,9 @@ export function StudioClient() {
   const [navOpen, setNavOpen] = useState(false);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const toolsOpenRef = useRef(false);
+  toolsOpenRef.current = toolsOpen;
+  const toolsBtnRef = useRef<HTMLButtonElement>(null);
   const [toolsQuery, setToolsQuery] = useState("");
   const [toolsCategory, setToolsCategory] = useState("all");
   const [commandOpen, setCommandOpen] = useState(false);
@@ -702,6 +739,7 @@ export function StudioClient() {
   const [duration, setDuration] = useState("");
   const [scale, setScale] = useState("4x");
   const [uploadId, setUploadId] = useState<string | null>(null);
+  const [keyError, setKeyError] = useState(false); // the last Connect save failed
   const [graphHistory, setGraphHistory] = useState(() => startHistory(EMPTY_GRAPH));
   const graph = graphHistory.present;
   /** Every canvas edit goes through here so it can be undone. */
@@ -802,7 +840,6 @@ export function StudioClient() {
   const [sessions, setSessions] = useState<{ id: string; name: string }[]>([]);
   const [onboardOpen, setOnboardOpen] = useState(false);
   const [onboardStep, setOnboardStep] = useState(0);
-  const [stageReset, setStageReset] = useState(false);
   const [modelsOpen, setModelsOpen] = useState(false);
   const [galleryQuery, setGalleryQuery] = useState("");
   const [pref, setPref] = useState("cheapest");
@@ -870,6 +907,8 @@ export function StudioClient() {
   const connectedKey = connected.join("\0");
   /** True after the user picks a model. Auto-defaults stay false so a new key can replace mock. */
   const modelTouched = useRef(false);
+  const urlReady = useRef(false); // boot has read the page from the URL; page changes may write it now
+  const [draftReady, setDraftReady] = useState(false); // the session draft was read back
   /** The model each page had (picked there, or its default when it was left): one modelId serves all pages, so a page restores it. */
   const pagePicks = useRef<Partial<Record<PageId, string>>>({});
   /** Each page's aspect, duration and resolution: one state serves all pages, so a page restores its own. */
@@ -1144,10 +1183,15 @@ export function StudioClient() {
         // A host bills in its own unit, serves some pages only, and has its own onboarding.
         setPriceUnit(host.currency);
         setShowsCredits(host.currency === "credits");
-        if (host.pages?.length) setPage((now) => (host.pages!.includes(now) ? now : host.pages![0]));
+        // The page the URL names when the host serves it (reload, a link, Back), else today's choice.
+        const asked = urlPage();
+        if (host.pages?.length) setPage((now) => (asked && host.pages!.includes(asked) ? asked : host.pages!.includes(now) ? now : host.pages![0]));
       } else {
         openOnboardOnce();
+        const asked = urlPage();
+        if (asked) setPage(asked);
       }
+      urlReady.current = true;
       setPref(doc.preference || "cheapest");
       setMonthlyCap(doc.budget?.monthly_cap_usd != null ? String(doc.budget.monthly_cap_usd) : "");
       const od = settingsBody.output_destination || { kind: "none" };
@@ -1359,11 +1403,20 @@ export function StudioClient() {
     return row?.mime?.startsWith("image/") ? id : null;
   }
 
+  /**
+   * The still this page animates or edits. Video uses its start frame only. Bug fixed (first
+   * occurrence, 2026-11-13 production crawl, COREPRODUC-639): a reference added on the Image page won
+   * over the Video start frame, and a paid clip started from the wrong picture.
+   */
+  function pageStill(): string | null {
+    return page === "video" ? imageAssetId(firstFrameId) : imageAssetId(uploadId) || imageAssetId(firstFrameId);
+  }
+
   function animateStill(model?: Model): boolean {
     const caps = model?.capabilities || [];
     if (!caps.includes("i2v")) return false;
     if (!caps.includes("t2v")) return true;
-    return Boolean(imageAssetId(uploadId) || imageAssetId(firstFrameId));
+    return Boolean(pageStill());
   }
 
   function skillFor(model?: Model): string {
@@ -1375,7 +1428,7 @@ export function StudioClient() {
     if (caps.includes("lipsync") && !videoJob) return "@tryvinci/lipsync";
     if (caps.includes("upscale") && !caps.includes("i2i") && !caps.includes("t2i") && !videoJob) return "@tryvinci/video-upscale";
     if ((caps.includes("i2i") || caps.includes("upscale")) && !videoJob && !caps.includes("t2i")) return "@tryvinci/image-upscale";
-    if (caps.includes("i2i") && caps.includes("t2i") && Boolean(imageAssetId(uploadId) || imageAssetId(firstFrameId)) && !videoJob) {
+    if (caps.includes("i2i") && caps.includes("t2i") && Boolean(pageStill()) && !videoJob) {
       return "@tryvinci/image-upscale";
     }
     if (videoJob) return "@tryvinci/video-generate";
@@ -1821,6 +1874,19 @@ export function StudioClient() {
       setLog("Models are still loading. Wait a moment and try again.");
       return;
     }
+    // The same rule as the page's Generate button, for a run that skips it (a page that rerenders late).
+    const pageRun = !opts?.nodeIds?.length && !opts?.graph && !(page === "canvas" && graphEdited);
+    const blocked = !pageRun
+      ? ""
+      : page === "image"
+        ? imageBlock(model, prompt, uploadId ? 1 : 0)
+        : page === "video"
+          ? videoBlock(model, { prompt, startId: firstFrameId, clipId: extendClipId, extendMode })
+          : "";
+    if (blocked) {
+      setLog(blocked);
+      return;
+    }
     const generateNodes = graph.nodes.filter((n) => n.type === "generate");
     // A canvas run can get its image from an upstream node, so only page runs need one up front.
     // An edited canvas runs only from the Canvas page. Bug fixed (first occurrence 2026-11-11, hosted
@@ -1863,7 +1929,6 @@ export function StudioClient() {
       return;
     }
     setBusy(true);
-    setStageReset(false);
     setModelsOpen(false);
     setLog("Generating…");
     try {
@@ -1914,32 +1979,27 @@ export function StudioClient() {
       let tracked: string[] = [];
       if (targets.size) {
         const keep = runSet(graph, targets, Boolean(opts?.solo));
-        tracked = [...keep];
+        // Only generate nodes run and report back; a Text node in the set is not an error (COREPRODUC-640).
+        tracked = [...keep].filter((id) => graph.nodes.find((n) => n.id === id)?.type === "generate");
+        // Text nodes go in before the slice: "This node only" leaves them out of it (COREPRODUC-640).
+        const filled = inlineText(graph);
         const slice = {
-          ...graph,
-          nodes: graph.nodes.filter((n) => keep.has(n.id)),
-          edges: graph.edges.filter((e) => keep.has(e.src) && keep.has(e.dst)),
+          ...filled,
+          nodes: filled.nodes.filter((n) => keep.has(n.id)),
+          edges: filled.edges.filter((e) => keep.has(e.src) && keep.has(e.dst)),
         };
         const runtime = runtimeGraph(withMentionRefs(slice, model));
-        payload.workflow = {
-          id: "canvas-node",
-          version: "1.0.0",
-          preference: pref,
-          nodes: runtime.nodes.map((n) =>
-            fitNode(targets.has(n.id) ? { ...n, model_id: modelIdForNode(n, model.id, models, connected) } : n),
-          ),
-          edges: runtime.edges,
-        };
+        // Pin the models first, then copy for count: each copy runs on the model its node shows.
+        const pinned = runtime.nodes.map((n) =>
+          fitNode(targets.has(n.id) ? { ...n, model_id: modelIdForNode(n, model.id, models, connected) } : n),
+        );
+        const expanded = expandCounts({ nodes: pinned, edges: runtime.edges }, seedBase());
+        payload.workflow = { id: "canvas-node", version: "1.0.0", preference: pref, nodes: expanded.nodes, edges: expanded.edges };
       } else if (!payload.workflow && graphRun && generateNodes.length) {
         tracked = generateNodes.map((n) => n.id);
-        const runtime = runtimeGraph(withMentionRefs(graph, model));
-        payload.workflow = {
-          id: "canvas",
-          version: "1.0.0",
-          preference: pref,
-          nodes: runtime.nodes.map(fitNode),
-          edges: runtime.edges,
-        };
+        const runtime = runtimeGraph(withMentionRefs(inlineText(graph), model));
+        const expanded = expandCounts({ nodes: runtime.nodes.map(fitNode), edges: runtime.edges }, seedBase());
+        payload.workflow = { id: "canvas", version: "1.0.0", preference: pref, nodes: expanded.nodes, edges: expanded.edges };
       } else if (!payload.workflow) {
         payload.skill = skill;
         const only = skillNodes.length === 1 ? skillNodes[0] : undefined;
@@ -1962,12 +2022,33 @@ export function StudioClient() {
       const times = !canvasRun && page === "image" ? (batchCount === 4 ? 4 : 1) : 1;
       // Each picture of a batch has its own seed. Same inputs hit the cache: 4 runs gave 1 picture (COREPRODUC-575).
       const base = times > 1 ? Number(inputs.seed) || Math.floor(Math.random() * 2 ** 31) : 0;
-      let body: Run | null = null;
+      // The pictures of a batch run together. Bug fixed (first occurrence, 2026-11-13 production crawl,
+      // COREPRODUC-642): count 4 waited for each run to end before posting the next, so the last started
+      // about 60 s after the click. They are posted one after another (a host admits each against the
+      // credits the earlier ones hold, and answers at once), then polled together.
+      const posted: Run[] = [];
+      let refused: unknown = null;
       for (let i = 0; i < times; i += 1) {
-        body = await startRun(times > 1 ? { ...payload, inputs: { ...inputs, seed: base + i } } : payload);
-        setRunIds((ids) => [...ids, body!.id]);
+        try {
+          posted.push(await postRun(times > 1 ? { ...payload, inputs: { ...inputs, seed: base + i } } : payload));
+        } catch (err) {
+          refused = err;
+          break;
+        }
       }
-      if (!body) throw new Error("Generate did not start a run.");
+      if (posted.length) setRunIds((ids) => [...ids, ...posted.map((run) => run.id)]);
+      if (!posted.length) throw refused ?? new Error("Generate did not start a run.");
+      if (refused) console.warn("[studio] batch: some runs did not start", { started: posted.length, of: times, err: String(refused) });
+      // One failed poll must not drop the runs that finish: keep their results, report the failure apart.
+      const polled = await Promise.allSettled(posted.map(waitRun));
+      const started = polled.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+      const lost = polled.find((r): r is PromiseRejectedResult => r.status === "rejected");
+      if (!started.length) throw lost?.reason ?? new Error("Generate did not start a run.");
+      if (lost) {
+        refused = refused ?? lost.reason;
+        console.warn("[studio] batch: a run could not be followed", { err: String(lost.reason) });
+      }
+      const body: Run = started.find((run) => run.state === "completed") || started[started.length - 1];
       if (tracked.length) {
         const results = await nodeRunStates(body, tracked);
         if (epoch === graphEpochRef.current) setNodeRuns((prev) => ({ ...prev, ...results }));
@@ -1988,6 +2069,7 @@ export function StudioClient() {
               : "Done. It is on the board."
           : plainError(typeof body.error === "string" ? body.error : ""),
       );
+      if (refused) setLog(`${started.length} of ${times} came back. ${plainError(refused)}`);
     } catch (err) {
       const message = plainError(err);
       setLog(message);
@@ -2036,7 +2118,6 @@ export function StudioClient() {
     if (item.model_id) setModelId(item.model_id);
     applyLibraryParams(params);
     setPage(nextPage);
-    setStageReset(false);
     setBusy(true);
     setLog("Running it again…");
     try {
@@ -2072,7 +2153,8 @@ export function StudioClient() {
       ids.map(async (id) => {
         const row = body.nodes?.[id];
         if (!row?.output && !row?.outputs?.length) {
-          next[id] = { state: "error", error: error || "No output. Try again." };
+          // The node's own error first (a refused run says why), then the run's (COREPRODUC-642).
+          next[id] = { state: "error", error: (row?.error && plainError(row.error)) || error || "No output. Try again." };
           return;
         }
         const job = row.job_id ? await api<{ estimate?: { cached?: boolean } }>(`/jobs/${row.job_id}`).catch(() => null) : null;
@@ -2092,7 +2174,9 @@ export function StudioClient() {
     const row = models.find((m) => m.id === id);
     // A `{{inputs.x}}` param takes what this page sends with the run; speech is priced by its text.
     const text = n.params?.prompt ?? n.params?.text;
-    return row && !isUnpriced(row) ? (clipPrice(row, n.params?.duration, runInputs(selected), text) ?? null) : null;
+    const one = row && !isUnpriced(row) ? clipPrice(row, n.params?.duration, runInputs(selected), text) : null;
+    // A node with count N runs N jobs (expandCounts), so it costs N times one (COREPRODUC-642).
+    return one == null ? null : one * countValue(n.params);
   }
 
   /** The `pricing.currency` of the model a node runs on ("" when it has none). */
@@ -2106,14 +2190,14 @@ export function StudioClient() {
    * own keys (COREPRODUC-613) and a provider's credits on a sign-in connector (COREPRODUC-614).
    */
   function runCost(ids: string[], pinned = new Set(ids), solo = false): { nodes: number; text: string } {
-    const e = estimateRun(graph, ids, (n) => nodePrice(n, pinned), solo);
+    const e = estimateRun(inlineText(graph), ids, (n) => nodePrice(n, pinned), solo); // wired text priced as sent
     const others = new Map<string, string>();
     for (const n of graph.nodes) {
       const currency = nodeCurrency(n);
       if (unitOf(currency) !== unitOf()) others.set(unitOf(currency), currency);
     }
     const extra = [...others].map(([unit, currency]) => {
-      const total = estimateRun(graph, ids, (n) => (unitOf(nodeCurrency(n)) === unit ? nodePrice(n, pinned) : 0), solo).total;
+      const total = estimateRun(inlineText(graph), ids, (n) => (unitOf(nodeCurrency(n)) === unit ? nodePrice(n, pinned) : 0), solo).total;
       return { total, text: total ? `${money(total, currency)}${unit === "usd" ? " on your keys" : ""}` : "" };
     });
     const own = e.total - extra.reduce((sum, x) => sum + x.total, 0);
@@ -2147,7 +2231,7 @@ export function StudioClient() {
   function openTemplate(t: Template) {
     const skill = skills.find((s) => s.id === t.skill);
     const defaults = t.defaults || {};
-    const nextPrompt = prompt.trim() || String(defaults.prompt || "") || "north-light oak cube tumbling";
+    const nextPrompt = prompt.trim() || String(defaults.prompt || "");
     const nextCamera = String(defaults.camera || OPTICAL_NEUTRAL.camera);
     const nextLens = String(defaults.lens || OPTICAL_NEUTRAL.lens);
     const nextLook = String(defaults.look || OPTICAL_NEUTRAL.look);
@@ -2211,25 +2295,25 @@ export function StudioClient() {
     };
   }
 
-  /** The page prompt a run sends: animating a still may leave it empty; other runs get a default. */
-  function runPrompt(model?: Model): string {
+  /** The page prompt a run sends. No hidden default: Generate stays off until there is a prompt (COREPRODUC-638). */
+  function runPrompt(): string {
     const text = prompt.trim();
-    if (page === "upscale") return text || "upscale";
-    return animateStill(model) && mode.showStill ? text : text || "north-light oak cube, 50mm cinema still.";
+    return page === "upscale" ? text || "upscale" : text;
   }
 
   /** Page inputs a run sends: the shot stack, plus the still as media and image when animating one. */
   function runInputs(model?: Model): Record<string, unknown> {
-    const inputs = shotInputs({ prompt: runPrompt(model) });
+    const inputs = shotInputs({ prompt: runPrompt() });
     if (!(animateStill(model) && mode.showStill)) return inputs;
-    const previous = model?.capabilities?.includes("t2v")
+    // Video animates its own start frame only: no fallback to the last project still.
+    const previous = model?.capabilities?.includes("t2v") || page === "video"
       ? null
       : [...projectRuns]
           .reverse()
           .flatMap((run) => [...(run.outputs || [])].reverse())
           .map((id) => imageAssetId(id))
           .find((id) => id) || null;
-    const still = imageAssetId(uploadId) || imageAssetId(firstFrameId) || previous;
+    const still = pageStill() || previous;
     return still ? { ...inputs, media: still, image: still } : inputs;
   }
 
@@ -2242,12 +2326,21 @@ export function StudioClient() {
   /** First reason the given nodes (and what feeds them, unless `solo`) cannot run, or null. */
   function runBlocker(ids: Iterable<string>, solo = false): string | null {
     const page = pageInputFlags();
-    for (const id of runSet(graph, ids, solo)) {
-      const node = graph.nodes.find((n) => n.id === id);
+    const filled = inlineText(graph); // what the run sends: Text nodes are in the prompts
+    const set = runSet(graph, ids, solo);
+    for (const id of set) {
+      const node = filled.nodes.find((n) => n.id === id);
       const reason = node && node.type === "generate" ? blockedReason(node, page) : null;
       if (reason) return reason;
     }
+    const src = unrunnableSource(filled, set);
+    if (src) return `A canvas run cannot use the ${NODE_CATALOG.find((row) => row.capability === src.capability)?.label || "node"}'s text yet. Use a Text node.`;
     return null;
+  }
+
+  /** A random first seed for count copies with no seed of their own. */
+  function seedBase(): number {
+    return Math.floor(Math.random() * 2 ** 31);
   }
 
   /** Insert a node: beside `from` (and wired to it when the types fit), else at the board centre. */
@@ -2367,6 +2460,7 @@ export function StudioClient() {
   }
 
   async function saveProvider(id: string) {
+    setKeyError(false);
     const payload: Record<string, string> = { id };
     if (keyDraft[`key-${id}`]) payload.secret = keyDraft[`key-${id}`];
     else if (keyDraft[`env-${id}`]) payload.from_env = keyDraft[`env-${id}`];
@@ -2397,7 +2491,10 @@ export function StudioClient() {
       }
       setPage("keys");
     } catch (err) {
-      if (connectIdRef.current === id) setLog(plainError(err));
+      if (connectIdRef.current === id) {
+        setLog(plainError(err));
+        setKeyError(true); // shown as an error, not as grey status text (COREPRODUC-642)
+      }
     }
   }
 
@@ -2546,8 +2643,13 @@ export function StudioClient() {
 
   async function generate3d() {
     if (busy) return;
+    const subject = prompt.trim() || brief.trim();
+    if (!subject) {
+      setLog("Write the subject in the Image prompt first, then make a new angle."); // no hidden default (COREPRODUC-638)
+      return;
+    }
     setBusy(true);
-    const text = (prompt.trim() || brief.trim() || "north-light oak cube") + ", 3D turntable plate";
+    const text = `${subject}, 3D turntable plate`;
     try {
       const body = await startRun({
         skill: "@tryvinci/image-generate",
@@ -2664,6 +2766,10 @@ export function StudioClient() {
   const served = (id: PageId) => !hostPages?.length || hostPages.includes(id);
   const accountName = doctor.host?.user?.name || doctor.host?.name || (live.length ? live.map(([id, row]) => row.display_name || id).join(" · ") : "Local");
   const spent = projectRuns.reduce((sum, r) => sum + Number(r.estimate?.total || 0), 0);
+  // Own-key runs cost 0 credits on a host; their dollars are counted apart. Bug fixed (first occurrence,
+  // 2026-11-13 production crawl, COREPRODUC-642): two own-key runs ($0.052) left "≈ 0 credits used".
+  const spentOwn = projectRuns.reduce((sum, r) => sum + Number(r.estimate?.usd || 0), 0);
+  const spentText = money(spent) + (spentOwn ? ` + ${money(spentOwn, "USD")} on your keys` : "");
   const popoverTools = filterTools(toolsQuery, toolsCategory).filter((tool) => served(tool.page));
   // Only tabs with tools this Studio serves. Bug fixed (first occurrence 2026-11-12, live UI check): on a
   // host four tabs were empty and said "No tools match" with nothing typed.
@@ -3402,7 +3508,7 @@ export function StudioClient() {
                               promptBaseRef.current = graph;
                             }}
                             onPromptChange={(text) => {
-                              setGraphHistory((h) => preview(h, setParams(h.present, n.id, { prompt: text })));
+                              setGraphHistory((h) => preview(h, setParams(h.present, n.id, { prompt: typedPrompt(n.params, text) })));
                             }}
                             onPromptBlur={settlePrompt}
                             onCount={(value) => setGraph((g) => setParams(g, n.id, countPatch(value)))}
@@ -3978,6 +4084,7 @@ export function StudioClient() {
         draft={keyDraft}
         setDraft={setKeyDraft}
         log={hostKeys.includes(connectId) ? log : ""}
+        error={keyError}
         onSave={(id) => {
           setConnectId(id);
           void saveProvider(id);
@@ -4445,6 +4552,68 @@ export function StudioClient() {
     return () => el.removeEventListener("wheel", onWheel);
   }, [page, view]);
 
+  // The page goes in the visible URL (#video), so reload, links and Back keep it (COREPRODUC-642).
+  useEffect(() => {
+    if (!urlReady.current || typeof window === "undefined") return;
+    const w = topWindow();
+    const named = pageFromUrl(w.location.search, w.location.hash);
+    if (named === page) return;
+    if (named) w.history.pushState(w.history.state, "", "#" + page);
+    else w.history.replaceState(w.history.state, "", "#" + page); // a first visit adds no Back step
+    console.info("[studio] page in url", { page });
+  }, [page]);
+
+  const openPageRef = useRef(openPage);
+  openPageRef.current = openPage;
+  useEffect(() => {
+    const w = topWindow();
+    const onPop = () => {
+      const next = pageFromUrl(w.location.search, w.location.hash);
+      if (next) openPageRef.current(next);
+    };
+    w.addEventListener("popstate", onPop);
+    return () => w.removeEventListener("popstate", onPop);
+  }, []);
+
+  // The Image and Video form survives a reload in this tab: prompt, model picks, reference and frames.
+  useEffect(() => {
+    try {
+      const d = JSON.parse(sessionStorage.getItem(DRAFT_STORAGE_KEY) || "null") as {
+        prompt?: string;
+        model?: string;
+        picks?: Partial<Record<PageId, string>>;
+        ref?: string | null;
+        first?: string | null;
+        last?: string | null;
+      } | null;
+      if (d) {
+        if (d.prompt) setPrompt(d.prompt);
+        if (d.picks) pagePicks.current = d.picks;
+        if (d.model) {
+          modelTouched.current = true;
+          setModelId(d.model);
+        }
+        if (d.ref) setUploadId(d.ref);
+        if (d.first) setFirstFrameId(d.first);
+        if (d.last) setLastFrameId(d.last);
+        console.info("[studio] draft restored", { model: d.model, prompt: Boolean(d.prompt) });
+      }
+    } catch {
+      /* a blocked or corrupt draft: start empty */
+    }
+    setDraftReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!draftReady) return;
+    try {
+      const draft = { prompt, model: modelId, picks: pagePicks.current, ref: uploadId, first: firstFrameId, last: lastFrameId };
+      sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    } catch {
+      /* storage full or blocked: the draft is a convenience */
+    }
+  }, [draftReady, prompt, modelId, uploadId, firstFrameId, lastFrameId]);
+
   useEffect(() => {
     try {
       setPinnedIds(parsePinned(localStorage.getItem(PIN_STORAGE_KEY)));
@@ -4494,6 +4663,8 @@ export function StudioClient() {
         return;
       }
       if (ev.key === "Escape") {
+        // Focus goes back to the All tools button, not to the page (COREPRODUC-642).
+        if (toolsOpenRef.current) requestAnimationFrame(() => toolsBtnRef.current?.focus());
         setCommandOpen(false);
         setToolsOpen(false);
         setAvatarOpen(false);
@@ -4815,7 +4986,9 @@ export function StudioClient() {
               aria-label="New"
               title="New"
               onClick={() => {
-                setStageReset(true);
+                // Bug fixed (first occurrence, 2026-11-13 production crawl, COREPRODUC-642): New kept the prompt, so it looked like it did nothing.
+                setPrompt("");
+                setLog("");
                 setUploadId(null);
                 setFirstFrameId(null);
                 setLastFrameId(null);
@@ -4884,11 +5057,13 @@ export function StudioClient() {
               </>
             ) : (
               // "≈ 0 credits" alone read like the balance; it is this project's estimated spend.
-              <span className="muted" title="Estimated cost of this project's runs">
-                ≈ {money(spent)} used
+              <span className="muted" title="Estimated cost of this project's runs" data-testid="spent">
+                {/* Hidden until /doctor names the unit: before, it read "$0" on a host that bills credits. */}
+                {doctor.providers ? `≈ ${spentText} used` : ""}
               </span>
             )}
             <button
+              ref={toolsBtnRef}
               className="ghost"
               type="button"
               title="All tools"
@@ -4938,7 +5113,7 @@ export function StudioClient() {
                 promptBaseRef.current = graph;
               }}
               onPromptChange={(text) => {
-                setGraphHistory((h) => preview(h, setParams(h.present, n.id, { prompt: text })));
+                setGraphHistory((h) => preview(h, setParams(h.present, n.id, { prompt: typedPrompt(n.params, text) })));
               }}
               onPromptBlur={settlePrompt}
               onCount={(value) => setGraph((g) => setParams(g, n.id, countPatch(value)))}

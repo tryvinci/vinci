@@ -17,6 +17,8 @@ NAMES = [
     "countPatch",
     "promptValue",
     "usesPagePrompt",
+    "typedPrompt",
+    "wiredPrompt",
     "pickListed",
     "listedOr",
     "fitToModel",
@@ -206,4 +208,18 @@ eq(shotValue({ lens: "85mm" }, "lens"), "85mm", "set value");
 eq(shotPatch({}, "lens", "85mm"), { lens: "85mm" }, "set");
 eq(shotPatch({ lens: "85mm" }, "lens", "85mm"), { lens: "" }, "second press clears");
 eq(shotPatch({ lighting: "neon" }, "lighting", "neon"), { lighting: "available" }, "lighting clears to available");
+""")
+
+
+def test_wired_prompt_reads_as_typed_text() -> None:
+    """COREPRODUC-642 (STU-21): a wired Text node is not "the page prompt", and edits keep the wire."""
+    _check("""
+const wired = { prompt: "a lighthouse\\n{{nodes.t.output}}" };
+eq(promptValue(wired), "a lighthouse", "the box shows the typed text");
+eq(promptValue({ prompt: "{{nodes.t.output}}" }), "", "a bare wire reads as empty");
+eq(usesPagePrompt({ prompt: "{{nodes.t.output}}" }), false, "a wire is not the page prompt");
+eq(usesPagePrompt({ prompt: "{{inputs.prompt}}" }), true, "the page prompt");
+eq(wiredPrompt(wired), true, "wired");
+eq(typedPrompt(wired, "a ship"), "a ship\\n{{nodes.t.output}}", "an edit keeps the wire");
+eq(typedPrompt({ prompt: "{{inputs.prompt}}" }, "x"), "x", "an edit replaces the page prompt");
 """)

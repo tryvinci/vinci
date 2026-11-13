@@ -823,3 +823,6 @@
 .olf-add-cue { margin: 12px 0; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--media); }
 .olf-add-cue .olf-row { align-items: flex-end; flex-wrap: wrap; gap: 12px; }
 .olf-add-cue .olf-field { width: 150px; }
+
+/* Why the storyboard is locked (COREPRODUC-642). */
+.olf-locked { margin: 0 0 12px; padding: 8px 12px; border-radius: 10px; color: var(--danger, #f07167); border: 1px solid currentColor; font-size: 13px; }
