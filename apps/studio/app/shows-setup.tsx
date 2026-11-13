@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
   KEYFRAME_OPTIONS,
   type OlfBatch,
@@ -67,6 +67,13 @@ export function ScriptStep({
   // The text model menu: "" is Auto (routing). An agent CLI is only ever a person's pick.
   const [models, setModels] = useState<OlfModels | null>(null);
   const [textModel, setTextModel] = useState("");
+  // A model split is waiting (price, Confirm, the run) or was refused: the rules preview is not its
+  // result, so it is hidden and Add stays off until the text changes or the split is cancelled. Bug
+  // fixed (first occurrence, 2026-11-13 production crawl, COREPRODUC-642): the list looked like the
+  // model's split before Confirm and stayed after the refusal.
+  const [held, setHeld] = useState(false);
+  const heldRef = useRef(false); // read by a rules preview that lands after the split started
+  heldRef.current = held;
   const names = JSON.stringify(characters);
 
   useEffect(() => {
@@ -81,6 +88,7 @@ export function ScriptStep({
   }, []);
 
   useEffect(() => {
+    setHeld(false);
     if (!script.trim()) {
       setView(null);
       onView?.(null);
@@ -94,7 +102,7 @@ export function ScriptStep({
           if (!live) return;
           setView(body);
           setError("");
-          onView?.(body);
+          onView?.(heldRef.current ? null : body);
         })
         .catch((err) => live && setError(message(err)));
     }, 350);
@@ -105,9 +113,18 @@ export function ScriptStep({
     // onView is the parent's setter: the preview depends only on these inputs.
   }, [script, path, names, refs]);
 
+  useEffect(() => {
+    onView?.(held ? null : view);
+    // Only a change of `held` re-sends: the preview effect sends each new view itself.
+  }, [held]);
+
   /** Run a text step: a dry run for the price, then the step itself (after Confirm when it costs money). */
   async function textStep(route: string, fields: Record<string, unknown>, what: string, confirmed?: OlfTextStep) {
     setError("");
+    if (route === "/script/model") {
+      heldRef.current = true; // before the next render: a preview may land first
+      setHeld(true);
+    }
     const body = { model: textModel || undefined, ...fields }; // a confirmed step keeps its model
     try {
       if (!confirmed) {
@@ -192,7 +209,10 @@ export function ScriptStep({
               setAsk(null);
               void textStep(job.route, job.body, job.what, job.plan);
             }}
-            onNo={() => setAsk(null)}
+            onNo={() => {
+              setAsk(null);
+              setHeld(false);
+            }}
           />
         ) : null}
         <div className="olf-row script-label">
@@ -237,7 +257,7 @@ export function ScriptStep({
         </footer>
         {error ? <p className="olf-error olf-small-text">{error}</p> : null}
       </section>
-      <ShotList view={view} />
+      <ShotList view={held ? null : view} />
     </div>
   );
 }
@@ -284,21 +304,56 @@ function ShotList({ view }: { view: OlfScriptPreview | null }) {
   );
 }
 
+// Bug fixed (first occurrence, 2026-11-13 production crawl, COREPRODUC-642): a reload lost the wizard.
+const DRAFT_KEY = "vinci-new-show-draft-v1";
+type Draft = {
+  step?: number;
+  show?: { title: string; medium: string; aspect: string };
+  cast?: { name: string; description: string; voice?: string; voiceName?: string };
+  script?: string;
+};
+
+function readDraft(): Draft {
+  try {
+    return (JSON.parse(sessionStorage.getItem(DRAFT_KEY) || "null") as Draft | null) || {};
+  } catch {
+    return {};
+  }
+}
+
+function dropDraft() {
+  try {
+    sessionStorage.removeItem(DRAFT_KEY);
+  } catch {
+    /* blocked storage */
+  }
+}
+
 /**
  * New show (Claude Design, screen 5): show, first character, first episode. Everything is saved as
  * plain OLF files (`POST /olf/new`); "Create show and draw keyframes" then draws two keyframes per
  * shot, price first (`POST /olf/batch`, mode `keyframes`).
  */
 export function NewShow({ onCancel, onOpen }: { onCancel: () => void; onOpen: (path: string, notice: string) => void }) {
-  const [step, setStep] = useState(0);
-  const [show, setShow] = useState({ title: "", medium: MEDIUMS[0], aspect: ASPECTS[0] });
-  const [cast, setCast] = useState({ name: "", description: "", sheet: "", voice: "", voiceName: "" });
-  const [script, setScript] = useState("");
+  const [draft] = useState(readDraft);
+  const [step, setStep] = useState(draft.step ?? 0);
+  const [show, setShow] = useState(draft.show ?? { title: "", medium: MEDIUMS[0], aspect: ASPECTS[0] });
+  const [cast, setCast] = useState({ name: "", description: "", sheet: "", voice: "", voiceName: "", ...draft.cast });
+  const [script, setScript] = useState(draft.script ?? "");
   const [view, setView] = useState<OlfScriptPreview | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [confirm, setConfirm] = useState(false);
   const title = show.title.trim() || "Untitled show";
+
+  // The draft lives in this tab's session, without the sheet image (it can be megabytes).
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ step, show, cast: { name: cast.name, description: cast.description, voice: cast.voice, voiceName: cast.voiceName }, script }));
+    } catch {
+      /* storage blocked or full: the draft is a convenience */
+    }
+  }, [step, show, cast.name, cast.description, cast.voice, cast.voiceName, script]);
   const characters: Record<string, string> = cast.name.trim() ? { [charId(cast.name)]: cast.name.trim() } : {};
   const estimate = keyframeEstimate(view);
   const people = newEntries(view).people;
@@ -347,6 +402,7 @@ export function NewShow({ onCancel, onOpen }: { onCancel: () => void; onOpen: (p
           notice += `. No keyframes were drawn: ${message(err)}`;
         }
       }
+      dropDraft();
       onOpen(made.path, notice);
     } catch (err) {
       setError(message(err));
@@ -356,7 +412,14 @@ export function NewShow({ onCancel, onOpen }: { onCancel: () => void; onOpen: (p
   }
 
   const next = (
-    <button type="button" className="run" disabled={step === 0 && !show.title.trim()} onClick={() => setStep(step + 1)} data-testid="setup-next">
+    <button
+      type="button"
+      className="run"
+      disabled={step === 0 && !show.title.trim()}
+      title={step === 0 && !show.title.trim() ? "Name the show first." : undefined}
+      onClick={() => setStep(step + 1)}
+      data-testid="setup-next"
+    >
       {step === 1 && !cast.name.trim() ? "Skip" : "Next"}
     </button>
   );
@@ -427,7 +490,15 @@ export function NewShow({ onCancel, onOpen }: { onCancel: () => void; onOpen: (p
           <button type="button" className="ghost olf-small" disabled={!!busy} onClick={() => void create(false, false, true)} data-testid="setup-skip">
             Skip to an empty project
           </button>
-          <button type="button" className="olf-x" aria-label="Close" onClick={onCancel}>
+          <button
+            type="button"
+            className="olf-x"
+            aria-label="Close"
+            onClick={() => {
+              dropDraft();
+              onCancel();
+            }}
+          >
             ×
           </button>
         </span>

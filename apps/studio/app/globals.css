@@ -322,7 +322,11 @@ kbd {
 .top h1 { margin: 0; font-size: 16px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .top-meta { display: flex; gap: 8px; align-items: center; flex: none; }
 .top-meta .muted { white-space: nowrap; }
-.top-log { max-width: min(46ch, 40vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); font-size: 13px; }
+/* Two lines, not one: the plan refusal (83 characters) was cut to "Please upgrad..." (COREPRODUC-642). */
+.top-log {
+  max-width: min(64ch, 45vw); overflow: hidden; color: var(--dim); font-size: 13px; line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal;
+}
 .chip, .ghost {
   border: 1px solid var(--line); background: transparent; border-radius: var(--pill); padding: 7px 14px;
   transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
@@ -614,6 +618,7 @@ textarea { min-height: 64px; max-height: 88px; resize: vertical; }
 .fields { padding: 12px 22px; display: flex; flex-direction: column; gap: 14px; flex: 1; overflow: auto; }
 label { display: block; font-size: 11px; color: var(--mute); margin: 0 0 4px; letter-spacing: 0.04em; }
 .log { color: var(--dim); white-space: pre-wrap; min-height: 2.2rem; }
+.log.error { color: var(--danger, #f07167); }
 .foot { padding: 16px 22px 20px; border-top: 1px solid var(--line); }
 .foot .run { width: 100%; display: flex; justify-content: space-between; }
 .keys { padding: 28px 32px 48px; max-width: 44rem; position: relative; }
@@ -1099,6 +1104,16 @@ input[type="range"] { accent-color: var(--teal); width: 100%; padding: 0; border
   background: var(--glass-fallback, #14161c); box-shadow: var(--glass-shadow, var(--card-shadow));
   -webkit-backdrop-filter: var(--glass-blur, blur(22px) saturate(140%));
   backdrop-filter: var(--glass-blur, blur(22px) saturate(140%));
+}
+/* A model's price in lists and preset cards (COREPRODUC-642). */
+.image-picker-price { margin-left: auto; font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+/* Typed text plus a wired Text node (COREPRODUC-642). */
+.node-wired { display: block; margin-top: 4px; font-size: 11px; color: var(--dim); }
+/* Why Generate is off (COREPRODUC-638): under the Video button, above the Image bar. */
+.run-hint { margin: 6px 0 0; font-size: 12px; line-height: 1.35; color: var(--dim); }
+.image-bar .run-hint {
+  position: absolute; right: 12px; bottom: calc(100% + 6px); margin: 0; padding: 4px 8px; border-radius: 8px;
+  background: var(--glass-fallback, #14161c); border: 1px solid var(--glass-line, var(--line));
 }
 .image-bar-refs { display: flex; gap: 6px; align-items: center; flex: none; }
 .image-ref-add {

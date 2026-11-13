@@ -18,7 +18,7 @@ import {
   feedFromLibrary,
   feedFromRuns,
   generateCost,
-  needsStartFrame,
+  videoBlock,
   presetFixes,
   toggleFavorite,
   videoModels,
@@ -473,8 +473,7 @@ export function VideoPage({
   );
 
   const cost = money(generateCost(clipPrice(selected, duration)), selected?.pricing?.currency);
-  const blocked =
-    (needsStartFrame(selected) && !extendMode && !startId) || (extendMode && !clipId && !startId);
+  const hint = videoBlock(selected, { prompt, startId, clipId, extendMode });
 
   return (
     <div className="video-page" data-testid="video-page">
@@ -514,7 +513,8 @@ export function VideoPage({
         cast={cast}
         cost={cost}
         busy={busy}
-        disabled={busy || !selected || blocked}
+        disabled={busy || !selected || Boolean(hint)}
+        hint={hint}
         onModelId={pickPreset}
         onGenerate={onGenerate}
         onOpenPresets={() => setOverlay(true)}

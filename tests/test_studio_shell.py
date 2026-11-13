@@ -41,6 +41,7 @@ def _run(body: str) -> None:
         "isCommandHotkey",
         "reachablePages",
         "editTools",
+        "pageFromUrl",
     ]
     result = run_ts("apps/studio/lib/studio-shell.ts", names, body)
     assert result.returncode == 0, result.stderr or result.stdout
@@ -220,3 +221,37 @@ def test_page_generate_runs_the_page_not_the_canvas() -> None:
     body = CLIENT.read_text(encoding="utf-8")
     assert 'const graphRun = !!opts?.graph || (page === "canvas" && graphEdited);' in body
     assert "(graphEdited || !!opts?.graph)" not in body and "(graphEdited || opts?.graph)" not in body
+
+
+def test_plain_error_reads_json_detail_and_network_failures() -> None:
+    """COREPRODUC-642 (STU-10, STU-16): a 415 body and "Failed to fetch" reached the user raw or generic."""
+    result = run_ts(
+        "apps/studio/app/ui/plain-text.ts",
+        ["plainError"],
+        """
+const eq = (a, b, m) => { if (a !== b) throw new Error(m + ": " + a); };
+eq(plainError(new Error('{"detail":"Upload an image, a video or an audio file."}')), "Upload an image, a video or an audio file.", "json detail");
+eq(plainError(new TypeError("Failed to fetch")), "Could not reach Vinci. Check your connection, then try again.", "network");
+eq(plainError(new Error("Load failed")), "Could not reach Vinci. Check your connection, then try again.", "safari network");
+eq(plainError(new Error('{"detail":[{"loc":["body"]}]}')).startsWith("Something went wrong"), true, "list detail stays generic");
+eq(plainError("Studio generation is not available for free users."), "Studio generation is not available for free users.", "plain text");
+""",
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_page_comes_from_the_url() -> None:
+    """COREPRODUC-642 (STU-07): reload, /studio?page=video and #canvas all opened Image."""
+    _run("""
+const eq = (a, b, m) => { if (a !== b) throw new Error(m + ": " + a); };
+eq(pageFromUrl("", "#video"), "video", "hash");
+eq(pageFromUrl("?page=canvas", ""), "canvas", "query");
+eq(pageFromUrl("?page=canvas", "#shows"), "shows", "hash wins");
+eq(pageFromUrl("", "#nope"), "", "unknown page");
+eq(pageFromUrl("", ""), "", "none");
+eq(pageFromUrl("?page=video", "#%"), "video", "a malformed hash names no page");
+""")
+    client = CLIENT.read_text(encoding="utf-8")
+    assert 'w.history.pushState(w.history.state, "", "#" + page)' in client
+    assert 'addEventListener("popstate", onPop)' in client
+    assert "sessionStorage.setItem(DRAFT_STORAGE_KEY" in client

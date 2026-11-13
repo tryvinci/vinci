@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useMenuEscape } from "./ui/focus";
 import { asLibraryItem, mentionableItems, type LibraryItem } from "../lib/library";
 import { AdvancedDisclosure } from "./ui/advanced";
 import { ImageModelPicker } from "./image-model-picker";
@@ -62,6 +63,7 @@ export function VideoPanel({
   cost,
   busy,
   disabled,
+  hint,
   onModelId,
   onGenerate,
   onOpenPresets,
@@ -102,6 +104,8 @@ export function VideoPanel({
   cost: string;
   busy: boolean;
   disabled: boolean;
+  /** Why Generate is off (shown under the button and as its title). */
+  hint?: string;
   onModelId: (id: string) => void;
   onGenerate: () => void;
   onOpenPresets: () => void;
@@ -116,6 +120,9 @@ export function VideoPanel({
   const resolutions = selected?.constraints?.resolutions || [];
   const durs = durationOptions(Number(selected?.constraints?.max_duration || 0), selected?.constraints?.durations);
   const items: LibraryItem[] = mentionableItems(cast.map(asLibraryItem));
+
+  const closeMenu = useCallback(() => setMenu(null), []);
+  useMenuEscape(rootRef, closeMenu);
 
   useEffect(() => {
     const onDown = (ev: PointerEvent) => {
@@ -254,6 +261,7 @@ export function VideoPanel({
               mentionTestId="video-mention"
               rows={4}
               placeholder="Describe the clip. Type @ to mention someone."
+              aria-label="Video prompt"
               value={prompt}
               items={items}
               open={menu === "mention"}
@@ -319,17 +327,30 @@ export function VideoPanel({
           </div>
         </>
       ) : null}
-      {tab !== "Edit" ? (
+      {/* Motion control only sets the camera move: Generate stays on Create, so a run never sends
+          inputs this tab does not show (COREPRODUC-641). */}
+      {tab === "Motion control" ? (
+        <p className="run-hint" data-testid="video-motion-note">
+          Camera move: {motion || "none"}. Go back to Create to write the prompt and generate.
+        </p>
+      ) : null}
+      {tab === "Create" ? (
         <button
           className="run image-generate"
           type="button"
           data-testid="video-generate"
           disabled={disabled}
+          title={hint || undefined}
           onClick={onGenerate}
         >
           <span>{busy ? "Generating…" : "Generate"}</span>
           <span>{cost}</span>
         </button>
+      ) : null}
+      {tab === "Create" && hint && !busy ? (
+        <p className="run-hint" role="status" data-testid="video-blocked">
+          {hint}
+        </p>
       ) : null}
       {tab === "Create" && controls.advanced ? (
         <AdvancedDisclosure testId="video-advanced">

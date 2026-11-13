@@ -95,14 +95,29 @@ export function isTemplate(value: unknown): boolean {
   return typeof value === "string" && value.trim().startsWith("{{");
 }
 
-/** Prompt shown on the card and in the inspector. A page-prompt template reads as empty. */
+const WIRED = /\n?\{\{\s*nodes\.[^}]*\}\}/g;
+
+/** Prompt shown on the card and in the inspector: the typed text. Templates and wired refs read as empty. */
 export function promptValue(params: Record<string, unknown> | undefined): string {
   const v = params?.prompt;
-  return typeof v === "string" && !isTemplate(v) ? v : "";
+  return typeof v === "string" && !isTemplate(v) ? v.replace(WIRED, "") : "";
 }
 
+/** The prompt param after the user types `text`: wired Text refs stay after it (COREPRODUC-642). */
+export function typedPrompt(params: Record<string, unknown> | undefined, text: string): string {
+  const v = params?.prompt;
+  const wired = typeof v === "string" ? v.match(/\{\{\s*nodes\.[^}]*\}\}/g) || [] : [];
+  return [text, ...wired].filter(Boolean).join("\n");
+}
+
+/** True when the prompt reads the page prompt (`{{inputs.prompt}}`), not a wired node. */
 export function usesPagePrompt(params: Record<string, unknown> | undefined): boolean {
-  return typeof params?.prompt === "string" && isTemplate(params.prompt);
+  return typeof params?.prompt === "string" && /^\s*\{\{\s*inputs\./.test(params.prompt);
+}
+
+/** True when a wired node (a Text node) feeds the prompt. */
+export function wiredPrompt(params: Record<string, unknown> | undefined): boolean {
+  return typeof params?.prompt === "string" && /\{\{\s*nodes\./.test(params.prompt);
 }
 
 /**

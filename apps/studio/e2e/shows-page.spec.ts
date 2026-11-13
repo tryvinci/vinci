@@ -352,7 +352,10 @@ test.describe("Shows (OLF movie engine)", () => {
     await page.getByLabel("Episode title").fill("The Third Light");
     await page.getByLabel("Episode title").press("Enter");
     await expect(page.locator(".top-crumb")).toContainText("E03 · The Third Light");
+    // The list shows the new episode with no Reload (2026-11-13 production crawl, COREPRODUC-642).
+    await expect(page.getByTestId("shows-episode-list")).toContainText("The Third Light");
     await expect(page.getByTestId("add-scene-form")).toContainText("This episode has no scenes yet");
+    await expect(page.getByTestId("add-scene-submit")).toHaveAttribute("title", /Write the scene heading first/);
     await page.getByLabel("Scene heading").fill("EXT. CLIFF PATH - DUSK");
     await page.getByRole("button", { name: "Add scene" }).click();
     await expect(page.getByTestId("shows-scene")).toContainText("EXT. CLIFF PATH - DUSK");

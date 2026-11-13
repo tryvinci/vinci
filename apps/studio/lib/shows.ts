@@ -412,6 +412,15 @@ export function mediaUrl(show: OlfShow, rel: string): string {
   return fileUrl(show.path, rel) + (hash ? `&v=${hash}` : "");
 }
 
+/**
+ * A shot's label without its episode: `e01/s02/sh010` -> `s02/sh010`. Shot numbers restart in each
+ * scene, so the last part alone named two shots "sh010" in one episode's Shots table (2026-11-13
+ * production crawl, COREPRODUC-642). The full IDs were always unique.
+ */
+export function shotLabel(id: string): string {
+  return id.split("/").slice(1).join("/") || id;
+}
+
 /** Last segment of a take ID: `e02/s03/sh014/kf1` -> `kf1`. */
 export function takeName(id: string): string {
   return id.slice(id.lastIndexOf("/") + 1);
@@ -691,7 +700,7 @@ export function silentClips(cut: OlfCut): OlfClip[] {
 export function clipLabel(clip: OlfClip): { shot: string; take: string } {
   const take = clip.kind === "keyframe" ? "kf only" : takeName(clip.take);
   const marks = [take, clip.transition === "fade" ? "fade" : null, clip.missing ? "missing" : clip.stale ? "stale" : null];
-  return { shot: clip.shot.split("/").slice(1).join("/"), take: marks.filter(Boolean).join(" · ") };
+  return { shot: shotLabel(clip.shot), take: marks.filter(Boolean).join(" · ") };
 }
 
 /** The subtitle showing at a time: each dialogue line gets an equal share of its clip (as in export). */

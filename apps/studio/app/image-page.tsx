@@ -9,7 +9,7 @@ import {
   feedFromRuns,
   generateCost,
   imageModels,
-  needsReference,
+  imageBlock,
   toggleFavorite,
   withPendingCards,
   type ImageAsset,
@@ -233,7 +233,7 @@ export function ImagePage({
   );
 
   const cost = selected && isUnpriced(selected) ? PRICE_VARIES : money(generateCost(selected?.pricing?.amount, batch), selected?.pricing?.currency);
-  const blocked = needsReference(selected) && refs.length === 0;
+  const hint = imageBlock(selected, prompt, refs.length);
 
   return (
     <div className="image-page" data-testid="image-page">
@@ -264,7 +264,8 @@ export function ImagePage({
         cast={cast}
         cost={cost}
         busy={busy}
-        disabled={busy || !selected || blocked}
+        disabled={busy || !selected || Boolean(hint)}
+        hint={hint}
         onModelId={onPickModel}
         onGenerate={onGenerate}
       />

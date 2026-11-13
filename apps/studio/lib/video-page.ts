@@ -115,7 +115,7 @@ export type VideoPresetDefaults = {
 /** Higgsfield Video empty strip: prompt, preset, generate. */
 export const VIDEO_HOW_STEPS = [
   { n: "1", title: "Write a prompt", copy: "Describe the clip. Type @ to mention a person, place, or prop." },
-  { n: "2", title: "Pick a preset", copy: "Press Change to pick a model. The form follows that model." },
+  { n: "2", title: "Pick a model", copy: "Press Change to pick a model. The form follows that model." },
   { n: "3", title: "Generate", copy: "The price is on the button. The clip shows up in History." },
 ] as const;
 
@@ -179,9 +179,11 @@ export function isVideoModel(model: VideoModel | undefined): boolean {
  */
 export function durationOptions(max: number, allowed: readonly number[] = []): number[] {
   if (allowed.length) {
-    return allowed.length <= VIDEO_DURATION_PICKS.length
-      ? [...allowed]
-      : VIDEO_DURATION_PICKS.filter((n) => allowed.includes(n));
+    if (allowed.length <= VIDEO_DURATION_PICKS.length) return [...allowed];
+    // The longest length stays a tile: Seedance 2.5 runs 30s, but the tiles stopped at 15s (COREPRODUC-642).
+    const picks = VIDEO_DURATION_PICKS.filter((n) => allowed.includes(n));
+    const top = Math.max(...allowed);
+    return picks.includes(top as (typeof VIDEO_DURATION_PICKS)[number]) ? picks : [...picks, top];
   }
   const cap = Number(max || 0);
   if (!cap) return [];
@@ -232,6 +234,25 @@ export function supportsEndFrame(model: VideoModel | undefined): boolean {
 export function needsStartFrame(model: VideoModel | undefined): boolean {
   const caps = model?.capabilities || [];
   return caps.includes("i2v") && !caps.includes("t2v");
+}
+
+/**
+ * Why Generate is off on the Video page, or "" when it can run. The reason shows under the button
+ * (COREPRODUC-638: an empty prompt ran a hidden default; Hailuo was off with no reason).
+ *
+ * Args:
+ *   model: The selected model.
+ *   page: The prompt, the start frame, the Extend clip and whether Extend is on.
+ */
+export function videoBlock(
+  model: VideoModel | undefined,
+  page: { prompt: string; startId?: string | null; clipId?: string | null; extendMode?: boolean },
+): string {
+  if (page.extendMode) return page.clipId || page.startId ? "" : "Add a clip or its last frame.";
+  if (needsStartFrame(model) && !page.startId) return "This model needs a start frame. Add one above.";
+  // Animating a start frame may leave the prompt empty; everything else needs one.
+  if (!page.prompt.trim() && !(page.startId && (model?.capabilities || []).includes("i2v"))) return "Describe the shot first.";
+  return "";
 }
 
 /**

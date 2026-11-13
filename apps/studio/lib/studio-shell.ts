@@ -302,6 +302,30 @@ export function sidebarPins(pinned: readonly string[], tools: readonly Tool[] = 
   return rows;
 }
 
+const PAGE_IDS: readonly PageId[] = [
+  "home", "explore", "image", "adapts", "video", "speak", "upscale", "edit", "canvas", "shows",
+  "library", "assets", "agent", "space", "collab", "skills", "find", "cost", "keys", "settings",
+];
+
+/**
+ * The page a URL names: `#video` first, then `?page=video`; "" when it names none. Bug fixed (first
+ * occurrence, 2026-11-13 production crawl, COREPRODUC-642): the page lived only in React state, so a
+ * reload, a link and Back all opened Image.
+ */
+export function pageFromUrl(search: string, hash: string): PageId | "" {
+  let named = hash.replace(/^#/, "");
+  try {
+    named = decodeURIComponent(named);
+  } catch {
+    named = ""; // a malformed hash (`#%`) names no page
+  }
+  const want = named || new URLSearchParams(search).get("page") || "";
+  return (PAGE_IDS as readonly string[]).includes(want) ? (want as PageId) : "";
+}
+
+/** Session key of the Image and Video form draft (prompt, model picks, frames). */
+export const DRAFT_STORAGE_KEY = "vinci-draft-v1";
+
 export function parsePinned(raw: string | null | undefined): string[] {
   if (!raw) return [];
   try {

@@ -15,6 +15,7 @@ import {
   showsFrame,
   slotRef,
   usesPagePrompt,
+  wiredPrompt,
 } from "../lib/canvas-node";
 import type { GraphNode } from "../lib/canvas-graph";
 import type { LibraryItem } from "../lib/library";
@@ -99,6 +100,7 @@ export function CanvasInspector({
   const cap = node.capability;
   const refs = refsOf(node.params);
   const pagePrompt = usesPagePrompt(node.params);
+  const wired = wiredPrompt(node.params);
   return (
     <aside className="insp canvas-insp" data-testid="canvas-inspector">
       <div className="insp-h" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
@@ -174,7 +176,11 @@ export function CanvasInspector({
             value={prompt}
             items={library}
             placeholder={
-              pagePrompt ? "Using the page prompt. Type here to override it." : placeholder || "Describe what to generate"
+              wired
+                ? "Using the wired text. Type here to add to it."
+                : pagePrompt
+                  ? "Using the page prompt. Type here to override it."
+                  : placeholder || "Describe what to generate"
             }
             textareaRef={promptRef}
             onFocus={onPromptFocus}
@@ -182,6 +188,7 @@ export function CanvasInspector({
             onBlur={onPromptBlur}
             onPick={(item) => onMention?.(item)}
           />
+          {wired && prompt ? <span className="node-wired">+ text from the wired node</span> : null}
         </div>
         <AdvancedDisclosure testId="inspector-advanced">
           <div>

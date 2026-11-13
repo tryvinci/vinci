@@ -18,6 +18,7 @@ NAMES = [
     "PRICE_VARIES",
     "money",
     "setPriceUnit",
+    "priceText",
 ]
 STUDIO = ROOT / "apps" / "studio" / "app" / "studio-client.tsx"
 
@@ -418,3 +419,18 @@ def test_studio_pickers_call_the_registry() -> None:
     html_path = ROOT / "apps" / "daemon" / "vinci_daemon" / "studio.html"
     html = html_path.read_text(encoding="utf-8")
     assert "model-capabilities" not in html
+
+
+def test_price_text_for_lists_and_cards() -> None:
+    """COREPRODUC-642 (STU-17): model lists and cards showed no price."""
+    script = """
+const eq = (a, b, m) => { if (a !== b) throw new Error(m + ": " + a); };
+setPriceUnit(undefined);
+eq(priceText({ provider: "wavespeed", pricing: { amount: 0.04 } }), "$0.040", "flat");
+eq(priceText({ provider: "wavespeed", pricing: { amount: 0.42, clip_prices: { "5": 0.21, "10": 0.42 } } }), "from $0.210", "per length");
+eq(priceText({ provider: "openai", pricing: { amount: 0 } }), PRICE_VARIES, "unpriced");
+setPriceUnit("credits");
+eq(priceText({ provider: "wavespeed", pricing: { amount: 2 } }), "2 credits", "host credits");
+"""
+    result = _run(script)
+    assert result.returncode == 0, result.stderr or result.stdout

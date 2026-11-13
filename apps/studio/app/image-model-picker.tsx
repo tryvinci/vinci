@@ -8,6 +8,7 @@ import {
   searchImageModels,
   type ImageModel,
 } from "../lib/image-page";
+import { priceText } from "../lib/model-capabilities";
 
 /**
  * Upward model picker: search, Featured, All, one-line blurbs, badges, chips.
@@ -16,7 +17,7 @@ import {
  *   models: Image catalog rows.
  *   value: Selected model id.
  *   query: Search text.
- *   onQuery / onPick / onClose: Picker events.
+ *   onQuery / onPick: Picker events. Escape and outside clicks are the parent bar's (useMenuEscape).
  */
 export function ImageModelPicker({
   models,
@@ -79,6 +80,9 @@ function PickerGroup({
           >
             <span className="image-picker-lead">
               <strong>{row.display_name}</strong>
+              <span className="image-picker-price" data-testid="model-price">
+                {priceText(row)}
+              </span>
               {badges.map((b) => (
                 <span key={b} className="image-badge">
                   {b}

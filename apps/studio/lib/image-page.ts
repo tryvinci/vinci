@@ -25,6 +25,7 @@ export type ImageModel = {
     resolutions?: string[];
     max_input_images?: number | null;
     max_duration?: number;
+    durations?: number[];
   };
   quality_tier?: string;
   status?: string;
@@ -185,7 +186,10 @@ export function modelBadges(model: ImageModel | undefined): string[] {
 export function capabilityChips(model: ImageModel | undefined): string[] {
   const chips = [...(model?.constraints?.resolutions || [])];
   const maxDur = Number(model?.constraints?.max_duration || 0);
-  if (maxDur) chips.push(`${maxDur}s`);
+  // The range the catalog prices ("4–30s"), not only the longest (COREPRODUC-642).
+  const lengths = (model?.constraints?.durations || []).map(Number).filter((n) => n > 0);
+  const minDur = lengths.length ? Math.min(...lengths) : maxDur;
+  if (maxDur) chips.push(minDur && minDur < maxDur ? `${minDur}–${maxDur}s` : `${maxDur}s`);
   if ((model?.pricing?.unit || "").includes("audio")) chips.push("Audio");
   if ((model?.capabilities || []).includes("i2i")) chips.push("References");
   const max = model?.constraints?.max_input_images;
@@ -386,4 +390,20 @@ export function applyFavorites(items: readonly ImageFeedItem[], ids: readonly st
 export function needsReference(model: ImageModel | undefined): boolean {
   const caps = model?.capabilities || [];
   return caps.includes("i2i") && !caps.includes("t2i");
+}
+
+/**
+ * Why Generate is off on the Image page, or "" when it can run. The reason shows under the button.
+ * Bug fixed (first occurrence, 2026-11-13 production crawl, COREPRODUC-638): an empty prompt ran a
+ * hidden default prompt ("north-light oak cube"), and the user paid for it.
+ *
+ * Args:
+ *   model: The selected model.
+ *   prompt: The prompt box text.
+ *   refs: How many reference stills are attached.
+ */
+export function imageBlock(model: ImageModel | undefined, prompt: string, refs: number): string {
+  if (needsReference(model) && !refs) return "This model edits a still. Add a reference first.";
+  if (!prompt.trim() && (model?.capabilities || []).includes("t2i")) return "Describe the still first.";
+  return "";
 }

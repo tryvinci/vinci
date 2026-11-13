@@ -442,7 +442,7 @@ function setNodeParam(graph: Graph, id: string, key: string, value: string): Gra
  * Picks `key` when given, else the first free input whose kind matches. An input
  * takes one source, so an existing wire into the same input is replaced.
  */
-export function connect(graph: Graph, src: string, dst: string, key?: string, style?: EdgeStyle): GraphResult {
+export function connect(graph: Graph, src: string, dst: string, key?: string, style?: EdgeStyle, fresh = false): GraphResult {
   const a = graph.nodes.find((n) => n.id === src);
   const b = graph.nodes.find((n) => n.id === dst);
   if (!a || !b) return { ok: false, error: "That step is missing. Add it again." };
@@ -454,8 +454,9 @@ export function connect(graph: Graph, src: string, dst: string, key?: string, st
   const taken = new Set(graph.edges.filter((e) => e.dst === dst).map((e) => e.input_key));
   const port = fits.find((p) => !taken.has(p.key)) || fits[0];
   const wired = graph.edges.some((e) => e.src === src && e.dst === dst && e.input_key === port.key);
+  const current = b.params?.[port.key];
   // Same wire again: a no-op, unless an older save left the param pointing at page inputs.
-  if (wired && b.params?.[port.key] === nodeRef(src)) return { ok: true, graph };
+  if (wired && typeof current === "string" && refPattern(src).test(current)) return { ok: true, graph };
   if (reaches(graph, dst, src)) return { ok: false, error: "That connection loops. Pick a different step." };
   // The input's old source: a keyed edge, or an unkeyed one (templates, old saves) feeding this param.
   const replaced = graph.edges.filter(
@@ -473,9 +474,20 @@ export function connect(graph: Graph, src: string, dst: string, key?: string, st
       { ...graph, edges: [...edges, { src, dst, input_key: port.key, ...(style && style !== "rounded" ? { style } : {}) }] },
       dst,
       port.key,
-      nodeRef(src),
+      // A node made from this output (`fresh`) takes the wire alone: its seeded prompt was not typed.
+      out === "text" && !fresh && typed(current) ? `${typed(current)}${WIRED_SEP}${nodeRef(src)}` : nodeRef(src),
     ),
   };
+}
+
+// A text wire into a prompt the user typed keeps the typed text: `typed\n{{nodes.src.output}}`.
+// Bug fixed (first occurrence, 2026-11-13 production crawl, COREPRODUC-642): the wire replaced the prompt.
+const WIRED_SEP = "\n";
+
+/** The text a user typed into a param: without wired `{{nodes…}}` refs, and "" for a page-input template. */
+function typed(value: unknown): string {
+  if (typeof value !== "string" || value.trim().startsWith("{{")) return "";
+  return value.replace(/\n?\{\{\s*nodes\.[^}]*\}\}/g, "").trim();
 }
 
 /** A whole `{{ nodes.<src>... }}` template, matching the runtime's `interpolate` grammar. */
@@ -530,6 +542,10 @@ export function disconnect(graph: Graph, src: string, dst: string): Graph {
   const node = next.nodes.find((n) => n.id === dst);
   for (const [key, value] of Object.entries(node?.params || {})) {
     if (value === nodeRef(src)) next = setNodeParam(next, dst, key, inputRef(key));
+    // Typed text plus this wire (see `connect`): keep the typed text.
+    else if (typeof value === "string" && value.endsWith(WIRED_SEP + nodeRef(src))) {
+      next = setNodeParam(next, dst, key, value.slice(0, -(WIRED_SEP + nodeRef(src)).length));
+    }
   }
   if (readsFrom(next.nodes.find((n) => n.id === dst), src)) next = { ...next, edges: [...next.edges, { src, dst }] };
   return next;
@@ -608,7 +624,7 @@ export function groupOf(graph: Graph, ids: string[]): GraphGroup | undefined {
 export function addNode(graph: Graph, node: GraphNode, linkFrom?: string, style?: EdgeStyle): Graph {
   const next = { ...graph, nodes: [...graph.nodes, node] };
   if (!linkFrom) return next;
-  const wired = connect(next, linkFrom, node.id, undefined, style);
+  const wired = connect(next, linkFrom, node.id, undefined, style, true);
   return wired.ok ? wired.graph : next;
 }
 
@@ -825,6 +841,64 @@ export function settle(h: GraphHistory, base: Graph): GraphHistory {
   // Dragged back to where it started: keep redo and the original graph object.
   if (JSON.stringify(h.present) === JSON.stringify(base)) return { ...h, present: base };
   return record(h, base, h.present);
+}
+
+/**
+ * Put the text of Text and List nodes into the generate params that read them. No server runs these
+ * canvas-only nodes, so a wired `{{nodes.<text>.output}}` would reach the runtime with no source. Bug
+ * fixed (first occurrence, 2026-11-13 production crawl, COREPRODUC-640): a Text node wired into Image
+ * Gen failed with "This step needs the output of text-…". Run on the whole graph before a run slices it.
+ */
+export function inlineText(graph: Graph): Graph {
+  const texts = graph.nodes.filter((n) => n.capability === "text" || n.capability === "list");
+  if (!texts.length) return graph;
+  const fill = (value: unknown): unknown => {
+    if (typeof value === "string") return texts.reduce((v, t) => v.replace(refPattern(t.id, "g"), () => String(t.params?.prompt ?? "")), value);
+    if (Array.isArray(value)) return value.map(fill);
+    if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, fill(v)]));
+    return value;
+  };
+  return { ...graph, nodes: graph.nodes.map((n) => (n.type === "generate" ? { ...n, params: fill(n.params || {}) as Record<string, unknown> } : n)) };
+}
+
+/** A canvas-only node (an Assistant) that a node in `ids` still reads after `inlineText`: no server runs it. */
+export function unrunnableSource(graph: Graph, ids: Iterable<string>): GraphNode | null {
+  const want = new Set(ids);
+  for (const n of graph.nodes) {
+    if (n.type !== "generate" || !want.has(n.id)) continue;
+    const src = graph.nodes.find((s) => s.type === "transform" && readsFrom(n, s.id));
+    if (src) return src;
+  }
+  return null;
+}
+
+/**
+ * One runtime node per output: a node with count N becomes N nodes (`<id>-copy2`...) with the same
+ * inputs and their own seed, so the cache does not return one picture N times. Bug fixed (first
+ * occurrence, 2026-11-13 production crawl, COREPRODUC-642): count 2 sent one job and gave 1 picture.
+ *
+ * Args:
+ *   graph: Runtime nodes and edges (after `runtimeGraph`).
+ *   seedBase: The seed of the first copy when the node has none.
+ */
+export function expandCounts(graph: { nodes: GraphNode[]; edges: GraphEdge[] }, seedBase: number): { nodes: GraphNode[]; edges: GraphEdge[] } {
+  const nodes: GraphNode[] = [];
+  const edges = [...graph.edges];
+  for (const n of graph.nodes) {
+    const count = Math.max(1, Math.floor(Number(n.params?.count) || 1));
+    if (count === 1) {
+      nodes.push(n);
+      continue;
+    }
+    const { count: _count, num_images: _num, ...params } = n.params || {};
+    const seed = Number(params.seed) || seedBase;
+    for (let i = 0; i < count; i += 1) {
+      const id = i ? `${n.id}-copy${i + 1}` : n.id;
+      nodes.push({ ...n, id, params: { ...params, seed: seed + i } });
+      if (i) for (const e of graph.edges) if (e.dst === n.id) edges.push({ ...e, dst: id });
+    }
+  }
+  return { nodes, edges };
 }
 
 /** Generate nodes and the wires between them. Canvas-only types stay off the runtime. */
