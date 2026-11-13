@@ -2,6 +2,7 @@ import {
   authConfigured,
   authorized,
   bridgeJournalAuthorized,
+  bridgeToken,
   csrfCookie,
   instanceSecret,
   loginPage,
@@ -13,17 +14,50 @@ import {
   type Env,
 } from "./auth";
 import { VinciHost } from "./host";
+import {
+  parseReviewConfig,
+  parseReviewEnvConfig,
+  reviewMisconfiguredEnv,
+  reviewModeEnabled,
+} from "./review-budget";
+
+function reviewMisconfigured(env: Env): boolean {
+  return reviewMisconfiguredEnv(env);
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
     if (url.pathname === "/healthz") {
-      return Response.json({
+      const body: Record<string, unknown> = {
         status: "ok",
         surface: "worker",
         auth: authConfigured(env),
-      });
+      };
+      const cfg = parseReviewConfig(env);
+      const envCfg = parseReviewEnvConfig(env);
+      if (reviewModeEnabled(env)) {
+        body.review_mode = true;
+        body.review_configured = envCfg !== null;
+        body.review_active = cfg !== null;
+        if (envCfg) {
+          body.review_expires_at_unix = envCfg.expiresAtUnix;
+        }
+      }
+      if (reviewMisconfigured(env)) {
+        return Response.json({ ...body, status: "misconfigured", error: "review_expires_missing" }, {
+          status: 503,
+        });
+      }
+      return Response.json(body);
+    }
+
+    if (reviewMisconfigured(env)) {
+      return Response.json(
+        { error: "misconfigured", detail: "VINCI_REVIEW_MODE=1 requires VINCI_REVIEW_EXPIRES_AT (unix seconds)." },
+        { status: 503 },
+      );
     }
 
     if (url.pathname.startsWith("/__vinci/journal/")) {
@@ -119,6 +153,17 @@ export default {
     const id = env.HOST.idFromName("default");
     const stub = env.HOST.get(id);
     return stub.fetch(request);
+  },
+
+  async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
+    if (!reviewModeEnabled(env) || !bridgeToken(env)) return;
+    const id = env.HOST.idFromName("default");
+    await env.HOST.get(id).fetch(
+      new Request("http://do/__vinci/review/teardown", {
+        method: "POST",
+        headers: { authorization: `Bearer ${bridgeToken(env)}` },
+      }),
+    );
   },
 };
 
