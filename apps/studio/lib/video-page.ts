@@ -123,7 +123,8 @@ export const VIDEO_HOW_STEPS = [
 /** Duration tiles already used by Studio. Do not add values the catalog cannot run. */
 export const VIDEO_DURATION_PICKS = [3, 5, 6, 8, 10, 15] as const;
 
-export const VIDEO_TABS = ["Create", "Edit", "Motion control"] as const;
+/** No Video model edits a region and the panel has no edit input, so there is no Edit tab (COREPRODUC-647). */
+export const VIDEO_TABS = ["Create", "Motion control"] as const;
 
 /** Families taken from catalog ids / display names. No invented labels. */
 const FAMILIES: [string, string][] = [

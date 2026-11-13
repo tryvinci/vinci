@@ -181,7 +181,7 @@ def test_how_steps_cost_and_demo_default() -> None:
 if (VIDEO_HOW_STEPS.length !== 3) throw new Error("how steps");
 // Card 2 said "Pick a preset" over "Press Change to pick a model" (COREPRODUC-642, STU-24).
 if (VIDEO_HOW_STEPS[1].title !== "Pick a model") throw new Error("step 2 title");
-if (VIDEO_TABS.join() !== "Create,Edit,Motion control") throw new Error("tabs");
+if (VIDEO_TABS.join() !== "Create,Motion control") throw new Error("tabs"); // No Edit tab (COREPRODUC-647).
 if (generateCost(0.35) !== 0.35) throw new Error("cost");
 if (toggleFavorite(["a"], "a").length !== 0) throw new Error("unfav");
 const fav = applyFavorites([{ id: "a", assetId: "a", prompt: "", modelId: "", createdAt: "", favorite: false, mediaKind: "video" }], ["a"]);
