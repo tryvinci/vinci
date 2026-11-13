@@ -178,7 +178,7 @@ export function ShotView({
   }
 
   function ask(kind: RenderKind) {
-    const what = kind === "audio" ? "the dialogue" : kind === "keyframe" && draws > 1 ? `${draws} keyframes` : "this render";
+    const what = kind === "audio" ? "the dialogue" : kind === "keyframe" && draws > 1 ? `${draws} keyframes` : `this ${kind}`;
     return (
       <Confirm
         text={spendText(total(kind), unpriced(kind), what)}

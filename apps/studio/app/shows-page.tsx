@@ -633,7 +633,7 @@ function OpenShow({
   return (
     <div className="shows-page shows-solo" data-testid="shows-open">
       <EmptyState
-        eyebrow="Movie engine · OLF v0.1"
+        eyebrow="Shows"
         title="Build the world once. Render every episode."
         copy="Write the show bible once: characters, places, props and style. Vinci renders every shot from it on any model, and shows you which takes are out of date when the bible changes."
         actions={
@@ -688,7 +688,7 @@ function OpenShow({
             "A show is a folder in the Open Lore Format, with project.yaml at the top. The sample is a short anime show called Tidewatch."
           ) : (
             // A host keeps the shows in its storage, not in folders on this computer.
-            "A show keeps its bible, episodes and shots in the Open Lore Format. The sample is a short anime show called Tidewatch."
+            "A show keeps its bible, episodes and shots together. The sample is a short anime show called Tidewatch."
           )
         }
       />

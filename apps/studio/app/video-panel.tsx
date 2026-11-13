@@ -356,11 +356,11 @@ export function VideoPanel({
         <AdvancedDisclosure testId="video-advanced">
           <label>
             Steps
-            <input data-testid="video-steps" type="number" min={0} value={steps} onChange={(ev) => onSteps(ev.target.value)} />
+            <input data-testid="video-steps" type="number" min={0} placeholder="Model default" value={steps} onChange={(ev) => onSteps(ev.target.value)} />
           </label>
           <label>
             Seed
-            <input data-testid="video-seed" type="number" value={seed} onChange={(ev) => onSeed(ev.target.value)} />
+            <input data-testid="video-seed" type="number" placeholder="Random" value={seed} onChange={(ev) => onSeed(ev.target.value)} />
           </label>
         </AdvancedDisclosure>
       ) : null}

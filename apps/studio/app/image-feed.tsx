@@ -148,6 +148,8 @@ export function ImageFeed({
                   <img src={fileUrl(item.assetId)} alt="" />
                 )}
                 <div className="image-card-hover" data-testid={hoverTestId}>
+                  {/* Under the buttons, over the picture: a click opens it full size (COREPRODUC-650 paid-8). */}
+                  <a className="image-card-open" href={fileUrl(item.assetId)} target="_blank" rel="noreferrer" aria-label="Open full size" data-testid="image-card-open" />
                   <button type="button" aria-label="Favorite" onClick={() => onFavorite(item)}>
                     {item.favorite ? "♥" : "♡"}
                   </button>

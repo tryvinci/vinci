@@ -76,6 +76,63 @@ test.describe("Production crawl fixes", () => {
     await expect(page.getByTestId("video-prompt")).toHaveValue("");
   });
 
+  test("COREPRODUC-648: a text-only model takes no reference; Generate says why and names one that does", async ({ page }) => {
+    // Demo has one image model (Mock PNG, takes references). Add a text-only copy named like FLUX Dev.
+    await page.route("**/vinci-api/models", async (route) => {
+      const res = await route.fetch();
+      const body = (await res.json()) as { models: Record<string, unknown>[] };
+      const png = body.models.find((row) => row.id === "mock:png:v1");
+      body.models.push({ ...png, id: "mock:flux-dev:test", display_name: "FLUX Dev", capabilities: ["t2i"] });
+      await route.fulfill({ response: res, json: body });
+    });
+    const posted: Record<string, unknown>[] = [];
+    await page.route("**/vinci-api/runs", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      posted.push(route.request().postDataJSON() as Record<string, unknown>);
+      await route.fulfill({ json: { id: "run-648", state: "completed", outputs: [], nodes: {}, estimate: { total: 0 } } });
+    });
+    const pick = async (name: string) => {
+      await page.getByTestId("image-model-chip").click();
+      await page.getByTestId("image-model-picker").getByRole("option", { name: new RegExp(name) }).click();
+      await expect(page.getByTestId("image-model-chip")).toHaveText(name);
+    };
+    await boot(page);
+    await openPage(page, "Image");
+    await page.getByRole("textbox", { name: "Image prompt" }).fill("a paper boat on a pond");
+
+    // A text-only model: Add reference is off and says why.
+    await pick("FLUX Dev");
+    await expect(page.getByTestId("image-ref")).toBeDisabled();
+    await expect(page.getByTestId("image-ref")).toHaveAttribute("aria-label", "FLUX Dev does not use references");
+    await page.screenshot({ path: path.join(shots, "ref_flux_add_off.png") });
+
+    // A model with References sends the reference.
+    await pick("Mock PNG");
+    await expect(page.getByTestId("image-ref")).toBeEnabled();
+    const refId = await upload(page, page.getByTestId("image-bar").locator("input[type=file]"), PNG);
+    await page.getByTestId("image-generate").click();
+    await expect.poll(() => posted.length).toBe(1);
+    expect((posted[0].inputs as Record<string, unknown>).image).toBe(refId);
+
+    // Picking FLUX Dev with the reference set blocks Generate with a reason and a model that takes one.
+    await pick("FLUX Dev");
+    await expect(page.getByTestId("image-generate")).toBeDisabled();
+    await expect(page.getByTestId("image-blocked")).toHaveText(
+      "FLUX Dev does not use references. Remove the reference, or pick Mock PNG.",
+    );
+    await page.screenshot({ path: path.join(shots, "ref_flux_blocked.png") });
+    await page.getByTestId("image-generate").click({ force: true });
+    expect(posted.length).toBe(1); // nothing paid for a reference the model ignores
+
+    // Removing the chip lets FLUX Dev run as text to image.
+    await page.getByTitle("Remove reference").click();
+    await expect(page.getByTestId("image-blocked")).toHaveCount(0);
+    await page.getByTestId("image-generate").click();
+    await expect.poll(() => posted.length).toBe(2);
+    expect(posted[1].model_id).toBe("mock:flux-dev:test");
+    expect((posted[1].inputs as Record<string, unknown>).image).toBeUndefined();
+  });
+
   test("STU-10, 08: a wrong file type shows the server's reason, in full", async ({ page }) => {
     await page.route("**/vinci-api/assets", (route) =>
       route.request().method() === "POST"

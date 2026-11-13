@@ -392,17 +392,29 @@ export function needsReference(model: ImageModel | undefined): boolean {
   return caps.includes("i2i") && !caps.includes("t2i");
 }
 
+/** True when the Image page sends a reference to this model (the picker's "References" tag). */
+export function takesReference(model: ImageModel | undefined): boolean {
+  return (model?.capabilities || []).includes("i2i");
+}
+
 /**
  * Why Generate is off on the Image page, or "" when it can run. The reason shows under the button.
  * Bug fixed (first occurrence, 2026-11-13 production crawl, COREPRODUC-638): an empty prompt ran a
  * hidden default prompt ("north-light oak cube"), and the user paid for it.
+ * Bug fixed (first seen 2026-11-13 crawl, confirmed on production 2026-11-14, COREPRODUC-648): a
+ * reference on a text-only model (FLUX Dev) showed a chip, but the run did not send it.
  *
  * Args:
  *   model: The selected model.
  *   prompt: The prompt box text.
  *   refs: How many reference stills are attached.
+ *   models: Picker rows, to name a model that takes references. Optional.
  */
-export function imageBlock(model: ImageModel | undefined, prompt: string, refs: number): string {
+export function imageBlock(model: ImageModel | undefined, prompt: string, refs: number, models?: readonly ImageModel[]): string {
+  if (model && refs && !takesReference(model)) {
+    const alt = models?.find(takesReference)?.display_name;
+    return `${model.display_name || "This model"} does not use references. Remove the reference, or pick ${alt || "a model with References"}.`;
+  }
   if (needsReference(model) && !refs) return "This model edits a still. Add a reference first.";
   if (!prompt.trim() && (model?.capabilities || []).includes("t2i")) return "Describe the still first.";
   return "";

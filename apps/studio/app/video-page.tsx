@@ -420,7 +420,8 @@ export function VideoPage({
         if (mime.startsWith("video/")) {
           onClip(asset.id);
           onExtendMode(true);
-          onLog("Clip added.");
+          // A clip turns on Extend Video; say so (COREPRODUC-650 video-9).
+          onLog(extendMode ? "Clip added." : "Clip added. Switched to Extend Video: the new clip continues it.");
           return;
         }
         if (mime.startsWith("audio/")) {

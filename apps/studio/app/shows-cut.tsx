@@ -15,6 +15,7 @@ import {
   dialogueLabel,
   fadeAt,
   fileUrl,
+  hasApprovedTakes,
   price,
   silentClips,
   spendText,
@@ -84,6 +85,9 @@ export function CutView({
   }, [playing, time, duration]);
 
   if (!cut) return <p className="muted">Loading the cut…</p>;
+  const approvedOff = hasApprovedTakes(show, show.episodes.find((row) => row.id === cut.episode))
+    ? ""
+    : "Approve a keyframe or a video first.";
   if (!cut.clips.length) {
     return (
       <section className="olf-cut-empty" data-testid="cut-empty">
@@ -92,9 +96,15 @@ export function CutView({
           The cut lists takes in play order. Start from the approved video of each shot, or its approved keyframe as a
           still.
         </p>
-        <button type="button" className="run" disabled={Boolean(busy)} onClick={onUseApproved} data-testid="cut-use-approved">
+        <button type="button" className="run" disabled={Boolean(busy || approvedOff)} title={approvedOff || undefined} onClick={onUseApproved} data-testid="cut-use-approved">
           {busy === "approved" ? "Building the cut…" : "Use approved takes"}
         </button>
+        {approvedOff ? (
+          // The reason in words, as the shot page's render hint (COREPRODUC-650 shows-11).
+          <p className="muted olf-small-text" data-testid="cut-approved-hint">
+            {approvedOff}
+          </p>
+        ) : null}
       </section>
     );
   }
@@ -144,7 +154,7 @@ export function CutView({
             {clockText(time)} / {clockText(duration)}
           </code>
           <span className="olf-grow" />
-          <button type="button" className="ghost" disabled={Boolean(busy)} onClick={onUseApproved} data-testid="cut-use-approved">
+          <button type="button" className="ghost" disabled={Boolean(busy || approvedOff)} title={approvedOff || undefined} onClick={onUseApproved} data-testid="cut-use-approved">
             {busy === "approved" ? "Building the cut…" : "Use approved takes"}
           </button>
           <OlfOnly path="/olf/cue">

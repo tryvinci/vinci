@@ -27,6 +27,7 @@ NAMES = [
     "pickerSections",
     "qualityOptions",
     "searchImageModels",
+    "takesReference",
     "toggleFavorite",
     "visibleControls",
     "withPendingCards",
@@ -257,6 +258,15 @@ eq(imageBlock(t2i, "", 1), "Describe the still first.", "empty with a reference"
 eq(imageBlock(t2i, "a cat", 0), "", "prompt");
 eq(imageBlock(edit, "a cat", 0), "This model edits a still. Add a reference first.", "edit, no reference");
 eq(imageBlock(edit, "", 1), "", "edit model with its reference");
+// COREPRODUC-648: a text-only model drops the reference, so Generate stays off and names a model that takes one.
+const flux = { id: "f", display_name: "FLUX Dev", capabilities: ["t2i"] };
+const seedream = { id: "s45", display_name: "Seedream 4.5 Edit", capabilities: ["i2i"] };
+eq(takesReference(flux), false, "flux takes no reference");
+eq(takesReference(t2i), true, "t2i+i2i takes a reference");
+eq(imageBlock(flux, "a boat", 0), "", "flux without a reference runs");
+eq(imageBlock(flux, "a boat", 1, [flux, seedream]), "FLUX Dev does not use references. Remove the reference, or pick Seedream 4.5 Edit.", "flux with a reference");
+eq(imageBlock(flux, "", 1), "FLUX Dev does not use references. Remove the reference, or pick a model with References.", "no alternative listed");
+eq(imageBlock(t2i, "a boat", 1, [flux, seedream]), "", "a reference model with its reference runs");
 """
     result = _run(script)
     assert result.returncode == 0, result.stderr or result.stdout

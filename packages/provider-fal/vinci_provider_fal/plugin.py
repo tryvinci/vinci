@@ -21,13 +21,14 @@ _SOUND_ROUTES = ("fal-ai/kling-video/v2.6", "fal-ai/veo3.1", "fal-ai/bytedance/s
 
 
 def _image_input(req: JobRequest) -> str | None:
+    # Start-frame keys first: only video runs send them, and they win over `image` (COREPRODUC-644).
     for key in (
-        "image_url",
+        "first_frame_url",
         "start_image_url",
+        "image_url",
         "image",
         "media",
         "input_image",
-        "first_frame_url",
     ):
         value = req.inputs.get(key)
         if isinstance(value, str) and value:

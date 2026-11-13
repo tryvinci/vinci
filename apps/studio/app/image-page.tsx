@@ -233,7 +233,7 @@ export function ImagePage({
   );
 
   const cost = selected && isUnpriced(selected) ? PRICE_VARIES : money(generateCost(selected?.pricing?.amount, batch), selected?.pricing?.currency);
-  const hint = imageBlock(selected, prompt, refs.length);
+  const hint = imageBlock(selected, prompt, refs.length, imageRows);
 
   return (
     <div className="image-page" data-testid="image-page">
