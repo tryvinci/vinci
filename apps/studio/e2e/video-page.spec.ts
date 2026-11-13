@@ -25,9 +25,9 @@ test.describe("Video page", () => {
     await expect(page.getByTestId("video-mode-extend")).toBeVisible();
     await page.screenshot({ path: path.join(shots, "video_empty_how.png"), fullPage: true });
 
-    await page.getByTestId("video-tab-edit").click();
-    await expect(page.getByTestId("video-edit-empty")).toBeVisible();
-    await page.screenshot({ path: path.join(shots, "video_edit_unsupported.png") });
+    // COREPRODUC-647: no model edits a region, so the panel offers no dead-end Edit tab.
+    await expect(page.getByTestId("video-panel").getByRole("tab")).toHaveText(["Create", "Motion control"]);
+    await expect(page.getByTestId("video-tab-edit")).toHaveCount(0);
 
     await page.getByTestId("video-tab-motion-control").click();
     await expect(page.getByTestId("video-motion")).toBeVisible();

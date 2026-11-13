@@ -176,11 +176,6 @@ export function VideoPanel({
           Change
         </button>
       </div>
-      {tab === "Edit" ? (
-        <p className="muted" data-testid="video-edit-empty">
-          This model cannot edit a region. Switch to Create, or press Change and pick another model.
-        </p>
-      ) : null}
       {tab === "Motion control" ? (
         <div className="video-tiles" data-testid="video-motion">
           {motions.map((value) => (
