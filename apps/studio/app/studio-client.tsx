@@ -4570,7 +4570,13 @@ export function StudioClient() {
                   <div>
                     <p className="rail-flyout-h">Features</p>
                     {FLYOUT_FEATURES[kind].filter((row) => served(row.id)).map((row) => (
-                      <button key={row.id} className="flyout-row" type="button" onClick={() => openPage(row.id)}>
+                      <button
+                        key={row.id}
+                        // same-page: the row opens the format's own page; the phone drawer hides it.
+                        className={"flyout-row" + (row.id === item.id ? " same-page" : "")}
+                        type="button"
+                        onClick={() => openPage(row.id)}
+                      >
                         <strong>{row.title}</strong>
                         <span>{row.blurb}</span>
                       </button>

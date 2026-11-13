@@ -935,18 +935,18 @@ input[type="range"] { accent-color: var(--teal); width: 100%; padding: 0; border
     padding: 0 12px;
     border-radius: 12px;
   }
-  .rail-flyout {
-    display: block;
-    position: static;
-    width: auto;
-    margin: 0 0 8px;
-    padding: 0 8px 4px;
-    border: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-  .rail-flyout::before { display: none; }
-  .rail-flyout > div:nth-child(2) { display: none; }
+  /* In the drawer a flyout is plain sub-rows under its format: the title only, lined up with the
+     format's label, and no row that opens the format's own page (brand.css drops the glass). Bug fixed
+     (first occurrence 2026-11-13, 1 report, phone screenshot of app.tryvinci.com/studio): each flyout
+     was a glass card with its "Features" heading on the card edge, and "Create Image" repeated "Image". */
+  .rail-flyout { display: block; position: static; width: auto; margin: 0; padding: 0; border: 0; }
+  .rail-flyout::before,
+  .rail-flyout > div:nth-child(2),
+  .rail-flyout-h,
+  .rail-flyout button.same-page,
+  .rail-flyout button.flyout-row span { display: none; }
+  .rail-flyout button.flyout-row { min-height: 36px; margin: 0; padding: 0 12px 0 40px; justify-content: center; color: hsl(200 6% 64%); }
+  .rail-flyout button.flyout-row strong { font-weight: 500; }
   .all-tools { left: 12px; right: 12px; width: auto; top: 68px; transform: none; }
   .insp { border-left: 0; border-top: 1px solid var(--line); max-height: 42vh; }
 }

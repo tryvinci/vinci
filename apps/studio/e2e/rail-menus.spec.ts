@@ -102,4 +102,15 @@ test.describe("Rail menus", () => {
     await video.hover();
     await expect(flyout).toBeVisible();
   });
+
+  // Bug fixed (first occurrence 2026-11-13, 1 report): on a phone each flyout was a glass card.
+  test("on a phone the drawer lists the other features as plain rows", async ({ page }) => {
+    await openImage(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator(".rail-menu").click();
+    const drawer = page.locator("nav#studio-rail");
+    await expect(drawer.getByRole("button", { name: "Upscale Still" })).toBeVisible();
+    await expect(drawer.getByRole("button", { name: "Create Image" })).toBeHidden();
+    await expect(drawer.locator(".rail-flyout").first()).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  });
 });
