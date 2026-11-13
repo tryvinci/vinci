@@ -26,9 +26,12 @@ type Props = {
   modelId: string;
   aspects: string[];
   resolutions: string[];
+  /** Video lengths in seconds ("5", "10"); empty for other nodes. */
+  durations: string[];
   count: number;
   aspect: string;
   resolution: string;
+  duration: string;
   costText: string;
   runDisabled: boolean;
   runTitle: string;
@@ -40,6 +43,7 @@ type Props = {
   onCount: (n: number) => void;
   onAspect: (v: string) => void;
   onResolution: (v: string) => void;
+  onDuration: (v: string) => void;
   onModel: (id: string) => void;
   onGear: () => void;
   onRun: () => void;
@@ -198,9 +202,11 @@ export function CanvasNodeCard({
   modelId,
   aspects,
   resolutions,
+  durations,
   count,
   aspect,
   resolution,
+  duration,
   costText,
   runDisabled,
   runTitle,
@@ -212,6 +218,7 @@ export function CanvasNodeCard({
   onCount,
   onAspect,
   onResolution,
+  onDuration,
   onModel,
   onGear,
   onRun,
@@ -349,6 +356,18 @@ export function CanvasNodeCard({
             onOpen={(next) => setOpenPill(next ? "resolution" : null)}
             onChange={onResolution}
             options={resolutions.map((v) => ({ id: v, label: v }))}
+          />
+        ) : null}
+        {durations.length ? (
+          <NodePill
+            label="Duration"
+            value={duration}
+            placeholder="Duration"
+            testId="node-duration-chip"
+            open={openPill === "duration"}
+            onOpen={(next) => setOpenPill(next ? "duration" : null)}
+            onChange={onDuration}
+            options={durations.map((v) => ({ id: v, label: `${v}s` }))}
           />
         ) : null}
       </div>

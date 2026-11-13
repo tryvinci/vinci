@@ -22,6 +22,7 @@ NAMES = [
     "isVideoModel",
     "modelFamily",
     "needsStartFrame",
+    "nodeDurations",
     "presetFilterChips",
     "presetFixes",
     "presetTabs",
@@ -52,6 +53,20 @@ const hidden = videoModels(rows, ["wavespeed", "mock"]).map((row) => row.id).joi
 if (hidden !== "kling") throw new Error("mock should hide when a provider is connected: " + hidden);
 const demo = videoModels(rows, ["mock"]).map((row) => row.id).join();
 if (demo !== "mock:mp4:v1") throw new Error("demo keeps mock: " + demo);
+"""
+    result = _run(script)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_a_canvas_video_node_gets_the_video_page_durations() -> None:
+    """COREPRODUC-649: a Video Gen node showed no duration and always sent 5 s."""
+    script = """
+const eq = (a, b, msg) => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(msg + ": " + JSON.stringify(a)); };
+const kling26 = { constraints: { durations: [5, 10], max_duration: 10 }, pricing: { clip_prices: { "5": 9, "10": 17 } } };
+eq(nodeDurations(kling26, 10), { options: ["5", "10"], value: "10" }, "the pick shows");
+eq(nodeDurations(kling26, 7), { options: ["5", "10"], value: "10" }, "an off-list length shows what the run sends");
+eq(nodeDurations(kling26, "{{inputs.duration}}").value, "", "a template reads the page");
+eq(nodeDurations(undefined, 5), { options: [], value: "" }, "no model, no pills");
 """
     result = _run(script)
     assert result.returncode == 0, result.stderr or result.stdout

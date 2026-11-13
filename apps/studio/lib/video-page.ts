@@ -8,6 +8,7 @@
  * Extend copies the clip's last frame plus the run's own settings.
  */
 
+import { fitToModel } from "./canvas-node";
 import { modelsFor, tieBreakAvailability, withoutMockWhenConnected } from "./model-capabilities";
 import { filterMentions, insertMention, mentionOpen, type MentionRow } from "./library";
 
@@ -190,6 +191,24 @@ export function durationOptions(max: number, allowed: readonly number[] = []): n
   const picks = VIDEO_DURATION_PICKS.filter((n) => n <= cap);
   if (!picks.length) return [cap];
   return [...new Set(picks)];
+}
+
+/**
+ * Duration pills for a canvas video node: the Video page's tiles for its model, and the length the
+ * run sends (fitted as `fitToModel` does), or "" when that is not a tile (a template reads the page).
+ * Bug fixed (first seen 2026-11-13 production crawl, confirmed 2026-11-14, COREPRODUC-649): a Video
+ * Gen node had no duration control, so the canvas always sent 5 s and could not make a 10 s clip.
+ *
+ * Args:
+ *   model: The node's catalog row.
+ *   asked: The node's `duration` param.
+ * Returns:
+ *   The tiles as strings ("5", "10") and the one picked.
+ */
+export function nodeDurations(model: Pick<VideoModel, "constraints"> | undefined, asked: unknown): { options: string[]; value: string } {
+  const options = durationOptions(Number(model?.constraints?.max_duration || 0), model?.constraints?.durations).map(String);
+  const value = String(fitToModel({ duration: asked }, model?.constraints).duration ?? "");
+  return { options, value: options.includes(value) ? value : "" };
 }
 
 /**
