@@ -326,6 +326,7 @@
           "9:16"
         ],
         "max_duration": 10,
+        "durations": [5, 10],
         "resolutions": [
           "1920x1080"
         ]
@@ -356,6 +357,7 @@
           "9:16"
         ],
         "max_duration": 10,
+        "durations": [5, 10],
         "resolutions": [
           "1920x1080"
         ]
@@ -386,6 +388,7 @@
           "9:16"
         ],
         "max_duration": 8,
+        "durations": [4, 6, 8],
         "resolutions": [
           "1280x720"
         ]
@@ -416,6 +419,7 @@
           "9:16"
         ],
         "max_duration": 8,
+        "durations": [4, 6, 8],
         "resolutions": [
           "1280x720"
         ]
@@ -477,6 +481,7 @@
           "9:16"
         ],
         "max_duration": 10,
+        "durations": [5, 10],
         "resolutions": [
           "1920x1080"
         ]
@@ -507,6 +512,7 @@
           "9:16"
         ],
         "max_duration": 10,
+        "durations": [5, 10],
         "resolutions": [
           "1920x1080"
         ]
@@ -627,6 +633,7 @@
           "9:16"
         ],
         "max_duration": 8,
+        "durations": [4, 6, 8],
         "resolutions": [
           "1920x1080"
         ]
@@ -657,6 +664,7 @@
           "9:16"
         ],
         "max_duration": 8,
+        "durations": [4, 6, 8],
         "resolutions": [
           "1920x1080"
         ]
@@ -687,6 +695,7 @@
           "9:16"
         ],
         "max_duration": 8,
+        "durations": [4, 6, 8],
         "resolutions": [
           "1920x1080"
         ]
@@ -717,6 +726,7 @@
           "9:16"
         ],
         "max_duration": 8,
+        "durations": [4, 6, 8],
         "resolutions": [
           "1280x720"
         ]
@@ -747,6 +757,7 @@
           "9:16"
         ],
         "max_duration": 8,
+        "durations": [8],
         "resolutions": [
           "1920x1080"
         ]
@@ -776,7 +787,8 @@
           "16:9",
           "9:16"
         ],
-        "max_duration": 10,
+        "max_duration": 6,
+        "durations": [6],
         "resolutions": [
           "1920x1080"
         ]
@@ -806,7 +818,8 @@
           "16:9",
           "9:16"
         ],
-        "max_duration": 10,
+        "max_duration": 6,
+        "durations": [6],
         "resolutions": [
           "1920x1080"
         ]
@@ -837,6 +850,7 @@
           "9:16"
         ],
         "max_duration": 10,
+        "durations": [5, 10],
         "resolutions": [
           "1280x720"
         ]

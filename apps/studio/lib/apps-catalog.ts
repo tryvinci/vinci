@@ -176,13 +176,13 @@ export const STUDIO_APPS: readonly StudioApp[] = [
   {
     id: "motion-clip",
     name: "Motion Clip",
-    description: "Five-second clip from one action line.",
+    description: "Six-second clip from one action line.",
     category: "motion",
     skill: "@tryvinci/video-generate",
     provider: "google",
     preferred_model_id: "google:veo-3.1-lite:2026-08",
     prompt_template: "{{action}}, {{lens}} lens, {{motion}} camera, natural sound off",
-    params: { aspect_ratio: "16:9", duration: 5, look: "documentary" },
+    params: { aspect_ratio: "16:9", duration: 6, look: "documentary" }, // Veo 3.1 takes 4, 6 or 8 s
     inputs: [
       { id: "action", label: "Action", type: "textarea", required: true, placeholder: "a paper cup slides down a wet bar" },
       {

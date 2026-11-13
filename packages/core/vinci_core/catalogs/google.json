@@ -34,6 +34,7 @@
       "constraints": {
         "aspect_ratios": ["16:9", "9:16"],
         "max_duration": 8,
+        "durations": [4, 6, 8],
         "resolutions": ["1280x720"]
       },
       "pricing": {
@@ -54,6 +55,7 @@
       "constraints": {
         "aspect_ratios": ["16:9", "9:16"],
         "max_duration": 8,
+        "durations": [4, 6, 8],
         "resolutions": ["1920x1080"]
       },
       "pricing": {

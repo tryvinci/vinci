@@ -228,6 +228,7 @@
           "1:1"
         ],
         "max_duration": 10,
+        "durations": [5, 10],
         "resolutions": [
           "1920x1080"
         ]
@@ -257,6 +258,7 @@
           "9:16"
         ],
         "max_duration": 10,
+        "durations": [5, 10],
         "resolutions": [
           "1920x1080"
         ]
@@ -286,6 +288,7 @@
           "9:16"
         ],
         "max_duration": 10,
+        "durations": [5, 10],
         "resolutions": [
           "1920x1080"
         ]
@@ -559,6 +562,7 @@
           "3:4"
         ],
         "max_duration": 15,
+        "durations": [5, 10, 15],
         "resolutions": [
           "1920x1080"
         ]
@@ -645,7 +649,8 @@
           "16:9",
           "9:16"
         ],
-        "max_duration": 10,
+        "max_duration": 6,
+        "durations": [6],
         "resolutions": [
           "1920x1080"
         ]
@@ -676,6 +681,7 @@
           "9:16"
         ],
         "max_duration": 15,
+        "durations": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
         "resolutions": [
           "1920x1080"
         ]
@@ -705,6 +711,7 @@
           "9:16"
         ],
         "max_duration": 8,
+        "durations": [4, 6, 8],
         "resolutions": [
           "1280x720"
         ]
