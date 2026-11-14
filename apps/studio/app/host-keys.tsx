@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { money } from "../lib/model-capabilities";
+
 /**
  * Connect on a host such as Vinci Platform: the user's own provider accounts (`doctor.host.keys`).
  * Wavespeed takes a pasted API key (COREPRODUC-613); Higgsfield and Magnific sign in with the
@@ -53,6 +56,46 @@ function ProviderLink({ id }: { id: string }) {
   ) : null;
 }
 
+type BalanceReply = { amount?: number | null; currency?: string; error?: string };
+
+/**
+ * What the user's own account can spend now: `GET /providers/{id}/balance` (free provider calls).
+ * Added 2026-11-15: a Higgsfield card said "Signed in" while every run failed, and nobody could see
+ * whether the account was out of credits. It loads again when the sign-in or the key changes.
+ *
+ * Args (props):
+ *   id: The provider id (`wavespeed`, `mcp_higgsfield`, `mcp_magnific`).
+ *   version: Changes when the sign-in state or the key changes, so the balance loads again.
+ */
+function Balance({ id, version }: { id: string; version: string }) {
+  const [reply, setReply] = useState<BalanceReply | null>(null);
+  useEffect(() => {
+    let live = true;
+    setReply(null);
+    fetch(`/vinci-api/providers/${id}/balance`)
+      .then(async (res) => (res.ok ? res.json() : { error: `Balance not available (HTTP ${res.status}).` }))
+      .catch(() => ({ error: "Could not reach Vinci for the balance." }))
+      .then((body: BalanceReply) => {
+        if (!live) return;
+        console.info("[connect] balance", { id, amount: body.amount, currency: body.currency, error: body.error });
+        setReply(body);
+      });
+    return () => {
+      live = false;
+    };
+  }, [id, version]);
+  if (!reply) return <div className="muted" data-testid={`balance-${id}`}>Balance: loading…</div>;
+  if (reply.error || reply.amount == null)
+    return <div className="log error" role="alert" data-testid={`balance-${id}`}>{reply.error || "The provider sent no balance."}</div>;
+  const empty = reply.amount <= 0;
+  return (
+    <div className={empty ? "log error" : "muted"} data-testid={`balance-${id}`}>
+      Balance: {money(reply.amount, reply.currency)}
+      {empty ? ". Add credits on the provider's site before you run." : ""}
+    </div>
+  );
+}
+
 /** The status line of a sign-in card. */
 function signInState(row?: KeyRow): string {
   if (row?.auth_state === "connected") return "Signed in";
@@ -97,6 +140,7 @@ export function HostKeys(props: {
                 <span className="kind">Sign-in</span>
                 <strong>{name}</strong>
                 <div className="muted">{signInState(row)}</div>
+                {signedIn ? <Balance id={id} version={row?.auth_state || ""} /> : null}
                 <p className="muted">{NOTES[id] || ""}</p>
                 <ProviderLink id={id} />
                 <div className="file-row">
@@ -133,6 +177,7 @@ export function HostKeys(props: {
                   ? `On your key ${row?.key_hint || ""}`.trim()
                   : "Not connected"}
               </div>
+              {ready ? <Balance id={id} version={row?.key_hint || ""} /> : null}
               <p className="muted">{NOTES[id] || ""}</p>
               <ProviderLink id={id} />
               <label htmlFor={`key-${id}`}>

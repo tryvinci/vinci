@@ -43,6 +43,7 @@ from vinci_mcp.connectors import (
     connector_for,
     decode_b64,
     models_for,
+    parse_balance,
     parse_cost,
     parse_generate,
     parse_status,
@@ -351,6 +352,22 @@ class McpProvider(Provider):
         status = self._attach_bytes(status, b64)
         self._jobs[ref] = status
         return ProviderJobRef(provider=self._provider_id, ref=ref)
+
+    def balance(self) -> float | None:
+        """The credits on the signed-in account now, from the provider's free balance tool.
+
+        Returns:
+            The credits, or None when the connector has no balance tool or the answer has no number.
+
+        Raises:
+            RuntimeError: The provider refused the call (its message, for example a 403).
+        """
+        tool = self._connector.balance_tool if self._connector is not None else ""
+        if not tool:
+            return None
+        credits = parse_balance(self._call(tool, {}))
+        log.info("mcp balance provider=%s credits=%s", self._provider_id, credits)
+        return credits
 
     def _call(self, name: str, arguments: dict[str, Any]) -> Any:
         """One tools/call. A tool error raises with the provider's message (no secrets in it)."""

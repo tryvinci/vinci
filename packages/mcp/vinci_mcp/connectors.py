@@ -56,6 +56,7 @@ class Connector:
     tools: dict[str, str]
     status_tool: str
     status_arg: str
+    balance_tool: str = ""  # free call: the account's credits now (Connect shows it)
     rows: tuple[Row, ...] = field(default=())
 
     def tool_for(self, capability: Capability) -> str:
@@ -133,6 +134,7 @@ CONNECTORS: dict[str, Connector] = {
         tools={"t2i": "generate_image", "i2v": "generate_video"},
         status_tool="job_status",
         status_arg="jobId",
+        balance_tool="balance",
         rows=(
             Row(
                 "seedream_v4_5",
@@ -164,6 +166,7 @@ CONNECTORS: dict[str, Connector] = {
         tools={"t2i": "images_generate", "i2v": "video_generate"},
         status_tool="creation_status",
         status_arg="creationIdentifier",
+        balance_tool="account_balance",
         rows=(
             Row(
                 "seedream-4-5",
@@ -239,6 +242,25 @@ def parse_cost(result: Any) -> float | None:
     nested = payload.get("cost")
     cost = nested if isinstance(nested, dict) else payload
     value = cost.get("credits")
+    return float(value) if isinstance(value, int | float) else None
+
+
+def parse_balance(result: Any) -> float | None:
+    """Credits of a balance call.
+
+    Higgsfield ``balance`` answers ``credits``; Magnific ``account_balance`` answers
+    ``credits.available``.
+
+    Args:
+        result: The ``tools/call`` result of the connector's ``balance_tool``.
+
+    Returns:
+        The credits the account can spend now, or None when the answer has no number.
+    """
+    payload = payload_from_tool(result)
+    value = payload.get("credits") if isinstance(payload, dict) else None
+    if isinstance(value, dict):
+        value = value.get("available")
     return float(value) if isinstance(value, int | float) else None
 
 

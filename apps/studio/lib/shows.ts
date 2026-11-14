@@ -153,13 +153,20 @@ export type OlfShowRow = { path: string; title: string; updated_at?: string };
  */
 export type OlfChoice = { id: string; name: string; provider: string; amount: number; currency?: string; unpriced: boolean; tools?: boolean };
 /** `GET /olf/models`: the choices, and the model routing picks with no choice (null: none). */
-export type OlfModels = { choices: OlfChoice[]; auto: { model: string; amount: number; unpriced: boolean } | null };
+export type OlfModels = { choices: OlfChoice[]; auto: { model: string; amount: number; currency?: string; unpriced: boolean } | null };
+/**
+ * A step on the person's own account (hosted Studio, COREPRODUC-615): a Wavespeed key in USD, or a
+ * Higgsfield or Magnific sign-in in its credits. Vinci charges it 0 credits, so `total` leaves it out.
+ */
+export type OlfOwnStep = { node?: string; model?: string; amount: number; currency: string };
 export type OlfPlan = {
-  plan?: { node: string; model: string; amount: number; capability?: string; extensions?: string[] }[];
+  plan?: { node: string; model: string; amount: number; currency?: string; capability?: string; extensions?: string[] }[];
   choices?: OlfChoice[];
   total?: number;
   /** Live models with no flat price (per-token billing): they need a confirm, like a paid total. */
   unpriced?: string[];
+  /** Steps on the person's own accounts, each in its unit (a host only). */
+  own?: OlfOwnStep[];
   takes?: string[];
   error?: string;
   /** Things to know before the render, such as an engine move that enlarges its keyframe. */
@@ -195,10 +202,11 @@ export type OlfBatchJob = {
   why?: string;
   total?: number;
   unpriced?: string[];
+  own?: OlfOwnStep[];
   takes?: string[];
   error?: string;
 };
-export type OlfBatch = { mode: "stale" | "animate"; jobs: OlfBatchJob[]; total: number; unpriced: string[]; takes: string[] };
+export type OlfBatch = { mode: "stale" | "animate"; jobs: OlfBatchJob[]; total: number; unpriced: string[]; own?: OlfOwnStep[]; takes: string[] };
 export type OlfShotDetail = {
   resolved: OlfData;
   /** Which level set each field (`project`, `bible`, `season`, `episode`, `scene`, `shot`). */
@@ -492,14 +500,49 @@ export function andList(items: readonly string[]): string {
 }
 
 /** The question before a paid render: `Spend $0.42 on 2 renders? openai:img has no flat price.` */
-export function spendText(total: number | undefined, unpriced: readonly string[] | undefined, what: string): string {
+export function spendText(total: number | undefined, unpriced: readonly string[] | undefined, what: string, own?: readonly OlfOwnStep[]): string {
   const extra = unpriced?.length ? ` ${unpriced.join(", ")} ${unpriced.length === 1 ? "has" : "have"} no flat price.` : "";
-  return `Spend ${price(total)} on ${what}?${extra}`;
+  return `Spend ${costText(total, own)} on ${what}?${extra}`;
 }
 
-/** A model menu row: the name and the price ("your plan" for an agent CLI). */
+/** True for a price in another unit than the page's own (a person's own account on a host). */
+function ownUnit(currency: string | undefined): currency is string {
+  const c = (currency || "").toLowerCase();
+  return Boolean(c) && c !== "plan" && c !== "credits" && (inCredits || c.endsWith("credits"));
+}
+
+/** A price in its own unit: `$0.040` (USD) or `4 Higgsfield credits`. */
+function unitPrice(amount: number, currency: string): string {
+  const n = Number(amount || 0);
+  if (currency.toUpperCase() === "USD") return n === 0 ? "$0" : `$${n.toFixed(3)}`;
+  return `${Number(n.toFixed(2))} ${currency.replace(/\s*credits$/i, "")} ${n === 1 ? "credit" : "credits"}`;
+}
+
+/** Own-account prices summed per unit: `4 Higgsfield credits on your account`, `$0.040 on your key`. */
+export function ownParts(own: readonly OlfOwnStep[] | undefined): string[] {
+  const sums = new Map<string, number>();
+  for (const row of own || []) sums.set(row.currency, (sums.get(row.currency) || 0) + Number(row.amount || 0));
+  return [...sums].map(([currency, n]) => `${unitPrice(n, currency)} on your ${currency.toUpperCase() === "USD" ? "key" : "account"}`);
+}
+
+/**
+ * A plan's cost: the Vinci price, plus what the person's own accounts pay (COREPRODUC-615). A plan
+ * only on own accounts shows only their part: `4 Higgsfield credits on your account`.
+ */
+export function costText(total: number | undefined, own?: readonly OlfOwnStep[]): string {
+  const parts = ownParts(own);
+  return [...(total || !parts.length ? [price(total)] : []), ...parts].join(" + ");
+}
+
+/** A model menu row: the name and the price ("your plan" for an agent CLI, its own unit for an own account). */
 export function choiceLabel(row: OlfChoice): string {
-  return `${row.name} · ${row.currency === "PLAN" ? "your plan" : row.unpriced ? "price varies" : price(row.amount)}`;
+  const cost = row.currency === "PLAN" ? "your plan" : row.unpriced ? "price varies" : ownUnit(row.currency) ? unitPrice(row.amount, row.currency) : price(row.amount);
+  return `${row.name} · ${cost}`;
+}
+
+/** True when a choice runs on the person's own account (its price is not in the page's unit). */
+export function isOwnChoice(row: OlfChoice | undefined): boolean {
+  return ownUnit(row?.currency);
 }
 
 /** The menu's first row, routing's own pick: `Auto · GPT-6 Luna` (the ID when it is not a choice). */
@@ -582,7 +625,7 @@ export type OlfScriptPreview = {
   shots: number;
   runtime: number;
   /** One keyframe on the routed model (New show: "2 keyframe options per shot · est."). */
-  keyframe?: { model: string; amount: number; unpriced: boolean } | null;
+  keyframe?: { model: string; amount: number; currency?: string; unpriced: boolean } | null;
 };
 /** A text-model step (`/olf/draft`, `/olf/script/model`): the plan, then the model's text. */
 export type OlfTextStep = OlfPlan & { text: string | null; preview?: OlfScriptPreview };
@@ -597,12 +640,15 @@ export function scriptFound(view: OlfScriptPreview | null | undefined): string {
 }
 
 /** `2 keyframe options per shot · est. $0.84`; a model with no flat price says so instead. */
-export function keyframeEstimate(view: OlfScriptPreview | null | undefined): { text: string; total: number; unpriced: boolean } {
+export function keyframeEstimate(view: OlfScriptPreview | null | undefined): { text: string; total: number; unpriced: boolean; own: OlfOwnStep[] } {
   const head = `${KEYFRAME_OPTIONS} keyframe options per shot`;
   const kf = view?.keyframe;
-  if (!view?.shots || !kf) return { text: head, total: 0, unpriced: false };
-  const total = kf.amount * KEYFRAME_OPTIONS * view.shots;
-  return { text: `${head} · ${kf.unpriced ? `${kf.model} has no flat price` : `est. ${price(total)}`}`, total, unpriced: kf.unpriced };
+  if (!view?.shots || !kf) return { text: head, total: 0, unpriced: false, own: [] };
+  const sum = kf.amount * KEYFRAME_OPTIONS * view.shots;
+  // On the person's own key (COREPRODUC-615) the keyframes cost 0 credits; the key pays the sum.
+  const own = ownUnit(kf.currency) ? [{ amount: sum, currency: kf.currency }] : [];
+  const total = own.length ? 0 : sum;
+  return { text: `${head} · ${kf.unpriced ? `${kf.model} has no flat price` : `est. ${costText(total, own)}`}`, total, unpriced: kf.unpriced, own };
 }
 
 /** What a script adds to the bible, as the design's notice says it. A new character needs a sheet. */

@@ -42,6 +42,8 @@ NAMES = [
     "readyJobs",
     "andList",
     "spendText",
+    "costText",
+    "isOwnChoice",
     "busyText",
     "dialogueLabel",
     "silentClips",
@@ -126,6 +128,16 @@ eq([durationSeconds("3+12"), durationSeconds("0+06"), durationSeconds("4s"), dur
 eq([price(0), price(0.42), price(undefined), price(0.0024)], ["$0", "$0.42", "$0", "$0.0024"], "price");
 setShowsCredits(true);  // a host that bills in credits (COREPRODUC-588)
 eq([price(0), price(1), price(11)], ["0 credits", "1 credit", "11 credits"], "price in credits");
+// Own accounts on a host (COREPRODUC-615): their part goes beside the credits, in its own unit.
+const hf = { amount: 4, currency: "Higgsfield credits" };
+eq([costText(2, [hf]), costText(0, [hf, { amount: 1, currency: "Higgsfield credits" }]), costText(0, [{ amount: 0.04, currency: "USD" }]), costText(3)],
+   ["2 credits + 4 Higgsfield credits on your account", "5 Higgsfield credits on your account", "$0.040 on your key", "3 credits"], "own accounts");
+eq(spendText(0, [], "this video", [hf]), "Spend 4 Higgsfield credits on your account on this video?", "own spend");
+eq(choiceLabel({ id: "vinci:mcp_higgsfield:minimax_hailuo", name: "Hailuo 2.3 Fast", provider: "mcp_higgsfield", amount: 4, currency: "Higgsfield credits", unpriced: false }),
+   "Hailuo 2.3 Fast · 4 Higgsfield credits", "own row in the menu");
+eq([isOwnChoice({ currency: "USD" }), isOwnChoice({ currency: "credits" }), isOwnChoice({ currency: "PLAN" })], [true, false, false], "own choice");
+eq(keyframeEstimate({ shots: 3, keyframe: { model: "vinci:seedream", amount: 0.04, currency: "USD", unpriced: false } }),
+   { text: "2 keyframe options per shot · est. $0.240 on your key", total: 0, unpriced: false, own: [{ amount: 0.24, currency: "USD" }] }, "keyframes on a key");
 setShowsCredits(false);
 eq(shortHash("sha256:" + "a".repeat(56) + "12345678"), "sha256:aaaaaaaa…12345678", "short hash");
 eq(fileUrl("/my shows/t", "takes/e02/s03/sh014/kf1.png"),
@@ -296,7 +308,7 @@ const view = { scenes: [{ shots: [{}, {}] }, { shots: [{}] }], shots: 3, runtime
   keyframe: { model: "mock:png:v1", amount: 0.04, unpriced: false } };
 eq(scriptFound(view), "2 scenes · 2 characters found", "found");
 eq(scriptFound(null), "No scenes yet", "empty");
-eq(keyframeEstimate(view), { text: "2 keyframe options per shot · est. $0.24", total: 0.24, unpriced: false }, "price");
+eq(keyframeEstimate(view), { text: "2 keyframe options per shot · est. $0.24", total: 0.24, unpriced: false, own: [] }, "price");
 eq(keyframeEstimate({ ...view, keyframe: { model: "openai:img", amount: 0, unpriced: true } }).text,
    "2 keyframe options per shot · openai:img has no flat price", "no flat price");
 const entries = newEntries(view);
