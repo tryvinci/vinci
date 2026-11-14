@@ -241,6 +241,42 @@ test.describe("Production crawl fixes", () => {
     expect(node.params.duration).toBe(10);
     expect(node.params.resolution).toBeUndefined(); // …is not sent to a model that lists none
   });
+
+  // FLUX Dev and Hailuo 02 as the host lists them: FLUX has ratios but no resolution, Hailuo neither.
+  for (const c of [
+    { start: "t2i", id: "mock:flux-dev", name: "FLUX Dev", caps: ["t2i"], limits: { aspect_ratios: ["16:9", "9:16", "1:1"], resolutions: [] } },
+    { start: "t2v", id: "mock:hailuo-02", name: "Hailuo 02", caps: ["t2v", "i2v"], limits: { aspect_ratios: [], resolutions: [], durations: [6, 10], max_duration: 10 } },
+  ]) {
+    test(`COREPRODUC-653: a ${c.name} node shows and sends only the aspect and resolution it lists`, async ({ page }) => {
+      const model = { id: c.id, display_name: c.name, provider: "mock", capabilities: c.caps, available: true, status: "ready", pricing: { amount: 0.1, unit: "generation", currency: "USD" }, constraints: c.limits };
+      await page.route("**/vinci-api/models", async (route) => {
+        const body = (await (await route.fetch()).json()) as { models: unknown[] };
+        await route.fulfill({ json: { ...body, models: [...body.models, model] } });
+      });
+      const bodies: { workflow?: { nodes: { model_id?: string; params: Record<string, unknown> }[] } }[] = [];
+      await page.route("**/vinci-api/runs", async (route) => {
+        if (route.request().method() !== "POST") return route.continue();
+        bodies.push(route.request().postDataJSON());
+        await route.fulfill({ json: { id: `run-${bodies.length}`, state: "completed", outputs: [], nodes: {}, estimate: { total: 0 } } });
+      });
+      await boot(page);
+      await page.getByRole("button", { name: "Canvas", exact: true }).first().click();
+      await page.locator(`[data-start="${c.start}"]`).click();
+      const gen = page.locator(".node[data-id]").first();
+      await gen.locator("[data-node-prompt]").fill("a lighthouse at dusk");
+      await gen.getByTestId("node-model-chip").click();
+      await gen.getByRole("option", { name: new RegExp(c.name) }).click();
+      await expect(gen.getByTestId("node-resolution-chip")).toHaveCount(0); // no made-up 1K/2K/4K
+      await expect(gen.getByTestId("node-aspect-chip")).toHaveCount(c.limits.aspect_ratios.length ? 1 : 0); // no made-up 4:3
+      await page.screenshot({ path: path.join(shots, `canvas_listed_controls_${c.start}.png`) });
+      await gen.getByTestId("node-run").click();
+      await expect.poll(() => bodies.length).toBe(1);
+      const sent = (bodies[0].workflow?.nodes || []).find((n) => n.model_id === c.id);
+      expect(sent?.params.resolution).toBeUndefined(); // the starter's "1K" is not sent
+      if (c.limits.aspect_ratios.length) expect(sent?.params.aspect_ratio).toBe("16:9");
+      else expect(sent?.params.aspect_ratio).toBeUndefined();
+    });
+  }
 });
 
 const HOST = {

@@ -16,10 +16,6 @@ export const REF_LIMIT = 8;
 export const REF_ROLES: RefRole[] = ["style", "character"];
 export const COUNT_MIN = 1;
 export const COUNT_MAX = 10;
-/** Magnific Image Generator aspect chips when a model does not list its own. */
-export const ASPECTS = ["1:1", "16:9", "9:16", "4:3", "3:4"];
-/** Magnific Image Generator resolution chips when a model does not list its own. */
-export const RESOLUTIONS = ["1K", "2K", "4K"];
 
 /**
  * Empty-space "Choose your first node" cards.
@@ -130,10 +126,6 @@ export function pickListed(current: unknown, listed: string[], fallback = ""): s
   return listed[0] || fallback;
 }
 
-export function listedOr(modelList: string[] | undefined, fallback: string[]): string[] {
-  return modelList && modelList.length ? modelList : fallback;
-}
-
 type FitConstraints = { aspect_ratios?: string[]; resolutions?: string[]; durations?: number[]; max_duration?: number };
 
 /**
@@ -146,15 +138,17 @@ type FitConstraints = { aspect_ratios?: string[]; resolutions?: string[]; durati
  * Args:
  *   params: The node's params.
  *   limits: The model's catalog constraints.
- *   video: True for a video node: a model that lists no resolution then gets none.
  */
-export function fitToModel(params: Record<string, unknown>, limits?: FitConstraints, video = false): Record<string, unknown> {
+export function fitToModel(params: Record<string, unknown>, limits?: FitConstraints): Record<string, unknown> {
   const out = { ...params };
   const concrete = (v: unknown) => typeof v === "string" && v !== "" && !isTemplate(v);
-  if (limits?.aspect_ratios?.length && concrete(out.aspect_ratio)) out.aspect_ratio = pickListed(out.aspect_ratio, limits.aspect_ratios);
-  if (limits?.resolutions?.length && concrete(out.resolution)) out.resolution = pickListed(out.resolution, limits.resolutions);
-  // A hidden "4K" (an image size, or another model's pick) went to Kling 2.6/3.0 Standard (COREPRODUC-649).
-  else if (video && concrete(out.resolution)) delete out.resolution;
+  // A model that lists no aspect or resolution gets none: the node shows no pill for it. Hidden
+  // fallback picks ("4K", "4:3") went to Kling, Hailuo and Wan (COREPRODUC-649, COREPRODUC-653).
+  for (const [key, listed] of [["aspect_ratio", limits?.aspect_ratios], ["resolution", limits?.resolutions]] as const) {
+    if (!limits || !concrete(out[key])) continue;
+    if (listed?.length) out[key] = pickListed(out[key], listed);
+    else delete out[key];
+  }
   const seconds = Number(out.duration);
   if (out.duration !== undefined && out.duration !== "" && Number.isFinite(seconds)) {
     const allowed = [...(limits?.durations ?? [])].sort((a, b) => a - b);

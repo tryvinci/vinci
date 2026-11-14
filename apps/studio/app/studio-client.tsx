@@ -44,12 +44,10 @@ import {
 } from "../lib/model-capabilities";
 import {
   addRef,
-  ASPECTS,
   clipPrice,
   countPatch,
   countValue,
   fitToModel,
-  listedOr,
   MOTIONS,
   nextRefRole,
   OPTICAL_NEUTRAL,
@@ -59,7 +57,6 @@ import {
   REF_LIMIT,
   refsOf,
   removeRef,
-  RESOLUTIONS,
   type RefRole,
 } from "../lib/canvas-node";
 import {
@@ -1981,7 +1978,7 @@ export function StudioClient() {
       /** A node's params as its pills show them for its model (see fitToModel). */
       const fitNode = (n: GraphNode): GraphNode => {
         const row = models.find((m) => m.id === n.model_id);
-        return row ? { ...n, params: fitToModel(n.params || {}, row.constraints, n.capability === "t2v" || n.capability === "i2v") } : n;
+        return row ? { ...n, params: fitToModel(n.params || {}, row.constraints || {}) } : n; // no limits: no pills, so none sent
       };
       // Canvas nodes this run will show state on.
       let tracked: string[] = [];
@@ -2195,8 +2192,9 @@ export function StudioClient() {
   function framePills(n: GraphNode) {
     const model = models.find((m) => m.id === (n.model_id || modelIdForNode(n, selected?.id || "", models, connected)));
     const video = n.capability === "t2v" || n.capability === "i2v";
-    const aspects = listedOr(model?.constraints?.aspect_ratios, ASPECTS);
-    const resolutions = listedOr(model?.constraints?.resolutions, video ? [] : RESOLUTIONS);
+    // Only what the model lists: a made-up 1K/2K/4K or 4:3 did nothing (COREPRODUC-653).
+    const aspects = model?.constraints?.aspect_ratios || [];
+    const resolutions = model?.constraints?.resolutions || [];
     const durations = video ? nodeDurations(model, n.params?.duration) : { options: [], value: "" };
     return {
       aspects,
