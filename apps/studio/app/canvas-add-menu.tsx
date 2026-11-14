@@ -22,6 +22,8 @@ type Props = {
   takes?: MediaKind | null;
   models: AddModel[];
   templates: AddTemplate[];
+  /** On a host: false for a node no model can run (see `buildAddMenu`). */
+  canAdd?: (capability: string) => boolean;
   onQuery: (value: string) => void;
   onIndex: (value: number) => void;
   onChip: (chip: AddChipId | null) => void;
@@ -41,6 +43,7 @@ export function CanvasAddMenu({
   takes,
   models,
   templates,
+  canAdd,
   onQuery,
   onIndex,
   onChip,
@@ -48,8 +51,8 @@ export function CanvasAddMenu({
   onClose,
 }: Props) {
   const sections = useMemo(
-    () => buildAddMenu(query, { chip, takes, models, templates }),
-    [query, chip, takes, models, templates],
+    () => buildAddMenu(query, { chip, takes, models, templates, canAdd }),
+    [query, chip, takes, models, templates, canAdd],
   );
   const rows = useMemo(() => flattenAddMenu(sections), [sections]);
   const pick = rows[Math.min(index, Math.max(0, rows.length - 1))];

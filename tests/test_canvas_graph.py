@@ -674,6 +674,10 @@ eq(flattenAddMenu(buildAddMenu("", { chip: "library", models, templates })), [],
 eq(capabilityForModel(["t2v", "t2i"]), "t2i", "catalog order");
 eq(capabilityForModel(["t2v"], "image"), null, "video model cannot take an image");
 eq(flattenAddMenu(buildAddMenu("upscaler")).map((r) => r.pick.capability), ["upscale"], "search");
+const runnable = (cap) => !["upscale", "tts", "lipsync", "assistant"].includes(cap);
+const hosted = flattenAddMenu(buildAddMenu("", { models, templates, canAdd: runnable })).map((r) => r.pick.capability);
+eq(["upscale", "tts", "lipsync", "assistant"].filter((cap) => hosted.includes(cap)), [], "a host hides nodes no model runs");
+eq(["media", "t2i", "text", "note"].every((cap) => hosted.includes(cap)), true, "runnable and model-free nodes stay");
 const textNode = { id: "copy", type: "transform", capability: "text", params: { prompt: "hi" } };
 const mixed = { nodes: [still, textNode], edges: [] };
 eq(runtimeGraph(mixed).nodes.map((n) => n.id), ["still"], "text stays off the runtime");

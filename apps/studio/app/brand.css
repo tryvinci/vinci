@@ -484,6 +484,7 @@ input[type="file"]::-webkit-file-upload-button {
   border-radius: var(--pill); color: var(--dim); padding: 5px 10px; font-size: 12px;
 }
 .access-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mute); }
+.access-dot.on { background: var(--teal); }
 .run.canvas-generate { min-height: 32px; padding: 6px 14px; font-size: 13px; }
 .canvas-view { display: flex; align-items: center; gap: 2px; }
 .dock-btn {

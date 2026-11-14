@@ -176,7 +176,8 @@ def test_studio_wires_card_and_inspector_to_the_same_params() -> None:
     assert "data-start={card.capability}" in empty_src
     # On a host, only the cards a listed model can run (live UI check, 2026-11-12, COREPRODUC-624).
     assert "START_CARDS.filter((card) => !canAdd || canAdd(card.capability)).map" in empty_src
-    assert "canAdd={doctor.host ? (cap) => nodeModels(cap).length > 0 : undefined}" in body
+    assert "canAdd={canAdd}" in body  # the start cards and the add menu share one rule (2026-11-14 crawl)
+    assert '(nodeTypeOf(cap) !== "generate" && cap !== "assistant") || nodeModels(cap).length > 0' in body
 
 
 def test_studio_wires_typed_ports_and_add_popover() -> None:

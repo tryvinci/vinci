@@ -223,17 +223,27 @@ function modelMatchesChip(model: AddModel, chip?: AddChipId | null): boolean {
 /**
  * Magnific add popover: Media / Nodes / Models (grouped by vendor, with counts) / Flows.
  * `takes` is the click-output filter. Flows stay out of that list — only compatible nodes and models.
+ * `canAdd` (on a host) drops a node no model can run. Bug fixed (first occurrence 2026-11-14, production
+ * Canvas crawl): Upscaler, Voiceover and Lip sync opened an empty model list and Assistant had no model.
  */
 export function buildAddMenu(
   query: string,
-  opts?: { chip?: AddChipId | null; takes?: MediaKind | null; models?: AddModel[]; templates?: AddTemplate[] },
+  opts?: {
+    chip?: AddChipId | null;
+    takes?: MediaKind | null;
+    models?: AddModel[];
+    templates?: AddTemplate[];
+    canAdd?: (capability: string) => boolean;
+  },
 ): AddMenuSection[] {
   const chip = opts?.chip || null;
   const takes = opts?.takes || null;
   const q = query.trim().toLowerCase();
   const sections: AddMenuSection[] = [];
 
-  const nodes = searchCatalog(query, takes, chip === "flows" || chip === "templates" || chip === "library" || chip === "3d" ? null : chip);
+  const nodes = searchCatalog(query, takes, chip === "flows" || chip === "templates" || chip === "library" || chip === "3d" ? null : chip).filter(
+    (row) => !opts?.canAdd || opts.canAdd(row.capability),
+  );
   const media = nodes.filter((row) => row.section === "media");
   const rest = nodes.filter((row) => row.section === "nodes");
   if (chip !== "flows" && chip !== "templates" && chip !== "library" && chip !== "3d") {
