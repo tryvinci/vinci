@@ -470,21 +470,20 @@ async function waitRun(first: Run): Promise<Run> {
 }
 
 /**
- * Build the rows of a model combobox. With `withPrice`, a row shows its price, or "price varies"
+ * Build the rows of a model combobox. A row shows its provider's name and its price, or "price varies"
  * for an unpriced model.
  *
  * Args:
  *   rows: Catalog rows for the node's capability.
- *   withPrice: Add the price text to each label.
  *   suffix: Status text added at the end of each label.
+ *   name: Provider id to the name people see ("mcp_higgsfield" to "Higgsfield").
  * Returns:
  *   One combobox row per model.
  */
-function comboModels(rows: Model[], withPrice: boolean, suffix: (row: Model) => string): ComboModel[] {
+function comboModels(rows: Model[], suffix: (row: Model) => string, name: (provider: string) => string): ComboModel[] {
   return rows.map((row) => {
-    const who = withPrice && row.provider === "mock" ? "Local" : row.provider;
-    const price = withPrice ? ` · ${isUnpriced(row) ? PRICE_VARIES : money(row.pricing?.amount, row.pricing?.currency)}` : "";
-    const label = `${row.display_name} · ${who}${price}${suffix(row)}`;
+    const price = ` · ${isUnpriced(row) ? PRICE_VARIES : money(row.pricing?.amount, row.pricing?.currency)}`;
+    const label = `${row.display_name} · ${name(row.provider)}${price}${suffix(row)}`;
     return { id: row.id, display_name: row.display_name, provider: row.provider, label };
   });
 }
@@ -2190,7 +2189,7 @@ export function StudioClient() {
    * was sent to Kling 3.0 Standard (COREPRODUC-649). Durations are the Video page's tiles.
    */
   function framePills(n: GraphNode) {
-    const model = models.find((m) => m.id === (n.model_id || modelIdForNode(n, selected?.id || "", models, connected)));
+    const model = models.find((m) => m.id === nodeModelId(n));
     const video = n.capability === "t2v" || n.capability === "i2v";
     // Only what the model lists: a made-up 1K/2K/4K or 4:3 did nothing (COREPRODUC-653).
     const aspects = model?.constraints?.aspect_ratios || [];
@@ -2204,6 +2203,15 @@ export function StudioClient() {
       resolution: pickListed(n.params?.resolution, resolutions),
       duration: durations.value,
     };
+  }
+
+  /**
+   * The model a node runs on: its own pick, else the page model or the first that fits. Bug fixed (first
+   * occurrence 2026-11-14, production Canvas crawl): a new node's pill said "Model" while it priced and
+   * ran Seedream 4.5.
+   */
+  function nodeModelId(n: GraphNode): string {
+    return n.model_id || modelIdForNode(n, selected?.id || "", models, connected);
   }
 
   /** The `pricing.currency` of the model a node runs on ("" when it has none). */
@@ -2855,6 +2863,17 @@ export function StudioClient() {
     const cap = capability || "t2i";
     return rankSurface("canvas", modelsFor("canvas", connected, models, { capability: cap }), connected, doctor);
   }
+  /**
+   * The name people see for a provider id. Bug fixed (first occurrence 2026-11-14, production Canvas
+   * crawl): the add menu and node pickers showed raw ids such as "MCP_HIGGSFIELD" and "mcp_magnific".
+   */
+  function providerName(id: string): string {
+    return id === "mock" ? "Local" : doctor.providers?.[id]?.display_name || id;
+  }
+  /** On a host, a node is offered only when a model can run it (Media, Text, List and Note need none). */
+  const canAdd = doctor.host
+    ? (cap: string) => (nodeTypeOf(cap) !== "generate" && cap !== "assistant") || nodeModels(cap).length > 0
+    : undefined;
   function modelFlyoutPage(row: Model, kind: FlyoutKind): PageId {
     const caps = row.capabilities || [];
     if (kind === "image") return caps.includes("t2i") ? "image" : "upscale";
@@ -3236,7 +3255,7 @@ export function StudioClient() {
           {graph.nodes.length === 0 && view === "canvas" ? (
             <CanvasEmpty
               onPick={(cap) => addNode(cap)}
-              canAdd={doctor.host ? (cap) => nodeModels(cap).length > 0 : undefined}
+              canAdd={canAdd}
             />
           ) : null}
           {view === "canvas" ? (
@@ -3498,7 +3517,7 @@ export function StudioClient() {
                         />
                       ) : null}
                       {(() => {
-                        const modelRows = comboModels(nodeModels(n.capability || "t2i"), true, statusSuffix);
+                        const modelRows = comboModels(nodeModels(n.capability || "t2i"), statusSuffix, providerName);
                         const runText = runCost([n.id]).text;
                         const runBlock = n.type === "generate" ? runBlocker([n.id]) : null;
                         return (
@@ -3515,7 +3534,7 @@ export function StudioClient() {
                             runState={nodeRuns[n.id]}
                             needs={needs}
                             models={modelRows}
-                            modelId={n.model_id || ""}
+                            modelId={nodeModelId(n)}
                             {...framePills(n)}
                             count={countValue(n.params)}
                             costText={runText}
@@ -3840,8 +3859,9 @@ export function StudioClient() {
               index={addIndex}
               chip={addChip}
               takes={addMenu.kind}
-              models={rankSurface("canvas", modelsForNodeTypes(connected, models), connected, doctor)}
+              models={rankSurface("canvas", modelsForNodeTypes(connected, models), connected, doctor).map((m) => ({ ...m, provider: providerName(m.provider) }))}
               templates={templates}
+              canAdd={canAdd}
               onQuery={setAddQuery}
               onIndex={setAddIndex}
               onChip={setAddChip}
@@ -4558,9 +4578,25 @@ export function StudioClient() {
     const el = boardRef.current;
     if (!el) return;
     function onWheel(ev: WheelEvent) {
+      const zoom = ev.ctrlKey || ev.metaKey;
+      // A list or text box on the board that can scroll takes a plain wheel itself. Bug fixed (first
+      // occurrence 2026-11-14, production Canvas crawl): the wheel panned the board under an open node
+      // model picker, so its last models could not be reached, and a long prompt could not scroll.
+      // Only a box that scrolls on the wheel's axis counts (PR-Agent review of #605); at its end it keeps
+      // the wheel too, so neither the board nor the page moves under it.
+      const vertical = Math.abs(ev.deltaY) >= Math.abs(ev.deltaX);
+      for (let at = ev.target as HTMLElement | null; !zoom && at && at !== el; at = at.parentElement) {
+        const room = vertical ? at.scrollHeight - at.clientHeight : at.scrollWidth - at.clientWidth;
+        const style = getComputedStyle(at);
+        if (room <= 0 || !/auto|scroll/.test(vertical ? style.overflowY : style.overflowX)) continue;
+        const pos = vertical ? at.scrollTop : at.scrollLeft;
+        const delta = vertical ? ev.deltaY : ev.deltaX;
+        if ((delta > 0 && pos >= room - 1) || (delta < 0 && pos <= 0)) ev.preventDefault();
+        return;
+      }
       ev.preventDefault();
       const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
-      if (ev.ctrlKey || ev.metaKey) {
+      if (zoom) {
         const factor = wheelZoomFactor(ev.deltaY, ev.deltaMode, ev.ctrlKey);
         setViewport((v) => zoomAt(v, v.zoom * factor, ev.clientX - r.left, ev.clientY - r.top));
       } else {
@@ -5063,8 +5099,11 @@ export function StudioClient() {
                     setToolsOpen(false);
                   }}
                 >
-                  <span className="access-dot" aria-hidden="true" />
-                  {doctor.host?.name || "Local"}
+                  {/* The accounts the canvas can run on. Bug fixed (first occurrence 2026-11-14, production
+                      Canvas crawl): it always said "Vinci Platform" with a grey dot, so Higgsfield and
+                      Magnific sign-ins looked unusable here. */}
+                  <span className={"access-dot" + (live.length ? " on" : "")} aria-hidden="true" />
+                  {[doctor.host?.name || "Local", ...live.filter(([, row]) => row.kind !== "hosted").map(([id]) => providerName(id))].join(" · ")}
                 </button>
                 <button
                   className="run canvas-generate"
@@ -5105,7 +5144,7 @@ export function StudioClient() {
       {wantsInsp && page === "canvas" && canvasSelected ? (
         (() => {
           const n = canvasSelected;
-          const modelRows = comboModels(nodeModels(n.capability || "t2i"), true, statusSuffix);
+          const modelRows = comboModels(nodeModels(n.capability || "t2i"), statusSuffix, providerName);
           const runText = runCost([n.id]).text;
           const runBlock = n.type === "generate" ? runBlocker([n.id]) : null;
           return (
@@ -5115,7 +5154,7 @@ export function StudioClient() {
               placeholder={defaultsFor(n.capability).placeholder}
               prompt={promptValue(n.params)}
               models={modelRows}
-              modelId={n.model_id || ""}
+              modelId={nodeModelId(n)}
               {...framePills(n)}
               count={countValue(n.params)}
               costText={runText}
