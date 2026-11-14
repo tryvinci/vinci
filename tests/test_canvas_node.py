@@ -10,8 +10,6 @@ MODULE = "apps/studio/lib/canvas-node.ts"
 NAMES = [
     "START_CARDS",
     "REF_LIMIT",
-    "ASPECTS",
-    "RESOLUTIONS",
     "clampCount",
     "countValue",
     "countPatch",
@@ -20,7 +18,6 @@ NAMES = [
     "typedPrompt",
     "wiredPrompt",
     "pickListed",
-    "listedOr",
     "fitToModel",
     "clipPrice",
     "refsOf",
@@ -81,11 +78,9 @@ eq(showsCount("upscale"), false, "upscale has no count stepper");
 
 def test_aspect_and_resolution_prefer_the_model_list() -> None:
     _check("""
-eq(pickListed("9:16", ASPECTS), "9:16", "keep a listed value");
-eq(pickListed("{{inputs.aspect_ratio}}", ASPECTS), "1:1", "drop templates");
+eq(pickListed("9:16", ["1:1", "9:16"]), "9:16", "keep a listed value");
+eq(pickListed("{{inputs.aspect_ratio}}", ["1:1", "9:16"]), "1:1", "drop templates");
 eq(pickListed("21:9", ["16:9", "9:16"]), "16:9", "snap when the model dropped it");
-eq(listedOr(["1024x1024"], RESOLUTIONS), ["1024x1024"], "model list wins");
-eq(listedOr([], RESOLUTIONS), RESOLUTIONS, "empty model list uses Magnific 1K/2K/4K");
 eq(showsFrame("t2v"), true, "video");
 eq(showsFrame("tts"), false, "voice");
 """)
@@ -100,10 +95,12 @@ eq(fitToModel({ aspect_ratio: "16:9", resolution: "1K", prompt: "p" }, seedream)
 eq(fitToModel({ duration: 5 }, { durations: [6] }), { duration: 6 }, "the listed length that covers it");
 eq(fitToModel({ duration: 8 }, { durations: [10, 6] }), { duration: 10 }, "the shortest that covers it, as fit_duration");
 eq(fitToModel({ duration: 12 }, { durations: [6, 10] }), { duration: 10 }, "else the longest");
-// COREPRODUC-649: a video model that lists no resolution gets none ("4K" went to Kling); an image model keeps 1K/2K/4K.
-eq(fitToModel({ resolution: "4K", duration: 10 }, { resolutions: [], durations: [5, 10] }, true), { duration: 10 }, "no hidden resolution on video");
-eq(fitToModel({ resolution: "{{inputs.resolution}}" }, { resolutions: [] }, true), { resolution: "{{inputs.resolution}}" }, "a template stays");
-eq(fitToModel({ resolution: "2K" }, { resolutions: [] }), { resolution: "2K" }, "an image node keeps its size");
+// A model that lists no resolution or aspect gets none: "4K" went to Kling (COREPRODUC-649),
+// 1K/2K/4K to FLUX Dev and 4:3 to Hailuo (COREPRODUC-653).
+eq(fitToModel({ resolution: "4K", duration: 10 }, { resolutions: [], durations: [5, 10] }), { duration: 10 }, "no hidden resolution on video");
+eq(fitToModel({ resolution: "2K", aspect_ratio: "16:9" }, { resolutions: [], aspect_ratios: ["16:9"] }), { aspect_ratio: "16:9" }, "nor on an image model");
+eq(fitToModel({ aspect_ratio: "4:3", duration: 6 }, { aspect_ratios: [], durations: [6, 10] }), { duration: 6 }, "no hidden aspect");
+eq(fitToModel({ resolution: "{{inputs.resolution}}" }, { resolutions: [] }), { resolution: "{{inputs.resolution}}" }, "a template stays");
 const kling = { pricing: { amount: 0.35, clip_prices: { "5": 0.35, "10": 0.7 } }, constraints: { durations: [5, 10] } };
 eq(clipPrice(kling, 10), 0.7, "a 10 s clip on a row that bills by length (COREPRODUC-555)");
 eq(clipPrice(kling, "7"), 0.7, "the length is fitted first, as fit_duration");
