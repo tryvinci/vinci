@@ -496,3 +496,26 @@ def test_result_page_names_the_provider_and_escapes() -> None:
     failed = result_page("", "unknown <b>state</b>")
     assert "Sign-in did not finish" in failed and 'class="bad"' in failed
     assert "Unknown &lt;b&gt;state&lt;/b&gt;" in failed and "<b>" not in failed
+
+
+def test_connector_balance_reads_each_provider_shape() -> None:
+    """Connect shows the account's credits: Higgsfield ``balance`` and Magnific ``account_balance``."""
+    def provider(provider_id: str, answers: dict[str, object]) -> McpProvider:
+        class Transport:
+            url = "http://127.0.0.1:9/mcp"
+
+            def bearer(self) -> str:
+                return "loopback-bearer"
+
+            def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+                answer = answers[str(params.get("name"))]
+                if isinstance(answer, str):  # a tool error, as the server sends it
+                    return {"isError": True, "content": [{"type": "text", "text": answer}]}
+                return {"structuredContent": answer}
+
+        return McpProvider(Transport(), cas=None, provider_id=provider_id)  # type: ignore[arg-type]
+
+    assert provider("mcp_higgsfield", {"balance": {"credits": 37}}).balance() == 37.0
+    assert provider("mcp_magnific", {"account_balance": {"credits": {"available": 0}}}).balance() == 0.0
+    with pytest.raises(RuntimeError, match="403"):
+        provider("mcp_higgsfield", {"balance": "FNF API GET /mcp/workspaces failed (403)"}).balance()

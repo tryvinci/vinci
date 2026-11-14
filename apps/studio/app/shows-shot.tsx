@@ -9,6 +9,7 @@ import {
   MOVES,
   RENDERS,
   type OlfData,
+  type OlfOwnStep,
   type OlfShotDetail,
   type OlfShow,
   type OlfStaleCause,
@@ -18,6 +19,8 @@ import {
   cameraworkMenu,
   choiceLabel,
   chosenKeyframe,
+  costText,
+  isOwnChoice,
   entryName,
   fileUrl,
   findEntry,
@@ -147,10 +150,20 @@ export function ShotView({
   const choice = plans?.video.choices?.find((row) => row.id === videoModel);
   // A keyframe render draws `draws` variations, each at the keyframe price; a picked video model
   // replaces the routed one's price.
+  // A step on the person's own account (COREPRODUC-615) costs 0 credits: `own` lists what the
+  // account pays, in its unit, and `total` stays in the page's unit.
+  const own = (kind: RenderKind): OlfOwnStep[] => {
+    const steps = plans?.[kind]?.own || [];
+    if (kind === "video" && choice) {
+      const other = steps.filter((row) => row.node !== "video");
+      return isOwnChoice(choice) ? [...other, { node: "video", model: choice.id, amount: choice.amount, currency: choice.currency || "" }] : other;
+    }
+    return kind === "keyframe" ? steps.map((row) => ({ ...row, amount: row.amount * draws })) : steps;
+  };
   const total = (kind: RenderKind) => {
     if (kind === "video" && choice) {
-      const other = (plans?.video.plan || []).filter((row) => row.node !== "video");
-      return other.reduce((sum, row) => sum + row.amount, 0) + choice.amount;
+      const other = (plans?.video.plan || []).filter((row) => row.node !== "video" && !(plans?.video.own || []).some((step) => step.node === row.node));
+      return other.reduce((sum, row) => sum + row.amount, 0) + (isOwnChoice(choice) ? 0 : choice.amount);
     }
     return (plans?.[kind]?.total || 0) * (kind === "keyframe" ? draws : 1);
   };
@@ -169,7 +182,7 @@ export function ShotView({
         type="button"
         className={primary ? "run olf-grow" : "ghost olf-grow"}
         disabled={blocked}
-        onClick={() => (total(kind) || unpriced(kind)?.length ? setConfirm(kind) : go(kind, false))}
+        onClick={() => (total(kind) || unpriced(kind)?.length || own(kind).length ? setConfirm(kind) : go(kind, false))}
         data-testid={`render-${kind}`}
       >
         {busy === kind ? "Rendering…" : label}
@@ -181,7 +194,7 @@ export function ShotView({
     const what = kind === "audio" ? "the dialogue" : kind === "keyframe" && draws > 1 ? `${draws} keyframes` : `this ${kind}`;
     return (
       <Confirm
-        text={spendText(total(kind), unpriced(kind), what)}
+        text={spendText(total(kind), unpriced(kind), what, own(kind))}
         onYes={() => {
           go(kind, true);
           setConfirm(null);
@@ -522,7 +535,7 @@ export function ShotView({
             <div className="olf-cost">
               <span>Estimated cost{canVideo ? "" : draws > 1 ? ` (${draws} keyframes)` : " (keyframe)"}</span>
               <b>
-                {price(total(next))}
+                {costText(total(next), own(next))}
                 {unpriced(next)?.length ? " + no flat price" : ""}
               </b>
             </div>

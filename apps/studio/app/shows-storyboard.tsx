@@ -15,7 +15,7 @@ import {
   fileUrl,
   findEntry,
   framingShort,
-  price,
+  costText,
   readyJobs,
   runtimeText,
   frames,
@@ -94,7 +94,8 @@ export function StoryboardView({
   const stale = readyJobs(batches?.stale).length;
   const animate = readyJobs(batches?.animate).length;
   /** Start a batch. A paid batch, or one with a model that has no flat price, asks once for the whole batch. */
-  const run = (mode: Mode) => (batches?.[mode].total || batches?.[mode].unpriced.length ? setConfirm(mode) : onBatch(mode, false));
+  // A batch on the person's own accounts (own, COREPRODUC-615) asks too: the account pays.
+  const run = (mode: Mode) => (batches?.[mode].total || batches?.[mode].unpriced.length || batches?.[mode].own?.length ? setConfirm(mode) : onBatch(mode, false));
   return (
     <section data-testid="shows-storyboard">
       <header className="olf-head">
@@ -105,7 +106,7 @@ export function StoryboardView({
         <div className="olf-head-actions" data-testid="batch-actions">
           {confirm && batches ? (
             <Confirm
-              text={spendText(batches[confirm].total, batches[confirm].unpriced, `${readyJobs(batches[confirm]).length} renders`)}
+              text={spendText(batches[confirm].total, batches[confirm].unpriced, `${readyJobs(batches[confirm]).length} renders`, batches[confirm].own)}
               onYes={() => {
                 onBatch(confirm, true);
                 setConfirm(null);
@@ -175,7 +176,7 @@ export function StoryboardView({
                 onClick={() => run("animate")}
                 data-testid="batch-animate"
               >
-                Animate approved · est. {price(batches?.animate.total)}
+                Animate approved · est. {costText(batches?.animate.total, batches?.animate.own)}
               </button>
             </>
           )}

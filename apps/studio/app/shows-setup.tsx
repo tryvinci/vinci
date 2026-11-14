@@ -547,7 +547,7 @@ export function NewShow({ onCancel, onOpen }: { onCancel: () => void; onOpen: (p
             next
           ) : confirm ? (
             <Confirm
-              text={spendText(estimate.total, estimate.unpriced ? [view?.keyframe?.model || "the image model"] : [], `${KEYFRAME_OPTIONS * (view?.shots || 0)} keyframes`)}
+              text={spendText(estimate.total, estimate.unpriced ? [view?.keyframe?.model || "the image model"] : [], `${KEYFRAME_OPTIONS * (view?.shots || 0)} keyframes`, estimate.own)}
               onYes={() => {
                 setConfirm(false);
                 void create(true, true);
@@ -561,7 +561,7 @@ export function NewShow({ onCancel, onOpen }: { onCancel: () => void; onOpen: (p
                 type="button"
                 className="run"
                 disabled={!!busy}
-                onClick={() => (draw && (estimate.total || estimate.unpriced) ? setConfirm(true) : void create(draw))}
+                onClick={() => (draw && (estimate.total || estimate.unpriced || estimate.own.length) ? setConfirm(true) : void create(draw))}
                 data-testid="setup-create"
               >
                 {busy || (draw ? "Create show and draw keyframes" : "Create show")}
