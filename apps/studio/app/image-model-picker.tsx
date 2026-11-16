@@ -1,17 +1,10 @@
 "use client";
 
-import {
-  capabilityChips,
-  modelBadges,
-  modelBlurb,
-  pickerSections,
-  searchImageModels,
-  type ImageModel,
-} from "../lib/image-page";
-import { priceText } from "../lib/model-capabilities";
+import { type ImageModel } from "../lib/image-page";
+import { ModelMenu } from "./model-menu";
 
 /**
- * Upward model picker: search, Featured, All, one-line blurbs, badges, chips.
+ * Upward model picker of the Image prompt bar: the shared model menu (COREPRODUC-666).
  *
  * Args:
  *   models: Image catalog rows.
@@ -32,74 +25,9 @@ export function ImageModelPicker({
   onQuery: (q: string) => void;
   onPick: (id: string) => void;
 }) {
-  const hits = searchImageModels(models, query);
-  const { featured, all } = pickerSections(hits);
   return (
     <div className="image-picker" data-testid="image-model-picker" role="listbox" aria-label="Image models">
-      <input
-        className="image-picker-search"
-        type="search"
-        placeholder="Search models"
-        aria-label="Search models"
-        autoComplete="off"
-        value={query}
-        onChange={(ev) => onQuery(ev.target.value)}
-      />
-      {hits.length === 0 ? <p className="muted">No models match. Try another word.</p> : null}
-      {featured.length ? <PickerGroup title="Featured" models={featured} value={value} onPick={onPick} /> : null}
-      {all.length ? <PickerGroup title="All" models={all} value={value} onPick={onPick} /> : null}
+      <ModelMenu models={models} value={value} query={query} onQuery={onQuery} onPick={onPick} />
     </div>
-  );
-}
-
-function PickerGroup({
-  title,
-  models,
-  value,
-  onPick,
-}: {
-  title: string;
-  models: ImageModel[];
-  value: string;
-  onPick: (id: string) => void;
-}) {
-  return (
-    <section>
-      <h3>{title}</h3>
-      {models.map((row) => {
-        const badges = modelBadges(row);
-        const chips = capabilityChips(row);
-        return (
-          <button
-            key={row.id}
-            type="button"
-            role="option"
-            aria-selected={row.id === value}
-            className={"image-picker-row" + (row.id === value ? " on" : "")}
-            onClick={() => onPick(row.id)}
-          >
-            <span className="image-picker-lead">
-              <strong>{row.display_name}</strong>
-              <span className="image-picker-price" data-testid="model-price">
-                {priceText(row)}
-              </span>
-              {badges.map((b) => (
-                <span key={b} className="image-badge">
-                  {b}
-                </span>
-              ))}
-            </span>
-            <span className="image-picker-blurb">{modelBlurb(row)}</span>
-            {chips.length ? (
-              <span className="image-picker-chips">
-                {chips.map((c) => (
-                  <span key={c}>{c}</span>
-                ))}
-              </span>
-            ) : null}
-          </button>
-        );
-      })}
-    </section>
   );
 }

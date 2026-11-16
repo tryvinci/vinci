@@ -1,17 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { RunClock } from "../lib/progress";
 import { clipPrice } from "../lib/canvas-node";
 import { daemonHasPath } from "../lib/daemon-routes";
 import { money } from "../lib/model-capabilities";
 import { ImageFeed } from "./image-feed";
-import { VideoPanel } from "./video-panel";
+import { VideoPanel, type PendingRef } from "./video-panel";
 import { VideoPresetOverlay } from "./video-preset-overlay";
 import { plainError } from "./ui/plain-text";
 import {
   VIDEO_HOW_STEPS,
   applyFavorites,
   applyPreset,
+  fitRefMode,
   closestAspect,
   defaultVideoModelId,
   extendFromItem,
@@ -29,6 +31,7 @@ import {
   type VideoFeedItem,
   type VideoModel,
   type VideoRun,
+  type VideoRefMode,
 } from "../lib/video-page";
 
 const FAV_KEY = "vinci-video-favorites";
@@ -146,6 +149,8 @@ export function VideoPage({
   steps,
   onSteps,
   extendMode,
+  refMode,
+  onRefMode,
   onExtendMode,
   startId,
   endId,
@@ -169,6 +174,7 @@ export function VideoPage({
   motions,
   cast,
   busy,
+  clock,
   runs,
   assets,
   ready,
@@ -203,6 +209,9 @@ export function VideoPage({
   steps: string;
   onSteps: (value: string) => void;
   extendMode: boolean;
+  /** Start frame, Start + End, or References (COREPRODUC-667). */
+  refMode: VideoRefMode;
+  onRefMode: (mode: VideoRefMode) => void;
   onExtendMode: (value: boolean) => void;
   startId: string | null;
   endId: string | null;
@@ -226,6 +235,8 @@ export function VideoPage({
   motions: string[];
   cast: MentionRow[];
   busy: boolean;
+  /** The run in flight, for the pending card's progress bar. */
+  clock?: RunClock | null;
   runs: VideoRun[];
   assets: VideoAsset[];
   ready: (model: VideoModel) => boolean;
@@ -341,14 +352,6 @@ export function VideoPage({
 
   const items = useMemo(() => withPendingCards(completed, busy ? 1 : 0), [busy, completed]);
 
-  const previews = useMemo(() => {
-    const map: Record<string, VideoFeedItem> = {};
-    for (const item of completed) {
-      if (item.modelId && !map[item.modelId]) map[item.modelId] = item;
-    }
-    return map;
-  }, [completed]);
-
   const favorite = useCallback(
     async (item: VideoFeedItem) => {
       const next = toggleFavorite(favs, item.id);
@@ -412,8 +415,26 @@ export function VideoPage({
     [onAspect, onDuration, onLog, onPickModel, onResolution, videoRows],
   );
 
+  // The slot a file is uploading into, with a local preview (COREPRODUC-659: a frame upload showed nothing).
+  const [uploading, setUploading] = useState<PendingRef | null>(null);
+
+  // A model that cannot take the input mode moves to the first mode it takes (COREPRODUC-667).
+  useEffect(() => {
+    const next = fitRefMode(selected, refMode);
+    if (next !== refMode) onRefMode(next);
+  }, [onRefMode, refMode, selected]);
+
   const addFile = useCallback(
-    async (file: File) => {
+    async (file: File, slot?: string) => {
+      const type = file.type || "";
+      const kind = type.startsWith("video/") ? "video" : type.startsWith("audio/") ? "audio" : "image";
+      // The slot clicked, else the mode's next one: Start; Start, then End; or one more Reference.
+      const label =
+        kind === "video" ? "Clip" : kind === "audio" ? "Audio" : extendMode ? "Start"
+          : slot || (refMode === "refs" ? "Reference" : refMode === "start" || !startId ? "Start" : "End");
+      const url = URL.createObjectURL(file);
+      setUploading({ label, kind, url });
+      console.info("[video-page] upload", { label, kind, bytes: file.size });
       try {
         const asset = await onIngest(file);
         const mime = asset.mime || file.type || "";
@@ -429,12 +450,12 @@ export function VideoPage({
           onLog("Audio added.");
           return;
         }
-        if (extendMode || !startId) {
+        if (label === "Start") {
           onStart(asset.id);
           onLog("Start frame added.");
           return;
         }
-        if (!endId) {
+        if (label === "End") {
           onEnd(asset.id);
           onLog("End frame added.");
           return;
@@ -443,9 +464,12 @@ export function VideoPage({
         onLog("Reference added.");
       } catch (err) {
         onLog(plainError(err));
+      } finally {
+        setUploading(null);
+        URL.revokeObjectURL(url);
       }
     },
-    [endId, extendMode, onAudio, onClip, onEnd, onExtendMode, onExtra, onIngest, onLog, onStart, startId],
+    [extendMode, onAudio, onClip, onEnd, onExtendMode, onExtra, onIngest, onLog, onStart, refMode, startId],
   );
 
   const extend = useCallback(
@@ -474,7 +498,7 @@ export function VideoPage({
   );
 
   const cost = money(generateCost(clipPrice(selected, duration)), selected?.pricing?.currency);
-  const hint = videoBlock(selected, { prompt, startId, clipId, extendMode });
+  const hint = uploading ? "Wait for the upload to finish." : videoBlock(selected, { prompt, startId, clipId, extendMode });
 
   return (
     <div className="video-page" data-testid="video-page">
@@ -495,12 +519,15 @@ export function VideoPage({
         onSteps={onSteps}
         extendMode={extendMode}
         onExtendMode={onExtendMode}
+        refMode={refMode}
+        onRefMode={onRefMode}
         startId={startId}
         endId={endId}
         clipId={clipId}
         audioId={audioId}
         extraIds={extraIds}
-        onAddFile={(file) => void addFile(file)}
+        onAddFile={(file, slot) => void addFile(file, slot)}
+        uploading={uploading}
         onRemoveStart={onRemoveStart}
         onRemoveEnd={onRemoveEnd}
         onRemoveClip={onRemoveClip}
@@ -516,12 +543,12 @@ export function VideoPage({
         busy={busy}
         disabled={busy || !selected || Boolean(hint)}
         hint={hint}
-        onModelId={pickPreset}
         onGenerate={onGenerate}
         onOpenPresets={() => setOverlay(true)}
       />
       <div className="video-main">
         <ImageFeed
+          clock={clock}
           items={items}
           steps={VIDEO_HOW_STEPS}
           emptyLayout="stage"
@@ -539,7 +566,6 @@ export function VideoPage({
         <VideoPresetOverlay
           models={videoRows}
           value={selected?.id || ""}
-          previews={previews}
           onPick={pickPreset}
           onClose={() => setOverlay(false)}
         />

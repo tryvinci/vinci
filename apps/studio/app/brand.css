@@ -157,10 +157,7 @@
 .video-tabs button.on,
 .video-mode button.on,
 .video-tile.on,
-.video-tile:hover,
-.video-overlay-tabs button.on,
-.video-preset-card.on,
-.video-preset-card:hover {
+.video-tile:hover {
   background: var(--hover);
   color: var(--ink);
   border-color: var(--line);
@@ -174,7 +171,6 @@
 /* Full-size pickers over the page are solid: --bar is 5% white with no blur, so the page showed
    through the Video presets and the Effects gallery, and its cards looked doubled. */
 .video-overlay,
-.video-overlay-bar,
 .effects-overlay-panel {
   background: var(--glass-fallback);
   color: var(--ink);

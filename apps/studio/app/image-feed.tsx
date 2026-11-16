@@ -2,6 +2,8 @@
 
 import { IMAGE_HOW_STEPS, type ImageFeedItem } from "../lib/image-page";
 import { DockIcon, DOCK_ICON } from "./ui/icons";
+import { GenProgress } from "./ui/gen-progress";
+import type { RunClock } from "../lib/progress";
 
 const FILE = "/vinci-api/assets";
 
@@ -79,6 +81,7 @@ export function ImageFeed({
   feedTestId = "image-feed",
   pendingTestId = "image-feed-pending",
   hoverTestId = "image-card-hover",
+  clock,
   onFavorite,
   onCopyPrompt,
   onReference,
@@ -93,6 +96,8 @@ export function ImageFeed({
   feedTestId?: string;
   pendingTestId?: string;
   hoverTestId?: string;
+  /** The run in flight: its pending cards fill a progress bar (COREPRODUC-659). */
+  clock?: RunClock | null;
   onFavorite: (item: ImageFeedItem) => void;
   onCopyPrompt: (item: ImageFeedItem) => void;
   onReference?: (item: ImageFeedItem) => void;
@@ -124,8 +129,14 @@ export function ImageFeed({
           item.pending ? (
             <article key={item.id} className="image-card pending" data-testid={pendingTestId}>
               <div className="image-card-thumb">
-                <span className="spinner" aria-hidden="true" />
-                <span>Generating…</span>
+                {clock ? (
+                  <GenProgress clock={clock} testId={`${pendingTestId}-progress`} />
+                ) : (
+                  <>
+                    <span className="spinner" aria-hidden="true" />
+                    <span>Generating…</span>
+                  </>
+                )}
               </div>
             </article>
           ) : (

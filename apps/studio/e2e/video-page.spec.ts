@@ -36,8 +36,9 @@ test.describe("Video page", () => {
 
     await page.getByTestId("video-preset-change").click();
     await expect(page.getByTestId("video-preset-overlay")).toBeVisible();
-    await expect(page.getByTestId("video-preset-tab-all")).toBeVisible();
-    await expect(page.getByTestId("video-preset-chip-all")).toBeVisible();
+    // COREPRODUC-666: a menu after Magnific's, search on top, one line a model, no preview cards.
+    await expect(page.getByTestId("video-preset-overlay").getByRole("searchbox", { name: "Search models" })).toBeFocused();
+    await expect(page.getByTestId("video-preset-overlay").locator("video, img")).toHaveCount(0);
     await page.screenshot({ path: path.join(shots, "video_preset_overlay.png"), fullPage: true });
 
     const mockPreset = page.getByTestId("video-preset-card").filter({ hasText: "Mock MP4" });

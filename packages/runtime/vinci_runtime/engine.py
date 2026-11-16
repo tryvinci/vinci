@@ -1669,6 +1669,12 @@ class Engine:
     def _put_run_state(self, run_id: str, run: dict[str, Any], state: str) -> None:
         self._require_journal_writer_live()
         record_writer_effect(f"run_state_{state}")
+        # Start and end times: the Studio's progress bar fills over a model's average run
+        # (COREPRODUC-659).
+        if state == JobState.RUNNING.value:
+            run.setdefault("started_at", now_utc().isoformat())
+        elif state in (JobState.COMPLETED.value, JobState.FAILED.value):
+            run["completed_at"] = now_utc().isoformat()
         self.store.put_run(run_id, run, state)
 
     def _require_journal_writer_live(self) -> None:

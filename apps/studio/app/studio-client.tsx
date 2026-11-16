@@ -15,13 +15,14 @@ import { CanvasAddMenu } from "./canvas-add-menu";
 import { CanvasEmpty } from "./canvas-empty";
 import { CanvasInspector } from "./canvas-inspector";
 import { CanvasNodeCard } from "./canvas-node-card";
+import { averageSeconds, modelKind, type RunClock } from "../lib/progress";
 import { ImagePage } from "./image-page";
 import { LibraryPage } from "./library-page";
 import { ShowsPage } from "./shows-page";
 import { setShowsCredits } from "../lib/shows";
 import { VideoPage } from "./video-page";
 import { imageBlock } from "../lib/image-page";
-import { nodeDurations, videoBlock } from "../lib/video-page";
+import { nodeDurations, videoBlock, type VideoRefMode } from "../lib/video-page";
 import { type ComboModel } from "./model-combo";
 import { VinciLogo } from "./ui/logo";
 import { DockIcon, DOCK_ICON } from "./ui/icons";
@@ -356,7 +357,8 @@ type Run = {
   estimate?: { total?: number; usd?: number }; // usd: runs on the user's own key, on a host that bills in credits
   nodes?: Record<string, { output?: string; outputs?: string[]; job_id?: string; error?: string }>;
   error?: unknown;
-  workflow?: { nodes?: { model_id?: string; capability?: string }[] };
+  workflow?: { nodes?: { id?: string; model_id?: string; capability?: string }[] };
+  started_at?: string;
 };
 type Asset = { id: string; mime?: string; kind?: string; uri?: string; width?: number; height?: number };
 type PlanStep = { id: string; title: string; skill: string; blurb?: string; note?: string };
@@ -437,6 +439,8 @@ async function api<T>(path: string, opts?: RequestInit): Promise<T> {
 
 /** Run states that are not final. The local daemon answers POST /runs when the run ends; a host may answer at once. */
 const RUN_GOING = new Set(["created", "queued", "running"]);
+/** This browser's run ids, kept across reloads so canvas nodes find their results (COREPRODUC-665). */
+const RUN_IDS_KEY = "vinci-studio-run-ids-v1";
 
 /**
  * Start a run and wait for its final state. While the run is still going, poll GET /runs/{id}.
@@ -786,7 +790,7 @@ export function StudioClient() {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [renamingGroup, setRenamingGroup] = useState<string | null>(null);
   /** Last run state per canvas node, shown on its card. */
-  const [nodeRuns, setNodeRuns] = useState<Record<string, { state: "running" | "done" | "cached" | "error"; error?: string }>>({});
+  const [nodeRuns, setNodeRuns] = useState<Record<string, { state: "running" | "done" | "cached" | "error"; error?: string; startedAt?: number }>>({});
   /** Gear on a Magnific card opens the right inspector for that node. */
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const nodeRefInput = useRef<HTMLInputElement>(null);
@@ -855,6 +859,8 @@ export function StudioClient() {
   const [extendClipId, setExtendClipId] = useState<string | null>(null);
   const [audioId, setAudioId] = useState<string | null>(null);
   const [videoExtraIds, setVideoExtraIds] = useState<string[]>([]);
+  /** Video inputs: Start frame, Start + End, or References; it decides what Generate sends (COREPRODUC-667). */
+  const [videoRefMode, setVideoRefMode] = useState<VideoRefMode>("start");
   const [audioOn, setAudioOn] = useState(false);
   const [seed, setSeed] = useState("");
   const [steps, setSteps] = useState("");
@@ -982,6 +988,21 @@ export function StudioClient() {
   }, [composeModels, modelId, page, connectedKey, models]);
 
   const selected = composeModels.find((m) => m.id === modelId) || composeModels[0];
+  // The page run in flight: its progress bar fills over the model's average time (COREPRODUC-659).
+  const [busySince, setBusySince] = useState<number | null>(null);
+  useEffect(() => setBusySince(busy ? Date.now() : null), [busy]);
+  const runClock = useMemo<RunClock | null>(
+    () => (busySince && selected ? { startedAt: busySince, seconds: averageSeconds(runs, selected.id, modelKind(selected.capabilities)) } : null),
+    [busySince, runs, selected],
+  );
+  /** A running canvas node's clock, from its own model's average. */
+  const nodeClock = (n: GraphNode): RunClock | null => {
+    const run = nodeState(n.id);
+    if (run?.state !== "running" || !run.startedAt) return null;
+    const id = nodeModelId(n);
+    const row = models.find((m) => m.id === id);
+    return { startedAt: run.startedAt, seconds: averageSeconds(runs, id, modelKind(row?.capabilities || [n.capability || ""])) };
+  };
   const mode = panelFor(selected, page);
 
   const loadMedia = useCallback(async () => {
@@ -1380,6 +1401,23 @@ export function StudioClient() {
     return ids.size ? runs.filter((r) => ids.has(r.id)) : runs.slice(-3);
   }, [runIds, runs]);
   const lastRun = projectRuns.at(-1);
+  /** Nodes of this browser's runs that are still going (a run started before a reload), with their start. */
+  const goingNodes = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const run of projectRuns.filter((r) => r.state && RUN_GOING.has(r.state))) {
+      const start = Date.parse(run.started_at || run.created_at || "") || Date.now();
+      for (const id of [...Object.keys(run.nodes || {}), ...(run.workflow?.nodes || []).map((n) => n.id || "")]) if (id) out[id] = start;
+    }
+    return out;
+  }, [projectRuns]);
+  const hasGoing = Object.keys(goingNodes).length > 0;
+  useEffect(() => {
+    if (!hasGoing || busy) return; // a run this page started is polled by generate()
+    const tick = window.setTimeout(() => void loadMedia().catch(() => {}), 3000);
+    return () => window.clearTimeout(tick);
+  }, [busy, hasGoing, loadMedia, runs]);
+  /** A node's run state: this page's run, else a run still going from before a reload. */
+  const nodeState = (id: string) => nodeRuns[id] ?? (goingNodes[id] ? { state: "running" as const, startedAt: goingNodes[id] } : undefined);
   const lastDigest = lastRun?.outputs?.[0];
   const canvasSelected = page === "canvas" ? graph.nodes.find((n) => n.id === selectedNode) : undefined;
   const wantsInsp = page === "canvas" && inspectorOpen && Boolean(canvasSelected);
@@ -1473,13 +1511,15 @@ export function StudioClient() {
       inputs.optimized_for = optimizedFor;
       inputs.engine = engine;
     }
-    if ((mode.showFrames || page === "video") && firstFrameId) {
+    // On Video the input mode decides: References sends no frames, Start frame no end frame (COREPRODUC-667).
+    const videoFrames = page !== "video" || extendMode || videoRefMode !== "refs";
+    if ((mode.showFrames || page === "video") && firstFrameId && videoFrames) {
       inputs.first_frame_url = firstFrameId;
       inputs.start_image_url = firstFrameId;
       inputs.image = firstFrameId;
       inputs.media = firstFrameId;
     }
-    if ((mode.showFrames || page === "video") && lastFrameId) {
+    if ((mode.showFrames || page === "video") && lastFrameId && (page !== "video" || (!extendMode && videoRefMode === "start-end"))) {
       inputs.last_frame_url = lastFrameId;
       inputs.tail_image_url = lastFrameId;
     }
@@ -1488,19 +1528,16 @@ export function StudioClient() {
       if (steps.trim()) inputs.steps = Number(steps);
       if (audioId) inputs.audio = audioId;
       if (extendClipId) inputs.video = extendClipId;
+      // Open references go apart from the start frame, so a host keeps the run on text-to-video.
+      if (!extendMode && videoRefMode === "refs" && videoExtraIds.length) inputs.reference_urls = videoExtraIds;
     }
     if (mode.showStill && uploadId && page !== "video") {
       inputs.media = uploadId;
       if (!inputs.image) inputs.image = uploadId;
     }
-    if (mode.showCast || mode.showStill || (page === "video" && videoExtraIds.length)) {
+    if (mode.showCast || mode.showStill) {
       const urls: string[] = [];
       if (typeof inputs.image === "string" && inputs.image) urls.push(inputs.image);
-      if (page === "video") {
-        for (const id of videoExtraIds) {
-          if (id && !urls.includes(id)) urls.push(id);
-        }
-      }
       const mapped = providerMentionInputs(String(inputs.prompt || prompt), libraryItems, selected, urls);
       if (mapped.image_urls.length) {
         inputs.image_urls = mapped.image_urls;
@@ -2022,7 +2059,7 @@ export function StudioClient() {
         if (skillNodes.length <= 1 && (!only || pageCanRun)) payload.model_id = model.id;
       }
       trackedRef.current = tracked;
-      if (tracked.length) setNodeRuns((prev) => ({ ...prev, ...Object.fromEntries(tracked.map((id) => [id, { state: "running" as const }])) }));
+      if (tracked.length) setNodeRuns((prev) => ({ ...prev, ...Object.fromEntries(tracked.map((id) => [id, { state: "running" as const, startedAt: Date.now() }])) }));
       const times = !canvasRun && page === "image" ? (batchCount === 4 ? 4 : 1) : 1;
       // Each picture of a batch has its own seed. Same inputs hit the cache: 4 runs gave 1 picture (COREPRODUC-575).
       const base = times > 1 ? Number(inputs.seed) || Math.floor(Math.random() * 2 ** 31) : 0;
@@ -3053,6 +3090,7 @@ export function StudioClient() {
         onRemoveRef={() => (setUploadId(null), setLog("Reference removed."))}
         cast={mentionItems.map(asCastRow)}
         busy={busy}
+        clock={runClock}
         pendingCount={batchCount === 4 ? 4 : 1}
         runs={runs}
         assets={assets}
@@ -3065,6 +3103,7 @@ export function StudioClient() {
         onAnimate={(id) => {
           setUploadId(id);
           setFirstFrameId(id);
+          setVideoRefMode((m) => (m === "refs" ? "start" : m)); // a start frame needs a frame mode
           setExtendMode(false);
           setExtendClipId(null);
           openPage("video"); // keeps Image's settings for the way back
@@ -3104,6 +3143,8 @@ export function StudioClient() {
         steps={steps}
         onSteps={setSteps}
         extendMode={extendMode}
+        refMode={videoRefMode}
+        onRefMode={setVideoRefMode}
         onExtendMode={setExtendMode}
         startId={firstFrameId}
         endId={lastFrameId}
@@ -3131,6 +3172,7 @@ export function StudioClient() {
         motions={MOTIONS}
         cast={mentionItems.map(asCastRow)}
         busy={busy}
+        clock={runClock}
         runs={runs}
         assets={assets}
         ready={(row) => usable({ ...row, capabilities: row.capabilities || [] })}
@@ -3531,7 +3573,8 @@ export function StudioClient() {
                             digest={digest}
                             thumbSrc={digest ? `${API}/assets/${digest}/file` : undefined}
                             video={Boolean(asset?.mime?.startsWith("video/"))}
-                            runState={nodeRuns[n.id]}
+                            runState={nodeState(n.id)}
+                            clock={nodeClock(n)}
                             needs={needs}
                             models={modelRows}
                             modelId={nodeModelId(n)}
@@ -4690,6 +4733,26 @@ export function StudioClient() {
     setProjectReady(true);
   }, [applyProject]);
 
+  // Bug fixed (first occurrence 2026-11-16, demo walkthrough, COREPRODUC-665): run ids lived only in
+  // memory, so after a reload (leave app.tryvinci.com/studio and come back) a node looked for its result
+  // in the newest 3 runs only; a later Image or Video run hid it. Keep them with the board.
+  useEffect(() => {
+    try {
+      const kept = JSON.parse(localStorage.getItem(RUN_IDS_KEY) || "[]") as unknown;
+      if (Array.isArray(kept)) setRunIds((ids) => [...new Set([...kept.filter((id) => typeof id === "string"), ...ids])]);
+    } catch {
+      /* ignore a blocked or corrupt list */
+    }
+  }, []);
+  useEffect(() => {
+    if (!projectReady) return;
+    try {
+      localStorage.setItem(RUN_IDS_KEY, JSON.stringify(runIds.slice(-200)));
+    } catch {
+      /* ignore */
+    }
+  }, [projectReady, runIds]);
+
   useEffect(() => {
     if (!projectReady) return;
     try {
@@ -5036,29 +5099,9 @@ export function StudioClient() {
             ) : null}
             {page === "shows" ? <div className="top-shows" ref={setShowsTop} /> : null}
           </div>
-          {page === "video" ? (
-            <button
-              className="icon-btn"
-              type="button"
-              aria-label="New"
-              title="New"
-              onClick={() => {
-                // Bug fixed (first occurrence, 2026-11-13 production crawl, COREPRODUC-642): New kept the prompt, so it looked like it did nothing.
-                setPrompt("");
-                setLog("");
-                setUploadId(null);
-                setFirstFrameId(null);
-                setLastFrameId(null);
-                setExtendMode(false);
-                setExtendClipId(null);
-                setAudioId(null);
-                setVideoExtraIds([]);
-                setModelsOpen(false);
-              }}
-            >
-              <DockIcon d={DOCK_ICON.add} />
-            </button>
-          ) : page === "speak" || page === "upscale" || page === "adapts" ? (
+          {/* Video has no New: it only cleared the form, so on a clean form it did nothing (removed 2026-11-16,
+              COREPRODUC-659; it was COREPRODUC-642's fix). Remove × on each ref and the prompt box clear it. */}
+          {page === "speak" || page === "upscale" || page === "adapts" ? (
             <button
               className="icon-btn"
               type="button"

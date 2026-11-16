@@ -213,12 +213,13 @@ def test_studio_wires_video_page_and_reuses_image_pieces() -> None:
     assert "ImageFeed" in page
     assert "VideoPresetOverlay" in page
     panel = (ROOT / "apps" / "studio" / "app" / "video-panel.tsx").read_text(encoding="utf-8")
-    assert "ImageModelPicker" in panel
+    assert "onOpenPresets" in panel  # the model chip and Change open one menu (COREPRODUC-666)
     assert "Extend Video" in panel
     assert "video-generate" in panel
     assert "PromptMention" in panel
     overlay = (ROOT / "apps" / "studio" / "app" / "video-preset-overlay.tsx").read_text(encoding="utf-8")
     assert "video-preset-overlay" in overlay
+    assert "ModelMenu" in overlay and "ModelMenu" in (ROOT / "apps" / "studio" / "app" / "image-model-picker.tsx").read_text(encoding="utf-8")
     feed = (ROOT / "apps" / "studio" / "app" / "image-feed.tsx").read_text(encoding="utf-8")
     assert "onExtend" in feed
     assert "Extend" in feed

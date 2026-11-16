@@ -8,6 +8,7 @@
  * Extend copies the clip's last frame plus the run's own settings.
  */
 
+import { takesEndFrame, takesReferences } from "./model-inputs";
 import { fitToModel } from "./canvas-node";
 import { modelsFor, tieBreakAvailability, withoutMockWhenConnected } from "./model-capabilities";
 import { filterMentions, insertMention, mentionOpen, type MentionRow } from "./library";
@@ -28,10 +29,20 @@ export type VideoModel = {
     max_input_images?: number | null;
     max_duration?: number;
     durations?: number[];
+    end_frame?: boolean; // the hosted catalog lists an end image (COREPRODUC-667)
+    max_references?: number; // open reference images the model takes
   };
   quality_tier?: string;
   status?: string;
 };
+
+/** The Video page's input modes (COREPRODUC-667). */
+export type VideoRefMode = "start" | "start-end" | "refs";
+export const VIDEO_REF_MODES: { mode: VideoRefMode; label: string }[] = [
+  { mode: "start", label: "Start frame" },
+  { mode: "start-end", label: "Start + End" },
+  { mode: "refs", label: "References" },
+];
 
 export type VideoFeedItem = {
   id: string;
@@ -244,10 +255,32 @@ export function hasAudio(model: VideoModel | undefined): boolean {
   return (model?.pricing?.unit || "").toLowerCase().includes("audio");
 }
 
-/** True when the catalog id is a first/last-frame model. */
+/** True when the model takes an end frame: the catalog flag, else a first-last id. */
 export function supportsEndFrame(model: VideoModel | undefined): boolean {
-  const blob = `${model?.id || ""} ${model?.display_name || ""}`.toLowerCase();
-  return blob.includes("flf") || blob.includes("first-last") || blob.includes("first_last");
+  return Boolean(model) && takesEndFrame(model as VideoModel);
+}
+
+/**
+ * Why a model cannot take an input mode, or "" when it can. A mode it cannot take is grayed out,
+ * with this as its hint (COREPRODUC-667: Siddhant's call, not hidden as Magnific does).
+ *
+ * Args:
+ *   model: The selected model.
+ *   mode: Start frame, Start + End, or References.
+ */
+export function refModeBlock(model: VideoModel | undefined, mode: VideoRefMode): string {
+  const name = model?.display_name || "This model";
+  if (!model) return "Pick a model first.";
+  if (mode === "refs") return takesReferences(model) ? "" : `${name} takes no reference images.`;
+  if (!(model.capabilities || []).includes("i2v")) return `${name} takes no start frame.`;
+  if (mode === "start-end" && !supportsEndFrame(model)) return `${name} takes a start frame only, no end frame.`;
+  return "";
+}
+
+/** The mode to keep after a model change: the same one if the model takes it, else the first it takes. */
+export function fitRefMode(model: VideoModel | undefined, mode: VideoRefMode): VideoRefMode {
+  if (!refModeBlock(model, mode)) return mode;
+  return VIDEO_REF_MODES.find((row) => !refModeBlock(model, row.mode))?.mode || mode;
 }
 
 /** i2v-only models need a start frame (or an Extend last frame). */

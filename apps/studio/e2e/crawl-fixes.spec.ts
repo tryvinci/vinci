@@ -49,7 +49,7 @@ test.describe("Production crawl fixes", () => {
     await expect(page.getByTestId("video-blocked")).toHaveText("Describe the shot first.");
   });
 
-  test("STU-02, 04, 22: Video sends its own start frame; Motion control has no Generate; New clears", async ({ page }) => {
+  test("STU-02, 04, 22: Video sends its own start frame; Motion control has no Generate; no New (COREPRODUC-659)", async ({ page }) => {
     const posted: Record<string, unknown>[] = [];
     await page.route("**/vinci-api/runs", async (route) => {
       if (route.request().method() !== "POST") return route.continue();
@@ -72,8 +72,263 @@ test.describe("Production crawl fixes", () => {
     await expect.poll(() => posted.length).toBe(1);
     expect(posted[0].image).toBe(startId); // not the Image-page reference
     expect(posted[0].prompt).toBe("slow push-in");
-    await page.getByRole("button", { name: "New" }).click();
-    await expect(page.getByTestId("video-prompt")).toHaveValue("");
+    await expect(page.getByRole("button", { name: "New" })).toHaveCount(0); // it only cleared the form
+  });
+
+  test("COREPRODUC-659: a start frame shows while it uploads, and Generate waits for it", async ({ page }) => {
+    let release = () => {};
+    const held = new Promise<void>((done) => (release = done));
+    await page.route("**/vinci-api/assets", async (route) => {
+      if (route.request().method() === "POST") await held; // keep the upload in flight
+      await route.continue();
+    });
+    await boot(page);
+    await openPage(page, "Video");
+    await page.getByTestId("video-prompt").fill("slow push-in");
+    await page.getByTestId("video-panel").locator("input[type=file]").setInputFiles(PNG);
+    await expect(page.getByTestId("video-ref-start-uploading")).toContainText("Uploading");
+    await expect(page.getByTestId("video-generate")).toBeDisabled();
+    await page.screenshot({ path: path.join(shots, "crawl_video_start_uploading.png") });
+    release();
+    await expect(page.getByTestId("video-ref-start")).toBeVisible();
+    await expect(page.getByTestId("video-ref-start-uploading")).toHaveCount(0);
+    await expect(page.getByTestId("video-generate")).toBeEnabled();
+    await page.screenshot({ path: path.join(shots, "crawl_video_start_ready.png") });
+  });
+
+  test("COREPRODUC-659: Generate shows a bar that counts down to 90% over the model's average, then waits", async ({ page }) => {
+    // History: two Mock MP4 runs of 4 s and 6 s, so the average is 5 s. The provider then takes 8 s.
+    const t0 = Date.parse("2026-11-16T10:00:00Z");
+    const past = (n: number, secs: number) => ({
+      id: `hist-${n}`, state: "completed", inputs: { model_id: "mock:mp4:v1" }, outputs: [],
+      created_at: new Date(t0).toISOString(), completed_at: new Date(t0 + secs * 1000).toISOString(),
+    });
+    await page.route("**/vinci-api/runs", async (route) => {
+      if (route.request().method() === "GET") {
+        const body = (await (await route.fetch()).json()) as { runs?: unknown[] };
+        return route.fulfill({ json: { ...body, runs: [...(body.runs || []), past(1, 4), past(2, 6)] } });
+      }
+      await new Promise((done) => setTimeout(done, 8000));
+      return route.fulfill({ json: { id: "run-slow", state: "completed", outputs: [], nodes: {}, estimate: { total: 0 } } });
+    });
+    await boot(page);
+    await openPage(page, "Video");
+    await page.getByTestId("video-prompt").fill("slow push-in");
+    await page.getByTestId("video-generate").click();
+    const bar = page.getByTestId("video-feed-pending-progress");
+    const pct = async () => Number(await bar.getByRole("progressbar").getAttribute("aria-valuenow"));
+    await expect(bar).toContainText(/About [1-5]s left/);
+    await expect.poll(pct).toBeGreaterThan(30);
+    await page.screenshot({ path: path.join(shots, "crawl_video_progress.png") });
+    await expect(bar).toContainText("Almost done…", { timeout: 6000 }); // 5 s in
+    expect(await pct()).toBe(90);
+    await page.waitForTimeout(1000);
+    expect(await pct()).toBe(90); // it waits at 90%, it does not reach 100
+    await page.screenshot({ path: path.join(shots, "crawl_video_progress_90.png") });
+    await expect(bar).toHaveCount(0, { timeout: 10_000 }); // the run ended
+  });
+
+  test("COREPRODUC-659: a running canvas node shows the bar; a model with no history counts from its kind's default", async ({ page }) => {
+    let release = () => {};
+    const held = new Promise<void>((done) => (release = done));
+    await page.route("**/vinci-api/runs", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      await held;
+      await route.fulfill({ json: { id: "run-node", state: "completed", outputs: [], nodes: {}, estimate: { total: 0 } } });
+    });
+    await boot(page);
+    await page.getByRole("button", { name: "Canvas", exact: true }).first().click();
+    await page.locator('[data-start="t2v"]').click();
+    const gen = page.locator(".node[data-id]").first();
+    await gen.locator("[data-node-prompt]").fill("a kite over the sea");
+    await gen.getByTestId("node-run").click();
+    const bar = gen.getByTestId("node-progress");
+    await expect(bar).toContainText(/About (2m 00s|1m 5\ds) left/); // no Mock MP4 history: the 120 s video default
+    await gen.screenshot({ path: path.join(shots, "canvas_node_progress.png") });
+    release();
+    await expect(bar).toHaveCount(0);
+  });
+
+  test("COREPRODUC-659: an effect run shows the bar under Generate", async ({ page }) => {
+    let release = () => {};
+    const held = new Promise<void>((done) => (release = done));
+    await page.route("**/vinci-api/runs", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      await held;
+      await route.continue();
+    });
+    await boot(page);
+    await page.locator(`nav button[aria-label="Image"]`).hover();
+    await page.getByRole("button", { name: "Upscale Still" }).first().click();
+    const shell = page.getByTestId("effects-shell");
+    await upload(page, shell.locator("input[type=file]").first(), PNG);
+    await page.getByTestId("effects-generate").click();
+    await expect(page.getByTestId("effects-progress")).toContainText(/left|Almost done/);
+    await shell.screenshot({ path: path.join(shots, "effects_progress.png") });
+    release();
+    await expect(page.getByTestId("effects-progress")).toHaveCount(0);
+  });
+
+  test("COREPRODUC-665: a canvas result stays after a reload and after later runs elsewhere", async ({ page }) => {
+    await boot(page);
+    await page.getByRole("button", { name: "Canvas", exact: true }).first().click();
+    await page.locator('[data-start="t2v"]').click();
+    const gen = page.locator(".node[data-id]").first();
+    await gen.locator("[data-node-prompt]").fill("a kite over the sea");
+    await gen.getByTestId("node-run").click();
+    await expect(gen.locator(".thumb video")).toHaveCount(1, { timeout: 30_000 });
+    // Leave the canvas: three stills on Image push the canvas run out of the newest three runs.
+    await openPage(page, "Image");
+    for (const n of [1, 2, 3]) {
+      await page.getByTestId("image-prompt").fill(`still ${n}`);
+      const done = page.waitForResponse((res) => res.url().endsWith("/vinci-api/runs") && res.request().method() === "POST");
+      await page.getByTestId("image-generate").click();
+      await done;
+      await expect(page.getByTestId("image-generate")).toBeEnabled();
+    }
+    // Come back after the Studio reloads (another app.tryvinci.com page, then back to Studio).
+    const booted = page.waitForResponse((res) => res.url().endsWith("/vinci-api/runs") && res.request().method() === "GET");
+    await page.reload();
+    await booted;
+    await page.getByRole("button", { name: "Canvas", exact: true }).first().click();
+    await expect(page.locator(".node[data-id]").first().locator(".thumb video")).toHaveCount(1);
+  });
+
+  test("COREPRODUC-665: a canvas run still going at a reload shows its bar, then its result", async ({ page }) => {
+    let release = () => {};
+    const held = new Promise<void>((done) => (release = done));
+    let started = false;
+    let released = false;
+    // The host answers POST /runs at once and the run keeps going on the server: model that.
+    await page.route("**/vinci-api/runs", async (route) => {
+      if (route.request().method() === "POST") {
+        const real = await route.fetch();
+        const body = (await real.json()) as { id: string };
+        started = true;
+        return route.fulfill({ json: { ...body, state: "running", outputs: [], nodes: {} } });
+      }
+      const body = (await (await route.fetch()).json()) as { runs: { state: string; outputs?: string[]; nodes?: Record<string, unknown> }[] };
+      const last = body.runs.at(-1);
+      if (started && last && !released) Object.assign(last, { state: "running", outputs: [], nodes: Object.fromEntries(Object.keys(last.nodes || {}).map((k) => [k, { state: "running" }])) });
+      return route.fulfill({ json: body });
+    });
+    await page.route("**/vinci-api/runs/*", async (route) => {
+      await held;
+      return route.continue();
+    });
+    await boot(page);
+    await page.getByRole("button", { name: "Canvas", exact: true }).first().click();
+    await page.locator('[data-start="t2v"]').click();
+    const gen = page.locator(".node[data-id]").first();
+    await gen.locator("[data-node-prompt]").fill("a kite over the sea");
+    await gen.getByTestId("node-run").click();
+    await expect.poll(() => started).toBe(true);
+    const booted = page.waitForResponse((res) => res.url().endsWith("/vinci-api/runs") && res.request().method() === "GET");
+    await page.reload();
+    await booted;
+    await page.getByRole("button", { name: "Canvas", exact: true }).first().click();
+    const node = page.locator(".node[data-id]").first();
+    await expect(node.getByTestId("node-progress")).toBeVisible(); // the run is still going
+    released = true;
+    release();
+    await expect(node.locator(".thumb video")).toHaveCount(1, { timeout: 15_000 });
+    await expect(node.getByTestId("node-progress")).toHaveCount(0);
+  });
+
+  test("COREPRODUC-665: a canvas run that ends while you are on Image shows its result back on Canvas", async ({ page }) => {
+    let release = () => {};
+    const held = new Promise<void>((done) => (release = done));
+    await page.route("**/vinci-api/runs", async (route) => {
+      if (route.request().method() === "POST") await held;
+      return route.continue();
+    });
+    await boot(page);
+    await page.getByRole("button", { name: "Canvas", exact: true }).first().click();
+    await page.locator('[data-start="t2v"]').click();
+    await page.locator(".node[data-id]").first().locator("[data-node-prompt]").fill("a kite over the sea");
+    const ended = page.waitForResponse((res) => res.url().endsWith("/vinci-api/runs") && res.request().method() === "POST");
+    await page.locator(".node[data-id]").first().getByTestId("node-run").click();
+    await openPage(page, "Image");
+    release();
+    await ended; // the run ended while Image was open
+    await page.getByRole("button", { name: "Canvas", exact: true }).first().click();
+    await expect(page.locator(".node[data-id]").first().locator(".thumb video")).toHaveCount(1);
+  });
+
+  test("COREPRODUC-666, 667: one-line model menu; input modes gray out with a reason; References sends no start frame", async ({ page }) => {
+    // Rows as the host lists them: an end frame and open references only where the catalog has them.
+    await page.route("**/vinci-api/models", async (route) => {
+      const body = (await (await route.fetch()).json()) as { models: Record<string, unknown>[] };
+      const mp4 = body.models.find((row) => row.id === "mock:mp4:v1") as { constraints?: Record<string, unknown> };
+      const like = (id: string, name: string, extra: Record<string, unknown>, tier = "fast") => ({
+        ...mp4, id, display_name: name, quality_tier: tier, constraints: { ...mp4.constraints, ...extra },
+      });
+      body.models.push(
+        like("mock:seedance-2.5", "Seedance 2.5", { end_frame: true, max_references: 3, resolutions: ["480p", "1080p"] }, "quality"),
+        like("mock:veo-3.1", "Veo 3.1", { end_frame: true, max_references: 0, resolutions: ["720p"] }, "quality"),
+        like("mock:kling-2.6", "Kling 2.6 Standard", { end_frame: false, max_references: 0, resolutions: [] }),
+        like("mock:wan-2.6", "Wan 2.6", { end_frame: false, max_references: 0 }),
+      );
+      const png = body.models.find((row) => row.id === "mock:png:v1") as Record<string, unknown>;
+      for (const [id, name, tier] of [["mock:seedream", "Seedream 4.5", "quality"], ["mock:nano", "Nano Banana Pro", "quality"], ["mock:flux", "FLUX Dev", "fast"], ["mock:gpt", "GPT Image 1", "fast"]])
+        body.models.push({ ...png, id, display_name: name, quality_tier: tier });
+      await route.fulfill({ json: body });
+    });
+    const posted: Record<string, unknown>[] = [];
+    await page.route("**/vinci-api/runs", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      posted.push((route.request().postDataJSON() as { inputs: Record<string, unknown> }).inputs);
+      await route.fulfill({ json: { id: "run-refs", state: "completed", outputs: [], nodes: {}, estimate: { total: 0 } } });
+    });
+    await boot(page);
+    await openPage(page, "Image");
+    await page.getByTestId("image-model-chip").click();
+    const picker = page.getByTestId("image-model-picker");
+    await expect(picker.getByTestId("model-menu-group-FLUX")).toBeVisible(); // the same menu on Image
+    await expect(picker).toHaveCSS("opacity", "1");
+    await page.screenshot({ path: path.join(shots, "model_menu_image.png") });
+    await page.keyboard.press("Escape");
+    await openPage(page, "Video");
+    await page.getByTestId("video-model-chip").click();
+    const menu = page.getByTestId("video-preset-overlay");
+    await expect(menu.getByRole("searchbox", { name: "Search models" })).toBeFocused();
+    await expect(menu.getByText("Featured")).toBeVisible();
+    await expect(menu.getByTestId("model-menu-group-Kling")).toBeVisible();
+    await expect(menu.getByTestId("video-preset-card").filter({ hasText: "Seedance 2.5" })).toContainText("Refs");
+    await expect(menu.locator("video, img")).toHaveCount(0); // no preview cards
+    await expect(menu).toHaveCSS("opacity", "1"); // after its fade-in
+    await page.screenshot({ path: path.join(shots, "model_menu_video.png") });
+    await menu.getByTestId("model-menu-feature-References").click();
+    await expect(menu.getByTestId("video-preset-card")).toHaveText([/Seedance 2\.5/]);
+    await menu.getByTestId("video-preset-card").first().click();
+    await expect(menu).toHaveCount(0);
+    // Seedance takes all three modes.
+    for (const mode of ["start", "start-end", "refs"]) await expect(page.getByTestId(`video-ref-mode-${mode}`)).toHaveAttribute("aria-disabled", "false");
+    await page.getByTestId("video-ref-mode-refs").click();
+    await expect(page.getByTestId("video-slot-reference")).toBeVisible();
+    await expect(page.getByTestId("video-slot-start")).toHaveCount(0);
+    await upload(page, page.getByTestId("video-panel").locator("input[type=file]"), PNG);
+    await expect(page.getByTestId("video-ref-reference")).toHaveCSS("opacity", "1");
+    await page.screenshot({ path: path.join(shots, "video_ref_modes_refs.png") });
+    await page.getByTestId("video-prompt").fill("she walks into the kitchen");
+    await page.getByTestId("video-generate").click();
+    await expect.poll(() => posted.length).toBe(1);
+    expect((posted[0].reference_urls as string[]).length).toBe(1);
+    expect(posted[0].image ?? posted[0].first_frame_url).toBeUndefined(); // not a start frame
+    // Kling 2.6 takes a start frame only: References moves to Start frame; the others gray out with a reason.
+    await page.getByTestId("video-model-chip").click();
+    await page.getByTestId("video-preset-card").filter({ hasText: "Kling 2.6" }).click();
+    await expect(page.getByTestId("video-ref-mode-start")).toHaveAttribute("aria-checked", "true");
+    await expect(page.getByTestId("video-ref-mode-refs")).toHaveAttribute("aria-disabled", "true");
+    await page.getByTestId("video-ref-mode-start-end").click({ force: true }); // grayed out (aria-disabled), still says why
+    await expect(page.getByTestId("video-ref-note")).toHaveText("Kling 2.6 Standard takes a start frame only, no end frame.");
+    await expect(page.getByTestId("video-ref-mode-start")).toHaveAttribute("aria-checked", "true");
+    await page.screenshot({ path: path.join(shots, "video_ref_modes_grayed.png") });
+    // Start + End on Veo: each slot fills itself.
+    await page.getByTestId("video-model-chip").click();
+    await page.getByTestId("video-preset-card").filter({ hasText: "Veo 3.1" }).click();
+    await page.getByTestId("video-ref-mode-start-end").click();
+    await expect(page.getByTestId("video-slot-end")).toBeVisible();
   });
 
   test("COREPRODUC-648: a text-only model takes no reference; Generate says why and names one that does", async ({ page }) => {

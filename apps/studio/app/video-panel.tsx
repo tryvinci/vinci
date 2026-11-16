@@ -1,24 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useMenuEscape } from "./ui/focus";
 import { asLibraryItem, mentionableItems, type LibraryItem } from "../lib/library";
 import { AdvancedDisclosure } from "./ui/advanced";
-import { ImageModelPicker } from "./image-model-picker";
 import { PromptMention } from "./prompt-mention";
 import {
+  VIDEO_REF_MODES,
   VIDEO_TABS,
   durationOptions,
+  refModeBlock,
   visibleVideoControls,
   type MentionRow,
   type VideoModel,
+  type VideoRefMode,
 } from "../lib/video-page";
-import type { ImageModel } from "../lib/image-page";
 
-type Menu = "model" | "mention" | null;
+type Menu = "mention" | null;
 type VideoTab = (typeof VIDEO_TABS)[number];
 
 const FILE = "/vinci-api/assets";
+
+/** A file on its way up: the slot it fills and a local preview URL. */
+export type PendingRef = { label: string; kind: "image" | "video" | "audio"; url: string };
 
 /**
  * Higgsfield Video left panel: preset, References | Extend, refs, prompt, tiles, Generate.
@@ -49,6 +53,9 @@ export function VideoPanel({
   audioId,
   extraIds,
   onAddFile,
+  refMode,
+  onRefMode,
+  uploading,
   onRemoveStart,
   onRemoveEnd,
   onRemoveClip,
@@ -64,7 +71,6 @@ export function VideoPanel({
   busy,
   disabled,
   hint,
-  onModelId,
   onGenerate,
   onOpenPresets,
 }: {
@@ -89,7 +95,12 @@ export function VideoPanel({
   clipId: string | null;
   audioId: string | null;
   extraIds: string[];
-  onAddFile: (file: File) => void;
+  /** A file for a slot ("Start", "End", "Reference"), or with no slot for the mode's next one. */
+  onAddFile: (file: File, slot?: string) => void;
+  /** Start frame, Start + End, or References (COREPRODUC-667). */
+  refMode: VideoRefMode;
+  onRefMode: (mode: VideoRefMode) => void;
+  uploading?: PendingRef | null;
   onRemoveStart: () => void;
   onRemoveEnd: () => void;
   onRemoveClip: () => void;
@@ -106,13 +117,16 @@ export function VideoPanel({
   disabled: boolean;
   /** Why Generate is off (shown under the button and as its title). */
   hint?: string;
-  onModelId: (id: string) => void;
   onGenerate: () => void;
   onOpenPresets: () => void;
 }) {
   const [tab, setTab] = useState<VideoTab>("Create");
   const [menu, setMenu] = useState<Menu>(null);
-  const [query, setQuery] = useState("");
+  const [over, setOver] = useState(false);
+  const [modeNote, setModeNote] = useState(""); // why a grayed-out mode cannot be picked
+  const target = useRef<string | undefined>(undefined); // the slot the file picker fills
+  const maxRefs = Number(selected?.constraints?.max_references || 0);
+  const allBlocked = VIDEO_REF_MODES.every((row) => refModeBlock(selected, row.mode));
   const rootRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const controls = visibleVideoControls(selected);
@@ -120,6 +134,39 @@ export function VideoPanel({
   const resolutions = selected?.constraints?.resolutions || [];
   const durs = durationOptions(Number(selected?.constraints?.max_duration || 0), selected?.constraints?.durations);
   const items: LibraryItem[] = mentionableItems(cast.map(asLibraryItem));
+
+  /** An empty slot: click it or drop on it to fill that slot. */
+  const empty = (name: string, label: string) => (
+    <button
+      type="button"
+      className="video-slot"
+      data-testid={`video-slot-${name.toLowerCase()}`}
+      onClick={(ev) => {
+        ev.stopPropagation();
+        target.current = name;
+        fileRef.current?.click();
+      }}
+      onDrop={(ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        setOver(false);
+        const file = ev.dataTransfer.files?.[0];
+        if (file) onAddFile(file, name);
+      }}
+    >
+      <span aria-hidden="true">+</span>
+      {label}
+    </button>
+  );
+  // One slot: the upload in flight, else the file, else the empty label.
+  const slot = (label: string, id: string | null, kind: PendingRef["kind"], onRemove: () => void, empty: ReactNode = null) =>
+    uploading?.label === label ? (
+      <PendingChip pending={uploading} />
+    ) : id ? (
+      <RefChip kind={kind} id={id} label={label} onRemove={onRemove} />
+    ) : (
+      empty
+    );
 
   const closeMenu = useCallback(() => setMenu(null), []);
   useMenuEscape(rootRef, closeMenu);
@@ -132,12 +179,6 @@ export function VideoPanel({
     return () => document.removeEventListener("pointerdown", onDown);
   }, []);
 
-  function pickModel(id: string) {
-    setMenu(null);
-    setQuery("");
-    onModelId(id);
-  }
-
   return (
     <aside className="video-panel" data-testid="video-panel" ref={rootRef}>
       <input
@@ -148,8 +189,10 @@ export function VideoPanel({
         aria-label="Add reference"
         onChange={(ev) => {
           const file = ev.target.files?.[0];
+          const slotName = target.current;
+          target.current = undefined;
           ev.target.value = "";
-          if (file) onAddFile(file);
+          if (file) onAddFile(file, slotName);
         }}
       />
       <div className="video-tabs" role="tablist" aria-label="Video mode">
@@ -172,7 +215,7 @@ export function VideoPanel({
           <strong>{selected?.display_name || "Model"}</strong>
           <span className="muted">{extendMode ? "Extend Video" : "References"}</span>
         </div>
-        <button type="button" className="ghost" data-testid="video-preset-change" onClick={onOpenPresets}>
+        <button type="button" className="ghost" data-testid="video-preset-change" data-model-menu-trigger onClick={onOpenPresets}>
           Change
         </button>
       </div>
@@ -210,42 +253,68 @@ export function VideoPanel({
               Extend Video
             </button>
           </div>
+          {!extendMode ? (
+            <div className="video-ref-modes" role="radiogroup" aria-label="Inputs" data-testid="video-ref-modes">
+              {VIDEO_REF_MODES.map(({ mode, label }) => {
+                const why = refModeBlock(selected, mode);
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    role="radio"
+                    aria-checked={refMode === mode && !why}
+                    aria-disabled={Boolean(why)}
+                    title={why || undefined}
+                    className={(refMode === mode && !why ? "on" : "") + (why ? " off" : "")}
+                    data-testid={`video-ref-mode-${mode}`}
+                    onClick={() => {
+                      setModeNote(why);
+                      if (!why) onRefMode(mode);
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+          {!extendMode && (modeNote || allBlocked) ? (
+            <p className="video-ref-note muted" role="status" data-testid="video-ref-note">
+              {allBlocked ? `${selected?.display_name || "This model"} makes the clip from the prompt alone.` : modeNote}
+            </p>
+          ) : null}
           <div
-            className="video-drop"
+            className={"video-drop" + (over ? " over" : "") + (!extendMode && allBlocked ? " off" : "")}
             data-testid="video-drop"
             onClick={() => fileRef.current?.click()}
-            onDragOver={(ev) => ev.preventDefault()}
+            onDragOver={(ev) => (ev.preventDefault(), setOver(true))}
+            onDragLeave={() => setOver(false)}
             onDrop={(ev) => {
               ev.preventDefault();
+              setOver(false);
               const file = ev.dataTransfer.files?.[0];
               if (file) onAddFile(file);
             }}
           >
             {extendMode ? (
               <>
-                {clipId ? (
-                  <RefChip kind="video" id={clipId} label="Clip" onRemove={onRemoveClip} />
-                ) : (
-                  <span>Drop a clip to continue it</span>
-                )}
-                {startId ? <RefChip kind="image" id={startId} label="Start" onRemove={onRemoveStart} /> : <span>Add the last frame</span>}
+                {slot("Clip", clipId, "video", onRemoveClip, <span>Drop a clip to continue it</span>)}
+                {slot("Start", startId, "image", onRemoveStart, <span>Add the last frame</span>)}
               </>
             ) : (
               <>
-                {startId ? (
-                  <RefChip kind="image" id={startId} label="Start" onRemove={onRemoveStart} />
-                ) : (
-                  <span>Start frame</span>
-                )}
-                {endId ? (
-                  <RefChip kind="image" id={endId} label="End" onRemove={onRemoveEnd} />
-                ) : (
-                  <span>End frame</span>
-                )}
-                {extraIds.map((id) => (
-                  <RefChip key={id} kind="image" id={id} label="Reference" onRemove={() => onRemoveExtra(id)} />
-                ))}
-                {audioId ? <RefChip kind="audio" id={audioId} label="Audio" onRemove={onRemoveAudio} /> : null}
+                {refMode !== "refs" ? slot("Start", startId, "image", onRemoveStart, empty("Start", "Start frame")) : null}
+                {refMode === "start-end" ? slot("End", endId, "image", onRemoveEnd, empty("End", "End frame")) : null}
+                {refMode === "refs" ? (
+                  <>
+                    {extraIds.map((id) => (
+                      <RefChip key={id} kind="image" id={id} label="Reference" onRemove={() => onRemoveExtra(id)} />
+                    ))}
+                    {slot("Reference", null, "image", () => {}, extraIds.length < (maxRefs || 1) ? empty("Reference", "Add reference") : null)}
+                  </>
+                ) : null}
+                {slot("Audio", audioId, "audio", onRemoveAudio)}
+                {slot("Clip", null, "video", () => {})}
               </>
             )}
           </div>
@@ -280,22 +349,13 @@ export function VideoPanel({
           <div className="image-chip-wrap video-model-row">
             <button
               type="button"
-              className={"image-chip" + (menu === "model" ? " on" : "")}
+              className="image-chip"
               data-testid="video-model-chip"
-              aria-expanded={menu === "model"}
-              onClick={() => setMenu(menu === "model" ? null : "model")}
+              data-model-menu-trigger
+              onClick={onOpenPresets}
             >
               {selected?.display_name || "Model"}
             </button>
-            {menu === "model" ? (
-              <ImageModelPicker
-                models={models as ImageModel[]}
-                value={selected?.id || ""}
-                query={query}
-                onQuery={setQuery}
-                onPick={pickModel}
-              />
-            ) : null}
           </div>
           <div className="video-tiles">
             {controls.duration ? (
@@ -386,6 +446,24 @@ function TileGroup({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** The file still uploading: its local preview, dimmed, under a spinner. */
+function PendingChip({ pending }: { pending: PendingRef }) {
+  return (
+    <div
+      className="video-ref pending"
+      data-testid={`video-ref-${pending.label.toLowerCase()}-uploading`}
+      role="status"
+      onClick={(ev) => ev.stopPropagation()}
+    >
+      <div className="video-ref-thumb">
+        {pending.kind === "video" ? <video src={pending.url} muted /> : pending.kind === "image" ? <img src={pending.url} alt="" /> : <span>♪</span>}
+        <span className="spinner" aria-hidden="true" />
+      </div>
+      <span>Uploading…</span>
     </div>
   );
 }

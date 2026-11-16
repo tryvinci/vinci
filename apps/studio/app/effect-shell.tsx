@@ -29,6 +29,8 @@ import { EffectsGalleryOverlay } from "./effects-gallery-overlay";
 import { PromptMention } from "./prompt-mention";
 import "./effects-shell.css";
 import { AdvancedDisclosure } from "./ui/advanced";
+import { GenProgress } from "./ui/gen-progress";
+import { averageSeconds, type RunClock, type TimedRun } from "../lib/progress";
 import { plainError } from "./ui/plain-text";
 
 const API = "/vinci-api";
@@ -172,6 +174,7 @@ export function EffectShell(props: EffectShellProps) {
   const [aspect, setAspect] = useState("");
   const [resolution, setResolution] = useState("2K");
   const [busy, setBusy] = useState(false);
+  const [clock, setClock] = useState<RunClock | null>(null);
   const [error, setError] = useState("");
   const [sessionOutputs, setSessionOutputs] = useState<string[]>([]);
 
@@ -241,6 +244,7 @@ export function EffectShell(props: EffectShellProps) {
         picked && (picked.provider === "mock" || (picked.available && liveSpend))
           ? picked.id
           : resolveAppModel(app, models, liveSpend, connected);
+      setClock({ startedAt: Date.now(), seconds: averageSeconds(runs as TimedRun[], modelId || "", app.output_kind) });
       const base = buildRunPayload(app, values, modelId);
       const promptText = Object.values(values)
         .filter((v) => typeof v === "string")
@@ -264,6 +268,7 @@ export function EffectShell(props: EffectShellProps) {
       setError(plainError(err));
     } finally {
       setBusy(false);
+      setClock(null);
     }
   }
 
@@ -428,6 +433,7 @@ export function EffectShell(props: EffectShellProps) {
                 </button>
               ) : null}
             </div>
+            {busy && clock ? <GenProgress clock={clock} testId="effects-progress" /> : null}
           </form>
         )}
       </aside>
