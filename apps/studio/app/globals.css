@@ -547,6 +547,15 @@ textarea { min-height: 64px; max-height: 88px; resize: vertical; }
 @keyframes vinci-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @keyframes vinci-pop { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+/* Generation progress (COREPRODUC-659): a fake countdown to 90% over the model's average time. */
+.gen-progress { width: min(78%, 260px); display: grid; gap: 8px; justify-items: center; font-size: 12px; color: var(--ink, #f6f3ee); }
+.gen-progress-track { width: 100%; height: 6px; border-radius: var(--pill, 999px); background: rgb(255 255 255 / 0.12); overflow: hidden; }
+.gen-progress-fill { height: 100%; border-radius: inherit; background: var(--teal, var(--accent, #21dad2)); transition: width 250ms linear; }
+.gen-progress-label { font-variant-numeric: tabular-nums; color: var(--dim, rgb(246 243 238 / 0.7)); }
+.gen-progress.compact { position: absolute; left: 8px; right: 8px; bottom: 8px; width: auto; gap: 4px; font-size: 10px; }
+.gen-progress.compact .gen-progress-track { height: 4px; }
+form .gen-progress { width: 100%; margin-top: 10px; } /* Effects: under Generate */
+@media (prefers-reduced-motion: reduce) { .gen-progress-fill { transition: none; } }
 .chip-cached {
   position: absolute; left: 8px; top: 8px; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--board-ink); background: rgb(0 0 0 / 0.55); border-radius: 999px; padding: 2px 7px;
@@ -1191,7 +1200,7 @@ input[type="range"] { accent-color: var(--teal); width: 100%; padding: 0; border
 .image-chip-menu button.on, .image-chip-menu button:hover { background: var(--hover, rgb(33 218 210 / 0.12)); }
 .image-picker {
   position: absolute; right: 0; bottom: calc(100% + 8px);
-  width: min(420px, 70vw); max-height: min(56vh, 420px); overflow: auto;
+  width: min(560px, 80vw); max-height: min(60vh, 480px); overflow: auto;
   padding: 10px; background: var(--raised); border: 1px solid var(--line);
   border-radius: 1.1rem; box-shadow: var(--card-shadow); z-index: 10;
 }
@@ -1335,13 +1344,21 @@ input[type="range"] { accent-color: var(--teal); width: 100%; padding: 0; border
 }
 .video-ref span { display: flex; align-items: center; justify-content: center; gap: 4px; }
 .video-ref button { border: 0; background: transparent; padding: 0; line-height: 1; }
+/* Upload feedback (COREPRODUC-659): the drop zone lights on drag-over; a frame shows dimmed under a
+   spinner while it uploads, then fades in. */
+.video-drop:hover,
+.video-drop.over { border-color: var(--teal, var(--accent, #21dad2)); }
+.video-drop.over { background: rgb(33 218 210 / 0.06); }
+.video-ref { animation: vinci-pop 180ms ease-out; }
+.video-ref-thumb { position: relative; }
+.video-ref.pending img,
+.video-ref.pending video { opacity: 0.45; }
+.video-ref-thumb > span:not(.spinner) { display: grid; place-items: center; width: 72px; height: 48px; border-radius: 8px; background: var(--media, #070808); }
+.video-ref.pending > span { color: var(--dim); }
 .video-prompt { position: relative; }
 .video-prompt textarea { min-height: 88px; resize: none; }
 .video-model-row { width: 100%; }
 .video-model-row .image-chip { width: 100%; max-width: none; }
-.video-model-row .image-picker {
-  left: calc(100% + 8px); right: auto; bottom: 0; width: min(420px, 46vw);
-}
 .video-tiles { display: grid; gap: 8px; }
 .video-tile-group { display: grid; gap: 4px; }
 .video-tile-group > span { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mute); }
@@ -1361,59 +1378,68 @@ input[type="range"] { accent-color: var(--teal); width: 100%; padding: 0; border
 .video-advanced button { border: 0; background: transparent; color: var(--dim); font-size: 12px; padding: 0; }
 .video-advanced-fields { display: grid; gap: 8px; margin-top: 8px; }
 .video-advanced-fields label { display: grid; gap: 4px; font-size: 11px; color: var(--dim); }
+/* The Video model menu (COREPRODUC-666): a popover beside the left panel, after Magnific's. */
 .video-overlay {
-  position: absolute; inset: 0; z-index: 12;
-  display: flex; flex-direction: column;
-  background: var(--bar, rgb(16 19 19 / 0.98)); color: var(--ink, #f6f3ee);
+  position: absolute; z-index: 12; top: 10px; left: 228px;
+  width: min(640px, calc(100% - 244px)); max-height: calc(100% - 20px); overflow: auto;
+  padding: 10px 12px 12px; border: 1px solid var(--line); border-radius: 1.1rem;
+  background: var(--raised); color: var(--ink, #f6f3ee); box-shadow: var(--card-shadow);
+  animation: vinci-pop 160ms ease;
 }
-.video-overlay-bar,
-.video-overlay-filters {
-  display: flex; gap: 10px; align-items: center; justify-content: space-between;
-  padding: 12px 16px; border-bottom: 1px solid var(--line);
-}
-.video-overlay-tabs,
-.video-overlay-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.video-overlay-tabs button {
-  border: 1px solid var(--line); background: var(--raised); border-radius: var(--pill);
-  padding: 6px 10px; font-size: 12px;
-}
-.video-overlay-tabs button.on {
-  border-color: var(--teal, var(--accent, #21dad2));
-  background: var(--hover, rgb(33 218 210 / 0.12));
-}
-.video-overlay-filters input { max-width: 240px; }
-.video-overlay-grid {
-  flex: 1; overflow: auto; padding: 16px;
-  column-count: 4; column-gap: 12px;
-}
-.video-preset-card {
-  break-inside: avoid; width: 100%; margin: 0 0 12px;
-  text-align: left; border: 1px solid transparent; background: transparent;
-  border-radius: 1rem; padding: 0 0 8px; display: grid; gap: 4px;
-}
-.video-preset-card.on, .video-preset-card:hover {
-  border-color: var(--line); background: var(--hover, rgb(33 218 210 / 0.12));
-}
-.video-preset-thumb {
-  border-radius: 1rem; overflow: hidden; min-height: 110px;
-  background: var(--media, #070808); color: var(--ink, #f6f3ee); display: grid; place-items: center;
-}
-.video-preset-thumb video { width: 100%; display: block; }
-.video-preset-card strong { padding: 0 8px; font-size: 13px; }
-.video-preset-blurb { padding: 0 8px; font-size: 12px; color: var(--dim); }
-.video-preset-card .image-picker-chips { padding: 0 8px; }
-@media (max-width: 1100px) {
-  .video-overlay-grid { column-count: 3; }
-}
-@media (max-width: 960px) {
-  .video-overlay-grid { column-count: 2; }
-  .video-model-row .image-picker { left: 0; width: min(100vw - 40px, 420px); bottom: calc(100% + 8px); }
-}
+.video-overlay-bar { display: flex; align-items: center; justify-content: space-between; padding: 0 2px 8px; }
 @media (max-width: 720px) {
   .video-page { grid-template-columns: 1fr; }
   .video-panel { border-right: 0; border-bottom: 1px solid var(--line); max-height: 46vh; }
-  .video-overlay-grid { column-count: 1; }
+  .video-overlay { left: 8px; width: calc(100% - 16px); }
 }
+/* The model menu, shared by Image and Video: search, filters, Featured, groups by family, one line a model. */
+.model-menu { display: grid; gap: 8px; }
+.model-menu-search { width: 100%; }
+.model-menu-filters { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.model-menu-filters .image-chip { flex: none; white-space: nowrap; }
+.model-menu h3 {
+  margin: 6px 0 4px; font-size: 10px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--mute); font-weight: 600;
+}
+.model-menu-group-head {
+  width: 100%; display: flex; align-items: center; gap: 8px; border: 0; background: transparent;
+  padding: 7px 10px; border-radius: 0.7rem; text-align: left; color: var(--ink, #f6f3ee);
+}
+.model-menu-group-head span:first-of-type { margin-left: auto; color: var(--dim); font-size: 12px; }
+.model-menu-group-head:hover, .model-menu-group-head[aria-expanded="true"] { background: var(--chip, rgb(246 243 238 / 0.06)); }
+.model-menu-row {
+  width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px;
+  border: 1px solid transparent; background: transparent; border-radius: 0.7rem; padding: 7px 10px; text-align: left;
+}
+.model-menu-group .model-menu-row { padding-left: 22px; }
+.model-menu-row.on, .model-menu-row:hover { background: var(--hover, rgb(33 218 210 / 0.12)); border-color: var(--line); }
+.model-menu-name { display: flex; gap: 6px; align-items: center; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; }
+.model-menu-chips { display: flex; gap: 4px; flex-wrap: nowrap; }
+.model-menu-chips span {
+  font-size: 10px; border-radius: 0.4rem; padding: 2px 6px; white-space: nowrap;
+  background: var(--chip, rgb(246 243 238 / 0.06)); color: var(--dim);
+}
+.model-menu-row .image-picker-price { margin-left: 0; min-width: 64px; text-align: right; }
+@media (max-width: 640px) {
+  .model-menu-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .model-menu-chips { grid-column: 1 / -1; flex-wrap: wrap; }
+}
+/* The Video page's input modes (COREPRODUC-667): one the model cannot take is grayed out, with its reason. */
+.video-ref-modes { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: var(--pill); }
+.video-ref-modes button {
+  flex: 1; border: 0; background: transparent; border-radius: var(--pill);
+  padding: 6px 2px; font-size: 11px; color: var(--dim); white-space: nowrap;
+}
+.video-ref-modes button.on { background: var(--hover, rgb(33 218 210 / 0.12)); color: var(--teal, var(--accent, #21dad2)); }
+.video-ref-modes button.off { opacity: 0.38; cursor: not-allowed; text-decoration: line-through; text-decoration-color: rgb(246 243 238 / 0.35); }
+.video-ref-note { margin: -4px 2px 0; font-size: 11px; line-height: 1.35; }
+.video-drop.off { opacity: 0.45; }
+.video-slot {
+  width: 72px; height: 62px; display: grid; place-items: center; align-content: center; gap: 2px;
+  border: 1px dashed var(--line); border-radius: 8px; background: transparent; color: var(--dim); font-size: 10px;
+}
+.video-slot span { font-size: 16px; line-height: 1; }
+.video-slot:hover { border-color: var(--teal, var(--accent, #21dad2)); color: var(--ink, #f6f3ee); }
 
 /* Canvas chrome: glass layers at the edges. No glow. Teal is the run button and the active control. */
 .float-glass {

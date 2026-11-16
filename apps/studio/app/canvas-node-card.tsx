@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKey } from "react";
+import { GenProgress } from "./ui/gen-progress";
+import type { RunClock } from "../lib/progress";
 import type { ComboModel } from "./model-combo";
 import { DockIcon, DOCK_ICON } from "./ui/icons";
 import { REF_LIMIT, showsCount, showsFrame, usesPagePrompt, wiredPrompt } from "../lib/canvas-node";
@@ -21,6 +23,8 @@ type Props = {
   thumbSrc?: string;
   video?: boolean;
   runState: RunState;
+  /** A running node's progress clock (COREPRODUC-659). */
+  clock?: RunClock | null;
   needs: string | null;
   models: ComboModel[];
   modelId: string;
@@ -197,6 +201,7 @@ export function CanvasNodeCard({
   thumbSrc,
   video,
   runState,
+  clock,
   needs,
   models,
   modelId,
@@ -237,7 +242,7 @@ export function CanvasNodeCard({
     <>
       <div className="thumb">
         {digest && thumbSrc ? video ? <video src={thumbSrc} muted /> : <img alt="" src={thumbSrc} /> : <span className="thumb-empty" aria-hidden="true" />}
-        {runState?.state === "running" ? <span className="spinner" aria-label="Running" /> : null}
+        {runState?.state === "running" ? clock ? <GenProgress clock={clock} compact testId="node-progress" /> : <span className="spinner" aria-label="Running" /> : null}
         {runState?.state === "cached" ? <span className="chip-cached">Saved</span> : null}
       </div>
       <div className="node-caption">

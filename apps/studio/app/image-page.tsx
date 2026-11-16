@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { RunClock } from "../lib/progress";
 import {
   applyFavorites,
   clampBatch,
@@ -68,6 +69,7 @@ export function ImagePage({
   onRemoveRef,
   cast,
   busy,
+  clock,
   pendingCount,
   runs,
   assets,
@@ -106,6 +108,8 @@ export function ImagePage({
   onRemoveRef: (id: string) => void;
   cast: MentionRow[];
   busy: boolean;
+  /** The run in flight, for the pending card's progress bar. */
+  clock?: RunClock | null;
   pendingCount: number;
   runs: ImageRun[];
   assets: ImageAsset[];
@@ -238,6 +242,7 @@ export function ImagePage({
   return (
     <div className="image-page" data-testid="image-page">
       <ImageFeed
+        clock={clock}
         items={items}
         onFavorite={(item) => void favorite(item)}
         onCopyPrompt={(item) => void copyPrompt(item)}
