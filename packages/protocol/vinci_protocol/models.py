@@ -69,6 +69,10 @@ class ModelConstraints(StrictModel):
     durations: list[float] = Field(default_factory=list)
     resolutions: list[str] = Field(default_factory=list)
     max_input_images: int | None = None
+    # A video model takes an end frame, and how many open reference images (the Studio's Video
+    # input modes gray out the others, COREPRODUC-667 and 669).
+    end_frame: bool = False
+    max_references: int = 0
 
 
 class ModelSpec(StrictModel):
