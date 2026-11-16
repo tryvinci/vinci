@@ -1,0 +1,1332 @@
+{
+ "provider": "mcp_higgsfield",
+ "listed_at": "2026-11-16T18:19:46+00:00",
+ "rows": [
+  {
+   "model": "soul_2",
+   "label": "Higgsfield Soul 2.0",
+   "capability": "t2i",
+   "credits": 1.0,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "16:9",
+    "9:16",
+    "4:3",
+    "3:4",
+    "3:2",
+    "2:3"
+   ],
+   "refs": 4,
+   "ref_role": "image"
+  },
+  {
+   "model": "soul_cinematic",
+   "label": "Soul Cinema",
+   "capability": "t2i",
+   "credits": 1.0,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "4:3",
+    "3:4",
+    "16:9",
+    "9:16",
+    "3:2",
+    "2:3",
+    "21:9"
+   ],
+   "refs": 4,
+   "ref_role": "image"
+  },
+  {
+   "model": "gpt_image_2",
+   "label": "GPT Image 2",
+   "capability": "t2i",
+   "credits": 1.0,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "4:3",
+    "3:4",
+    "16:9",
+    "21:9",
+    "9:16",
+    "3:2",
+    "2:3"
+   ],
+   "refs": 4,
+   "ref_role": "image"
+  },
+  {
+   "model": "cinematic_studio_2_5",
+   "label": "Cinema Studio Image 2.5",
+   "capability": "t2i",
+   "credits": 2.0,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "3:2",
+    "2:3",
+    "4:3",
+    "3:4",
+    "4:5",
+    "5:4",
+    "16:9",
+    "9:16",
+    "21:9"
+   ],
+   "refs": 4,
+   "ref_role": "image"
+  },
+  {
+   "model": "image_auto",
+   "label": "Auto",
+   "capability": "t2i",
+   "credits": 2.0,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "4:3",
+    "3:4",
+    "16:9",
+    "9:16"
+   ],
+   "refs": 4,
+   "ref_role": "image"
+  },
+  {
+   "model": "z_image",
+   "label": "Z Image",
+   "capability": "t2i",
+   "credits": 0.15,
+   "caps": [
+    "t2i"
+   ],
+   "ratios": [
+    "1:1",
+    "4:3",
+    "3:4",
+    "16:9",
+    "9:16"
+   ]
+  },
+  {
+   "model": "nano_banana",
+   "label": "Nano Banana",
+   "capability": "t2i",
+   "credits": 1.0,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "3:2",
+    "2:3",
+    "4:3",
+    "3:4",
+    "4:5",
+    "5:4",
+    "9:16",
+    "16:9",
+    "21:9"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "nano_banana_pro",
+   "label": "Nano Banana Pro",
+   "capability": "t2i",
+   "credits": 2.0,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "3:2",
+    "2:3",
+    "4:3",
+    "3:4",
+    "4:5",
+    "5:4",
+    "9:16",
+    "16:9",
+    "21:9"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "nano_banana_2",
+   "label": "Nano Banana 2",
+   "capability": "t2i",
+   "credits": 1.5,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "3:2",
+    "2:3",
+    "4:3",
+    "3:4",
+    "4:5",
+    "5:4",
+    "9:16",
+    "16:9",
+    "21:9"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "nano_banana_2_1",
+   "label": "Nano Banana 2.1",
+   "capability": "t2i",
+   "credits": 1.5,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "3:2",
+    "2:3",
+    "4:3",
+    "3:4",
+    "4:5",
+    "5:4",
+    "9:16",
+    "16:9",
+    "21:9",
+    "4:1",
+    "1:4",
+    "8:1",
+    "1:8"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "nano_banana_2_lite",
+   "label": "Nano Banana 2 Lite",
+   "capability": "t2i",
+   "credits": 1.0,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "3:2",
+    "2:3",
+    "4:3",
+    "3:4",
+    "4:5",
+    "5:4",
+    "9:16",
+    "16:9",
+    "21:9"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "seedream_v4_5",
+   "label": "Seedream 4.5",
+   "capability": "t2i",
+   "credits": 1.0,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "4:3",
+    "16:9",
+    "3:2",
+    "21:9",
+    "3:4",
+    "9:16",
+    "2:3"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "flux_2",
+   "label": "FLUX.2",
+   "capability": "t2i",
+   "credits": 1.0,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "4:3",
+    "3:4",
+    "16:9",
+    "9:16"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "flux_3_image",
+   "label": "FLUX 3 Image",
+   "capability": "t2i",
+   "credits": 2.0,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "21:9",
+    "2:1",
+    "16:9",
+    "3:2",
+    "7:5",
+    "4:3",
+    "5:4",
+    "1:1",
+    "4:5",
+    "3:4",
+    "5:7",
+    "2:3",
+    "9:16",
+    "1:2"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "flux_kontext",
+   "label": "Flux Kontext",
+   "capability": "t2i",
+   "credits": 1.5,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "4:3",
+    "3:4",
+    "16:9",
+    "9:16"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "kling_omni_image",
+   "label": "Kling O1 Image",
+   "capability": "t2i",
+   "credits": 0.5,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "16:9",
+    "9:16",
+    "4:3",
+    "3:4",
+    "3:2",
+    "2:3",
+    "21:9"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "openai_hazel",
+   "label": "OpenAI Hazel",
+   "capability": "t2i",
+   "credits": 4.0,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "3:2",
+    "2:3"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "gpt_image_2_5",
+   "label": "GPT Image 2.5",
+   "capability": "t2i",
+   "credits": 0.25,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "3:2",
+    "2:3",
+    "4:3",
+    "3:4",
+    "16:9",
+    "9:16",
+    "21:9",
+    "27:16",
+    "16:27",
+    "9:8",
+    "8:9",
+    "4:5",
+    "5:4"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "gpt_image_2_6",
+   "label": "GPT Image 2.6",
+   "capability": "t2i",
+   "credits": 0.25,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "3:2",
+    "2:3",
+    "4:3",
+    "3:4",
+    "16:9",
+    "9:16",
+    "21:9",
+    "27:16",
+    "16:27",
+    "9:8",
+    "8:9",
+    "4:5",
+    "5:4"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "gpt_image_2_6_flare",
+   "label": "GPT Image 2.6 Flare",
+   "capability": "t2i",
+   "credits": 0.25,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "3:2",
+    "2:3",
+    "4:3",
+    "3:4",
+    "16:9",
+    "9:16",
+    "21:9",
+    "27:16",
+    "16:27",
+    "9:8",
+    "8:9",
+    "4:5",
+    "5:4"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "soul_cinema_studio",
+   "label": "Soul Cinema Studio",
+   "capability": "t2i",
+   "credits": 0.12,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "16:9",
+    "9:16",
+    "4:3",
+    "3:4",
+    "3:2",
+    "2:3",
+    "21:9"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "seedream_v5_lite",
+   "label": "Seedream 5.0 Lite",
+   "capability": "t2i",
+   "credits": 1.0,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "4:3",
+    "3:4",
+    "16:9",
+    "9:16",
+    "21:9"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "seedream_5_0_flash",
+   "label": "Seedream 5.0 Flash",
+   "capability": "t2i",
+   "credits": 0.5,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "4:3",
+    "3:4",
+    "16:9",
+    "9:16",
+    "3:2",
+    "2:3",
+    "21:9"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "seedream_v5_pro",
+   "label": "Seedream 5.0 Pro",
+   "capability": "t2i",
+   "credits": 2.5,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "4:3",
+    "3:4",
+    "16:9",
+    "9:16",
+    "3:2",
+    "2:3",
+    "21:9"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "grok_image",
+   "label": "Grok Image",
+   "capability": "t2i",
+   "credits": 1.0,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "1:2",
+    "2:1",
+    "3:2",
+    "2:3",
+    "4:3",
+    "3:4",
+    "16:9",
+    "9:16"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "grok_image_2_0",
+   "label": "Grok Image 2.0",
+   "capability": "t2i",
+   "credits": 2.0,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "1:2",
+    "2:1",
+    "3:2",
+    "2:3",
+    "4:3",
+    "3:4",
+    "16:9",
+    "9:16"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "ideogram_4_5",
+   "label": "Ideogram 4.5",
+   "capability": "t2i",
+   "credits": 6.25,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "1:2",
+    "2:1",
+    "2:3",
+    "3:2",
+    "4:5",
+    "5:4",
+    "9:16",
+    "16:9",
+    "5:8",
+    "8:5",
+    "3:4",
+    "4:3",
+    "9:22",
+    "22:9",
+    "9:23",
+    "23:9",
+    "3:8",
+    "8:3",
+    "5:12",
+    "12:5",
+    "1:3",
+    "3:1"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "ideogram_vector",
+   "label": "Ideogram Vector",
+   "capability": "t2i",
+   "credits": null,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "1:4",
+    "1:3",
+    "1:2",
+    "9:16",
+    "10:16",
+    "2:3",
+    "3:4",
+    "4:5",
+    "5:4",
+    "4:3",
+    "3:2",
+    "16:10",
+    "16:9",
+    "2:1",
+    "3:1",
+    "4:1"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "recraft_v4_1",
+   "label": "Recraft V4.1",
+   "capability": "t2i",
+   "credits": 1.25,
+   "caps": [
+    "t2i"
+   ],
+   "ratios": [
+    "1:1",
+    "3:4",
+    "4:3",
+    "4:5",
+    "5:4",
+    "3:2",
+    "2:3",
+    "16:9",
+    "9:16"
+   ]
+  },
+  {
+   "model": "recraft_v4_styles",
+   "label": "Recraft V4 Styles",
+   "capability": "t2i",
+   "credits": 1.0,
+   "caps": [
+    "t2i"
+   ],
+   "ratios": [
+    "1:1",
+    "2:1",
+    "1:2",
+    "3:2",
+    "2:3",
+    "4:3",
+    "3:4",
+    "5:4",
+    "4:5",
+    "6:10",
+    "14:10",
+    "10:14",
+    "16:9",
+    "9:16"
+   ]
+  },
+  {
+   "model": "minimax_h3_image",
+   "label": "MiniMax H3 Image",
+   "capability": "t2i",
+   "credits": 4.0,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "cinematic_studio_image",
+   "label": "Cinematic Studio Image",
+   "capability": "t2i",
+   "credits": 2.0,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "4:3",
+    "3:4",
+    "16:9",
+    "9:16",
+    "3:2",
+    "2:3",
+    "21:9"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "cinematic_studio_3_0",
+   "label": "Cinema Studio Video 3.0",
+   "capability": "i2v",
+   "credits": 20.0,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "21:9",
+    "16:9",
+    "4:3",
+    "1:1",
+    "3:4",
+    "9:16"
+   ],
+   "durations": [
+    4,
+    5,
+    6,
+    8,
+    10,
+    12,
+    15
+   ],
+   "clip_credits": {
+    "4": 20.0,
+    "5": 25.0,
+    "6": 30.0,
+    "8": 40.0,
+    "10": 50.0,
+    "12": 60.0,
+    "15": 75.0
+   },
+   "end_frame": true,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "cinematic_studio_video",
+   "label": "Cinema Studio Video",
+   "capability": "i2v",
+   "credits": 18.0,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "1:1",
+    "4:3",
+    "3:4",
+    "16:9",
+    "9:16"
+   ],
+   "end_frame": true,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "flux_3_video",
+   "label": "FLUX 3 Video",
+   "capability": "i2v",
+   "credits": 30.0,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "21:9",
+    "2:1",
+    "16:9",
+    "4:3",
+    "1:1",
+    "3:4",
+    "9:16"
+   ],
+   "end_frame": true,
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "grok_video_v15",
+   "label": "Grok Video 1.5",
+   "capability": "i2v",
+   "credits": 22.5,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "grok_video_v15_lite",
+   "label": "Grok Imagine Video 1.5 Lite",
+   "capability": "i2v",
+   "credits": 5.0,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "16:9",
+    "9:16",
+    "4:3",
+    "3:4",
+    "1:1",
+    "3:2",
+    "2:3"
+   ],
+   "ref_role": "image_references"
+  },
+  {
+   "model": "minimax_hailuo",
+   "label": "Minimax Hailuo",
+   "capability": "i2v",
+   "credits": 6.0,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "durations": [
+    6,
+    10
+   ],
+   "clip_credits": {
+    "6": 6.0,
+    "10": 11.0
+   },
+   "end_frame": true,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "minimax_h3",
+   "label": "MiniMax H3",
+   "capability": "i2v",
+   "credits": 10.0,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "21:9",
+    "16:9",
+    "4:3",
+    "1:1",
+    "3:4",
+    "9:16"
+   ],
+   "end_frame": true,
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "minimax_h3_max",
+   "label": "MiniMax H3 Max",
+   "capability": "i2v",
+   "credits": 12.5,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "21:9",
+    "16:9",
+    "4:3",
+    "1:1",
+    "3:4",
+    "9:16"
+   ],
+   "end_frame": true,
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "wan2_6",
+   "label": "Wan 2.6 Video",
+   "capability": "t2v",
+   "credits": 7.5,
+   "caps": [
+    "t2v"
+   ],
+   "ratios": [
+    "16:9",
+    "9:16",
+    "1:1"
+   ],
+   "durations": [
+    5,
+    10,
+    15
+   ],
+   "clip_credits": {
+    "5": 7.5,
+    "10": 15.0,
+    "15": 22.5
+   },
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "seedance_2_0",
+   "label": "Seedance 2.0",
+   "capability": "i2v",
+   "credits": 22.5,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "16:9",
+    "9:16",
+    "4:3",
+    "3:4",
+    "1:1",
+    "21:9"
+   ],
+   "end_frame": true,
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "seedance_2_5",
+   "label": "Seedance 2.5",
+   "capability": "i2v",
+   "credits": 35.0,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "21:9",
+    "16:9",
+    "4:3",
+    "1:1",
+    "3:4",
+    "9:16"
+   ],
+   "end_frame": true,
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "cinematic_studio_video_4_0",
+   "label": "Cinema Studio 4.0",
+   "capability": "i2v",
+   "credits": 35.0,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "21:9",
+    "16:9",
+    "4:3",
+    "1:1",
+    "3:4",
+    "9:16"
+   ],
+   "end_frame": true,
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "kling2_6",
+   "label": "Kling 2.6 Video",
+   "capability": "i2v",
+   "credits": 10.0,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "16:9",
+    "9:16",
+    "1:1"
+   ],
+   "durations": [
+    5,
+    10
+   ],
+   "clip_credits": {
+    "5": 10.0,
+    "10": 20.0
+   },
+   "ref_role": "image_references"
+  },
+  {
+   "model": "kling3_0",
+   "label": "Kling v3.0",
+   "capability": "i2v",
+   "credits": 10.0,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "16:9",
+    "9:16",
+    "1:1"
+   ],
+   "end_frame": true,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "kling3_0_turbo",
+   "label": "Kling 3.0 Turbo",
+   "capability": "i2v",
+   "credits": 7.5,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "16:9",
+    "9:16",
+    "1:1"
+   ],
+   "ref_role": "image_references"
+  },
+  {
+   "model": "kling4_0",
+   "label": "Kling 4.0",
+   "capability": "i2v",
+   "credits": 32.5,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "21:9",
+    "16:9",
+    "9:16",
+    "1:1"
+   ],
+   "end_frame": true,
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "kling_4_0_flash",
+   "label": "Kling 4.0 Flash",
+   "capability": "i2v",
+   "credits": 30.0,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "21:9",
+    "16:9",
+    "9:16",
+    "1:1"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "kling_o3_image_reference",
+   "label": "Kling 3.0 Omni",
+   "capability": "t2v",
+   "credits": 6.25,
+   "caps": [
+    "t2v"
+   ],
+   "ratios": [
+    "16:9",
+    "9:16",
+    "1:1"
+   ],
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "kling_o3_flf",
+   "label": "Kling 3.0 Omni (Frames)",
+   "capability": "i2v",
+   "credits": 6.25,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "16:9",
+    "9:16",
+    "1:1"
+   ],
+   "end_frame": true,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "happy_horse_video",
+   "label": "Happy Horse Video",
+   "capability": "i2v",
+   "credits": 12.5,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "16:9",
+    "9:16",
+    "1:1",
+    "4:3",
+    "3:4"
+   ],
+   "ref_role": "image_references"
+  },
+  {
+   "model": "grok_video",
+   "label": "Grok Video",
+   "capability": "i2v",
+   "credits": 7.5,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "16:9",
+    "9:16",
+    "1:1"
+   ],
+   "ref_role": "image_references"
+  },
+  {
+   "model": "gemini_omni_flash_1_1",
+   "label": "Gemini Omni Flash 1.1",
+   "capability": "i2v",
+   "credits": 24.0,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "16:9",
+    "9:16"
+   ],
+   "end_frame": true,
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "gemini_omni_flash_1_2",
+   "label": "Gemini Omni Flash 1.2",
+   "capability": "i2v",
+   "credits": 18.0,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "16:9",
+    "9:16"
+   ],
+   "end_frame": true,
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "wan2_7",
+   "label": "Wan 2.7",
+   "capability": "i2v",
+   "credits": 7.5,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "16:9",
+    "9:16",
+    "1:1",
+    "4:3",
+    "3:4"
+   ],
+   "end_frame": true,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "wan3_0",
+   "label": "Wan 3.0",
+   "capability": "i2v",
+   "credits": 8.75,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "16:9",
+    "9:16",
+    "1:1",
+    "4:3",
+    "3:4"
+   ],
+   "end_frame": true,
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "wan3_0_prime",
+   "label": "Wan 3.0 Prime",
+   "capability": "i2v",
+   "credits": 15.0,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "16:9",
+    "9:16",
+    "1:1",
+    "4:3",
+    "3:4"
+   ],
+   "end_frame": true,
+   "refs": 4,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "veo3_1",
+   "label": "Google Veo 3.1",
+   "capability": "i2v",
+   "credits": 16.0,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "16:9",
+    "9:16"
+   ],
+   "durations": [
+    4,
+    6,
+    8
+   ],
+   "clip_credits": {
+    "4": 16.0,
+    "6": 24.0,
+    "8": 32.0
+   },
+   "ref_role": "image_references"
+  },
+  {
+   "model": "veo3_1_lite",
+   "label": "Google Veo 3.1 Lite",
+   "capability": "i2v",
+   "credits": 6.0,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "16:9",
+    "9:16"
+   ],
+   "durations": [
+    4,
+    6,
+    8
+   ],
+   "clip_credits": {
+    "4": 6.0,
+    "6": 9.0,
+    "8": 12.0
+   },
+   "end_frame": true,
+   "ref_role": "image_references"
+  },
+  {
+   "model": "cinematic_studio_video_3_5",
+   "label": "Cinematic Studio Video 3.5",
+   "capability": "i2v",
+   "credits": 75.0,
+   "caps": [
+    "t2v",
+    "i2v"
+   ],
+   "ratios": [
+    "21:9",
+    "16:9",
+    "4:3",
+    "1:1",
+    "3:4",
+    "9:16"
+   ],
+   "end_frame": true,
+   "refs": 4,
+   "ref_role": "image_references"
+  }
+ ]
+}

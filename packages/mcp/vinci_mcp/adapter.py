@@ -324,22 +324,42 @@ class McpProvider(Provider):
         if connector is None or self._cas is None:
             raise RuntimeError("mcp connector is not configured")
         row = connector.row(spec.id)
-        tool = connector.tool_for(Capability(row.capability))
-        start = self._start_frame(req.inputs) if row.capability == "i2v" else None
-        args = connector.arguments(row, req.inputs, start)
+        tool = connector.tools[row.capability]
+        inputs = req.inputs
+        start = end = None
+        if row.video:
+            first = _image_ref(inputs)
+            if first and "i2v" in row.capabilities:
+                start = self._upload(first)
+            elif "t2v" not in row.capabilities:
+                raise ValueError("this model needs a start frame")
+            last = inputs.get("last_frame_url") or inputs.get("tail_image_url")
+            if start and row.end_frame and isinstance(last, str) and last:
+                end = self._upload(last)
+            asked = inputs.get("reference_urls")  # the Video page's References mode
+        else:
+            asked = inputs.get("image_urls") or ([inputs["image"]] if inputs.get("image") else [])
+        # Reference images go to the provider's storage too (COREPRODUC-669): an image edit, or
+        # a video's References mode.
+        listed = [ref for ref in asked or [] if isinstance(ref, str) and ref][: row.refs]
+        refs = tuple(self._upload(ref) for ref in listed)
+        args = connector.arguments(row, inputs, start, end, refs)
         preview_tool, preview = connector.cost_call(tool, args)
         live = parse_cost(self._call(preview_tool, preview))
+        expected = row.price(row.length(inputs.get("duration")))
         log.info(
-            "mcp price provider=%s model=%s live=%s row=%s",
+            "mcp price provider=%s model=%s live=%s row=%s refs=%s end=%s",
             connector.id,
             row.model,
             live,
-            row.credits,
+            expected,
+            len(refs),
+            bool(end),
         )
-        if live is not None and live > row.credits + 1e-9:
+        if live is not None and expected is not None and live > expected + 1e-9:
             raise ValueError(
                 f"{spec.display_name} costs {live:g} {connector.currency} now, "
-                f"not {row.credits:g}. Nothing ran."
+                f"not {expected:g}. Nothing ran."
             )
         ref, status, b64 = parse_generate(self._call(tool, args))
         log.info(
@@ -378,16 +398,13 @@ class McpProvider(Provider):
             raise RuntimeError(f"{self._provider_id} {name}: {message[:300]}")
         return result
 
-    def _start_frame(self, inputs: dict[str, Any]) -> str:
-        """Put the start frame in the provider's storage and return its id there.
+    def _upload(self, ref: str) -> str:
+        """Put one image (a start or end frame, a reference) in the provider's storage; its id.
 
         A public https link is imported by the provider. A content digest or a ``data:`` URI is
         uploaded: Higgsfield ``media_upload`` + PUT + ``media_confirm``; Magnific
         ``creations_request_upload`` + PUT + ``creations_finalize_upload`` (not in the library).
         """
-        ref = _image_ref(inputs)
-        if not ref:
-            raise ValueError("this model needs a start frame")
         higgsfield = self._provider_id == "mcp_higgsfield"
         if ref.startswith("https://"):
             if higgsfield:

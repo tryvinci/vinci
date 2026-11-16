@@ -20,4 +20,4 @@ dependencies = [
 include = ["vinci_mcp*"]
 
 [tool.setuptools.package-data]
-vinci_mcp = ["py.typed"]
+vinci_mcp = ["py.typed", "catalogs/*.json"]

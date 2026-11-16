@@ -86,6 +86,8 @@ export interface ModelSpec {
     durations?: number[];
     resolutions?: string[];
     max_input_images?: number | null;
+    end_frame?: boolean;
+    max_references?: number;
   };
   pricing: Pricing;
   quality_tier?: string;

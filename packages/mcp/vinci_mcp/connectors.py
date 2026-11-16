@@ -5,14 +5,20 @@ provider's free price preview (Higgsfield ``get_cost``, Magnific ``simulate_cost
 The tool names and argument shapes come from a live, signed-in ``tools/list`` on that date
 (COREPRODUC-610 and 614). Before, the Higgsfield names were guesses, both servers got only
 ``prompt`` and ``image_url``, and every row cost "1 credit".
+
+Every other model of each provider comes from ``catalogs/<provider>.json``: a snapshot of the
+provider's free model list, priced with its free preview (COREPRODUC-669, made by
+``vinci_mcp.catalog_live``). Before, each provider listed only the 3 rows below, and none took a
+reference image.
 """
 
 from __future__ import annotations
 
 import base64
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from vinci_protocol.enums import Capability, ErrorCode, JobState
@@ -21,8 +27,9 @@ from vinci_protocol.models import JobStatus, ModelConstraints, ModelSpec, Pricin
 # The pricing snapshot of every connector row. Fixed, not the time of the call: the job cache
 # reuses a result only under the row's current snapshot, so a new time at each catalog call made
 # each cached result stale and paid again. Change it when a connector's tools or request mapping
-# change (COREPRODUC-596; changed 2026-11-12 for the live tool mapping).
-SNAPSHOT = datetime(2026, 11, 12, tzinfo=UTC)
+# change (COREPRODUC-596; changed 2026-11-12 for the live tool mapping, 2026-11-16 for every model
+# with references, end frames and lengths, COREPRODUC-669).
+SNAPSHOT = datetime(2026, 11, 16, tzinfo=UTC)
 
 
 @dataclass(frozen=True)
@@ -32,18 +39,54 @@ class Row:
     Attributes:
         model: The provider's model id (Higgsfield ``model``, Magnific ``mode`` or ``slug``).
         label: The name in the Studio's model lists.
-        capability: ``t2i`` or ``i2v``.
-        credits: The provider's price of one run with ``settings``, in its own credits.
+        capability: ``t2i`` or ``i2v``: the run's tool (image or video).
+        credits: The provider's price of one run with ``settings``, in its own credits; None when
+            its free preview gave none (the Studio shows "price varies").
         ratios: The shapes the model takes. Another shape is not sent.
         settings: Fixed model settings sent with every run (length, resolution, variant).
+        caps: Every capability (``t2i``, ``i2i``, ``t2v``, ``i2v``); empty: only ``capability``.
+        durations: The lengths a video row offers, each priced in ``clip_credits``.
+        clip_credits: The price of each length, ``((5, 40.0), (10, 80.0))``.
+        end_frame: The model takes an end frame.
+        refs: The reference images it takes (image edit, or a video's References mode).
+        ref_role: Higgsfield's media role of a reference image (``image_references``, ``image``).
     """
 
     model: str
     label: str
     capability: str
-    credits: float
+    credits: float | None
     ratios: tuple[str, ...]
     settings: tuple[tuple[str, Any], ...] = ()
+    caps: tuple[str, ...] = ()
+    durations: tuple[int, ...] = ()
+    clip_credits: tuple[tuple[int, float], ...] = ()
+    end_frame: bool = False
+    refs: int = 0
+    ref_role: str = ""
+
+    @property
+    def capabilities(self) -> tuple[str, ...]:
+        return self.caps or (self.capability,)
+
+    @property
+    def video(self) -> bool:
+        return self.capability in ("i2v", "t2v")
+
+    def length(self, asked: Any) -> int | None:
+        """The clip length a run sends: the asked one fitted to ``durations``, else the fixed."""
+        fixed = dict(self.settings).get("duration")
+        if not self.durations:
+            return int(fixed) if isinstance(fixed, int | float) else None
+        try:
+            want = float(asked)
+        except (TypeError, ValueError):
+            want = 5.0
+        return min(self.durations, key=lambda n: (abs(n - want), n))
+
+    def price(self, length: int | None) -> float | None:
+        """What a run of ``length`` costs: its clip price, else the row's price."""
+        return dict(self.clip_credits).get(length or -1, self.credits)
 
 
 @dataclass(frozen=True)
@@ -74,15 +117,22 @@ class Connector:
         raise KeyError(model_id)
 
     def arguments(
-        self, row: Row, inputs: dict[str, Any], start: str | None = None
+        self,
+        row: Row,
+        inputs: dict[str, Any],
+        start: str | None = None,
+        end: str | None = None,
+        refs: tuple[str, ...] = (),
     ) -> dict[str, Any]:
         """Tool arguments of one run.
 
         Args:
             row: The model row.
-            inputs: The run inputs (``prompt``, ``aspect_ratio``).
+            inputs: The run inputs (``prompt``, ``aspect_ratio``, ``duration``).
             start: The start frame as the provider's own id (Higgsfield media id, Magnific
-                creation identifier), for an image-to-video row.
+                creation identifier), for a video row.
+            end: The end frame, the same way, for a row that takes one.
+            refs: Reference images the same way: an image edit, or a video's References mode.
 
         Returns:
             The ``arguments`` of the generate tool.
@@ -91,6 +141,7 @@ class Connector:
         ratio = inputs.get("aspect_ratio")
         ratio = ratio if isinstance(ratio, str) and ratio in row.ratios else None
         settings = dict(row.settings)
+        length = row.length(inputs.get("duration")) if row.durations else None
         if self.id == "mcp_higgsfield":
             # use_unlim false: without it, a free-trial allowance makes the tool ask instead of run.
             params: dict[str, Any] = {
@@ -102,19 +153,33 @@ class Connector:
             params |= settings
             if ratio:
                 params["aspect_ratio"] = ratio
-            if start:
-                params["medias"] = [{"value": start, "role": "start_image"}]
+            if length:
+                params["duration"] = length
+            medias = [{"value": start, "role": "start_image"}] if start else []
+            medias += [{"value": end, "role": "end_image"}] if end else []
+            medias += [{"value": ref, "role": row.ref_role or "image_references"} for ref in refs]
+            if medias:
+                params["medias"] = medias
             return {"params": params}
         args: dict[str, Any] = {"prompt": prompt, **settings}
-        if row.capability == "i2v":
+        if length:
+            args["duration"] = length
+        if row.video:
             args["slug"] = row.model
-            args["aspectRatio"] = ratio or row.ratios[0]
-            if start:
-                args["keyframes"] = {"start": start}
+            if ratio or row.ratios:
+                args["aspectRatio"] = ratio or row.ratios[0]
+            frames = {"start": start} if start else {}
+            frames |= {"end": end} if end else {}
+            if frames:
+                args["keyframes"] = frames
+            if refs:
+                args["references"] = [{"type": "image", "url": ref} for ref in refs]
             return args
         args |= {"mode": row.model, "count": 1}
         if ratio:
             args["aspectRatio"] = ratio
+        if refs:
+            args["references"] = [{"type": "image", "identifier": ref} for ref in refs]
         return args
 
     def cost_call(self, tool: str, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -131,7 +196,12 @@ CONNECTORS: dict[str, Connector] = {
         url="https://mcp.higgsfield.ai/mcp",
         docs="https://higgsfield.ai/creator-hub/help-center/integrations/what-is-higgsfield-mcp",
         currency="Higgsfield credits",
-        tools={"t2i": "generate_image", "i2v": "generate_video"},
+        tools={
+            "t2i": "generate_image",
+            "i2i": "generate_image",
+            "t2v": "generate_video",
+            "i2v": "generate_video",
+        },
         status_tool="job_status",
         status_arg="jobId",
         balance_tool="balance",
@@ -163,7 +233,12 @@ CONNECTORS: dict[str, Connector] = {
         url="https://mcp.magnific.com",
         docs="https://docs.magnific.com/modelcontextprotocol",
         currency="Magnific credits",
-        tools={"t2i": "images_generate", "i2v": "video_generate"},
+        tools={
+            "t2i": "images_generate",
+            "i2i": "images_generate",
+            "t2v": "video_generate",
+            "i2v": "video_generate",
+        },
         status_tool="creation_status",
         status_arg="creationIdentifier",
         balance_tool="account_balance",
@@ -196,6 +271,46 @@ CONNECTORS: dict[str, Connector] = {
 }
 
 
+CATALOGS = Path(__file__).with_name("catalogs")
+
+
+def snapshot_rows(provider_id: str, skip: set[str] = frozenset()) -> tuple[Row, ...]:  # type: ignore[assignment]
+    """The rows of ``catalogs/<provider_id>.json`` (COREPRODUC-669), minus the ``skip`` models."""
+    path = CATALOGS / f"{provider_id}.json"
+    if not path.is_file():
+        return ()
+    rows = []
+    for item in json.loads(path.read_text(encoding="utf-8")).get("rows", []):
+        if item["model"] in skip:
+            continue
+        rows.append(
+            Row(
+                model=item["model"],
+                label=item["label"],
+                capability=item["capability"],
+                credits=item.get("credits"),
+                ratios=tuple(item.get("ratios") or ()),
+                settings=tuple((k, v) for k, v in (item.get("settings") or {}).items()),
+                caps=tuple(item.get("caps") or ()),
+                durations=tuple(item.get("durations") or ()),
+                clip_credits=tuple(
+                    (int(k), float(v)) for k, v in (item.get("clip_credits") or {}).items()
+                ),
+                end_frame=bool(item.get("end_frame")),
+                refs=int(item.get("refs") or 0),
+                ref_role=str(item.get("ref_role") or ""),
+            )
+        )
+    return tuple(rows)
+
+
+# The 3 hand-tuned rows of each provider stay first; its snapshot adds every other model.
+for _id, _connector in list(CONNECTORS.items()):
+    CONNECTORS[_id] = replace(
+        _connector, rows=_connector.rows + snapshot_rows(_id, {r.model for r in _connector.rows})
+    )
+
+
 def connector_for(provider_id: str) -> Connector | None:
     return CONNECTORS.get(provider_id)
 
@@ -209,23 +324,30 @@ def models_for(connector: Connector, tool_names: set[str] | None) -> list[ModelS
             continue
         settings = dict(row.settings)
         resolution = settings.get("resolution")
+        lengths = [float(n) for n in row.durations] or (
+            [float(settings["duration"])] if "duration" in settings else []
+        )
         specs.append(
             ModelSpec(
                 id=f"{connector.id}:{row.model}",
                 display_name=f"{connector.label} {row.label}",
                 provider=connector.id,
-                capabilities=[Capability(row.capability)],
+                capabilities=[Capability(cap) for cap in row.capabilities],
                 constraints=ModelConstraints(
                     aspect_ratios=list(row.ratios),
-                    durations=[float(settings["duration"])] if "duration" in settings else [],
-                    max_duration=float(settings["duration"]) if "duration" in settings else None,
+                    durations=lengths,
+                    max_duration=max(lengths) if lengths else None,
                     resolutions=[str(resolution)] if resolution else [],
+                    max_input_images=row.refs or None,
+                    end_frame=row.end_frame,
+                    max_references=row.refs if row.video else 0,
                 ),
                 pricing=Pricing(
                     unit="generation",
-                    amount=row.credits,
+                    amount=row.credits or 0,
                     currency=connector.currency,
                     snapshot_at=SNAPSHOT,
+                    clip_prices={str(n): c for n, c in row.clip_credits},
                 ),
                 quality_tier="fast",
                 secret_names=[],

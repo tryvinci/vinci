@@ -23,7 +23,9 @@
         "max_duration": { "type": ["number", "null"] },
         "durations": { "type": "array", "items": { "type": "number" } },
         "resolutions": { "type": "array", "items": { "type": "string" } },
-        "max_input_images": { "type": ["integer", "null"] }
+        "max_input_images": { "type": ["integer", "null"] },
+        "end_frame": { "type": "boolean" },
+        "max_references": { "type": "integer", "minimum": 0 }
       }
     },
     "pricing": {
