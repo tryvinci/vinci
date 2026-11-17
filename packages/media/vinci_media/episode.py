@@ -349,7 +349,10 @@ def burn_cues(
         graph, label = [], "[0:v]"
         for i, (start, end, _) in enumerate(cues, 1):
             graph.append(
-                f"{label}[{i}:v]overlay=x=(W-w)/2:y=H-h-{margin}:enable='between(t,{start:.3f},{end:.3f})'[o{i}]"
+                # Half-open [start, end): `between` includes both ends, so the frame where one line
+                # ends and the next begins showed both (COREPRODUC-671, Lamp Oil export at 4.000 s).
+                f"{label}[{i}:v]overlay=x=(W-w)/2:y=H-h-{margin}"
+                f":enable='gte(t,{start:.3f})*lt(t,{end:.3f})'[o{i}]"
             )
             label = f"[o{i}]"
         inputs = ["-i", str(src), *[arg for image in images for arg in ("-i", str(image))]]

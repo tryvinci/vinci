@@ -643,11 +643,11 @@ def decode_image(data: str) -> Any:
     return image
 
 
-def _save_image(image: Any, target: Path) -> None:
+def _save_image(image: Any, target: Path, **opts: Any) -> None:
     """Write an image in the format its file name asks for (``.png``, ``.jpg``, ``.webp``)."""
     target.parent.mkdir(parents=True, exist_ok=True)
     fmt = {".jpg": "JPEG", ".jpeg": "JPEG", ".webp": "WEBP"}.get(target.suffix.lower(), "PNG")
-    (image.convert("RGB") if fmt == "JPEG" else image).save(target, fmt)
+    (image.convert("RGB") if fmt == "JPEG" else image).save(target, fmt, **opts)
 
 
 def replace_sheet(p: Project, char_id: str, data: str, *, sheet: str | None = None) -> str:
@@ -762,3 +762,56 @@ def add_form(
     )
     log.info("character %s: added form %s (view %s)", char_id, name, view)
     return name
+
+
+def add_storyboard(p: Project, shot_id: str, data: str) -> str:
+    """Save a shot's 3D pill frame and name it in ``control.storyboard``.
+
+    The Studio renders the frame with three.js (``apps/studio/lib/pillframe.ts``): a clay set and
+    the shot's camera, a human figure where each pill stands, then a striped pin in place of each
+    figure, the previs method of github.com/sirioberati/ai-filmmaking-camera-control-seedance-2-5
+    (MIT). A keyframe render sends the frame as its last reference, and ``render.prompt`` says
+    how to read it. Before, no pill frame reached a model, and over-the-shoulder keyframes drew
+    a second copy of the near character (COREPRODUC-671 and 673; the gap was COREPRODUC-569).
+
+    Args:
+        p: The loaded project.
+        shot_id: The shot.
+        data: The frame as base64 PNG (a ``data:`` URL is fine).
+
+    Returns:
+        The frame's asset ID. The file is ``storyboards/<shot>.png``, locked with the show's
+        license; a new frame replaces it, so the shot's keyframes become stale.
+
+    Raises:
+        OlfError: The shot is missing, or ``data`` is not an image.
+    """
+    from PIL.PngImagePlugin import PngInfo
+
+    from vinci_olf.render import _lock_entry, take_license
+
+    doc = p.docs.get(shot_id)
+    if doc is None or p.kind(shot_id) != "shot":
+        raise OlfError(f"{shot_id}: no such shot")
+    license_ = take_license(p)  # no license: stop here, or `asset/<digest>` has no lock row
+    image = decode_image(data)
+    target = p.inside(p.root / "storyboards" / f"{shot_id}.png")
+    if target.is_file():  # the old frame goes with its lock entry
+        p.drop_from_lock(p.rel(target))
+    named = PngInfo()  # two shots with the same frame get two assets: a redraw of one never
+    named.add_text("olf-shot", shot_id)  # drops the lock row of the other
+    _save_image(image, target, pnginfo=named)
+    p.forget(target)  # a redraw: the cached (or host) digest is the old frame's
+    digest, rel = p.sha256(target), p.rel(target)
+    p.add_to_lock({f"asset/{digest}": _lock_entry(rel, digest, "image/png", "generated", license_)})
+    lines = _lines(doc.path)
+    first, end, indent = shot_block(lines, shot_id)
+    control = dict(_node(read(doc.path), shot_id).get("control") or {}) | {
+        "storyboard": f"asset/{digest}"
+    }
+    flow = "{ " + ", ".join(f"{k}: {_flow(v)}" for k, v in control.items()) + " }"
+    _put(lines, first, end, indent, "control", flow)
+    _save(doc.path, lines, lambda d: _node(d, shot_id).get("control") == control)
+    doc.data = _node(read(doc.path), shot_id)  # a resolve on this project sees the new frame
+    log.info("shot %s: storyboard %s (%dx%d)", shot_id, rel, *image.size)
+    return f"asset/{digest}"

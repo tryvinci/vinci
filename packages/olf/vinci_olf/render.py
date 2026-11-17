@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from vinci_olf.explain import save_inputs
+from vinci_olf.layout import shot_plan
 from vinci_olf.project import OlfError, Project, sheets_of, write
 from vinci_olf.qa import palette_check, palettes
 from vinci_olf.resolve import from_keyframe, hash_view, inputs_hash, resolve
@@ -74,7 +75,9 @@ def references(view: dict[str, Any]) -> list[str]:
         refs += _leaves(prop.get("references"))[:1]
     refs += _leaves((view.get("location") or {}).get("references"))[:1]
     refs += _leaves((view.get("style") or {}).get("references"))
-    return list(dict.fromkeys(refs))[:REF_LIMIT]
+    # The pill frame goes last, inside the cap: it places the cast (author.add_storyboard).
+    board = _leaves((view.get("control") or {}).get("storyboard"))[:1]
+    return [r for r in dict.fromkeys(refs) if r not in board][: REF_LIMIT - len(board)] + board
 
 
 def _leaves(value: Any) -> list[str]:
@@ -90,46 +93,292 @@ def _leaves(value: Any) -> list[str]:
     return [leaf for item in items for leaf in _leaves(item)]
 
 
-def prompt(view: dict[str, Any], kind: str) -> str:
-    """Write a model-agnostic prompt from a resolved shot (video adds motion and dialogue)."""
+def prompt(
+    view: dict[str, Any], kind: str, plan: dict[str, Any] | None = None, *, from_frame: bool = False
+) -> str:
+    """Write a model-agnostic prompt from a resolved shot.
+
+    Args:
+        view: The resolved shot.
+        kind: ``keyframe`` (blocks: ``_keyframe_words``) or ``video``.
+        plan: The shot's pills (``layout.shot_plan``): a keyframe prompt says who stands where.
+        from_frame: A video that starts from a picture (the keyframe) gets motion blocks
+            (``_video_words``); with no picture it gets the whole shot in words.
+    """
+    if kind == "keyframe":
+        return _keyframe_words(view, plan)
+    if from_frame:
+        return _video_words(view)
     cam = view.get("camera") or {}
+    parts = [_shot_words(cam, kind), view.get("description"), _template_words(view, "prompt")]
+    parts += [*_cast_lines(view), *_place_lines(view), _style_words(view)]
+    parts.append(f"Mood: {view['mood']}" if view.get("mood") else None)
+    names = {c["id"]: c.get("name", c["id"]) for c in view.get("characters") or []}
+    for line in view.get("dialogue") or []:
+        delivery = f" ({line['delivery']})" if line.get("delivery") else ""
+        parts.append(
+            f'{names.get(line["speaker"], line["speaker"])}{delivery} says: "{line["line"]}"'
+        )
+    return " ".join(_sentence(str(x)) for x in parts if x)
+
+
+def _shot_words(cam: dict[str, Any], kind: str = "keyframe") -> str:
     words = [f"{cam.get('framing', 'medium')} shot"]
     words += [f"{cam['angle']} angle"] if cam.get("angle") else []
     words += [f"{cam['lens']} lens"] if cam.get("lens") else []
     if kind == "video" and cam.get("move"):
         words.append(" ".join(filter(None, [cam["move"], cam.get("direction")])))
-    parts = [", ".join(words).replace("_", " ").capitalize(), view.get("description")]
-    parts.append(_template_words(view, "prompt" if kind == "video" else "keyframe"))
-    blocking = view.get("blocking") or {}
+    return ", ".join(words).replace("_", " ").capitalize()
+
+
+def _cast_lines(view: dict[str, Any]) -> list[str]:
+    """Each character's look: description, form, outfit and the shot's blocking."""
+    blocking, out = view.get("blocking") or {}, []
     for char in view.get("characters") or []:
         outfit = (char.get("outfit") or {}).get("description")
         looks = [char.get("description"), (char.get("form") or {}).get("description")]
         looks += [f"Wearing: {outfit}" if outfit else None, blocking.get(char["id"])]
-        parts.append(
-            f"{char.get('name', char['id'])}: " + " ".join(_sentence(x) for x in looks if x)
-        )
+        out.append(f"{char.get('name', char['id'])}: " + " ".join(_sentence(x) for x in looks if x))
+    return out
+
+
+def _place_lines(view: dict[str, Any]) -> list[str]:
+    out = [f"Prop: {prop.get('description')}" for prop in view.get("props") or []]
     if loc := view.get("location"):
-        parts.append(
-            f"Location: {loc.get('name')}" + (f", {loc['variant']}" if loc.get("variant") else "")
+        variant = f", {loc['variant']}" if loc.get("variant") else ""
+        out += [f"Location: {loc.get('name')}{variant}", loc.get("description")]
+    return out
+
+
+def _style_words(view: dict[str, Any]) -> str | None:
+    look = (view.get("style") or {}).get("look")
+    if not look:
+        return None
+    pairs = (f"{k} {', '.join(v) if isinstance(v, list) else v}" for k, v in look.items())
+    return "Style: " + "; ".join(pairs)
+
+
+# How to read the 3D pill frame of ``control.storyboard`` (``author.add_storyboard``): the sketch
+# route of github.com/sirioberati/ai-filmmaking-camera-control-seedance-2-5 (MIT), for a still.
+BOARD = (
+    "Image {n} is a 3D layout render, not a picture of the scene: a plain grey clay set in which "
+    "each person is replaced by a striped pin, a head on a slim body, as tall as they are and "
+    "standing where they stand, with a round white dot on the head on the side they face. Read "
+    "from it only how the shot is framed, where each person stands, how large they are in the "
+    "frame and which way they face: a dot in the middle of the head faces the viewer, a dot at "
+    "its edge is a profile, and no dot is a person seen from behind. Each pin becomes the person "
+    "it stands for and has no pose of its own, so every pose comes from these words. Never draw "
+    "a pin, a stripe, the white dot, the grey clay or the bare floor: build the real place from "
+    "the description. The stripe colors only say who is who: no clothing, skin, prop or surface "
+    "takes those colors or stripes"
+)
+
+
+def _keyframe_words(view: dict[str, Any], plan: dict[str, Any] | None) -> str:
+    """The keyframe prompt in blocks: Goal, References, People and place, Camera, Look, Keep.
+
+    The blocks follow the previs prompts of
+    github.com/sirioberati/ai-filmmaking-camera-control-seedance-2-5 (MIT; docs/prompt-anatomy.md):
+    each reference image has one narrow role, each pin is named by its stripes and becomes its
+    person, and the words carry every pose and the whole place.
+
+    Bug (COREPRODUC-671 and 673, Lamp Oil e01/s03 sh030 and sh040; 4 of 5 tries): an
+    over-the-shoulder keyframe drew a second, whole copy of a character. The prompt described
+    each character in full, gave the sheets (four views of one person) no role and sent no layout.
+    """
+    from vinci_olf.layout import STRIPES
+
+    cam = view.get("camera") or {}
+    cast = [c for c in view.get("characters") or [] if isinstance(c, dict)]
+    names = {c["id"]: str(c.get("name", c["id"])) for c in cast}
+    look = (view.get("style") or {}).get("look") or {}
+    medium = str(look.get("medium") or "illustration")
+    board = bool(_leaves((view.get("control") or {}).get("storyboard")))
+    pills = sorted(
+        (x for x in (plan or {}).get("start") or [] if x.get("id") in names and 0 <= x["x"] <= 1),
+        key=lambda x: x["x"],
+    )  # who is in the frame when the shot starts, from left to right
+    people: list[Any] = []
+    if names:
+        count = len(pills) if plan else len(names)  # `start: []`: nobody is in frame yet
+        people.append(
+            "No person is in the picture: the shot starts on the empty place"
+            if not count
+            else f"Exactly {count} {'person is' if count == 1 else 'people are'} in the picture, "
+            + ("one time only" if count == 1 else "each one time only")
         )
-        parts.append(loc.get("description"))
-    parts += [f"Prop: {prop.get('description')}" for prop in view.get("props") or []]
-    if look := (view.get("style") or {}).get("look"):
-        parts.append(
-            "Style: "
-            + "; ".join(
-                f"{k} {', '.join(v) if isinstance(v, list) else v}" for k, v in look.items()
-            )
+    for pill in pills:
+        who, place = names[pill["id"]], _pill_place(pill)
+        stripe = STRIPES.get(str(pill.get("color")), ("", "grey"))[1]
+        people.append(
+            f"The {stripe}-and-black striped pin is {who}: {place}"
+            if board
+            else f"{who} is {place}"
         )
-    parts.append(f"Mood: {view['mood']}" if view.get("mood") else None)
-    if kind == "video":
-        names = {c["id"]: c.get("name", c["id"]) for c in view.get("characters") or []}
-        for line in view.get("dialogue") or []:
-            delivery = f" ({line['delivery']})" if line.get("delivery") else ""
-            parts.append(
-                f'{names.get(line["speaker"], line["speaker"])}{delivery} says: "{line["line"]}"'
+    people += [*_cast_lines(view), *_place_lines(view)]
+    if view.get("location"):
+        people.append("Build the real place from these words, with real materials and wear")
+    camera = [_shot_words(cam), _template_words(view, "keyframe")]
+    if len(pills) > 1:
+        order = ", then ".join(names[x["id"]] for x in pills)
+        camera.append(f"From left to right: {order}, as on their side of the scene's line")
+    keep = (
+        "Keep each person's face, hair and clothing as in their sheet, each person one time "
+        "only, who stands on which side, and the light of the scene"
+    )
+    blocks: list[tuple[str, list[Any]]] = [
+        (
+            "Goal",
+            [
+                f"One {medium} keyframe, a single still picture",
+                # The keyframe is the first frame of its clip or engine move: a description that
+                # tells an action ("then the wick catches") must not be drawn finished.
+                "It is the first frame of the shot: draw the moment the shot starts",
+                view.get("description"),
+            ],
+        ),
+        ("References", _reference_roles(view, names)),
+        ("People and place", people),
+        ("Camera", camera),
+        ("Look", [_style_words(view), f"Mood: {view['mood']}" if view.get("mood") else None]),
+        ("Keep", [keep] if names else []),
+    ]
+    return "\n\n".join(
+        f"{title}: " + " ".join(_sentence(str(x)) for x in words if x)
+        for title, words in blocks
+        if any(words)
+    )
+
+
+def _video_words(view: dict[str, Any]) -> str:
+    """The prompt of a video that starts from its keyframe, in blocks: Goal, First frame,
+    Camera, Action, Motion, Keep. The 2D anime defaults: limited animation that holds on drawings.
+
+    It does not describe the picture again: in image-to-video, words that describe the image
+    fight it (skills/cinematic-previs/references/rulebook.md of
+    github.com/sirioberati/ai-filmmaking-camera-control-seedance-2-5, MIT). Bug (COREPRODUC-671
+    and 673, Lamp Oil e01/s03/sh020, first report): the prompt described the lamp room again
+    ("warm lamp light", the lamp's wick), and Hailuo 02 lit the great lamp and pulled the camera
+    back within 0.5 s of a "static" insert of oil being poured. Then (sh050, the next try): the
+    words "the drawing holds" and "line art" were filmed literally, and at 1.85 s the clip
+    dissolved into a pencil sketch of four strangers. So: no "drawing" or "line art", and the
+    repo's unbroken-take line (docs/prompt-anatomy.md, "Continuity and match cuts").
+    Then (sh060, twice): an insert with nobody in it got a stranger who walked in to light the
+    lamp; a shot with no cast now says that no person enters.
+    """
+    cam = view.get("camera") or {}
+    seconds = float(view.get("duration") or 0)
+    look = (view.get("style") or {}).get("look") or {}
+    medium = str(look.get("medium") or "animated")
+    move = " ".join(filter(None, [cam.get("move"), cam.get("direction")])).replace("_", " ")
+    camera = (
+        "Locked-off camera: the frame does not move, zoom, pan or shake"
+        if move in ("", "static")
+        else f"One camera move only, at a steady speed: {move}"
+    )
+    names = {c["id"]: c.get("name", c["id"]) for c in view.get("characters") or []}
+    action: list[Any] = [view.get("description"), _template_words(view, "prompt")]
+    for line in view.get("dialogue") or []:
+        who = names.get(line["speaker"], line["speaker"])
+        action.append(f"{who}'s mouth moves to speak a short line; there is no sound and no text")
+    blocks: list[tuple[str, list[Any]]] = [
+        (
+            "Goal",
+            [
+                f"Animate the first frame as one {medium} shot",
+                f"The action happens in the first {seconds:g} seconds" if seconds else None,
+                "It is one single, unbroken take in the look of the first frame from the first "
+                "frame to the last: no cut, dissolve, fade or change of style",
+            ],
+        ),
+        (
+            "First frame",
+            [
+                "The first frame is the shot's keyframe: keep its look, its framing, and the "
+                "people, objects and place exactly as they are. Animate only the action below",
+            ],
+        ),
+        ("Camera", [camera]),
+        ("Action", action),
+        (
+            "Motion",
+            [
+                f"Limited {medium} animation: few movements, each one clean, and shapes, hands, "
+                "faces and objects keep their form from frame to frame",
+            ],
+        ),
+        (
+            "Keep",
+            [
+                "Nothing appears that is not in the first frame unless the action brings it in. "
+                "Every light that is off in the first frame stays off unless the action lights "
+                "it. No text and no subtitles appear",
+                # An insert with nobody in it: Hailuo 02 walked a stranger in twice (sh060).
+                None
+                if names
+                else "No person enters the frame at any moment; a hand that is in the first "
+                "frame may move, and no other hand or arm appears",
+            ],
+        ),
+    ]
+    return "\n\n".join(
+        f"{title}: " + " ".join(_sentence(str(x)) for x in words if x)
+        for title, words in blocks
+        if any(words)
+    )
+
+
+def _pill_place(pill: dict[str, Any]) -> str:
+    """Where a pill stands, in words: its side of the frame, near or far, and its facing."""
+    x, facing, near = pill["x"], pill.get("facing"), pill["size"] >= 0.5
+    side = (
+        "at the left of the frame"
+        if x < 0.4
+        else "at the right of the frame"
+        if x > 0.6
+        else "in the middle of the frame"
+    )
+    if facing == "away":
+        close = "close to the camera, " if near else ""
+        return f"{side}, {close}seen from behind: only the back of the head and the shoulders show"
+    turn = {"left": "turned toward frame left", "right": "turned toward frame right"}
+    look = turn.get(str(facing)) or ("facing the viewer" if facing == "camera" else None)
+    return ", ".join(filter(None, [side, "close to the camera" if near else None, look]))
+
+
+def _reference_roles(view: dict[str, Any], names: dict[str, str]) -> list[str]:
+    """One narrow role for each reference image, numbered in the order ``references`` sends."""
+    sheets = {r: names[c["id"]] for c in view.get("characters") or [] if c.get("id") in names
+              for r in references({"characters": [c]})}  # fmt: skip
+    # A prop by its name (`prop/great-lamp`: "great lamp"); its description is in People and place.
+    props = {
+        r: str(x.get("name") or str(x.get("id", "")).split("/")[-1].replace("-", " "))
+        for x in view.get("props") or []
+        for r in _leaves(x.get("references"))[:1]
+    }
+    place = _leaves((view.get("location") or {}).get("references"))[:1]
+    board = _leaves((view.get("control") or {}).get("storyboard"))[:1]
+    words = []
+    for n, ref in enumerate(references(view), 1):
+        if ref in board:
+            words.append(BOARD.format(n=n))
+        elif ref in sheets:
+            who = sheets[ref]
+            words.append(
+                f"Image {n} is {who}'s model sheet, one person shown in several views: use it "
+                f"only for {who}'s face, hair, build and clothing. {who} appears one time only, "
+                "in this shot's pose; its background and its row of views are not copied"
             )
-    return " ".join(_sentence(str(x)) for x in parts if x)
+        elif ref in props:
+            words.append(
+                f"Image {n} shows the {props[ref]}: use it only for its shape and material; its "
+                "state in this shot (lit or dark, open or shut) comes from these words"
+            )
+        elif ref in place:
+            words.append(f"Image {n} shows the place: use it for the set and its light only")
+        else:
+            words.append(f"Image {n} is a style reference: use it only for the drawing style")
+    return words
 
 
 def _template_words(view: dict[str, Any], key: str) -> str | None:
@@ -385,7 +634,7 @@ def plan_render(
     if new_kf:
         params = (
             base
-            | {"prompt": prompt(view, "keyframe")}
+            | {"prompt": prompt(view, "keyframe", shot_plan(p, shot_id))}
             | ({"aspect_ratio": canvas} if canvas else {})
         )
         if refs:
@@ -408,7 +657,7 @@ def plan_render(
             notes = _soft(p, view, source)
         else:
             params = base | {
-                "prompt": prompt(view, "video"),
+                "prompt": prompt(view, "video", from_frame=bool(source)),
                 "duration": math.ceil(float(view["duration"])),
             }
             template = (view.get("camera") or {}).get("template")

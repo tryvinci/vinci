@@ -1,6 +1,6 @@
 # Vinci OLF camerawork library, dialogue family. CC0-1.0: copy it and change it, no credit needed.
 id: anime/insert-object
-version: 1
+version: 2
 family: dialogue
 name: Insert of an object
 notation: INS
@@ -12,5 +12,5 @@ slots: []          # the object only: the shot sets `characters: []`
 rules: { needs_prop: true }
 keyframe: The object fills the frame. No faces are in the picture.
 prompt: >
-  Static camera on the object. Only the light, or a small move of a hand, changes.
+  Static camera on the object. Only the light, or a hand that is already in the frame, moves.
 avoid: [hands that change shape, camera movement]

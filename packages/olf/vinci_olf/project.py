@@ -225,6 +225,12 @@ class Project:
                     self._hashes[path] = hashlib.file_digest(handle, "sha256").hexdigest()
         return self._hashes[path]
 
+    def forget(self, path: Path) -> None:
+        """Drop what is cached about ``path`` (digests, assets found in it): its bytes changed."""
+        self._hashes.pop(path, None)
+        self.known.pop(self.rel(path), None)
+        self.files = {digest: file for digest, file in self.files.items() if file != path}
+
     def inside(self, path: Path) -> Path:
         """Resolve ``path``; refuse it outside the project folder (projects can be untrusted)."""
         path = path.resolve()

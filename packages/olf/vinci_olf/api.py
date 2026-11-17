@@ -11,7 +11,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from vinci_olf.layout import staging
+from vinci_olf.layout import shot_plan, staging
 from vinci_olf.project import ASSET_REF, LIBRARY, OlfError, Project, read
 from vinci_olf.render import prompt, references
 from vinci_olf.resolve import awaits_keyframe, inputs_hash, origins, resolve, stale, take_frames
@@ -163,6 +163,8 @@ def summary(p: Project) -> dict[str, Any]:
             "takes": [t for t in take_ids if t.rsplit("/", 1)[0] == shot_id],
             **{k: view.get(k) for k in ("duration", "description", "camera", "select", "control")},
         }
+        board = _map(_map(view).get("control")).get("storyboard")  # `control: x` is a schema error
+        shots[shot_id]["storyboard"] = file_of(p, board) if isinstance(board, str) else None
     try:  # pills for a shot with no picture yet
         plans = staging(p, cache)
     except Exception as exc:  # a layout off the schema (`slot: d`) broke GET /olf/project (#530)
@@ -288,6 +290,11 @@ def shot_detail(p: Project, shot_id: str) -> dict[str, Any]:
             "video": None if waits else inputs_hash(view, "video", frames),
             "audio": inputs_hash(view, "audio"),
         },
-        "prompts": {"keyframe": prompt(view, "keyframe"), "video": prompt(view, "video")},
+        "prompts": {
+            "keyframe": prompt(view, "keyframe", shot_plan(p, shot_id)),
+            "video": prompt(
+                view, "video", from_frame=bool((view.get("control") or {}).get("first_frame"))
+            ),
+        },
         "references": refs,
     }

@@ -431,6 +431,8 @@
 .olf-prov dt { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mute); }
 .olf-prov dd { margin: 2px 0 0; font: 12px var(--font-mono); color: var(--dim); overflow-wrap: anywhere; }
 .olf-cast { display: grid; gap: 6px; margin-bottom: 8px; }
+.olf-storyboard { display: grid; gap: 8px; justify-items: start; }
+.olf-storyboard img { display: block; width: 100%; border-radius: 6px; }
 .olf-render { margin-top: 6px; }
 .olf-cost { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--dim); }
 .olf-cost b { font-weight: 500; color: var(--ink); }

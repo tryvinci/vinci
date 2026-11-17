@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import shutil
 import struct
@@ -370,7 +371,8 @@ def test_api_views() -> None:
     assert origins["outfits"] == {"char/mira": "scene"}
     assert (origins["style"], origins["location"], origins["camera"]) == ("season", "scene", "shot")
     assert detail["hashes"]["keyframe"] == EXPECTED["e02/s03/sh014"]["inputs_hash"]["keyframe"]
-    assert detail["prompts"]["video"].endswith('Mira Sol (whisper) says: "You kept the key?".')
+    # sh014 starts from its keyframe: motion words only (COREPRODUC-673), the line moves the mouth
+    assert "Mira Sol's mouth moves to speak a short line" in detail["prompts"]["video"]
 
 
 def test_season_level(show: Path) -> None:
@@ -1701,6 +1703,7 @@ def test_pills_and_the_180_line(show: Path) -> None:
         "start": [
             {"slot": "a", "id": "char/mira", "name": "Mira Sol"}
             | {"x": 0.4, "y": 0.42, "size": 0.75, "facing": "right", "color": "#1c9fb8"}
+            | {"stripe": "#e3261f"}  # its pin in the 3D pill frame: red-and-black
         ],
         "end": None,
         "aspect": "16:9",
@@ -1743,6 +1746,119 @@ def test_pills_and_the_180_line(show: Path) -> None:
     assert not any("pills" in shot for shot in summary(load(show))["shots"].values())
     with pytest.raises(OlfError, match="previs of e02 stopped: fix the errors that validate"):
         previs(load(show), "e02", sheet=False, animatic=False)
+
+
+def test_storyboard_sends_the_pills_to_the_keyframe(show: Path) -> None:
+    """COREPRODUC-671 and 673: over-the-shoulder keyframes drew a second copy of a character. The
+    Studio's 3D pill frame is saved in ``control.storyboard`` and sent last, and the keyframe
+    prompt has blocks: one role for each reference, who stands where, the head count."""
+    import base64
+    import io
+
+    from PIL import Image
+    from vinci_olf.author import add_storyboard, apply_template
+    from vinci_olf.layout import shot_plan
+    from vinci_olf.render import prompt, references
+
+    _two_characters(show)
+    two, over = "e02/s03/sh014", "e02/s03/sh015"
+    apply_template(load(show), two, "anime/two-shot-axis")
+    apply_template(load(show), over, "anime/ots-b")  # over Tomas's shoulder, on Mira
+    words = prompt(resolve(load(show), over), "keyframe", shot_plan(load(show), over))
+    assert "Image" in words and "3D layout render" not in words  # no frame yet: words only
+    assert "Mira Sol is at the left of the frame, turned toward frame right" in words
+    buffer = io.BytesIO()
+    Image.new("RGB", (1920, 1080), "#a3a39e").save(buffer, "PNG")
+    data = "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode()
+    asset = add_storyboard(load(show), over, data)
+    p = load(show)
+    assert p.lock[asset]["uri"] == "storyboards/e02/s03/sh015.png"
+    assert p.lock[asset]["source"] == "generated"
+    assert not [i.message for i in validate(p) if i.level == "error"]
+    view = resolve(p, over)
+    refs = references(view)
+    assert refs[-1] == asset and refs.count(asset) == 1  # the cast, place, style, then layout
+    words = prompt(view, "keyframe", shot_plan(p, over))
+    blocks = [line.split(":", 1)[0] for line in words.split("\n\n")]
+    assert blocks == ["Goal", "References", "People and place", "Camera", "Look", "Keep"]
+    assert "It is the first frame of the shot: draw the moment the shot starts" in words
+    assert "Exactly 2 people are in the picture, each one time only" in words
+    assert "The red-and-black striped pin is Mira Sol: at the left of the frame" in words
+    assert (
+        "The yellow-and-black striped pin is Tomas Hale: at the right of the frame, close to "
+        "the camera, seen from behind: only the back of the head and the shoulders show" in words
+    )
+    assert f"Image {len(refs)} is a 3D layout render" in words  # numbered as sent
+    assert "Image 1 is Mira Sol's model sheet" in words and "says" not in words
+    assert "From left to right: Mira Sol, then Tomas Hale" in words
+    key = (
+        load(show).docs["prop/brass-key"].data
+    )  # a prop with a reference image: named, not described
+    keyed = prompt(view | {"props": [key | {"references": ["asset/" + "0" * 64]}]}, "keyframe")
+    assert "shows the brass key: use it only for its shape and material; its state" in keyed
+    assert "3D layout render" not in prompt(resolve(p, two), "keyframe")  # only where named
+    assert add_storyboard(load(show), over, data) == asset  # the same frame again: one entry
+    assert [k for k, v in load(show).lock.items() if "storyboards/" in v["uri"]] == [asset]
+    with pytest.raises(OlfError, match="no such shot"):
+        add_storyboard(load(show), "e02/s03/sh999", data)
+    # A redraw on the same project (or a hosted one, digests from the host) locks the new bytes:
+    # before, the cached digest of the old frame was locked (CodeRabbit on #653).
+    p = load(show)
+    buffer = io.BytesIO()
+    Image.new("RGB", (1920, 1080), "#202020").save(buffer, "PNG")
+    dark = "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode()
+    assert add_storyboard(p, over, data) == asset  # this project now caches the frame's digest
+    redraw = add_storyboard(p, over, dark)
+    assert [k for k, v in load(show).lock.items() if "storyboards/" in v["uri"]] == [redraw]
+    frame = (show / "storyboards/e02/s03/sh015.png").read_bytes()
+    assert redraw != asset and redraw == "asset/" + hashlib.sha256(frame).hexdigest()
+    p = load(show)
+    p.manifest.pop("license")  # no license: no file is written, and no `control.storyboard`
+    with pytest.raises(OlfError, match="license"):
+        add_storyboard(p, two, data)
+    assert not (show / "storyboards/e02/s03/sh014.png").exists()
+    p = load(show)  # the same frame on two shots: two assets, so a redraw of one keeps the other
+    shared = add_storyboard(p, two, dark)
+    assert shared != redraw and resolve(p, two)["control"]["storyboard"] == shared  # no reload
+    add_storyboard(p, over, data)
+    assert load(show).lock[shared]["uri"] == "storyboards/e02/s03/sh014.png"
+    # `start: []`: nobody is in the frame when the shot starts, so not "Exactly 2 people"
+    empty = prompt(view, "keyframe", {"start": [], "end": None, "aspect": "16:9"})
+    assert "No person is in the picture" in empty and "Exactly" not in empty
+
+
+def test_video_from_a_keyframe_gets_motion_blocks(show: Path) -> None:
+    """COREPRODUC-673: a clip that starts from its keyframe gets motion words only. Before, the
+    prompt described the place again ("warm lamp light"), and Hailuo 02 lit the great lamp in a
+    static insert of oil being poured (Lamp Oil e01/s03/sh020)."""
+    from vinci_olf.render import prompt
+
+    view = resolve(load(show), "e02/s03/sh014")  # Mira speaks, a push in, first frame: keyframe
+    words = prompt(view, "video", from_frame=True)
+    blocks = [line.split(":", 1)[0] for line in words.split("\n\n")]
+    assert blocks == ["Goal", "First frame", "Camera", "Action", "Motion", "Keep"]
+    assert "Animate the first frame as one 2D anime shot" in words
+    assert "The action happens in the first 4 seconds" in words
+    assert (
+        "one single, unbroken take" in words
+        and "no cut, dissolve, fade or change of style" in words
+    )
+    assert "drawing" not in words and "line art" not in words  # filmed literally (sh050)
+    assert "One camera move only, at a steady speed: push in" in words
+    assert "Mira Sol's mouth moves to speak a short line; there is no sound and no text" in words
+    assert "Every light that is off in the first frame stays off" in words
+    assert "Location:" not in words and "Style:" not in words and "says:" not in words
+    still = view | {"camera": {**view["camera"], "move": "static"}}
+    assert "Locked-off camera: the frame does not move" in prompt(still, "video", from_frame=True)
+    assert "No person enters the frame" not in words  # Mira is in the shot
+    empty = prompt(still | {"characters": []}, "video", from_frame=True)
+    assert "No person enters the frame at any moment" in empty  # an insert (sh060 got a stranger)
+    assert "Location:" in prompt(view, "video")  # no first frame: the whole shot in words
+    # insert-object v2: "a small move of a hand" brought a stranger into sh060 (no hand in frame)
+    from vinci_olf.api import library
+
+    insert = next(row for row in library() if row["id"] == "anime/insert-object")
+    assert insert["version"] == 2 and "a hand that is already in the frame" in insert["prompt"]
 
 
 def test_canvas_draws_a_wider_keyframe_for_a_pan(
