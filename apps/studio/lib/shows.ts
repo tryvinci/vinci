@@ -50,11 +50,13 @@ export type OlfShot = {
   control?: Record<string, string> | null;
   /** The staging plan: one pill per character (vinci_olf.layout). It is in no hash. */
   pills?: OlfPills;
+  /** The 3D pill frame that a keyframe gets as its layout (`control.storyboard`), as a file. */
+  storyboard?: string | null;
 };
 
 /** A flat stand-in for one character: its centre and eye line (0 to 1 of the frame), its head
  * height as a part of the frame height, and where it looks. */
-export type OlfPill = { slot: string; id: string | null; name: string | null; x: number; y: number; size: number; facing: string | null; color?: string };
+export type OlfPill = { slot: string; id: string | null; name: string | null; x: number; y: number; size: number; facing: string | null; color?: string; stripe?: string };
 /** A shot's pills when it starts (and ends, when they move), and the 180° line warning. */
 export type OlfPills = { start: OlfPill[]; end: OlfPill[] | null; aspect: string; stated: boolean; crosses: string | null };
 /** `POST /olf/previs`: the e-conte sheet and the animatic in previs/<episode>/. */

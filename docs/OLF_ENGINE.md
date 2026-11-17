@@ -33,7 +33,7 @@ Status (2026-11-09): **Reader** conformance level, plus the **Renderer** level f
 | C2PA provenance in exported files (local signer) | `packages/olf/vinci_olf/provenance.py` |
 | JSON views for a UI | `packages/olf/vinci_olf/api.py` |
 | Daemon routes `/olf/*` | `apps/daemon/vinci_daemon/olf_routes.py` |
-| Studio Shows page | `apps/studio/app/shows-page.tsx` (state and routes), `shows-api.ts` (route calls), `shows-setup.tsx` (New show, the script panel), `shows-nav.tsx`, `shows-storyboard.tsx`, `shows-shot.tsx`, `shows-bible.tsx`, `shows-parts.tsx`, `shows.css`; pure helpers in `apps/studio/lib/shows.ts` |
+| Studio Shows page | `apps/studio/app/shows-page.tsx` (state and routes), `shows-api.ts` (route calls), `shows-setup.tsx` (New show, the script panel), `shows-nav.tsx`, `shows-storyboard.tsx`, `shows-shot.tsx`, `shows-bible.tsx`, `shows-parts.tsx`, `shows.css`; pure helpers in `apps/studio/lib/shows.ts`; the 3D pill frame in `apps/studio/lib/pillframe.ts` (stage math) and `pillframe-gl.ts` (three.js render) |
 | CLI | `packages/olf/vinci_olf/__main__.py`, `./scripts/vinci olf ...` |
 | MCP tools `vinci.olf_*` (listed when `vinci_olf` imports) | `packages/mcp/vinci_mcp/olf_tools.py` |
 | Conformance sample and its expected output | `packages/olf/conformance/tidewatch/`, `packages/olf/conformance/tidewatch.expected.yaml` |
@@ -124,6 +124,7 @@ The flow is keyframes first: **the bible locks the look, the storyboard reviews 
 | `POST /olf/scene` | Add a scene file to an episode and list it in `episode.yaml` |
 | `POST /olf/episode` | Add an episode folder, listed in a season when one is given |
 | `POST /olf/sheet` | Add a character sheet (`add`: `sheet-2.png`, listed in `sheets`), or replace one in place (base64; the file name stays, and the lock entry of the old image goes) |
+| `POST /olf/storyboard` | Save a shot's 3D pill frame from the Studio (base64 PNG) as `storyboards/<shot>.png` and its `control.storyboard`; a new frame replaces the old one and its lock entry |
 | `POST /olf/form` | Add a form to a character: description, palette, front view image |
 | `GET /olf/camerawork` | The camerawork library that ships with the engine (`library`: each template as written, with its library ID and `version`). A show's own templates are in its bible (`GET /olf/project`, `bible.camerawork`) |
 | `POST /olf/camerawork` | Put a template on a shot (`shot`, `template`: a library ID such as `anime/tu-slow`, a show template `cam/tu-slow`, or null to take it off). A library template is copied into the bible first |
@@ -278,6 +279,38 @@ Cookbook: [From a script to an anime episode](https://docs.tryvinci.com/learn/an
 4. **The animatic** (`write_animatic`): one MP4 of the episode in play order, 960 px wide at the project fps. Each shot plays for its length: its video (from 0), else its keyframe under its camera move (`camera_move`; a move that a still cannot do holds), else its pill clip (`pill_frames`: the pills go from `start` to `end` under the camera move, with its holds and fairing, over a grid that shows the move). The shot's chosen dialogue take is its sound.
 5. **The mock render** (`write_mock`, `--mock`): the same cuts and timing as the animatic, but every shot from its pills for its whole length, under its camera move, at the same review frame. No shot mixes in a model take, a clip of another shape or a sound of its own, so the cuts look the same. There is no sound; each line is a subtitle with the speaker's first name (the lines of a shot share its time). It writes one silent video in one pass, then burns the subtitles.
 6. **Canvas.** `camera.canvas` (`21:9`, `9:16`, ...) is the shape of a drawing larger than the frame. A keyframe render asks the model for that shape (`aspect_ratio`); a model whose catalog entry lists other shapes stops at the plan. On a shot with a canvas, a pan, a tilt or a truck with no `amount` goes from one edge of the drawing to the other (`vinci_media.camera.windows`, `canvas=`); a 16:9 frame can pan 0.31 frame widths over 21:9 and tilt 2.16 frame heights over 9:16. Where the drawing has too little room, the window gets smaller by the travel, as before. A shot with no canvas moves inside the centre crop, as before canvases, also over a keyframe of another shape (a square keyframe in a 16:9 show tilts 0.2 frame heights): the same take inputs give the same move.
+7. **The 3D pill frame of a keyframe** (COREPRODUC-673). This is the previs method of [ai-filmmaking-camera-control-seedance-2-5](https://github.com/sirioberati/ai-filmmaking-camera-control-seedance-2-5) (MIT, by Sirio Berati), for stills:
+   - **Build:** the Studio builds the shot in three.js first (`apps/studio/lib/pillframe.ts`, `stage`):
+     - The camera comes from the shot's lens (on a Super 35 sensor) and angle.
+     - A 1.7 m clay figure stands where each pill is in the frame: at the depth where a real head is as large as the pill's head, with its eyes on the pill's eye line.
+     - The camera height puts the nearest figure's feet on the floor.
+     - A figure that faces a side looks at the next figure on that side (a real eye line).
+   - **Swap and render:** `pillframe-gl.ts` puts a striped pin in place of each figure and renders. The pin is the previs pin (`standins.ts`):
+     - a head on a slim body, as tall as the figure;
+     - one loud color per character with near-black diagonal stripes (`layout.STRIPES`: red, yellow, green… by the order of the bible);
+     - a white dot on the head at eye height, on the side it faces.
+
+     There is a grey clay floor, and no names and no grid: a model copies text and lines.
+   - **Save:** **Draw 3D pill frame** on the shot page saves the PNG with `POST /olf/storyboard` (`author.add_storyboard`): `storyboards/<shot>.png`, locked with the show's license, named in `control.storyboard`. A keyframe render sends it as its last reference.
+   - **Keyframe prompt blocks** (`render._keyframe_words`):
+     - **Goal:** with "It is the first frame of the shot: draw the moment the shot starts", so a description that tells an action is not drawn finished.
+     - **References:** one role for each image, numbered in the order they are sent. A sheet is "only for the face, hair, build and clothing; one person, one time only". A prop's reference image is "only for its shape and material; its state in this shot (lit or dark, open or shut) comes from these words": one image of the prop keeps it the same in every shot (COREPRODUC-674). The layout gets the sketch-route paragraph: pins become people, no pin, stripe, dot or clay is drawn.
+     - **People and place:** the head count; each pin named by its stripes, with its side, nearness and facing in words from the pills ("seen from behind: only the back of the head and the shoulders show"); then the looks and the place.
+     - **Camera:** with the order from left to right on the scene's line.
+     - **Look.**
+     - **Keep.**
+
+     A shot with no frame gets the same blocks with the places in words only.
+   - **Video prompt from a keyframe** (`render._video_words`), when a clip starts from a picture:
+     - **Goal:** animate the first frame as one shot of the show's medium; the action happens in the shot's length; one single, unbroken take in the look of the first frame (no cut, dissolve, fade or change of style).
+     - **First frame:** keep its drawing, framing, people, objects and place; animate only the action.
+     - **Camera:** "locked-off" for a static shot, else one move.
+     - **Action:** the description and the template's words; a speaker's mouth moves, with no sound and no text.
+     - **Motion:** limited animation, few clean movements, with no morphing. The words "drawing" and "line art" are left out: a model filmed them.
+     - **Keep:** nothing new appears; a light that is off stays off unless the action lights it; no text. A shot with no cast adds: no person enters, and no hand or arm appears except one already in the frame.
+
+     It does not describe the picture again, because in image-to-video those words fight the image (the repo's rulebook). A shot whose clip should start from its keyframe needs `control.first_frame: keyframe` (or an asset there: the clip starts from that picture); with no `first_frame`, the clip is text-to-video and gets the whole shot in words.
+   - **Check figures:** `renderPillFrame(..., "figure")` draws the clay figures instead of the pins, to check the blocking. A model never gets them, because a body gets copied ([why-not-people](https://github.com/sirioberati/ai-filmmaking-camera-control-seedance-2-5/blob/main/docs/why/why-not-people.md)).
 
 ## Spec changes made with Slice 1
 
@@ -336,7 +369,7 @@ Engine choices that the spec leaves open:
 | Lock files support relative URIs only; open spec gaps (`bible/show.yaml` fields, the order of split shot files, YAML 1.1 aspect ratios) | COREPRODUC-545 |
 | `/olf` routes and the `vinci.olf_*` MCP tools open any folder with a `project.yaml` that the caller names; they rely on loopback or `VINCI_BRIDGE_TOKEN` (`vinci studio --lan` exposes them to the LAN) | COREPRODUC-545 |
 | The camerawork library has 32 of the 36 planned templates. `sl-element` and `multiplane-drift` wait for layered keyframes (no catalog capability cuts a character from its background), `impact-frame` for a flash check on exported frames, and `eyecatch` for title text that the engine draws. The library files have no `pairs_with` yet: nothing reads it | COREPRODUC-569 |
-| Pills have no editor: a person writes `layout` in the YAML file. A pill frame is not sent to a model (`control.storyboard` takes a file; a live test comes first). Two rules of the design are not checked: `side-scroll` agrees with the scene axis, and `pov-look` follows a shot with a character. A pill color follows the order of the bible, so a new character can change the color of the others in the next previs (never inside one run) | COREPRODUC-569 |
+| Pills have no editor: a person writes `layout` in the YAML file. The 3D pill frame is drawn by hand on each shot page (**Draw 3D pill frame**); a batch does not draw it, and the set is a bare floor (no location blockout yet) (COREPRODUC-673). Two rules of the design are not checked: `side-scroll` agrees with the scene axis, and `pov-look` follows a shot with a character. A pill color follows the order of the bible, so a new character can change the color of the others in the next previs (never inside one run) | COREPRODUC-569 |
 | The importer gives only `kuchipaku-hold` (to a line in a 2D anime show) | COREPRODUC-569 |
 | A 21:9 canvas stops at the plan on Seedream 4.5: its catalog entry lists 1:1, 16:9 and 9:16, though the route takes any `size` (the plugin sends 3136*1344 for 21:9). The engine does not yet warn when a keyframe's shape differs from the project's. No `i2i` model in the catalogs lists 21:9 (only the mock model does), so a `still-pan` shot of a character with a sheet stops at the plan on each real provider (CodeRabbit review of #530) | COREPRODUC-566 |
 | An engine move enlarges a small keyframe (the plan says how much); no upscale step is offered. `hold_start`, `hold_end` and `center` have no control in the Studio. A newer library version shows on the template's page, but no button takes it | COREPRODUC-565 |
@@ -344,6 +377,19 @@ Engine choices that the spec leaves open:
 
 ## Bugs fixed
 
+- **Two subtitles showed at once on one frame (COREPRODUC-671)**: found in the Lamp Oil export on 2026-11-17, a shot with two lines; first report, 0 user reports. At 4.000 s, where one line ends and the next begins, the captions lay over each other for one frame: `burn_cues` enabled each caption with `between(t, start, end)`, which includes both ends. Fix: half-open windows, `gte(t, start)*lt(t, end)`; `tests/test_burn_cues.py`.
+- **Over-the-shoulder keyframes drew a second copy of a character (COREPRODUC-671 and 673)**: found in the Lamp Oil sample render on 2026-11-17, Seedream 5.5 on Magnific. It happened in 4 of 5 two-person keyframes: sh030 and sh040 with no layout, then sh030 with a grey 2D pill frame, then sh040 with that frame and role words. sh030 was clean once, with the role words. There are 0 user reports. Causes:
+  - No pill frame reached a model; `control.storyboard` was in the spec but not read.
+  - The prompt described each character in full and gave the sheets (four views of one person) no role.
+
+  Fix:
+  - The Studio's 3D pill frame, made with the previs method (item 7 of [How previs works](#how-previs-works)).
+  - The keyframe prompt in blocks: reference roles, pins named by their stripes, who stands where, the head count.
+  - Before the fix, the free remedy was a crop to a single.
+- **A static insert clip lit the great lamp (COREPRODUC-673)**: Lamp Oil e01/s03/sh020, Hailuo 02 at 512p on Magnific, on 2026-11-17; first report, 0 user reports. The camera pulled back and the dark lamp burned from about 0.5 s, before the match is struck. The video prompt described the place again ("warm lamp light", the lamp's wick) and gave no rule to keep the first frame. Fix: the video blocks above. The shot became an engine push on its keyframe.
+- **A clip dissolved into a pencil sketch (COREPRODUC-673)**: Lamp Oil e01/s03/sh050, the next clip on the same day, on the first version of those blocks; first report. At 1.85 s the match insert dissolved into a line drawing of four strangers. The Motion block said "the drawing holds" and "line art", and the model filmed the words. Fix: those words are out, and the Goal has the unbroken-take line of the previs repo. The shot was cut to its clean 1.75 s.
+- **An insert clip brought in a stranger (COREPRODUC-673)**: Lamp Oil e01/s03/sh060, the third clip that day, with the fixed video blocks; first report. At 1 s a hand, then a person in a white coat, walked into a close-up of the lamp with no one in it. The `insert-object` template's motion words said "Only the light, or a small move of a hand, changes", and the model brought in a hand to move. Fix: `anime/insert-object` v2, "Only the light, or a hand that is already in the frame, moves". The shot became an engine push on its keyframe. A second clip with v2 again brought in a person, at 1.75 s: the keyframe shows the flame burning while the action says "the wick catches". Fix: a shot with no cast says that no person enters, and the shot was cut to its clean 1.75 s.
+- **3D pill frame edge cases (COREPRODUC-673)**: found by the review of #653 before release, on 2026-11-17; 0 user reports. (1) A redraw on the same project, or on a hosted show whose host gives the digests, locked the new frame under the old frame's cached digest: `add_storyboard` now calls `Project.forget`. (2) A show with no license got `control.storyboard` with no lock row: it now stops first (`take_license`). (3) `control: x` (not a map) broke `GET /olf/project`. (4) A shot that starts with nobody in the frame (`start: []`) said "Exactly 2 people": it now says the shot starts on the empty place. (5) A failed three.js load or render showed no notice. (6) Two shots with the same frame bytes shared one asset, so a redraw of one dropped the lock row of the other: each frame now names its shot in a PNG text chunk. (7) The project in memory kept the old `control` after a save.
 - **Seedream 4.5 keyframes were square in a 16:9 show (COREPRODUC-566)**: every Seedream 4.5 keyframe since the OLF engine used it (6 of 6 in the show "Lamp Oil", first written down 2026-11-10); 0 user reports. The plugin sent `aspect_ratio`, which the Seedream routes do not read; they read `size` (`width*height`, default `2048*2048`; Wavespeed API docs, checked 2026-11-10). So each keyframe was 2048×2048, and a model video from it was square (768×768 on Hailuo), with bars in the cut. Fix: for Seedream, a job with an aspect ratio and no size gets the size of that shape (`2560*1440` for 16:9, as the docs suggest; about 2048×2048 pixels for other shapes). Checked live on 2026-11-10: 7 keyframes at 2560×1440, and their Hailuo videos at 1364×768.
 - **Review of the previs videos of #530 (COREPRODUC-565)**: found 2026-11-10 before merge, each a first occurrence with 0 user reports.
   - **A character's pill changed color between cuts.** The color followed the cast slot, so Tomas was amber as the second character of a two-shot and cyan in his own single. Fix: one color per character for the show (`layout.COLORS`, by the order of the bible).

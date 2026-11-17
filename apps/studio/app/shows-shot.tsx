@@ -34,7 +34,7 @@ import {
   takeName,
   takesOf,
 } from "../lib/shows";
-import { Confirm, Field, Panel, PillFrame, Pick, PlayBar, RefThumb, StalePill } from "./shows-parts";
+import { Confirm, Field, OlfOnly, Panel, PillFrame, Pick, PlayBar, RefThumb, StalePill } from "./shows-parts";
 
 const DRAWS = [1, 2, 3, 4]; // keyframe variations per draw (the engine's MAX_VARIATIONS)
 
@@ -64,6 +64,7 @@ export function ShotView({
   onCamerawork,
   onExplain,
   onKeep,
+  onStoryboard,
 }: {
   show: OlfShow;
   id: string;
@@ -85,6 +86,8 @@ export function ShotView({
   onExplain: (take: string) => Promise<OlfStaleCause>;
   /** Keep a stale take on purpose (`POST /olf/keep`). */
   onKeep: (take: string) => void;
+  /** Draw the shot's 3D pill frame (`draw` gives a PNG `data:` URL) and save it as its keyframe layout (`POST /olf/storyboard`). */
+  onStoryboard: (draw: () => Promise<string>) => Promise<unknown>;
 }) {
   const shot = show.shots[id];
   const [current, setCurrent] = useState<string | null>(null);
@@ -114,6 +117,7 @@ export function ShotView({
   // The banner explains the take on screen when it is stale, else the first stale take.
   const banner = take?.stale ? take : staleTakes[0];
   const others = staleTakes.filter((row) => row.id !== banner?.id);
+  const [drawing, setDrawing] = useState(false); // the 3D pill frame is rendering and saving
   const [cause, setCause] = useState<OlfStaleCause | null>(null);
   const [diff, setDiff] = useState(false);
   useEffect(() => {
@@ -442,6 +446,39 @@ export function ShotView({
             <p className="olf-error" data-testid="shot-crosses">
               Crosses the 180° line: {shot.pills.crosses}
             </p>
+          ) : null}
+          {shot.pills?.start.length ? (
+            <OlfOnly path="/olf/storyboard">
+              <Field label="Keyframe layout">
+                <div className="olf-box olf-storyboard" data-testid="shot-storyboard">
+                  {shot.storyboard ? (
+                    <img src={`${fileUrl(show.path, shot.storyboard)}&v=${String(shot.control?.storyboard || "").slice(6, 18)}`} alt="3D pill frame of this shot" />
+                  ) : (
+                    <span className="muted">No 3D pill frame yet: the keyframe model gets the staging in words only.</span>
+                  )}
+                  <button
+                    type="button"
+                    className="ghost olf-small"
+                    disabled={locked || drawing}
+                    title="Render this shot in 3D (its camera, one striped pin for each character) and send it with the next keyframe"
+                    onClick={async () => {
+                      const pills = shot.pills;
+                      if (!pills) return;
+                      setDrawing(true);
+                      try {
+                        // three.js loads only here; a failed load or render gets a notice (the page catches it)
+                        await onStoryboard(async () => (await import("../lib/pillframe-gl")).renderPillFrame(pills, shot.camera));
+                      } finally {
+                        setDrawing(false);
+                      }
+                    }}
+                    data-testid="draw-storyboard"
+                  >
+                    {drawing ? "Drawing..." : shot.storyboard ? "Redraw 3D pill frame" : "Draw 3D pill frame"}
+                  </button>
+                </div>
+              </Field>
+            </OlfOnly>
           ) : null}
           {((resolved.characters || []) as OlfData[]).length ? (
             <Field label="Characters">

@@ -568,6 +568,15 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
             onCamerawork={(template) => void author("POST", "/camerawork", { shot: shotId, template })}
             onExplain={(take) => olf<OlfStaleCause>(`/stale?path=${encodeURIComponent(show.path)}&take=${encodeURIComponent(take)}`)}
             onKeep={(take) => void author("POST", "/keep", { take }, () => `Kept ${takeName(take)}: it is fresh until an input changes again`)}
+            onStoryboard={(draw) =>
+              draw().then(
+                (data) => author("POST", "/storyboard", { shot: shotId, data }, () => "Saved the 3D pill frame: the next keyframe of this shot gets it as its layout"),
+                (err) => {
+                  console.error("[shows] pill frame not drawn", err); // e.g. no WebGL, or three.js did not load
+                  setNotice(`Could not draw the 3D pill frame: ${message(err)}. Try again.`);
+                },
+              )
+            }
           />
         ) : null}
         {route.view === "bible" ? (

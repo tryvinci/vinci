@@ -8,9 +8,12 @@ module only calculates (``vinci_olf.previs`` draws), so the validator can use it
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from vinci_olf.project import Project
+
+log = logging.getLogger(__name__)
 
 # Head height as a part of the frame height, and the eye line from the frame top, by framing.
 HEADS = {
@@ -27,6 +30,19 @@ OFF = 0.35  # how far outside the frame a pill is before it enters or after it l
 # its color in each cut, whatever its slot there. A pill with no character is grey.
 COLORS = ("#1c9fb8", "#e08a00", "#c2255c", "#2f9e44", "#7048e8", "#e8590c")
 NO_ONE = "#868e96"
+# The stripes of each character's pin in the 3D pill frame that a keyframe model gets, one
+# loud color per COLORS entry, with near-black diagonal stripes: nothing in a set looks like it,
+# and a prompt names the person by it (the previs pins of github.com/sirioberati/
+# ai-filmmaking-camera-control-seedance-2-5, MIT: engine/cinematic/src/standins.ts).
+STRIPES = {
+    "#1c9fb8": ("#e3261f", "red"),
+    "#e08a00": ("#ffe600", "yellow"),
+    "#c2255c": ("#1fa84a", "green"),
+    "#2f9e44": ("#1f5fe3", "blue"),
+    "#7048e8": ("#d81fb5", "magenta"),
+    "#e8590c": ("#ff7a00", "orange"),
+    NO_ONE: ("#00c8d7", "cyan"),
+}
 ROOM = (
     0.1  # look room: a single that looks off screen sits this far from the centre, behind its gaze
 )
@@ -112,8 +128,9 @@ def _pills(
         char = cast[place] if place < len(cast) else {}
         default = {"x": (n + 1) / (len(rows) + 1), "y": y, "size": size, "facing": None}
         who = {"id": char.get("id"), "name": char.get("name") or char.get("id")}
-        color = {"color": colors.get(str(char.get("id")), NO_ONE), "placed": "x" in row}
-        out.append(default | row | who | color)
+        color = colors.get(str(char.get("id")), NO_ONE)
+        paint = {"color": color, "stripe": STRIPES[color][0], "placed": "x" in row}
+        out.append(default | row | who | paint)
     return out
 
 
@@ -167,4 +184,22 @@ def _outside(pill: dict[str, Any], *, leaves: bool) -> dict[str, Any]:
 
 def _public(pill: dict[str, Any]) -> dict[str, Any]:
     """A pill as the API sends it: only its public fields."""
-    return {k: pill[k] for k in ("slot", "id", "name", "x", "y", "size", "facing", "color")}
+    keys = ("slot", "id", "name", "x", "y", "size", "facing", "color", "stripe")
+    return {k: pill[k] for k in keys}
+
+
+def shot_plan(p: Project, shot_id: str) -> dict[str, Any] | None:
+    """One shot's pills (``staging``), with the 180° line that the shots of its scene set.
+
+    Returns:
+        The shot's staging plan, or None when the shot is missing or its scene does not resolve.
+    """
+    from vinci_olf.resolve import resolve
+
+    scene = shot_id.rsplit("/", 1)[0]
+    shots = [k for k in p.docs if p.kind(k) == "shot" and k.rsplit("/", 1)[0] == scene]
+    try:
+        return staging(p, {s: resolve(p, s) for s in shots}).get(shot_id)
+    except Exception as exc:  # noqa: BLE001 - a broken shot in the scene: the prompt goes without
+        log.warning("staging of %s: %r", shot_id, exc)
+        return None

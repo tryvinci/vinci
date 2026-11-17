@@ -30,6 +30,7 @@ from vinci_olf.author import (
     add_scene,
     add_sheet,
     add_shot,
+    add_storyboard,
     apply_template,
     clone_voice,
     new_show,
@@ -174,6 +175,14 @@ class SheetBody(BaseModel):
     data: str
     sheet: str | None = None
     add: bool = False
+
+
+class StoryboardBody(BaseModel):
+    """A shot's 3D pill frame, base64 PNG (a ``data:`` URL is fine), rendered by the Studio."""
+
+    path: str
+    shot: str
+    data: str
 
 
 class CharacterBody(BaseModel):
@@ -680,6 +689,14 @@ def new_sheet(body: SheetBody) -> dict[str, str]:
     if body.add:
         return {"sheet": _olf(lambda: add_sheet(p, body.entry, body.data))}
     return {"file": _olf(lambda: replace_sheet(p, body.entry, body.data, sheet=body.sheet))}
+
+
+@router.post("/storyboard")
+def new_storyboard(body: StoryboardBody) -> dict[str, str]:
+    """Save a shot's 3D pill frame as its ``control.storyboard`` (the keyframe's layout)."""
+    p = _project(body.path)
+    log.info("olf: storyboard for %s in %s", body.shot, p.root)
+    return {"storyboard": _olf(lambda: add_storyboard(p, body.shot, body.data))}
 
 
 @router.post("/form")
