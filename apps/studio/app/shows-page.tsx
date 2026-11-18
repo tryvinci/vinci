@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { daemonPaths } from "../lib/daemon-routes";
 import {
   CLOSED_KEY,
+  OLF_API,
   RECENT_KEY,
   type OlfBatch,
   type OlfCut,
@@ -127,6 +128,8 @@ function keptExport(key: string, id?: string | null): string {
   }
 }
 
+const HOST_IMPORT_BYTES = 50 * 1024 * 1024; // the host's upload limit (studio_service.MAX_UPLOAD_BYTES)
+
 export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement | null; hosted?: boolean }) {
   const [available, setAvailable] = useState<boolean | null>(null);
   const [routes, setRoutes] = useState<Set<string> | null>(null); // the OLF routes this daemon serves
@@ -179,6 +182,7 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
   // A reload (`keepView`) is for the show on screen only: it never replaces a show being opened.
   const openRun = useRef(0);
   const [listKey, setListKey] = useState(0); // a bump loads the open screen's list again
+  const [packing, setPacking] = useState(false); // a host Export (.volf) is running
   const mounted = useRef(true); // an import that ends after the page left opens nothing
   useEffect(() => {
     mounted.current = true;
@@ -556,23 +560,57 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
 
   /** Import a `.volf` package (SPEC.md, Package) as a new show, then open it. */
   async function importShow(file: File) {
+    if (hosted && file.size > HOST_IMPORT_BYTES) {
+      // The host takes packages up to the Studio's upload limit: refused here, before the upload.
+      setError("The package is larger than 50 MB. Import it in the local Studio.");
+      return;
+    }
     setLoading(true);
     const run = openRun.current; // a show opened or closed meanwhile moves it on: then do not open
     try {
       const form = new FormData();
       form.append("file", file);
-      const { path, title } = await olf<{ path: string; title: string }>("/import", { method: "POST", body: form });
+      const { path, title, skipped = [] } = await olf<{ path: string; title: string; skipped?: string[] }>("/import", { method: "POST", body: form });
+      // A host keeps only show files (text and media): it names what it left out.
+      const left = skipped.length ? ` · ${skipped.length} file${skipped.length === 1 ? "" : "s"} left out (not show files)` : "";
       console.info("[shows] imported", { file: file.name, bytes: file.size, path, stale: run !== openRun.current });
       if (!mounted.current) return;
       setListKey((n) => n + 1); // the list shows the new show even if its first load fails
       if (run !== openRun.current) {
         if (!opening.current) setLoading(false); // a newer load owns the spinner while it runs
-        setNotice(`Imported ${title}. It is in Your shows.`);
-      } else if (await open(path)) setNotice(`Imported ${title}`);
+        setNotice(`Imported ${title}${left}. It is in Your shows.`);
+      } else if (await open(path)) setNotice(`Imported ${title}${left}`);
     } catch (err) {
       console.warn("[shows] import failed", { file: file.name, error: message(err) });
       setError(message(err));
       setLoading(false);
+    }
+  }
+
+  /** Host Export (COREPRODUC-699): a worker packs the show as a `.volf`; its link works for 24 hours. */
+  async function exportPackage() {
+    if (!show) return;
+    const { path, title } = show;
+    setPacking(true);
+    setNotice(`Packing ${title} as one .volf file. The worker can take a minute or two to start.`);
+    let id = "";
+    try {
+      const done = await olf<{ package: { name: string; bytes: number } }>("/export", send("POST", { path, kind: "volf" }), (job) => {
+        id ||= job.id; // the first answer carries the export id; the download needs it
+      });
+      const link = document.createElement("a");
+      link.href = `${OLF_API}/package?export=${encodeURIComponent(id)}`;
+      link.download = done.package.name;
+      link.click();
+      console.info("[shows] exported a package", { path, id, ...done.package });
+      const { bytes } = done.package;
+      const size = bytes < 1e6 ? `${Math.max(1, Math.round(bytes / 1e3))} KB` : `${(bytes / 1e6).toFixed(1)} MB`;
+      setNotice(`Exported ${done.package.name} (${size}). The download link works for 24 hours.`);
+    } catch (err) {
+      console.warn("[shows] package export failed", { path, id, error: message(err) });
+      setNotice(message(err));
+    } finally {
+      setPacking(false);
     }
   }
 
@@ -707,6 +745,8 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
               onRoute={setRoute}
               onReload={() => show && void open(show.path, true)}
               onClose={closeShow}
+              onExport={hosted ? () => void exportPackage() : undefined}
+              exporting={packing}
             />,
             topSlot,
           )
