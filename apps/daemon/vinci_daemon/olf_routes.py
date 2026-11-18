@@ -34,9 +34,14 @@ from vinci_olf.author import (
     apply_template,
     clone_voice,
     new_show,
+    read_source,
     replace_sheet,
+    set_entry,
+    set_reference,
     set_shot,
+    set_variant,
     set_voice,
+    write_source,
 )
 from vinci_olf.batch import render_batch
 from vinci_olf.cues import MAX_SECONDS, add_cue, place_cue, render_cue
@@ -264,6 +269,42 @@ class FormBody(BaseModel):
     description: str
     palette: list[str] = []
     front: str | None = None  # base64 image of the front view
+
+
+class EntryBody(BaseModel):
+    """A bible entry's new name and/or description (COREPRODUC-682)."""
+
+    path: str
+    entry: str
+    name: str | None = None
+    description: str | None = None
+
+
+class ReferenceBody(BaseModel):
+    """A reference image of a bible entry: ``data`` adds one (named by ``label``), ``data`` and
+    ``ref`` replace that file, ``ref`` and ``remove`` take it out."""
+
+    path: str
+    entry: str
+    data: str | None = None  # base64 image (a ``data:`` URL is fine; 20 MB at most)
+    ref: str | None = None
+    label: str | None = None
+    remove: bool = False
+
+
+class SourceBody(BaseModel):
+    """A bible entry's YAML file as a person wrote it (Edit YAML, COREPRODUC-683)."""
+
+    path: str
+    entry: str
+    text: str
+
+
+class VariantBody(BaseModel):
+    path: str
+    entry: str
+    name: str
+    remove: bool = False
 
 
 def _project(path: str) -> Project:
@@ -708,6 +749,51 @@ def new_form(body: FormBody) -> dict[str, str]:
         )
     )
     return {"form": form}
+
+
+@router.patch("/entry")
+def edit_entry(body: EntryBody) -> dict[str, str]:
+    """Change a bible entry's name and/or description."""
+    p = _project(body.path)
+    log.info("olf: entry %s in %s", body.entry, p.root)
+    name, text = body.name, body.description
+    return {"entry": _olf(lambda: set_entry(p, body.entry, name=name, description=text))}
+
+
+@router.post("/reference")
+def edit_reference(body: ReferenceBody) -> dict[str, str]:
+    """Add, replace or remove a reference image of a bible entry."""
+    p = _project(body.path)
+    log.info("olf: reference %s (remove=%s) of %s in %s", body.ref, body.remove, body.entry, p.root)
+    ref = _olf(
+        lambda: set_reference(
+            p, body.entry, data=body.data, ref=body.ref, label=body.label, remove=body.remove
+        )
+    )
+    return {"reference": ref}
+
+
+@router.get("/source")
+def get_source(path: str, entry: str) -> dict[str, str]:
+    """A bible entry's YAML file as written: ``{file, text}``."""
+    p = _project(path)
+    return _olf(lambda: read_source(p, entry))
+
+
+@router.put("/source")
+def put_source(body: SourceBody) -> dict[str, str]:
+    """Save a bible entry's YAML file if the show stays as valid as before (else a 400)."""
+    p = _project(body.path)
+    log.info("olf: YAML of %s by hand (%d chars) in %s", body.entry, len(body.text), p.root)
+    return {"file": _olf(lambda: write_source(p, body.entry, body.text))}
+
+
+@router.post("/variant")
+def edit_variant(body: VariantBody) -> dict[str, list[str]]:
+    """Add a variant to a location, or remove one that no scene picks."""
+    p = _project(body.path)
+    log.info("olf: variant %s (remove=%s) of %s in %s", body.name, body.remove, body.entry, p.root)
+    return {"variants": _olf(lambda: set_variant(p, body.entry, body.name, remove=body.remove))}
 
 
 @router.get("/voices")

@@ -582,3 +582,53 @@ def test_previs_route_serves_the_sheet_and_share_leaves_it_out(client: TestClien
     assert not [n for n in zipfile.ZipFile(io.BytesIO(shared)).namelist() if "/previs/" in n]
     missing = client.post("/olf/previs", json={"path": path, "episode": "e09"})
     assert missing.status_code == 400 and "e09: no such episode" in missing.json()["detail"]
+
+
+def test_bible_edit_routes(client: TestClient) -> None:
+    """COREPRODUC-682: a location's name, description, references and variants."""
+    import base64
+    import io
+
+    from PIL import Image
+
+    path = client.post("/olf/sample").json()["path"]
+    shutil.rmtree(path)
+    shutil.copytree(SAMPLE, path)
+    buf = io.BytesIO()
+    Image.new("RGB", (64, 32), "red").save(buf, "PNG")
+    image = base64.b64encode(buf.getvalue()).decode()
+    loc = {"path": path, "entry": "loc/lighthouse"}
+    entry = client.patch("/olf/entry", json=loc | {"description": "Glass and brass."})
+    assert entry.json() == {"entry": "loc/lighthouse"}
+    added = client.post("/olf/reference", json=loc | {"data": image, "label": "Gate"})
+    assert added.json() == {"reference": "gate.png"}
+    replaced = client.post("/olf/reference", json=loc | {"data": image, "ref": "gate.png"})
+    assert replaced.json() == {"reference": "bible/locations/lighthouse/gate.png"}
+    empty = client.post("/olf/reference", json=loc)
+    assert empty.status_code == 400 and "send an image" in empty.json()["detail"]
+    fog = client.post("/olf/variant", json=loc | {"name": "fog"})
+    assert fog.json() == {"variants": ["day", "dusk", "night", "storm", "fog"]}
+    used = client.post("/olf/variant", json=loc | {"name": "night", "remove": True})
+    assert used.status_code == 400 and "scene e02/s03 uses the variant" in used.json()["detail"]
+    show = client.get("/olf/project", params={"path": path}).json()
+    lighthouse = next(e for e in show["bible"]["location"] if e["id"] == "loc/lighthouse")
+    assert lighthouse["data"]["description"] == "Glass and brass." and show["issues"] == []
+    assert lighthouse["data"]["references"]["gate"] == "gate.png"
+    gone = client.post("/olf/reference", json=loc | {"ref": "gate.png", "remove": True})
+    assert gone.json() == {"reference": "bible/locations/lighthouse/gate.png"}
+
+
+def test_edit_yaml_routes(client: TestClient) -> None:
+    """COREPRODUC-683: read and save a bible entry's YAML; a bad edit is a 400 and saves nothing."""
+    path = client.post("/olf/sample").json()["path"]
+    shutil.rmtree(path)
+    shutil.copytree(SAMPLE, path)
+    q = {"path": path, "entry": "prop/bell"}
+    source = client.get("/olf/source", params=q).json()
+    assert source == {"file": "bible/props/bell/bell.yaml", "text": source["text"]}
+    text = source["text"] + "name: Silver bell  # shown in the bible list\n"
+    assert client.put("/olf/source", json=q | {"text": text}).json() == {"file": source["file"]}
+    assert client.get("/olf/source", params=q).json()["text"] == text
+    bad = client.put("/olf/source", json=q | {"text": text + "colour: red\n"})
+    assert bad.status_code == 400 and "nothing was saved" in bad.json()["detail"]
+    assert client.get("/olf/source", params=q).json()["text"] == text

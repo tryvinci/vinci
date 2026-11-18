@@ -1,5 +1,6 @@
 """Author an OLF show from the Studio: a new show and its first character, shot fields, new
-shots, scenes and episodes, sheets, forms.
+shots, scenes and episodes, sheets, forms, and for every bible entry its name, description,
+references and variants.
 
 Each edit changes only its own lines (``vinci_olf.edit._put``), so a hand-written file keeps its
 comments and style, and each edit is parsed again before it is saved. New files are written in
@@ -35,7 +36,7 @@ from vinci_olf.project import (
     write,
 )
 from vinci_olf.resolve import MOTION
-from vinci_olf.validate import SCHEMA, schema_errors
+from vinci_olf.validate import SCHEMA, schema_errors, validate
 
 log = logging.getLogger(__name__)
 CAMERA = SCHEMA["$defs"]["camera"]["properties"]
@@ -762,6 +763,260 @@ def add_form(
     )
     log.info("character %s: added form %s (view %s)", char_id, name, view)
     return name
+
+
+# Bible edits for every entry kind (COREPRODUC-682). Before, only a character's sheets and forms
+# had controls: a location or prop page was read-only, and a hosted show (no folder) could not
+# change it at all (first report 2026-11-18, prod).
+TEXT_KINDS = ("character", "location", "prop", "voice")  # entries with a name and a description
+REFERENCE_KINDS = ("character", "location", "prop", "style")  # entries with top-level references
+
+
+def _entry(p: Project, entry_id: str, kinds: tuple[str, ...]) -> Any:
+    doc = p.docs.get(entry_id)
+    if doc is None or p.kind(entry_id) not in kinds:
+        raise OlfError(f"{entry_id}: no such {' or '.join(kinds)} entry")
+    return doc
+
+
+def set_entry(
+    p: Project, entry_id: str, *, name: str | None = None, description: str | None = None
+) -> str:
+    """Change a bible entry's ``name`` and/or ``description`` (only those lines change).
+
+    Raises:
+        OlfError: The entry is missing, nothing changes, or a value is empty.
+    """
+    doc = _entry(p, entry_id, TEXT_KINDS)
+    fields = {
+        k: str(v).strip()
+        for k, v in (("name", name), ("description", description))
+        if v is not None
+    }
+    if not fields or not all(fields.values()):
+        raise OlfError("send a name or a description, and do not leave it empty")
+    lines = _lines(doc.path)
+    for key, text in fields.items():
+        _put(lines, 0, len(lines), "", key, json.dumps(text, ensure_ascii=False))
+    _save(doc.path, lines, lambda d: all(d.get(k) == v for k, v in fields.items()))
+    doc.data = read(doc.path)
+    log.info("%s: set %s", entry_id, ", ".join(fields))
+    return entry_id
+
+
+def _references(doc: Any) -> dict[str, str] | list[str]:
+    """The entry's top-level references: a map (label -> file), else a list of files."""
+    refs = doc.data.get("references")
+    refs = {} if refs is None else [refs] if isinstance(refs, str) else refs  # none: a map
+    values = refs.values() if isinstance(refs, dict) else refs
+    if not all(isinstance(v, str) for v in values):
+        raise OlfError(f"{doc.data.get('id')}: references has nested groups; edit the YAML")
+    return refs
+
+
+def _write_references(doc: Any, refs: dict[str, str] | list[str]) -> None:
+    """Write ``references`` as a block map or one flow list; an empty one removes the key."""
+    lines = _lines(doc.path)
+    value: str | list[str] | None = None
+    if isinstance(refs, dict) and refs:
+        value = [f"  {_scalar(k)}: {_scalar(v)}\n" for k, v in refs.items()]
+    elif refs:
+        value = "[" + ", ".join(_scalar(v) for v in refs) + "]"
+    _put(lines, 0, len(lines), "", "references", value)
+    _save(doc.path, lines, lambda d: (d.get("references") or []) == (refs or []))
+    doc.data = read(doc.path)
+
+
+def add_reference(p: Project, entry_id: str, data: str, *, label: str | None = None) -> str:
+    """Add a reference image next to the entry file: ``<label>.png`` (``-2``, ... when taken).
+
+    A map gets the label as its key; a list gets the file at its end.
+
+    Returns:
+        The new file name, as written in the entry file.
+    """
+    doc = _entry(p, entry_id, REFERENCE_KINDS)
+    refs = _references(doc)
+    image = decode_image(data)
+    base, folder = _slug(label or "") or "ref", doc.path.parent
+    names = set(refs) | set(refs.values()) if isinstance(refs, dict) else set(refs)
+    stem = next(
+        s
+        for s in (base if n == 1 else f"{base}-{n}" for n in range(1, 1000))
+        if s not in names and f"{s}.png" not in names and not (folder / f"{s}.png").exists()
+    )
+    name = f"{stem}.png"
+    _save_image(image, p.inside(folder / name))
+    _write_references(doc, {**refs, stem: name} if isinstance(refs, dict) else [*refs, name])
+    log.info("%s: added reference %s (%dx%d)", entry_id, name, *image.size)
+    return name
+
+
+def _reference_file(p: Project, doc: Any, entry_id: str, ref: str) -> Path:
+    refs = _references(doc)
+    if ref not in (refs.values() if isinstance(refs, dict) else refs):
+        raise OlfError(f"{entry_id} has no reference {ref!r}")
+    if ref.startswith("asset/"):
+        raise OlfError(f"{ref} is a locked asset, not a file of this entry")
+    return p.inside(doc.path.parent / ref)
+
+
+def replace_reference(p: Project, entry_id: str, ref: str, data: str) -> str:
+    """Replace a reference image in place: the file name stays, so the entry file does not change.
+
+    Returns:
+        The project-relative path of the file.
+    """
+    doc = _entry(p, entry_id, REFERENCE_KINDS)
+    target = _reference_file(p, doc, entry_id, ref)
+    _save_image(decode_image(data), target)
+    p.forget(target)  # the cached (or host) digest is the old image's
+    p.drop_from_lock(p.rel(target))  # the old image is gone: its lock entry would be an error
+    log.info("%s: replaced reference %s", entry_id, ref)
+    return p.rel(target)
+
+
+def remove_reference(p: Project, entry_id: str, ref: str) -> str:
+    """Take a reference out of the entry and delete its file (with its lock entry).
+
+    Returns:
+        The project-relative path of the removed file.
+    """
+    doc = _entry(p, entry_id, REFERENCE_KINDS)
+    target = _reference_file(p, doc, entry_id, ref)
+    refs = _references(doc)
+    _write_references(
+        doc,
+        {k: v for k, v in refs.items() if v != ref}
+        if isinstance(refs, dict)
+        else [v for v in refs if v != ref],
+    )
+    target.unlink(missing_ok=True)
+    p.forget(target)
+    p.drop_from_lock(p.rel(target))
+    log.info("%s: removed reference %s", entry_id, ref)
+    return p.rel(target)
+
+
+def set_reference(
+    p: Project,
+    entry_id: str,
+    *,
+    data: str | None = None,
+    ref: str | None = None,
+    label: str | None = None,
+    remove: bool = False,
+) -> str:
+    """One reference edit, as ``POST /olf/reference`` sends it (the daemon and hosts share it).
+
+    ``data`` adds an image (named by ``label``), ``data`` and ``ref`` replace that file, and
+    ``ref`` with ``remove`` takes it out.
+
+    Returns:
+        The new file name (add), or the project-relative path of the file (replace, remove).
+    """
+    if remove and ref:
+        return remove_reference(p, entry_id, ref)
+    if not data:
+        raise OlfError("send an image (data), or a reference to remove (ref and remove)")
+    if ref:
+        return replace_reference(p, entry_id, ref, data)
+    return add_reference(p, entry_id, data, label=label)
+
+
+def set_variant(p: Project, loc_id: str, name: str, *, remove: bool = False) -> list[str]:
+    """Add a variant to a location, or remove one that no scene picks.
+
+    Returns:
+        The location's variants after the edit.
+
+    Raises:
+        OlfError: The name is not a new slug, or (remove) it is missing or a scene uses it.
+    """
+    doc = _entry(p, loc_id, ("location",))
+    variants = [str(v) for v in doc.data.get("variants") or []]
+    if remove:
+        if name not in variants:
+            raise OlfError(f"{loc_id} has no variant {name!r}")
+        if used := [
+            k
+            for k, d in p.of_kind("scene").items()
+            if d.data.get("location") == loc_id and d.data.get("variant") == name
+        ]:
+            raise OlfError(f"scene {used[0]} uses the variant {name!r}; change the scene first")
+        variants.remove(name)
+    elif not SLUG.fullmatch(str(name or "")) or name in variants:
+        raise OlfError(
+            f"a variant is a new name of lowercase letters, digits and dashes, not {name!r}"
+        )
+    else:
+        variants.append(name)
+    lines = _lines(doc.path)
+    _put(
+        lines, 0, len(lines), "", "variants", "[" + ", ".join(variants) + "]" if variants else None
+    )
+    _save(doc.path, lines, lambda d: [str(v) for v in d.get("variants") or []] == variants)
+    doc.data = read(doc.path)
+    log.info("%s: %s variant %s", loc_id, "removed" if remove else "added", name)
+    return variants
+
+
+# Edit YAML (COREPRODUC-683): any field of a bible entry, for a hosted show too (it has no folder).
+SOURCE_KINDS = ("style", *TEXT_KINDS, "camerawork")
+
+
+def read_source(p: Project, entry_id: str) -> dict[str, str]:
+    """Return a bible entry's YAML file as written: ``{file, text}`` (comments included)."""
+    path = p.inside(_entry(p, entry_id, SOURCE_KINDS).path)  # a link out of the show is refused
+    return {"file": p.rel(path), "text": path.read_text(encoding="utf-8")}
+
+
+def write_source(p: Project, entry_id: str, text: str) -> str:
+    """Save a bible entry's YAML file as a person wrote it, if the show stays as valid as before.
+
+    The file must parse, keep its ``id`` (rename with ``set_entry``), and add no validation error
+    to the show; else the old text stays and nothing is saved. Limit: ``validate`` resolves shots
+    only in a show with no errors, so in a show that already has one, an edit that breaks a shot
+    is not caught (COREPRODUC-686).
+
+    Returns:
+        The project-relative path of the file.
+
+    Raises:
+        OlfError: The YAML does not parse, the id changed, or the edit adds errors (the first 3).
+    """
+    from ruamel.yaml import YAML
+
+    doc = _entry(p, entry_id, SOURCE_KINDS)
+    p.inside(doc.path)  # a link out of the show is refused
+    old, rel = doc.path.read_text(encoding="utf-8"), p.rel(doc.path)
+    try:
+        data = YAML(typ="safe", pure=True).load(text)
+    except Exception as exc:  # noqa: BLE001 - any parse error is the person's to fix
+        raise OlfError(f"{rel}: the YAML does not parse ({exc}); nothing was saved") from exc
+    if not isinstance(data, dict) or str(data.get("id") or "") != str(doc.data.get("id") or ""):
+        raise OlfError(
+            f"{rel}: keep `id: {doc.data.get('id')}` (rename with Edit); nothing was saved"
+        )
+
+    def errors(q: Project) -> set[str]:
+        return {f"{i.where}: {i.message}" for i in validate(q) if i.level == "error"}
+
+    before = errors(p)
+    doc.path.write_text(text, encoding="utf-8")
+    try:
+        new = sorted(errors(load(p.root, hashes=p.known)) - before)
+    except Exception:
+        doc.path.write_text(old, encoding="utf-8")
+        raise
+    if new:
+        doc.path.write_text(old, encoding="utf-8")
+        raise OlfError(
+            f"{rel}: the edit adds {len(new)} error(s); nothing was saved: " + "; ".join(new[:3])
+        )
+    doc.data = read(doc.path)
+    log.info("%s: saved its YAML by hand (%d bytes)", entry_id, len(text.encode()))
+    return rel
 
 
 def add_storyboard(p: Project, shot_id: str, data: str) -> str:

@@ -39,6 +39,8 @@ Paths that change durable application state or accept work that must survive abr
 | `/olf/script/model`, `/olf/draft` | POST | a runtime run (one text-model step) | outputs | **409 while the journal is on** (not journaled yet, COREPRODUC-545) |
 | `/olf/cue` | POST | a runtime run (one music or SFX cue), the cue take, `episode.yaml` (`cues`, `audio`) | outputs | **409 while the journal is on** (not journaled yet, COREPRODUC-545) |
 | `/olf/sheet`, `/olf/form` | POST | bible image files and the character file | no | user's folder, not journaled |
+| `/olf/entry` (PATCH), `/olf/reference`, `/olf/variant` | PATCH, POST | a bible entry file and its reference images (COREPRODUC-682) | no | user's folder, not journaled |
+| `/olf/source` | PUT | a bible entry file, as a person wrote it (Edit YAML, COREPRODUC-683) | no | user's folder, not journaled |
 | `/olf/camerawork` | POST | a camerawork template file in the bible (a copy of a library template) and the shot's `camera`, `duration` and `characters` lines | no | user's folder, not journaled |
 | `/olf/previs` | POST | `previs/<episode>/` (the e-conte sheet as PDF and PNG pages, the animatic MP4, and with `mock` the mock render MP4): derived files, not in the lock file | no | user's folder, not journaled |
 | `/olf/voice` | POST | the voice entry (`bible/voices/<slug>/<slug>.yaml`) and the character's `voice` | no | user's folder, not journaled |

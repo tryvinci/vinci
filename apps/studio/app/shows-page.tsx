@@ -366,7 +366,7 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
    * Author the show (vinci_olf.author): edit a shot, add a shot, scene or episode, replace a sheet,
    * add a form. Reloads after the edit and returns the route's answer (null on an error notice).
    */
-  async function author<T>(method: "POST" | "PATCH", route: string, body: Record<string, unknown>, done?: (out: T) => string) {
+  async function author<T>(method: "POST" | "PATCH" | "PUT", route: string, body: Record<string, unknown>, done?: (out: T) => string) {
     if (!show) return null;
     try {
       const out = await olf<T>(route, send(method, { path: show.path, ...body }));
@@ -603,6 +603,8 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
             onAddForm={(fields) =>
               void author<{ form: string }>("POST", "/form", { entry: route.entry, ...fields }, (o) => `Added form ${o.form}`)
             }
+            onEdit={(method, path, body, notice) => void author<Record<string, unknown>>(method, path, body, notice)}
+            onSaveSource={async (text) => !!(await author<{ file: string }>("PUT", "/source", { entry: route.entry, text }, (o) => `Saved ${o.file}`))}
           />
         ) : null}
         {view === "issues" ? <IssuesView show={show} /> : null}
