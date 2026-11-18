@@ -147,7 +147,9 @@ test.describe("Video page", () => {
     await page.addInitScript(() => {
       localStorage.setItem("vinci-onboard-v1", "done");
     });
-    await page.goto("/");
+    // An empty project: the help strip shows only on an empty feed, and earlier tests made runs (COREPRODUC-702).
+    const made = await page.request.post("/vinci-api/projects", { data: { name: "e2e narrow video" } });
+    await page.goto(`/?project=${((await made.json()) as { id: string }).id}`);
     await page.locator("button.rail-menu").click();
     await page.locator('nav button[aria-label="Video"]').click();
     await expect(page.getByTestId("video-page")).toBeVisible();

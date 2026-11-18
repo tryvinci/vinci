@@ -802,7 +802,7 @@ test.describe("Shows (OLF movie engine)", () => {
       localStorage.removeItem("vinci-shows-recent-v1");
     });
     // Boot reads the page from the URL when it ends (GET /runs): a rail click before that is undone.
-    const booted = page.waitForResponse((res) => res.url().endsWith("/vinci-api/runs") && res.request().method() === "GET");
+    const booted = page.waitForResponse((res) => res.url().split("?")[0].endsWith("/vinci-api/runs") && res.request().method() === "GET");
     await page.goto("/");
     await booted;
     const sample = String((await (await page.request.post("/vinci-api/olf/sample")).json()).path);
@@ -860,7 +860,7 @@ test.describe("Shows (OLF movie engine)", () => {
       expect(loads.length).toBe(before);
     };
     // Boot reads the page from the URL when it ends (GET /runs): a rail click before that is undone.
-    const booted = page.waitForResponse((res) => res.url().endsWith("/vinci-api/runs") && res.request().method() === "GET");
+    const booted = page.waitForResponse((res) => res.url().split("?")[0].endsWith("/vinci-api/runs") && res.request().method() === "GET");
     await page.goto("/");
     await booted;
     await shows.click();
@@ -877,7 +877,7 @@ test.describe("Shows (OLF movie engine)", () => {
     await stays(before);
     await page.screenshot({ path: path.join(shots, "shows_closed_stays.png") });
     before = loads.length;
-    const rebooted = page.waitForResponse((res) => res.url().endsWith("/vinci-api/runs") && res.request().method() === "GET");
+    const rebooted = page.waitForResponse((res) => res.url().split("?")[0].endsWith("/vinci-api/runs") && res.request().method() === "GET");
     await page.reload(); // the URL is `#shows`, so the Studio opens on Shows
     await rebooted;
     await stays(before);

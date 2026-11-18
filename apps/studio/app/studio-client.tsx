@@ -8,8 +8,20 @@ import { EffectShell } from "./effect-shell";
 import { OutputSettingsPanel } from "./output-settings-panel";
 import { defaultAppIdForPage, getApp } from "../lib/apps-catalog";
 import { AssetsPage, type LibraryItem as AssetItem } from "./assets-page";
-import { type LibraryResponse } from "./library-types";
 import { daemonHasPath } from "../lib/daemon-routes";
+import {
+  LAST_PROJECT_KEY,
+  pickProject,
+  projectFromSearch,
+  projectHref,
+  runBody,
+  saveBoard,
+  setCurrentProject,
+  uploadForm,
+  withProject,
+  type Project,
+} from "../lib/projects";
+import { ProjectSwitcher } from "./project-switcher";
 import type { AdaptPresetRow, AdaptTarget, BatchStatus } from "./adapt-ui-shared";
 import { CanvasAddMenu } from "./canvas-add-menu";
 import { CanvasEmpty } from "./canvas-empty";
@@ -461,7 +473,7 @@ async function postRun(payload: object): Promise<Run> {
   return api<Run>("/runs", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(runBody(payload)), // the run stays in the tab's project (COREPRODUC-702)
   });
 }
 
@@ -811,7 +823,23 @@ export function StudioClient() {
     setViewport(page.viewport || HOME_VIEW);
   }, [resetGraph]);
   const [runIds, setRunIds] = useState<string[]>([]);
+  /** The tab's Studio project (COREPRODUC-702): undefined until boot picks it, null when projects are off. */
+  const [activeProject, setActiveProject] = useState<Project | null | undefined>(undefined);
+  const [projects, setProjects] = useState<Project[]>([]);
+  /** The saved board's revision and text; `boardStale` stops saves after another window saved first. */
+  const boardRev = useRef(0);
+  const boardSaved = useRef("");
+  const boardStale = useRef(false);
+  const boardSaving = useRef<Promise<void>>(Promise.resolve());
+  /** The board on screen, as text. A save or a closing page sends it when it differs from `boardSaved`. */
+  const boardLatest = useRef("");
+  /** The project's saved board, fetched by `openProject` before boot loads anything else. */
+  const boardLoaded = useRef<ProjectFile | null>(null);
+  /** Set once the project and its board loaded: a later boot() (after Connect) keeps the live board. */
+  const projectOpened = useRef(false);
   const [log, setLog] = useState("");
+  /** A save got 409: saves stop until reload, so this warning stays (not the passing log line). */
+  const [boardConflict, setBoardConflict] = useState(false);
   /** Set when a host answered 401 at start: the page shows this and a way to sign in again. */
   const [sessionEnded, setSessionEnded] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1033,28 +1061,12 @@ export function StudioClient() {
 
   const loadMedia = useCallback(async () => {
     const [runBody, assetBody] = await Promise.all([
-      api<{ runs: Run[] }>("/runs"),
-      api<{ assets: Asset[] }>("/assets"),
+      api<{ runs: Run[] }>(withProject("/runs")),
+      api<{ assets: Asset[] }>(withProject("/assets")),
     ]);
     setRuns(runBody.runs || []);
     setAssets(assetBody.assets || []);
   }, []);
-
-  const [toolFeed, setToolFeed] = useState<AssetItem[]>([]);
-  const loadToolFeed = useCallback(async (tool?: "image" | "video") => {
-    const next = tool || (page === "video" ? "video" : page === "image" ? "image" : null);
-    if (!next) return;
-    try {
-      if (!(await daemonHasPath(API, "/library"))) {
-        setToolFeed([]);
-        return;
-      }
-      const body = await api<LibraryResponse>(`/library?tool=${next}&limit=80`);
-      setToolFeed(body.items || []);
-    } catch {
-      setToolFeed([]);
-    }
-  }, [page]);
 
   const adaptPresetChoices = useMemo(() => {
     const rows = adaptPresets.slice();
@@ -1071,9 +1083,7 @@ export function StudioClient() {
 
   const uploadAdaptSource = useCallback(
     async (file: File) => {
-      const body = new FormData();
-      body.append("file", file);
-      const res = await fetch(`${API}/assets`, { method: "POST", body });
+      const res = await fetch(`${API}/assets`, { method: "POST", body: uploadForm(file) });
       if (!res.ok) {
         throw new Error(await res.text());
       }
@@ -1247,8 +1257,10 @@ export function StudioClient() {
       setSkills(skillBody.skills || []);
       setTemplates(tplBody.templates || []);
       setAdaptPresets(presetBody.presets || []);
+      await openProject();
       await loadMedia();
     } catch (err) {
+      setActiveProject((now) => (now === undefined ? null : now)); // the board still loads (from this browser)
       // A host answers 401 when the session ended. Bug fixed (first occurrence 2026-11-12, live UI
       // check): the Studio then showed the local Studio (all local pages, "Local", its first-run overlay).
       if ((err as { status?: number }).status === 401) {
@@ -1264,6 +1276,57 @@ export function StudioClient() {
   useEffect(() => {
     void boot();
   }, [boot]);
+
+  /**
+   * Pick the tab's project before any feed or board loads, so no work of another project shows
+   * (COREPRODUC-702): the URL's `?project=`, else the one this browser opened last, else the default.
+   * The pick goes into the URL in place, so a reload and a copied link keep it.
+   */
+  async function openProject() {
+    if (projectOpened.current) return;
+    if (!(await daemonHasPath(API, "/projects"))) {
+      console.info("[projects] off: the backend has no /projects");
+      setActiveProject(null);
+      return;
+    }
+    const list = (await api<{ projects: Project[] }>("/projects")).projects || [];
+    let last = "";
+    try {
+      last = localStorage.getItem(LAST_PROJECT_KEY) || "";
+    } catch {
+      /* no storage: the default project */
+    }
+    const w = topWindow();
+    const picked = pickProject(list, projectFromSearch(w.location.search), last);
+    setCurrentProject(picked?.id || null);
+    if (picked) {
+      // The board loads here, before the feeds and before any edit. Bug fixed (first occurrence
+      // 2026-11-18, crawl-fixes e2e of COREPRODUC-702 PR 2, before release): loaded later, it replaced
+      // a node added in the meantime.
+      try {
+        const saved = await api<{ board: unknown; board_rev: number }>(`/projects/${encodeURIComponent(picked.id)}/board`);
+        boardRev.current = saved.board_rev;
+        boardLoaded.current = saved.board ? readProjectFile(JSON.stringify(saved.board)) : null;
+        if (boardLoaded.current) boardSaved.current = JSON.stringify(boardLoaded.current);
+        boardStale.current = false; // a retry after a failed load: no save ran before it (CodeRabbit on #688)
+        projectOpened.current = true; // a failed load leaves it unset, so the next boot() tries again
+      } catch (err) {
+        boardStale.current = true; // do not overwrite a board that did not load
+        setLog(`The board did not load: ${plainError(err)}. Reload to try again.`);
+      }
+    }
+    setProjects(list);
+    setActiveProject(picked);
+    if (!picked) return;
+    try {
+      localStorage.setItem(LAST_PROJECT_KEY, picked.id);
+    } catch {
+      /* ignore */
+    }
+    const href = projectHref(w.location.href, picked.id);
+    if (href !== w.location.href) w.history.replaceState(w.history.state, "", href);
+    console.info("[projects] opened", { id: picked.id, name: picked.name, projects: list.length });
+  }
 
   /** First-run overlay of the local Studio. Boot opens it once it knows that no host serves this Studio. */
   function openOnboardOnce() {
@@ -1300,9 +1363,6 @@ export function StudioClient() {
     setModelsOpen(false);
   }, [page]);
 
-  useEffect(() => {
-    if (page === "image" || page === "video") void loadToolFeed(page);
-  }, [loadToolFeed, page]);
 
   useEffect(() => {
     if (page !== "cost") return;
@@ -1423,9 +1483,10 @@ export function StudioClient() {
   }, [selected]);
 
   const projectRuns = useMemo(() => {
+    if (activeProject) return runs; // GET /runs?project= already holds this project's runs only
     const ids = new Set(runIds);
     return ids.size ? runs.filter((r) => ids.has(r.id)) : runs.slice(-3);
-  }, [runIds, runs]);
+  }, [activeProject, runIds, runs]);
   const lastRun = projectRuns.at(-1);
   /** Nodes of this browser's runs that are still going (a run started before a reload), with their start. */
   const goingNodes = useMemo(() => {
@@ -1905,9 +1966,7 @@ export function StudioClient() {
     // callers then say what they did with the file.
     const uploading = `Uploading ${file.name}…`;
     setLog(uploading);
-    const data = new FormData();
-    data.append("file", file);
-    const res = await fetch(API + "/assets", { method: "POST", body: data }).finally(() =>
+    const res = await fetch(API + "/assets", { method: "POST", body: uploadForm(file) }).finally(() =>
       setLog((cur) => (cur === uploading ? "" : cur)),
     );
     if (!res.ok) throw new Error(await res.text());
@@ -2175,7 +2234,6 @@ export function StudioClient() {
         trackedRef.current = [];
       }
       await loadMedia();
-      await loadToolFeed(page === "video" ? "video" : "image");
       if (body.exported_outputs?.length) {
         autoImportPhotosExports(body.exported_outputs);
       }
@@ -2258,7 +2316,6 @@ export function StudioClient() {
       });
       setRunIds((ids) => [...ids, body.id]);
       await loadMedia();
-      await loadToolFeed(item.rerun_page === "video" ? "video" : "image");
       if (body.exported_outputs?.length) {
         autoImportPhotosExports(body.exported_outputs);
       }
@@ -4790,7 +4847,8 @@ export function StudioClient() {
     }
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [page, view]);
+    // projectReady: on a direct #canvas load the board mounts only after the project loads (CodeRabbit on #688).
+  }, [page, view, projectReady]);
 
   // The page goes in the visible URL (#video), so reload, links and Back keep it (COREPRODUC-642).
   useEffect(() => {
@@ -4873,15 +4931,23 @@ export function StudioClient() {
   }, []);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(PROJECT_STORAGE_KEY);
-      const file = raw ? readProjectFile(raw) : null;
-      if (file) applyProject(file);
-    } catch {
-      /* ignore a blocked or corrupt project file */
-    }
+    if (activeProject === undefined) return; // boot has not picked the project yet
+    const local = () => {
+      try {
+        const raw = localStorage.getItem(PROJECT_STORAGE_KEY);
+        return raw ? readProjectFile(raw) : null;
+      } catch {
+        return null; // a blocked or corrupt project file
+      }
+    };
+    // The project's board, fetched by openProject (COREPRODUC-702). With no board saved yet, the default
+    // project starts from the board this browser kept before projects, so nobody loses a canvas.
+    const file = activeProject
+      ? boardLoaded.current ?? (activeProject.default && !boardStale.current ? local() : null)
+      : local();
+    if (file) applyProject(file);
     setProjectReady(true);
-  }, [applyProject]);
+  }, [activeProject, applyProject]);
 
   // Bug fixed (first occurrence 2026-11-16, demo walkthrough, COREPRODUC-665): run ids lived only in
   // memory, so after a reload (leave app.tryvinci.com/studio and come back) a node looked for its result
@@ -4905,12 +4971,72 @@ export function StudioClient() {
 
   useEffect(() => {
     if (!projectReady) return;
-    try {
-      localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(writeActive(project, graph, comments, viewport)));
-    } catch {
-      /* ignore */
+    const text = JSON.stringify(writeActive(project, graph, comments, viewport));
+    if (!activeProject) {
+      try {
+        localStorage.setItem(PROJECT_STORAGE_KEY, text);
+      } catch {
+        /* ignore */
+      }
+      return;
     }
-  }, [comments, graph, project, projectReady, viewport]);
+    // On the server, 0.8 s after the last change and one save at a time, so a pan is not a request per frame.
+    boardLatest.current = text;
+    if (text === boardSaved.current || boardStale.current) return;
+    const timer = window.setTimeout(() => queueBoardSave(activeProject.id), 800);
+    return () => window.clearTimeout(timer);
+  }, [activeProject, comments, graph, project, projectReady, viewport]);
+  /**
+   * Queue one save of the board on screen. Each save sends the latest board, not the one that scheduled
+   * it, and queues one more when the board changed during the request (an edit or an undo while a save
+   * was in flight: CodeRabbit on #688).
+   */
+  const queueBoardSave = useCallback((id: string) => {
+    boardSaving.current = boardSaving.current.then(async () => {
+      const text = boardLatest.current;
+      if (text === boardSaved.current || boardStale.current) return;
+      try {
+        const rev = await saveBoard(API, id, JSON.parse(text), boardRev.current);
+        if (rev === null) {
+          boardStale.current = true;
+          setBoardConflict(true);
+          return;
+        }
+        boardRev.current = rev;
+        boardSaved.current = text;
+      } catch (err) {
+        setLog(plainError(err)); // the next change tries again
+        return;
+      }
+      if (boardLatest.current !== boardSaved.current) queueBoardSave(id);
+    });
+  }, []);
+  // A reload or a closed tab within 0.8 s of an edit: send the last change as the page goes.
+  useEffect(() => {
+    if (!activeProject) return;
+    const flush = () => {
+      const text = boardLatest.current;
+      if (!text || text === boardSaved.current || boardStale.current) return;
+      const body = JSON.stringify({ board: JSON.parse(text), board_rev: boardRev.current });
+      // Browsers refuse a keepalive body over about 64 KiB: such a board keeps its last timed save.
+      if (body.length > 60_000) {
+        console.warn("[projects] board not sent at close: too large for keepalive", { bytes: body.length });
+        return;
+      }
+      fetch(`${API}/projects/${encodeURIComponent(activeProject.id)}/board`, {
+        method: "PUT", headers: { "content-type": "application/json" }, body, keepalive: true,
+      })
+        .then(async (res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`); // 409: a save still in flight took the revision
+          // The page can come back (back/forward cache): keep the revision the server gave.
+          boardRev.current = ((await res.json()) as { board_rev: number }).board_rev;
+          boardSaved.current = text;
+        })
+        .catch((err) => console.warn("[projects] board save at close failed", { error: String(err) }));
+    };
+    window.addEventListener("pagehide", flush);
+    return () => window.removeEventListener("pagehide", flush);
+  }, [activeProject]);
 
   useEffect(() => {
     if (!navOpen) return;
@@ -5232,6 +5358,8 @@ export function StudioClient() {
                 <path d="M3 5h12M3 9h12M3 13h12" stroke="currentColor" />
               </svg>
             </button>
+            {/* The tab's project (COREPRODUC-702). Shows keeps this slot for its own breadcrumb. */}
+            {activeProject && page !== "shows" ? <ProjectSwitcher projects={projects} active={activeProject} onError={setLog} /> : null}
             <h1 className={page === "canvas" || page === "shows" ? "sr-only" : ""}>
               {page === "speak" || page === "upscale" || page === "adapts"
                 ? getApp(effectAppId)?.name || titles[page]
@@ -5269,7 +5397,12 @@ export function StudioClient() {
           <div className="top-meta">
             {/* These pages have no log line of their own. Bug fixed (first occurrence 2026-11-11, hosted
                 Studio check, COREPRODUC-585): a refused or failed run on them showed no reason. */}
-            {log && (page === "image" || page === "video" || page === "canvas") ? (
+            {boardConflict && page === "canvas" ? (
+              <span className="top-log" role="alert" data-testid="board-conflict">
+                This board changed in another window. Reload to see it; edits here are not saved.
+              </span>
+            ) : null}
+            {log && !(boardConflict && page === "canvas") && (page === "image" || page === "video" || page === "canvas") ? (
               <span className="top-log" role="status" aria-live="polite" title={log}>
                 {log}
               </span>
@@ -5332,7 +5465,8 @@ export function StudioClient() {
             </button>
           </div>
         </div>
-        <div className="page">{main}</div>
+        {/* No page until boot has picked the tab's project, so no feed loads unscoped (CodeRabbit on #688). */}
+        <div className="page">{activeProject === undefined ? null : main}</div>
       </section>
       {wantsInsp && page === "canvas" && canvasSelected ? (
         (() => {

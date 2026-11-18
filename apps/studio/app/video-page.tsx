@@ -5,6 +5,7 @@ import type { RunClock } from "../lib/progress";
 import type { RunAction, RunProblem } from "./ui/plain-text";
 import { clipPrice } from "../lib/canvas-node";
 import { daemonHasPath } from "../lib/daemon-routes";
+import { withProject } from "../lib/projects";
 import { money } from "../lib/model-capabilities";
 import { ImageFeed } from "./image-feed";
 import { VideoPanel, type PendingRef } from "./video-panel";
@@ -276,7 +277,7 @@ export function VideoPage({
           }
           return;
         }
-        const res = await fetch(`${API}/library?tool=video`);
+        const res = await fetch(`${API}${withProject("/library?tool=video")}`); // the tab's project only
         if (!res.ok) {
           if (!cancelled) {
             setLibraryItems(null);

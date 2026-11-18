@@ -22,6 +22,7 @@ import {
   type MentionRow,
 } from "../lib/image-page";
 import { daemonHasPath } from "../lib/daemon-routes";
+import { withProject } from "../lib/projects";
 import { isUnpriced, money, PRICE_VARIES } from "../lib/model-capabilities";
 import { ImageFeed } from "./image-feed";
 import { ImagePromptBar } from "./image-prompt-bar";
@@ -152,7 +153,7 @@ export function ImagePage({
           }
           return;
         }
-        const res = await fetch(`${API}/library?tool=image`);
+        const res = await fetch(`${API}${withProject("/library?tool=image")}`); // the tab's project only
         if (!res.ok) {
           if (!cancelled) {
             setLibraryItems(null);

@@ -35,7 +35,7 @@ async function openCanvas(page: Page) {
   });
   // Boot sets models, then loads media (GET /runs). /skills can take ~2s, and a run started
   // before models load stops at "Models are still loading", which the canvas does not show.
-  const booted = page.waitForResponse((res) => res.url().endsWith("/vinci-api/runs") && res.request().method() === "GET");
+  const booted = page.waitForResponse((res) => res.url().split("?")[0].endsWith("/vinci-api/runs") && res.request().method() === "GET");
   await page.goto("/");
   await expect(page.locator("nav")).toBeVisible();
   await page.getByRole("button", { name: "Canvas" }).click();
@@ -86,7 +86,7 @@ test("selection scopes, pages, history, minimap", async ({ page }) => {
     await route.fulfill({ json: body });
   });
   const posted: string[][] = [];
-  await page.route("**/vinci-api/runs", async (route) => {
+  await page.route(/\/vinci-api\/runs(\?.*)?$/, async (route) => {
     if (route.request().method() !== "POST") {
       await route.continue();
       return;

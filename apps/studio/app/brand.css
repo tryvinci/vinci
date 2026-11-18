@@ -475,6 +475,45 @@ input[type="file"]::-webkit-file-upload-button {
   border-radius: var(--pill); padding: 5px 12px; font-size: 13px;
 }
 .space-switch button.on { color: var(--teal); background: var(--hover); }
+/* Project switcher (COREPRODUC-702): the tab's project in the top bar; the menu uses the glass surface. */
+.project-switch { position: relative; flex: none; }
+/* The top bar's backdrop-filter makes it a stacking context under the page: lift it while the menu is open. */
+.top:has(.project-menu) { position: relative; z-index: 30; }
+.project-switch-btn {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 220px;
+  border: 0; background: transparent; color: var(--ink);
+  border-radius: var(--pill); padding: 5px 10px; font-size: 13px; font-weight: 600;
+}
+.project-switch-btn:hover,
+.project-switch-btn[aria-expanded="true"] { background: var(--hover); }
+.project-switch-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
+  width: min(260px, calc(100vw - 32px)); padding: 6px; display: grid; gap: 4px;
+  border: 1px solid var(--glass-line); border-radius: 14px; color: var(--ink);
+  background: var(--glass-fallback); box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  animation: vinci-pop 160ms ease;
+}
+.project-menu input { width: 100%; box-sizing: border-box; }
+.project-menu form { display: grid; gap: 6px; }
+.project-menu-list { display: grid; max-height: 280px; overflow-y: auto; }
+.project-menu-list a,
+.project-menu-actions button {
+  display: block; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent;
+  color: var(--ink); text-align: left; text-decoration: none; font-size: 13px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.project-menu-list a.on { color: var(--teal); }
+.project-menu-list a:hover,
+.project-menu-actions button:hover { background: var(--hover); }
+.project-menu-actions { display: grid; border-top: 1px solid var(--glass-line); padding-top: 4px; }
+.project-menu .muted { margin: 4px 10px; font-size: 12px; }
+@media (prefers-reduced-motion: reduce) { .project-menu { animation: none; } }
+/* On a phone the page title was cut to "I…" beside the switcher; the rail names the page, so hide it (not from screen readers). */
+@media (max-width: 600px) {
+  .top-lead:has(.project-switch) h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+}
 .access-pill {
   display: inline-flex; align-items: center; gap: 6px;
   border-radius: var(--pill); color: var(--dim); padding: 5px 10px; font-size: 12px;
