@@ -347,7 +347,8 @@ def list_shows(request: Request) -> dict[str, list[dict[str, str]]]:
         changed = max(manifest.stat().st_mtime, manifest.parent.stat().st_mtime)
         rows.append(
             {
-                "path": str(manifest.parent),
+                # Resolved, as /project reports it: a URL slug's key hashes it (COREPRODUC-698).
+                "path": str(manifest.parent.resolve()),
                 "title": str(title or manifest.parent.name),
                 "updated_at": datetime.fromtimestamp(changed, UTC).isoformat(),
             }

@@ -248,6 +248,8 @@ eq(pageFromUrl("", "#video"), "video", "hash");
 eq(pageFromUrl("?page=canvas", ""), "canvas", "query");
 eq(pageFromUrl("?page=canvas", "#shows"), "shows", "hash wins");
 eq(pageFromUrl("", "#nope"), "", "unknown page");
+eq(pageFromUrl("", "#shows/lamp-oil-b1b8cc8b/cut/e01"), "shows", "a place in the page (COREPRODUC-698)");
+eq(pageFromUrl("", "#video/motion-control"), "video", "a tab");
 eq(pageFromUrl("", ""), "", "none");
 eq(pageFromUrl("?page=video", "#%"), "video", "a malformed hash names no page");
 """)

@@ -183,9 +183,11 @@ import {
   providerMentionInputs,
   serializeLibraryStore,
   upsertLibraryItem,
+  LIBRARY_TABS,
   type LibraryItem,
   type LibraryTab,
 } from "../lib/library";
+import { topWindow, useUrlPart } from "./url-part";
 
 const API = "/vinci-api";
 
@@ -665,14 +667,6 @@ function graphFromSkill(
 
 /** No <title>: the rail shows its labels, and a tooltip covered them. The button has the aria-label. */
 /** The window whose URL the user sees: the host page around the Studio frame (same origin), else this one. */
-function topWindow(): Window {
-  try {
-    return window.top && window.top.location.href ? window.top : window;
-  } catch {
-    return window; // a frame from another origin
-  }
-}
-
 /** The page the visible URL names (`#video`, `?page=video`), or "". */
 function urlPage(): PageId | "" {
   if (typeof window === "undefined") return "";
@@ -4811,11 +4805,21 @@ export function StudioClient() {
 
   const openPageRef = useRef(openPage);
   openPageRef.current = openPage;
+  const pageRef = useRef(page);
+  useEffect(() => {
+    pageRef.current = page;
+  }, [page]);
+  // Library tabs and the Canvas timeline are in the URL too: `#library/elements`, `#canvas/timeline`.
+  useUrlPart("library", page === "library", libTab === LIBRARY_TABS[0] ? "" : libTab, (part) =>
+    setLibTab((LIBRARY_TABS as string[]).includes(part) ? (part as LibraryTab) : LIBRARY_TABS[0]),
+  );
+  useUrlPart("canvas", page === "canvas", view === "timeline" ? "timeline" : "", (part) => setView(part === "timeline" ? "timeline" : "canvas"));
   useEffect(() => {
     const w = topWindow();
     const onPop = () => {
       const next = pageFromUrl(w.location.search, w.location.hash);
-      if (next) openPageRef.current(next);
+      // Back within a page (`#video/motion-control` → `#video`) is the page's own: it does not open it again.
+      if (next && next !== pageRef.current) openPageRef.current(next);
     };
     w.addEventListener("popstate", onPop);
     return () => w.removeEventListener("popstate", onPop);

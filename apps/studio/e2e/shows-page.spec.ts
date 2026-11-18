@@ -194,6 +194,34 @@ test.describe("Shows (OLF movie engine)", () => {
     await page.getByTestId("cut-sound").uncheck();
     await page.getByTestId("cut-export-button").click();
     await expect(page.getByTestId("shows-notice")).toContainText("Exported 3 files for e02", { timeout: 90_000 });
+
+    // On a host the export is a job (HTTP 202) that reports its step; the button shows it with a timer,
+    // and a reload goes on waiting for the same job. Bug fixed (first occurrence 2026-11-18, 1 report):
+    // a 4-minute export showed only "Exporting…", and a reload lost it.
+    let stage = "loading"; // the test moves the job on, so no step depends on one poll interval
+    let finish = false;
+    const since = new Date(Date.now() - 65_000).toISOString(); // the job started 65 s ago
+    await page.route("**/vinci-api/olf/export", (route) => route.fulfill({ status: 202, json: { export_id: "job1", state: "queued" } }));
+    await page.route("**/vinci-api/olf/exports/job1", (route) => {
+      const done = { state: "done", stage: null, files: ["exports/e02/e02-16x9.mp4"], duration: 4, clips: 1, subtitles: 0 };
+      const running = { state: "running", stage };
+      return route.fulfill({ json: { created_at: since, error: null, ...(finish ? done : running) } });
+    });
+    await page.getByTestId("cut-export-button").click();
+    await expect(page.getByTestId("cut-export-button")).toHaveText(/^Getting your takes… 1:\d\d$/);
+    stage = "rendering";
+    await expect(page.getByTestId("cut-export-button")).toHaveText(/^Rendering… 1:\d\d$/);
+    await expect(page.getByTestId("cut-export-hint")).toContainText("You can leave this page");
+    await page.screenshot({ path: path.join(shots, "shows_cut_export_progress.png") });
+    await page.reload(); // the URL names the show and its Cut (COREPRODUC-698): the reload lands there
+    await expect(page.getByTestId("shows-tab-cut")).toHaveClass(/on/);
+    await expect(page.getByTestId("cut-export-button")).toHaveText(/^Rendering… 1:\d\d$/); // the same job, resumed
+    finish = true;
+    await expect(page.getByTestId("cut-export-files")).toContainText("exports/e02/e02-16x9.mp4");
+    await expect(page.getByTestId("shows-notice")).toContainText("Exported 1 files for e02");
+    await expect(page.getByTestId("cut-export-button")).toHaveText("Export episode");
+    expect(await page.evaluate(() => sessionStorage.getItem("vinci-shows-exports-v1"))).toBe("{}"); // forgotten once shown
+    await page.screenshot({ path: path.join(shots, "shows_cut_export_resumed.png") });
     expect(errors).toEqual([]);
   });
 

@@ -19,18 +19,25 @@ import {
   type RenderKind,
   andList,
   episodeGroups,
+  findEntry,
   folderName,
   issueCounts,
   matchShows,
   parseRecent,
   price,
+  partRoute,
   pushRecent,
+  routePart,
+  showSlug,
+  slugKey,
+  showKey,
   readyJobs,
   runtimeText,
   takeName,
   updatedText,
 } from "../lib/shows";
-import { OlfRoutes, message, olf, polling, runJobs, send, waitRun } from "./shows-api";
+import { type ExportJob, ExportUnreachable, OlfRoutes, message, olf, polling, runJobs, send, waitExport, waitRun } from "./shows-api";
+import { setUrlPart, topWindow, urlParts } from "./url-part";
 import { BibleView, IssuesView } from "./shows-bible";
 import { CutView } from "./shows-cut";
 import { type Route, ShowNav, ShowTop, routeEpisode } from "./shows-nav";
@@ -48,6 +55,24 @@ function firstRoute(show: OlfShow): Route {
   return episode ? { view: "storyboard", episode } : { view: "issues" };
 }
 
+/** The place a link names, if the show has it (an episode or shot that is gone opens the first place). */
+function knownRoute(show: OlfShow, route: Route | null): Route | null {
+  if (!route) return null;
+  if (route.view === "shot") return show.shots[route.shot] ? route : null;
+  if (route.view === "bible") return route.entry === "style" || findEntry(show, route.entry) ? route : null;
+  if (route.view === "storyboard" || route.view === "shots" || route.view === "cut") {
+    return episodeGroups(show).some((group) => group.episodes.some((ep) => ep.id === route.episode)) ? route : null;
+  }
+  return route;
+}
+
+/** The show slug and the place in it that the URL names (`#shows/lamp-oil-b1b8cc8b/cut/e01`). */
+function urlShow(): { slug: string; part: string } {
+  const [page, rest] = urlParts();
+  const [slug, ...part] = page === "shows" ? rest.split("/") : [""];
+  return { slug: slug || "", part: part.join("/") };
+}
+
 /**
  * Shows: the OLF movie engine in the Studio, laid out as the Claude Design editor. The bible locks
  * the look, the storyboard reviews keyframes (cheap stills), and the shot page approves takes and
@@ -58,6 +83,32 @@ function firstRoute(show: OlfShow): Route {
  *   hosted: A host serves the shows (Vinci Platform): they live in its storage, so there is no
  *     folder to open and the open screen lists the host's shows only.
  */
+/** An export a Cut follows: the attempt that owns it, its step and start (ms), then its files. */
+type ExportView = { attempt: number; stage: string; since: number; result: OlfExport | null };
+
+/** Session key of the running exports of this tab (`<show path>\n<episode>` → export id): a reload goes on waiting. */
+const EXPORT_KEY = "vinci-shows-exports-v1";
+
+/**
+ * The running export of a show's episode in this tab: read it (`id` left out), keep it (an id) or
+ * forget it (`null`).
+ *
+ * Returns:
+ *   The kept export id, or "".
+ */
+function keptExport(key: string, id?: string | null): string {
+  try {
+    const rows = JSON.parse(sessionStorage.getItem(EXPORT_KEY) || "{}") as Record<string, string>;
+    if (id === undefined) return rows[key] || "";
+    if (id) rows[key] = id;
+    else delete rows[key];
+    sessionStorage.setItem(EXPORT_KEY, JSON.stringify(rows));
+    return id || "";
+  } catch {
+    return ""; // no session storage (a private window): the export still runs, a reload only loses its progress
+  }
+}
+
 export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement | null; hosted?: boolean }) {
   const [available, setAvailable] = useState<boolean | null>(null);
   const [routes, setRoutes] = useState<Set<string> | null>(null); // the OLF routes this daemon serves
@@ -73,7 +124,25 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
   // The Cut screen: the cut of one episode, what it is doing ("approved", "clip", "export"), the last export.
   const [cut, setCut] = useState<OlfCut | null>(null);
   const [cutBusy, setCutBusy] = useState("");
-  const [exported, setExported] = useState<OlfExport | null>(null);
+  // The exports this page follows, one view per show and episode (`key` = "<path>\n<episode>"): the step
+  // and start (ms) while it runs ("Rendering… 2:41"), then the files. Each Cut shows only its own, and
+  // clip edits (`cutBusy`) never hide it. Bug fixed (first occurrence, 2026-11-18, 1 report,
+  // COREPRODUC-693): a 4-minute export showed only "Exporting…", and a reload lost it.
+  const [exportViews, setExportViews] = useState<Record<string, ExportView>>({}); // per Cut key: each Cut its own
+  const exportViewsRef = useRef(exportViews);
+  useEffect(() => {
+    exportViewsRef.current = exportViews;
+  }, [exportViews]);
+  const attempts = useRef(0); // each export a page follows has its own number: an older one never writes a newer view
+  const following = useRef(new Set<string>()); // export ids this page polls: one poller per job
+  const openCut = useRef(""); // the key of the open Cut, set by an effect
+  const alive = useRef(true); // false once the person left Shows: a kept export then waits for their return
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
   // The one previs slot: `key` names its show and episode; the newest request owns it.
   const [previs, setPrevis] = useState<{ key: string; result: OlfPrevis | null; busy: string }>({ key: "", result: null, busy: "" });
   const previsRun = useRef(0);
@@ -96,8 +165,8 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
   useEffect(() => {
     shownPath.current = show?.path ?? null;
   }, [show]);
-  /** Load a show; returns true when its answer was shown. */
-  const open = useCallback(async (path: string, keepView = false): Promise<boolean> => {
+  /** Load a show; returns true when its answer was shown. `start` is the place a link names. */
+  const open = useCallback(async (path: string, keepView = false, start: Route | null = null): Promise<boolean> => {
     if (keepView && (opening.current || path !== shownPath.current)) {
       console.info("[shows] reload skipped: another show is on screen or opening", { path });
       return false;
@@ -114,7 +183,11 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
       }
       setShow(body);
       setRecent((rows) => pushRecent(rows, body.path));
-      if (!keepView) setRoute(firstRoute(body));
+      if (!keepView) {
+        const known = knownRoute(body, start);
+        if (start && !known) setNotice("That place is not in this show. It opens at its start.");
+        setRoute(known || firstRoute(body));
+      }
       console.info("[shows] opened", {
         path: body.path,
         shots: Object.keys(body.shots).length,
@@ -205,12 +278,109 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
       .catch(() => undefined);
   }, [available]);
 
+  /**
+   * Open the show a URL slug names, at the place the URL names: from the show list (a host, or a daemon
+   * that lists shows), else from the recent shows. An unknown show leaves the open screen with a notice.
+   */
+  const linking = useRef(0); // the lookup that is finding a URL's show (0: none); the URL keeps naming it meanwhile
+  const lookups = useRef(0);
+  const quiet = useRef(false); // the page opened a show by itself: its place replaces the bare `#shows`
+  const restoring = useRef(false); // Back or Forward set the place: a place fixed up replaces its entry
+  const held = useRef(false); // the show list failed: the URL keeps the link, so a reload can try again
+  const openSlug = useCallback(
+    async (slug: string, part: string, recentRows: string[]) => {
+      const lookup = ++lookups.current;
+      const run = openRun.current; // a later Back or open moves it on, and this lookup then stops
+      linking.current = lookup;
+      let failed = false;
+      const listed = routes?.has("/olf/shows")
+        ? await olf<{ shows: OlfShowRow[] }>("/shows").then((body) => body.shows || []).catch((err) => {
+            failed = true;
+            console.warn("[shows] list failed for a link", message(err));
+            return [] as OlfShowRow[];
+          })
+        : [];
+      const path = [...listed.map((row) => row.path), ...recentRows].find((row) => showKey(row) === slugKey(slug));
+      console.info("[shows] url show", { slug, part, found: Boolean(path), failed, stale: run !== openRun.current });
+      if (run === openRun.current) {
+        if (path) await open(path, false, partRoute(part));
+        else {
+          setShow(null); // the open screen says why
+          restoring.current = false;
+          held.current = failed;
+          setError(failed ? "Could not load your shows, so this link did not open. Reload the page to try again." : "That show is not in your Studio.");
+          if (!failed) setUrlPart("shows", "", true);
+        }
+      }
+      if (linking.current === lookup) linking.current = 0;
+    },
+    [routes, open],
+  );
+
   useEffect(() => {
-    if (!available) return;
+    if (!available || !routes) return;
     const rows = parseRecent(window.localStorage.getItem(RECENT_KEY));
     setRecent(rows);
-    if (rows[0]) void open(rows[0]);
-  }, [available, open]);
+    const { slug, part } = urlShow();
+    if (slug) void openSlug(slug, part, rows); // a link or a reload names the show
+    else if (rows[0]) {
+      quiet.current = true;
+      void open(rows[0]).then((shown) => {
+        if (!shown) quiet.current = false; // only this automatic open replaces the bare entry
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the engine and its routes are known
+  }, [available, routes]);
+
+  // The open show and its place are in the URL: `#shows/lamp-oil-b1b8cc8b/cut/e01` (COREPRODUC-698).
+  // Opening a show from its bare link (`#shows/<slug>`), by itself, or by Back fills in the place in place.
+  useEffect(() => {
+    if (loading || !available) return;
+    const { slug, part } = urlShow();
+    if (!show) {
+      if (!linking.current && !held.current) setUrlPart("shows", ""); // closed, or never opened
+      return;
+    }
+    held.current = false;
+    const mine = showSlug(show.path, show.title || folderName(show.path));
+    const bare = (slugKey(slug) === showKey(show.path) && !part) || (quiet.current && !slug) || restoring.current;
+    quiet.current = false;
+    restoring.current = false;
+    setUrlPart("shows", `${mine}/${routePart(route)}`, bare);
+  }, [show, route, loading, available, error]);
+
+  // Back and Forward: open the show and place the URL names, or the open screen.
+  const showRef = useRef(show);
+  useEffect(() => {
+    showRef.current = show;
+  }, [show]);
+  useEffect(() => {
+    const onPop = () => {
+      if (urlParts()[0] !== "shows") return;
+      const { slug, part } = urlShow();
+      const now = showRef.current;
+      held.current = false;
+      if (now && slug && showKey(now.path) === slugKey(slug)) {
+        const known = knownRoute(now, partRoute(part));
+        if (part && !known) setNotice("That place is not in this show. It opens at its start.");
+        restoring.current = true;
+        return setRoute(known || firstRoute(now));
+      }
+      openRun.current += 1; // a pending lookup or load is stale now
+      linking.current = 0;
+      if (!slug) return setShow(null);
+      restoring.current = true;
+      void openSlug(slug, part, parseRecent(window.localStorage.getItem(RECENT_KEY)));
+    };
+    const w = topWindow();
+    w.addEventListener("popstate", onPop);
+    return () => w.removeEventListener("popstate", onPop);
+  }, [openSlug]);
+
+  // Another show or episode: its Cut never shows the previous one's cut while its own loads.
+  useEffect(() => {
+    setCut(null);
+  }, [show?.path, cutEpisode]);
 
   useEffect(() => {
     // A shot that cannot resolve has no plan; its page shows the engine's reason instead.
@@ -286,23 +456,74 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
     }
   }
 
-  /** Export the cut of the open episode: one MP4 for each aspect, with the subtitles, sound, C2PA and OTIO that the user picks. */
-  async function exportEpisode(aspects: string[], subtitles: boolean, c2pa: boolean, otio: boolean, sound: boolean) {
-    if (!show || !cutEpisode) return;
-    setCutBusy("export");
-    setExported(null);
+  /**
+   * Follow a host's export of one show and episode: its step while it runs, then its files. The job
+   * id is kept for the tab once, when the host accepts the job, so a reload or another page goes on
+   * waiting; it is forgotten only when its result is shown on its own Cut.
+   *
+   * Args:
+   *   key: "<show path>\n<episode>".
+   *   start: Starts the export (or waits for a kept one); it reports each answer of the job.
+   */
+  async function followExport(key: string, start: (onJob: (job: ExportJob) => void) => Promise<unknown>) {
+    const episode = key.split("\n")[1];
+    const since = Date.now();
+    const attempt = ++attempts.current;
+    let id = "";
+    let reachable = true;
+    /** Change this Cut's view only while it is still this attempt's. */
+    const mine = (next: (view: ExportView) => ExportView | null) =>
+      setExportViews((views) => {
+        const view = views[key];
+        if (!view || view.attempt !== attempt) return views;
+        const { [key]: _old, ...rest } = views;
+        const changed = next(view);
+        return changed ? { ...rest, [key]: changed } : rest;
+      });
+    const before = exportViewsRef.current[key]; // a rejected click leaves the view it found
+    setExportViews((views) => ({ ...views, [key]: { attempt, stage: "", since, result: null } }));
     try {
-      const body = { path: show.path, episode: cutEpisode, aspects, subtitles, c2pa, otio, sound };
-      const result = await olf<OlfExport>("/export", send("POST", body));
-      setExported(result);
-      setNotice(`Exported ${result.files.length} files for ${cutEpisode} · ${result.duration.toFixed(1)} s`);
-      console.info("[shows] exported", { episode: cutEpisode, ...result });
+      const result = (await start((job) => {
+        if (!id) {
+          id = job.id; // the first answer: the host accepted the job (later answers never write the id back)
+          keptExport(key, id);
+          following.current.add(id);
+        }
+        if (!alive.current) throw new Error("left Shows"); // stop polling; Cut resumes the kept export
+        mine((view) => ({ ...view, stage: job.stage || "", since: job.created_at ? Date.parse(job.created_at) : since }));
+      })) as OlfExport;
+      mine((view) => ({ ...view, result }));
+      setNotice(`Exported ${result.files.length} files for ${episode} · ${result.duration.toFixed(1)} s`);
+      console.info("[shows] exported", { episode, ...result });
     } catch (err) {
-      setNotice(message(err));
+      reachable = !(err instanceof ExportUnreachable);
+      if (alive.current) setNotice(message(err));
+      mine(() => (id ? null : before || null)); // a rejected click (no job) gives the Cut back its view
     } finally {
-      setCutBusy("");
+      following.current.delete(id);
+      // Forget the id only for this job's own outcome, shown on its own Cut; a later visit shows any other.
+      if (id && alive.current && reachable && openCut.current === key && keptExport(key) === id) keptExport(key, null);
     }
   }
+
+  /** Export the cut of the open episode: one MP4 for each aspect, with the subtitles, sound, C2PA and OTIO that the user picks. */
+  function exportEpisode(aspects: string[], subtitles: boolean, c2pa: boolean, otio: boolean, sound: boolean) {
+    if (!show || !cutEpisode) return;
+    const body = { path: show.path, episode: cutEpisode, aspects, subtitles, c2pa, otio, sound };
+    void followExport(`${show.path}\n${cutEpisode}`, (onJob) => olf<OlfExport>("/export", send("POST", body), onJob));
+  }
+
+  // Cut opens on an episode whose export this tab kept (a reload, another page): wait for it again.
+  const cutKey = show && cutEpisode ? `${show.path}\n${cutEpisode}` : "";
+  const cutView = cutKey ? exportViews[cutKey] : undefined;
+  useEffect(() => {
+    openCut.current = cutKey;
+    const id = cutKey ? keptExport(cutKey) : "";
+    if (!id || following.current.has(id)) return;
+    console.info("[shows] export resumed", { key: cutKey, id });
+    void followExport(cutKey, (onJob) => waitExport(id, onJob));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new show or episode resumes
+  }, [cutKey]);
 
   async function openSample() {
     setLoading(true);
@@ -510,8 +731,9 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
           <CutView
             show={show}
             cut={cut?.episode === episode.id ? cut : null}
-            busy={cutBusy}
-            result={exported}
+            busy={cutView && !cutView.result ? "export" : cutBusy}
+            job={cutView && !cutView.result ? cutView : null}
+            result={cutView?.result || null}
             onUseApproved={() => void editCut("approved", { use_approved: true })}
             onClip={(clip, fields) => void editCut("clip", { clip, fields })}
             onExport={(aspects, subtitles, c2pa, otio, sound) => void exportEpisode(aspects, subtitles, c2pa, otio, sound)}

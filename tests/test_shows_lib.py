@@ -58,6 +58,11 @@ NAMES = [
     "hasApprovedTakes",
     "upcomingVideos",
     "updatedText",
+    "showKey",
+    "showSlug",
+    "slugKey",
+    "routePart",
+    "partRoute",
     "matchShows",
 ]
 SHOW = """
@@ -416,4 +421,29 @@ def test_shot_label_keeps_the_scene() -> None:
 if (shotLabel("e01/s01/sh010") !== "s01/sh010") throw new Error("s01");
 if (shotLabel("e01/s02/sh010") === shotLabel("e01/s01/sh010")) throw new Error("labels must differ");
 if (shotLabel("sh010") !== "sh010") throw new Error("bare id");
+""")
+
+
+def test_show_slugs_and_places_in_the_url() -> None:
+    """COREPRODUC-698: `#shows/lamp-oil-b1b8cc8b/cut/e01`; only the 8-character key picks the show."""
+    _run("""
+const hosted = "show:b1b8cc8bd1c04ded9a6d458a7a351af0";
+if (showKey(hosted) !== "b1b8cc8b") throw new Error("a host's show id");
+if (showSlug(hosted, "Lamp Oil") !== "lamp-oil-b1b8cc8b") throw new Error("title + key");
+if (showSlug(hosted, "  Café: Night!! ") !== "cafe-night-b1b8cc8b") throw new Error("plain words");
+if (showSlug(hosted, "") !== "b1b8cc8b") throw new Error("no title");
+const local = showKey("/Users/me/shows/tidewatch");
+if (!/^[0-9a-f]{8}$/.test(local) || local !== showKey("/Users/me/shows/tidewatch")) throw new Error("a stable path hash");
+if (local === showKey("/Users/me/shows/tidewatch2")) throw new Error("paths differ");
+if (showKey("/shows/\\u{1F600}") === showKey("/shows/\\u{1F601}")) throw new Error("both UTF-16 units count");
+if (slugKey("another-title-b1b8cc8b") !== showKey(hosted)) throw new Error("a rename keeps the link");
+const places = [
+  { view: "storyboard", episode: "e02" }, { view: "shots", episode: "e01" }, { view: "cut", episode: "e01" },
+  { view: "shot", shot: "e01/s03/sh010" }, { view: "bible", entry: "char/ada" }, { view: "issues" },
+];
+for (const place of places) {
+  if (JSON.stringify(partRoute(routePart(place))) !== JSON.stringify(place)) throw new Error("round trip " + routePart(place));
+}
+if (routePart({ view: "shot", shot: "e01/s03/sh010" }) !== "shot/e01/s03/sh010") throw new Error("shot part");
+if (partRoute("cut") !== null || partRoute("nope/e01") !== null || partRoute("") !== null) throw new Error("unknown parts");
 """)
