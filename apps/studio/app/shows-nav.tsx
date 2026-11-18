@@ -252,7 +252,7 @@ export function ShowTop({
         <button type="button" className="olf-x" title="Reload from disk" aria-label="Reload" onClick={onReload}>
           ↻
         </button>
-        {/* Design "Share": the show folder as one .olf.zip of plain OLF files (exports left out). */}
+        {/* Design "Share": the show folder as one .volf package (a ZIP of plain OLF files; exports left out). */}
         <OlfOnly path="/olf/share">
           <a className="ghost olf-small olf-share" href={`${OLF_API}/share?path=${encodeURIComponent(show.path)}`} download data-testid="share">
             Share

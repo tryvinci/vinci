@@ -907,7 +907,7 @@ def previs_episode(body: PrevisBody) -> dict[str, Any]:
 
 @router.get("/share")
 def share(path: str) -> FileResponse:
-    """The show folder as one ``<show>.olf.zip`` (design: Share): plain OLF files to send.
+    """The show folder as one ``<show>.volf`` package (design: Share; SPEC.md, Package).
 
     ``exports/`` and ``previs/`` are left out (derived files). A link that leaves the show is
     skipped, so a zip never carries a file from outside the folder.
@@ -932,7 +932,7 @@ def share(path: str) -> FileResponse:
     except BaseException:
         Path(handle.name).unlink(missing_ok=True)  # a failed zip leaves no temp file behind
         raise
-    name = f"{p.manifest.get('show') or p.root.name}.olf.zip"
+    name = f"{p.manifest.get('show') or p.root.name}.volf"  # was .olf.zip until 2026-11-18
     log.info("olf: share %s as %s (%d files)", p.root, name, count)
     return FileResponse(
         handle.name,
