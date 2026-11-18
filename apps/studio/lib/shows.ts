@@ -13,6 +13,7 @@
 
 export const OLF_API = "/vinci-api/olf";
 export const RECENT_KEY = "vinci-shows-recent-v1";
+export const CLOSED_KEY = "vinci-shows-closed-v1"; // set by Close show: the next visit opens no show by itself
 export const TEXT_MODEL_KEY = "vinci-shows-text-model-v1"; // the text model a person picked last
 export const RECENT_LIMIT = 6;
 

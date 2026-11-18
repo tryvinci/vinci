@@ -4,6 +4,7 @@ import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useStat
 import { createPortal } from "react-dom";
 import { daemonPaths } from "../lib/daemon-routes";
 import {
+  CLOSED_KEY,
   RECENT_KEY,
   type OlfBatch,
   type OlfCut,
@@ -48,6 +49,22 @@ import { EmptyState } from "./ui/empty-state";
 import "./shows.css";
 
 type Batches = { episode: string; stale: OlfBatch; animate: OlfBatch };
+
+/**
+ * Remember (or forget) Close show for the next visit (COREPRODUC-700). A storage error (full, or
+ * blocked) only loses the memory: it never stops a close or undoes an open.
+ *
+ * Args:
+ *   closed: True after Close show; false once the person opens a show.
+ */
+function markClosed(closed: boolean): void {
+  try {
+    if (closed) window.localStorage.setItem(CLOSED_KEY, "1");
+    else window.localStorage.removeItem(CLOSED_KEY);
+  } catch (err) {
+    console.warn("[shows] could not save the closed flag", { closed, err });
+  }
+}
 
 /** Where a show opens: the storyboard of its first episode, else the issues page. */
 function firstRoute(show: OlfShow): Route {
@@ -184,6 +201,7 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
       setShow(body);
       setRecent((rows) => pushRecent(rows, body.path));
       if (!keepView) {
+        markClosed(false); // a show the person opens opens again on the next visit
         const known = knownRoute(body, start);
         if (start && !known) setNotice("That place is not in this show. It opens at its start.");
         setRoute(known || firstRoute(body));
@@ -323,7 +341,9 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
     setRecent(rows);
     const { slug, part } = urlShow();
     if (slug) void openSlug(slug, part, rows); // a link or a reload names the show
-    else if (rows[0]) {
+    // Bug fixed (first occurrence, 2026-11-18 user report, COREPRODUC-700): Close show did not stick;
+    // the newest recent show opened again on the next visit. After Close show, nothing opens by itself.
+    else if (rows[0] && !window.localStorage.getItem(CLOSED_KEY)) {
       quiet.current = true;
       void open(rows[0]).then((shown) => {
         if (!shown) quiet.current = false; // only this automatic open replaces the bare entry
@@ -628,6 +648,22 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
     ]);
   }
 
+  /**
+   * Close show: drop pending loads and link lookups, so a late answer (a reload after a render, a
+   * link) cannot bring the show back, and remember the close for the next visit.
+   */
+  function closeShow() {
+    openRun.current += 1;
+    linking.current = 0;
+    held.current = false;
+    restoring.current = false; // a cancelled Back lookup must not make the next open replace `#shows`
+    opening.current = false;
+    setLoading(false);
+    markClosed(true);
+    console.info("[shows] closed: the next visit opens no show", { path: show?.path });
+    setShow(null);
+  }
+
   // The show's header goes into the Studio top bar (as Canvas puts its view switch there).
   const has = (path: string) => !routes || routes.has(path);
   const top = (node: ReactNode) => (
@@ -639,7 +675,7 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
               route={route}
               onRoute={setRoute}
               onReload={() => show && void open(show.path, true)}
-              onClose={() => setShow(null)}
+              onClose={closeShow}
             />,
             topSlot,
           )

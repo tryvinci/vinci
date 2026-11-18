@@ -796,6 +796,82 @@ test.describe("Shows (OLF movie engine)", () => {
     expect(errors).toEqual([]);
   });
 
+  test("Close show sticks: no show opens by itself until one is opened (COREPRODUC-700)", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("vinci-onboard-v1", "done");
+      // Only the first load starts clean, so a reload keeps the recent shows and the closed flag.
+      if (!sessionStorage.getItem("e2e-clean")) localStorage.removeItem("vinci-shows-recent-v1");
+      sessionStorage.setItem("e2e-clean", "1");
+    });
+    const loads: string[] = [];
+    page.on("request", (req) => req.url().includes("/olf/project?") && loads.push(req.url()));
+    const shows = page.locator('nav button[aria-label="Shows"]');
+    const crumb = page.locator(".top-crumb");
+    /** Leave Shows for Library and come back: the Shows page mounts again, as on a new visit. */
+    const away = async () => {
+      await page.locator('nav button[aria-label="Library"]').click();
+      await expect(page).toHaveURL(/#library/);
+      await shows.click();
+    };
+    /** The open screen stays: its list loaded (the page knows its routes) and no show loaded since `before`. */
+    const stays = async (before: number) => {
+      await expect(page.getByTestId("shows-grid")).toBeVisible();
+      await expect(crumb).toHaveText("Shows");
+      expect(loads.length).toBe(before);
+    };
+    // Boot reads the page from the URL when it ends (GET /runs): a rail click before that is undone.
+    const booted = page.waitForResponse((res) => res.url().endsWith("/vinci-api/runs") && res.request().method() === "GET");
+    await page.goto("/");
+    await booted;
+    await shows.click();
+    await page.getByTestId("shows-open-sample").click();
+    await expect(crumb).toContainText("Tidewatch");
+    await away();
+    await expect(crumb).toContainText("Tidewatch"); // the newest show opens again on the next visit
+
+    let before = loads.length;
+    await page.getByRole("button", { name: "Close show" }).click();
+    await stays(before);
+    before = loads.length;
+    await away();
+    await stays(before);
+    await page.screenshot({ path: path.join(shots, "shows_closed_stays.png") });
+    before = loads.length;
+    const rebooted = page.waitForResponse((res) => res.url().endsWith("/vinci-api/runs") && res.request().method() === "GET");
+    await page.reload(); // the URL is `#shows`, so the Studio opens on Shows
+    await rebooted;
+    await stays(before);
+
+    // Opening a show clears the flag: the next visit opens it again.
+    await page.getByTestId("shows-open-sample").click();
+    await expect(crumb).toContainText("Tidewatch");
+    await away();
+    await expect(crumb).toContainText("Tidewatch");
+
+    // A reload in flight at Close (as after a render or an edit) cannot bring the show back. The
+    // reload is held until Close is done, then answered.
+    let release: () => void = () => undefined;
+    let reached: () => void = () => undefined;
+    const hold = new Promise<void>((done) => (release = done));
+    const asked = new Promise<void>((done) => (reached = done));
+    await page.route("**/olf/project?**", async (route) => {
+      reached();
+      await hold;
+      await route.continue();
+    });
+    await page.getByRole("button", { name: "Reload" }).click();
+    await asked;
+    await page.getByRole("button", { name: "Close show" }).click();
+    await expect(page).toHaveURL(/#shows$/);
+    const late = page.waitForResponse((res) => res.url().includes("/olf/project?"));
+    release();
+    await late;
+    await page.waitForTimeout(500); // the late answer has landed
+    await expect(crumb).toHaveText("Shows");
+    await expect(page).toHaveURL(/#shows$/);
+    await page.unroute("**/olf/project?**");
+  });
+
   test("invalid show, wrong folder, engine off", async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem("vinci-onboard-v1", "done");
