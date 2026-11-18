@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from fastapi import FastAPI, HTTPException, Query, Request, UploadFile
+from fastapi import FastAPI, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
     FileResponse,
@@ -31,6 +31,7 @@ from vinci_runtime.engine import Engine
 from vinci_storage.durable_journal import JournalConfigError, JournalError, journal_from_env
 from vinci_storage.home_persistence import persistence_from_env
 
+from vinci_daemon import projects
 from vinci_daemon.bridge_auth import BridgeAuthMiddleware
 from vinci_daemon.durable_ops import client_operation_id, with_journal_ack
 from vinci_daemon.durable_receipts import commit_run_receipt_before_complete
@@ -62,6 +63,7 @@ class RunBody(BaseModel):
     max_cost: float | None = None
     preference: str | None = None
     model_id: str | None = None
+    project_id: str | None = None  # the Studio project the run belongs to (COREPRODUC-702)
 
 
 class ProviderBody(BaseModel):
@@ -397,8 +399,14 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
             spec = WorkflowSpec.model_validate(loaded)
 
         op_id = client_operation_id(request)
+        project_id = projects.stamp(eng, body.project_id)  # fixed at the start: a run never moves
 
         def _accept() -> dict[str, Any]:
+            run = _start()
+            projects.store(eng).link("run", str(run.get("id")), project_id, only_once=True)
+            return run
+
+        def _start() -> dict[str, Any]:
             try:
                 if getattr(eng, "_journal", None) is None:
                     return eng.start_run(
@@ -432,8 +440,10 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
         )
 
     @app.get("/runs")
-    def list_runs() -> dict[str, Any]:
-        return {"runs": eng.store.list_runs()}
+    def list_runs(project: str = "") -> dict[str, Any]:
+        """Every run, or with ``project`` that project's runs without Shows renders."""
+        runs = eng.store.list_runs()
+        return {"runs": projects.filter_runs(eng, runs, project) if project else runs}
 
     @app.get("/runs/{run_id}")
     def get_run(run_id: str) -> dict[str, Any]:
@@ -528,8 +538,9 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
         tool: str | None = None,
         section: str | None = None,
         limit: int = 100,
+        project: str = "",
     ) -> dict[str, Any]:
-        return eng.list_library(
+        out = eng.list_library(
             kind=kind,
             model=model,
             provider=provider,
@@ -539,8 +550,13 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
             q=q,
             tool=tool,
             section=section,
-            limit=limit,
+            limit=10_000 if project else limit,  # filtered below, then cut to the limit
         )
+        if project:
+            ids = projects.asset_ids(eng, project)
+            items = [item for item in out["items"] if str(item.get("asset_id")) in ids]
+            out["items"] = items[:limit]
+        return out
 
     @app.post("/library/scan")
     def scan_library() -> dict[str, Any]:
@@ -626,21 +642,34 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
         return Response(content=blob or b"", media_type=mime)
 
     @app.get("/assets")
-    def list_assets() -> dict[str, Any]:
-        return {"assets": [a.model_dump(mode="json") for a in eng.store.list_assets()]}
+    def list_assets(project: str = "") -> dict[str, Any]:
+        """Every asset, or with ``project`` that project's uploads and run outputs."""
+        assets = eng.store.list_assets()
+        if project:
+            ids = projects.asset_ids(eng, project)
+            assets = [a for a in assets if a.id in ids]
+        return {"assets": [a.model_dump(mode="json") for a in assets]}
 
     @app.post("/assets")
-    async def upload_asset(request: Request, file: UploadFile) -> dict[str, Any]:
+    async def upload_asset(
+        request: Request, file: UploadFile, project_id: str = Form("")
+    ) -> dict[str, Any]:
+        project_id = projects.stamp(eng, project_id or None) or ""
         data = await file.read()
         asset = eng.ingest_bytes(
             data, mime=file.content_type or "application/octet-stream", filename=file.filename
         )
         dumped = asset.model_dump(mode="json")
+        projects.store(eng).link("asset", str(asset.id), project_id)
         return with_journal_ack(
             request,
             method="POST",
             path="/assets",
-            payload={"filename": file.filename, "bytes": len(data)},
+            payload={
+                "filename": file.filename,
+                "bytes": len(data),
+                "project_id": project_id or None,
+            },
             blob_keys=[str(asset.id)],
             build_response=lambda: dumped,
         )
@@ -1156,6 +1185,8 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
         from vinci_mcp.server import TOOL_NAMES, tool_schemas
 
         return {"name": "vinci", "tools": list(TOOL_NAMES), "schemas": tool_schemas()}
+
+    app.include_router(projects.router)  # Studio projects (COREPRODUC-702)
 
     try:  # OLF movie engine (Studio Shows page); off when vinci-olf is not installed
         from vinci_daemon.olf_routes import router as olf_router

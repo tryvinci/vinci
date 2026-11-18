@@ -54,6 +54,8 @@ from vinci_olf.provenance import available as c2pa_available
 from vinci_olf.render import render, run_one
 from vinci_olf.script import bible_names, draft, import_script, preview, split_with_model
 
+from vinci_daemon import projects
+
 log = logging.getLogger("vinci.olf")
 router = APIRouter(prefix="/olf", tags=["olf"])
 MEDIA = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".webm", ".mov", ".wav", ".mp3", ".m4a"}
@@ -221,6 +223,7 @@ class NewShowBody(BaseModel):
     """Design: New show. Without ``character`` and ``script``: "Skip to an empty project"."""
 
     title: str = "Untitled show"
+    project_id: str | None = None  # the Studio project the show belongs to (COREPRODUC-702)
     medium: str = "2D anime"
     aspect: str = "16:9"
     character: CharacterBody | None = None
@@ -331,13 +334,17 @@ def _olf(fn: Callable[[], T]) -> T:
 
 
 @router.get("/shows")
-def list_shows(request: Request) -> dict[str, list[dict[str, str]]]:
+def list_shows(request: Request, project: str = "") -> dict[str, list[dict[str, str]]]:
     """The shows in ``$VINCI_HOME/shows``, last changed first, for the open screen's list.
 
     A folder counts when it has a manifest (``project.yaml``, ``.yml`` or ``.json``); its
-    ``title`` names it. A show in another
-    folder still opens by its path.
+    ``title`` names it. A show in another folder still opens by its path. With ``project``:
+    only that Studio project's shows.
     """
+    engine = request.app.state.engine
+    if project:
+        projects.store(engine).get(project)  # 404 for an unknown project
+    inside = projects.member(engine, "show", project) if project else (lambda _key: True)
     rows = []
     home = Path(request.app.state.engine.config.home) / "shows"
     found = (m for ext in reversed(EXTS) for m in home.glob(f"*/project{ext}") if m.is_file())
@@ -347,6 +354,8 @@ def list_shows(request: Request) -> dict[str, list[dict[str, str]]]:
             title = (read(manifest) or {}).get("title")
         except Exception:  # noqa: BLE001 - a broken manifest still lists, by its folder name
             title = None
+        if not inside(projects.show_key(manifest.parent)):
+            continue
         changed = max(manifest.stat().st_mtime, manifest.parent.stat().st_mtime)
         rows.append(
             {
@@ -361,18 +370,31 @@ def list_shows(request: Request) -> dict[str, list[dict[str, str]]]:
     return {"shows": rows}
 
 
+class SampleBody(BaseModel):
+    project_id: str | None = None
+
+
 @router.post("/sample")
-def open_sample(request: Request) -> dict[str, str]:
-    """Copy the tidewatch sample show into ``$VINCI_HOME/shows`` (once) and return its folder."""
+def open_sample(request: Request, body: SampleBody | None = None) -> dict[str, str]:
+    """Copy the tidewatch sample show into ``$VINCI_HOME/shows`` (once) and return its folder.
+
+    My work keeps ``shows/tidewatch``; a named project gets its own copy, ``tidewatch-<id8>``, so
+    the sample opened in one project never shows up as another project's (CodeRabbit on #682).
+    """
+    engine = request.app.state.engine
+    project_id = projects.stamp(engine, body.project_id if body else None)
     source = sample_path()
     if source is None:
         raise HTTPException(
             status_code=404, detail="the sample show ships only in a source checkout"
         )
-    dest = Path(request.app.state.engine.config.home) / "shows" / "tidewatch"
+    named = project_id and project_id != projects.DEFAULT_ID
+    folder = f"tidewatch-{project_id[:8]}" if named else "tidewatch"
+    dest = Path(engine.config.home) / "shows" / folder
     if not (dest / "project.yaml").is_file():
         shutil.copytree(source, dest, dirs_exist_ok=True)
         log.info("olf: copied the sample show to %s", dest)
+    projects.store(engine).link("show", projects.show_key(dest), project_id)
     return {"path": str(dest)}
 
 
@@ -410,6 +432,8 @@ def _unit_price(engine: Any, capability: str) -> dict[str, Any] | None:
 def new(body: NewShowBody, request: Request) -> dict[str, Any]:
     """Create a show in ``$VINCI_HOME/shows/<title>`` (design: New show): project and style, the
     first character, and episode 1 from the script. A failed create leaves no folder behind."""
+    engine = request.app.state.engine
+    project_id = projects.stamp(engine, body.project_id)  # checked before any file is written
     base = Path(request.app.state.engine.config.home) / "shows"
     slug = _slug(body.title) or "show"
     root = next(
@@ -436,9 +460,17 @@ def new(body: NewShowBody, request: Request) -> dict[str, Any]:
             out |= {"episode": episode} | import_script(load(root), episode, str(body.script))
         return out
 
-    log.info("olf: new show %r in %s (script: %s)", body.title, root, bool(body.script))
+    log.info(
+        "olf: new show %r in %s (script: %s, project: %s)",
+        body.title,
+        root,
+        bool(body.script),
+        project_id,
+    )
     try:
-        return _olf(create)
+        out = _olf(create)
+        projects.store(engine).link("show", projects.show_key(root), project_id, only_once=True)
+        return out
     except Exception:
         shutil.rmtree(root, ignore_errors=True)
         raise

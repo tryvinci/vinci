@@ -27,6 +27,9 @@ Paths that change durable application state or accept work that must survive abr
 | `/collab/sessions` | POST | collab session | no | |
 | `/collab/sessions/{sid}` | PUT | canvas snapshot | optional | |
 | `/catalog/refresh` | POST | catalog cache | no | |
+| `/projects` | POST | project row | no | COREPRODUC-702 |
+| `/projects/{id}` | PATCH, DELETE | project row (name, archive; delete only when empty) | no | |
+| `/projects/{id}/board` | PUT | canvas board + `board_rev` | no | stale `board_rev` answers 409 |
 | `/mcp` | POST | tool side effects | per tool | not fully journaled in v1 |
 | `/olf/sample` | POST | none (copies a show into `$VINCI_HOME/shows`) | no | project files, not journaled |
 | `/olf/render` | POST | runtime run + project files | outputs | **409 while the journal is on** (not journaled yet, COREPRODUC-545) |
