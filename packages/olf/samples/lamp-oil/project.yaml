@@ -1,0 +1,11 @@
+spec: olf/0.1
+show: lamp-oil
+title: Lamp Oil
+defaults:
+  aspect: "16:9"
+  fps: 24
+  resolution: 1920x1080
+exports: ["16:9"]
+license:                      # the license of the assets the engine adds (COREPRODUC-671)
+  owner: "Vinci"
+  terms: CC-BY-4.0

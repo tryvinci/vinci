@@ -1,0 +1,99 @@
+asset/15af924ab240eae3ddbc1319c59018b3f77a27fb9daf8418b96214a6b30b96da:
+  uri: bible/characters/mira/sheet.png
+  hash: sha256:15af924ab240eae3ddbc1319c59018b3f77a27fb9daf8418b96214a6b30b96da
+  type: image/png
+  source: generated
+  license:
+    owner: Vinci
+    terms: CC-BY-4.0
+  extensions:
+    magnific:
+      provider: mcp_magnific
+      model: seedream-5-5
+asset/d1585a12ff4c30dfa1ff3e6a3dc332c9fc6029b8e93e33cb6ccb114a85b26124:
+  uri: bible/characters/tomas/sheet.png
+  hash: sha256:d1585a12ff4c30dfa1ff3e6a3dc332c9fc6029b8e93e33cb6ccb114a85b26124
+  type: image/png
+  source: generated
+  license:
+    owner: Vinci
+    terms: CC-BY-4.0
+  extensions:
+    magnific:
+      provider: mcp_magnific
+      model: seedream-5-5
+asset/f8add670cf914335ce53c9a245eb52c3cdd3a740dfcfaf293535ae80edfe1316:
+  uri: takes/e01/s03/sh010/kf1.png
+  hash: sha256:f8add670cf914335ce53c9a245eb52c3cdd3a740dfcfaf293535ae80edfe1316
+  type: image/png
+  source: generated
+  license:
+    owner: Vinci
+    terms: CC-BY-4.0
+asset/0c32a0ad5b7d08db8b8c7d132a10026d3ad20923cc3d16ce9f0c1c7850bfb7a9:
+  uri: takes/e01/s03/sh010/v2.mp4
+  hash: sha256:0c32a0ad5b7d08db8b8c7d132a10026d3ad20923cc3d16ce9f0c1c7850bfb7a9
+  type: video/mp4
+  source: generated
+  license:
+    owner: Vinci
+    terms: CC-BY-4.0
+asset/2ddcb401aa3eb2c4922edcc3fda48663357d66c498d02135d783685d081ba1ef:
+  uri: bible/props/great-lamp/ref.png
+  hash: sha256:2ddcb401aa3eb2c4922edcc3fda48663357d66c498d02135d783685d081ba1ef
+  type: image/png
+  source: generated
+  license:
+    owner: Vinci
+    terms: CC-BY-4.0
+  extensions:
+    magnific:
+      cut_from: e01/s03/sh010/kf1
+asset/1a139770d74498220df14cd88f3897e5f7ef5d0e148ae20eb0fe68a03827467b:
+  uri: storyboards/e01/s03/sh090.png
+  hash: sha256:1a139770d74498220df14cd88f3897e5f7ef5d0e148ae20eb0fe68a03827467b
+  type: image/png
+  source: generated
+  license:
+    owner: Vinci
+    terms: CC-BY-4.0
+asset/ed94e5843d834be58a8e04ab4330e8517dc482183404e39857ce50a7b0e67e8e:
+  uri: takes/e01/s03/sh050/kf3.png
+  hash: sha256:ed94e5843d834be58a8e04ab4330e8517dc482183404e39857ce50a7b0e67e8e
+  type: image/png
+  source: generated
+  license:
+    owner: Vinci
+    terms: CC-BY-4.0
+asset/ff1f50dd0c2be5e1f827f76b7aeb80d5cd0aaeb3fc83157404b7f68603985797:
+  uri: takes/e01/s03/sh050/kf4.png
+  hash: sha256:ff1f50dd0c2be5e1f827f76b7aeb80d5cd0aaeb3fc83157404b7f68603985797
+  type: image/png
+  source: generated
+  license:
+    owner: Vinci
+    terms: CC-BY-4.0
+asset/de1edc0c70a5111d4be5642b92eafdcd0143b3cb47a2122d6c7ce8854530818b:
+  uri: takes/e01/s03/sh050/v3.mp4
+  hash: sha256:de1edc0c70a5111d4be5642b92eafdcd0143b3cb47a2122d6c7ce8854530818b
+  type: video/mp4
+  source: generated
+  license:
+    owner: Vinci
+    terms: CC-BY-4.0
+asset/645ea0bf44355bbf0432ea55e71fede1d78abca5983a9d68affe5fa2fc8e32e0:
+  uri: takes/e01/s03/sh090/kf3.png
+  hash: sha256:645ea0bf44355bbf0432ea55e71fede1d78abca5983a9d68affe5fa2fc8e32e0
+  type: image/png
+  source: generated
+  license:
+    owner: Vinci
+    terms: CC-BY-4.0
+asset/52a15e0f62005dfffb48f15eda870a23b959ac4b6a716847bd3fcbb2d3c3b75d:
+  uri: takes/e01/s03/sh090/v4.mp4
+  hash: sha256:52a15e0f62005dfffb48f15eda870a23b959ac4b6a716847bd3fcbb2d3c3b75d
+  type: video/mp4
+  source: generated
+  license:
+    owner: Vinci
+    terms: CC-BY-4.0

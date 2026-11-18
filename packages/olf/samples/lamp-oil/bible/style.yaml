@@ -1,0 +1,8 @@
+id: style/main
+look:
+  medium: 2D anime
+  palette: ["#1d2b44", "#f2b25c", "#c9563c", "#e9e2d0"]
+  grade: blue dusk shadows, warm lamp light, soft contrast
+  grain: none
+lenses: [24mm, 35mm, 50mm, 85mm]
+negative: [text, watermark, extra limbs, extra fingers, painterly texture]

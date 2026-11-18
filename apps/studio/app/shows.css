@@ -455,6 +455,19 @@
 .olf-ref-grid figure { display: grid; gap: 6px; margin: 0; }
 .olf-ref-grid .ref-thumb { width: 100%; height: 96px; object-fit: cover; }
 .olf-ref-grid figcaption { font-size: 12px; color: var(--dim); }
+/* Bible edits (COREPRODUC-682): Replace and Remove under a reference, the name form, + Variant. */
+.olf-ref-actions { flex-wrap: wrap; gap: 4px; }
+.olf-ref-grid figure { align-content: start; }
+.olf-ref-actions .olf-small { min-height: 24px; padding: 2px 8px; color: var(--dim); }
+.olf-ref-actions .olf-small:hover { color: var(--ink); }
+.olf-ref-actions .olf-danger,
+.olf-ref-actions .olf-danger:hover { color: var(--danger); border-color: rgb(240 113 103 / 0.4); }
+.olf-entry-form { flex: 1; min-width: 0; max-width: 640px; padding: 0; }
+.olf-variant-form { flex-wrap: wrap; margin-top: 10px; }
+.olf-variant-form .olf-input { flex: 1; min-width: 140px; }
+/* Edit YAML (COREPRODUC-683): the entry file as written, in the mono face of file paths. */
+.olf-textarea.olf-yaml { min-height: 240px; font: 12.5px/1.55 var(--font-mono); white-space: pre; overflow: auto; tab-size: 2; }
+.olf-yaml-file { font: 11.5px var(--font-mono); color: var(--mute); }
 .olf-kv { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; }
 .olf-kv:first-of-type { border-top: 0; }
 .olf-kv > :last-child { text-align: right; }

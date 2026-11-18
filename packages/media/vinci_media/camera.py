@@ -220,7 +220,10 @@ def encode(frames: Iterable[bytes], dst: Path, *, width: int, height: int, fps: 
     dst.parent.mkdir(parents=True, exist_ok=True)
     cmd = [FFMPEG, "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24"]
     cmd += ["-s", f"{width}x{height}", "-r", f"{fps:g}", "-i", "-"]
-    cmd += ["-c:v", pick_video_encoder(), "-b:v", BITRATE, "-pix_fmt", "yuv420p", str(dst)]
+    cmd += ["-c:v", pick_video_encoder(), "-b:v", BITRATE, "-pix_fmt", "yuv420p"]
+    # The index (moov) first: a browser plays the clip after one request, not after it reads the
+    # end of the file (the Studio Cut preview waited about 10 s for one, COREPRODUC-680).
+    cmd += ["-movflags", "+faststart", str(dst)]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
     assert proc.stdin is not None
     try:

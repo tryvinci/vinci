@@ -1,0 +1,47 @@
+id: e01/s03
+heading: INT. LAMP ROOM - NIGHT
+location: loc/lamp-room
+variant: night
+characters: [char/mira, char/tomas]
+mood: hushed, then warm
+script: |
+  Mira and Tomas stand on either side of the great lamp, still dark.
+  Mira pours the oil into the burner.
+  MIRA: What if it goes out?
+  TOMAS: Then you light it again. That is the whole job.
+  She sets the can down, strikes a match and lights the wick. The light grows in the lens.
+  MIRA: It's lit.
+  The beam reaches out over the sea.
+# Three long cuts for 22 s (COREPRODUC-671). Each cut opens on the moment the one before ends:
+# the pour carries into the close-up, and the blazing lamp carries into the pull-back.
+shots:
+  - id: e01/s03/sh010
+    duration: 6+00
+    description: Mira and Tomas stand on either side of the great lamp, which is still dark. Mira pours oil from the can into the burner while Tomas watches; she asks her question and he answers. At the cut she is still pouring.
+    camera: { framing: wide, angle: eye_level, lens: 24mm, template: cam/two-shot-axis }
+    props: [prop/oil-can, prop/great-lamp]
+    blocking:
+      char/mira: left of the lamp, the oil can in both hands
+      char/tomas: right of the lamp, the lantern held low
+    dialogue:
+      - { speaker: char/mira, line: "What if it goes out?" }
+      - { speaker: char/tomas, line: "Then you light it again. That is the whole job." }
+    control: { first_frame: keyframe }  # the clip starts from the approved keyframe
+    select: { keyframe: kf1, video: v2 }
+  - id: e01/s03/sh050
+    duration: 8+00
+    description: Close on the burner of the great lamp, on the moment the wide shot ends. Mira's hand in a navy duffle sleeve lowers the oil can beside a box of matches; the lamp is still dark. Then she strikes a match, touches it to the wick, and the wick catches; the flame grows and the glass prisms of the lens fill with gold light.
+    camera: { framing: close_up, angle: eye_level, lens: 50mm, move: static }
+    characters: []
+    props: [prop/oil-can, prop/matches, prop/great-lamp]
+    control: { first_frame: keyframe }  # the clip starts from the approved keyframe
+    select: { keyframe: kf4, video: v3 }
+  - id: e01/s03/sh090
+    duration: 8+00
+    description: The great lamp burns at full strength, as at the end of the close-up before it; its lens is a blaze of gold light, and a broad beam shines out through the glass over the dark sea. Mira stands at its left and Tomas at its right, both lit gold, inside the glass lamp room at the top of the tower. The camera pulls back out through the glass.
+    camera: { framing: extreme_wide, angle: eye_level, lens: 24mm, move: pull_out, amount: 0.4, ease: in_out, hold_end: 2+00, render: engine }
+    props: [prop/great-lamp]
+    dialogue:
+      - { speaker: char/mira, line: "It's lit." }
+    control: { storyboard: asset/1a139770d74498220df14cd88f3897e5f7ef5d0e148ae20eb0fe68a03827467b }
+    select: { keyframe: kf3, video: v4 }

@@ -142,6 +142,13 @@ test.describe("Shows (OLF movie engine)", () => {
     await expect(page.locator(".top-file")).toHaveText("episodes/e02/episode.yaml · cut");
     await expect(page.getByTestId("cut-empty")).toBeVisible();
     await page.screenshot({ path: path.join(shots, "shows_cut_empty.png") });
+    // Hold the clip's file: the playhead must wait for it, not run on over a still picture (COREPRODUC-680).
+    let release = () => {};
+    const held = new Promise<void>((done) => (release = done));
+    await page.route(/\/olf\/file\?.*sh014%2Fv1\.mp4/, async (route) => {
+      await held;
+      await route.continue();
+    });
     await page.getByTestId("cut-use-approved").click();
     await expect(page.getByTestId("cut-clip")).toHaveCount(1); // only sh014 has approved takes
     await expect(page.getByTestId("cut-clip")).toContainText("v1 · stale"); // stale since the bible edit
@@ -151,7 +158,13 @@ test.describe("Shows (OLF movie engine)", () => {
     await page.getByTestId("cut-out").press("Enter");
     await expect(page.getByTestId("cut-time")).toHaveText("0:00.0 / 0:03.0");
     await page.getByTestId("cut-play").click();
+    await expect(page.getByTestId("cut-loading")).toHaveText("Loading the clip…");
+    await page.waitForTimeout(1000);
+    await expect(page.getByTestId("cut-time")).toHaveText("0:00.0 / 0:03.0"); // the clock waits for the clip
+    release();
     await expect(page.getByTestId("cut-time")).not.toHaveText("0:00.0 / 0:03.0"); // the clock runs
+    await expect(page.getByTestId("cut-loading")).toHaveCount(0);
+    await page.unroute(/\/olf\/file\?.*sh014%2Fv1\.mp4/);
     await page.getByTestId("cut-play").click();
     await expect(page.getByTestId("cut-preview")).toContainText("You kept the key?"); // the subtitle line
     await page.screenshot({ path: path.join(shots, "shows_cut.png") });
@@ -417,6 +430,121 @@ test.describe("Shows (OLF movie engine)", () => {
     await expect(page.getByTestId("shows-notice")).toContainText("connect ElevenLabs to clone a voice"); // demo mode
     // That 400 is expected: its response and the browser's console line are the only errors.
     expect(errors.filter((line) => !/voice\/clone|status of 400/.test(line))).toEqual([]);
+  });
+
+  test("bible edits: name and description, references, variants (COREPRODUC-682)", async ({ page }) => {
+    test.setTimeout(120_000);
+    const errors: string[] = [];
+    page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));
+    page.on("console", (msg) => {
+      if (msg.type() === "error") errors.push(msg.text());
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("vinci-onboard-v1", "done");
+      localStorage.removeItem("vinci-shows-recent-v1");
+    });
+    await page.goto("/");
+    const sample = String((await (await page.request.post("/vinci-api/olf/sample")).json()).path);
+    rmSync(sample, { recursive: true, force: true });
+    cpSync(SAMPLE, sample, { recursive: true });
+    const yaml = () => readFileSync(path.join(sample, "bible/locations/lighthouse/lighthouse.yaml"), "utf8");
+    await page.locator('nav button[aria-label="Shows"]').click();
+    await page.getByTestId("shows-open-sample").click();
+    await page.getByTestId("shows-section-bible").click();
+    await page.getByTestId("shows-bible-list").getByRole("button", { name: "Lamp room" }).click();
+    const refs = page.getByTestId("entry-references");
+    await expect(refs.getByTestId("entry-reference")).toHaveCount(1);
+    await page.screenshot({ path: path.join(shots, "shows_bible_location_rest.png") });
+
+    // Edit: the name and description replace the title in place.
+    await page.getByTestId("edit-entry").click();
+    const form = page.getByTestId("entry-edit-form");
+    await form.getByLabel("Name").fill("Lamp room, top");
+    await form.getByLabel("Description").fill("Round glass room, brass lamp, fog on the glass.");
+    await page.screenshot({ path: path.join(shots, "shows_bible_location_edit.png") });
+    await form.getByRole("button", { name: "Save" }).click();
+    await expect(page.locator('[data-testid="shows-entry"] h1')).toHaveText("Lamp room, top");
+    expect(yaml()).toContain('description: "Round glass room, brass lamp, fog on the glass."');
+
+    // + Reference adds a labelled image; Replace keeps the file; Remove asks once more.
+    await refs.getByTestId("add-reference").locator("input[type=file]").setInputFiles(path.join(SAMPLE, "bible/props/brass-key/ref.png"));
+    await expect(page.getByTestId("shows-notice")).toContainText("Added ref.png");
+    await expect(refs.getByTestId("entry-reference")).toHaveCount(2);
+    expect(yaml()).toContain("  ref: ref.png\n");
+    const added = refs.locator('[data-ref="ref.png"]');
+    await added.getByTestId("replace-reference").locator("input[type=file]").setInputFiles(path.join(SAMPLE, "bible/locations/lighthouse/establishing.png"));
+    await expect(page.getByTestId("shows-notice")).toContainText("Replaced ref.png");
+    await added.getByTestId("remove-reference").click();
+    await expect(added.getByTestId("remove-reference")).toHaveText("Delete file");
+    await expect(added.getByTestId("remove-reference")).toHaveCSS("color", "rgb(240, 113, 103)"); // after the 140 ms fade
+    await page.screenshot({ path: path.join(shots, "shows_bible_location_remove.png") });
+    await added.getByTestId("remove-reference").click();
+    await expect(page.getByTestId("shows-notice")).toContainText("Removed ref.png");
+    await expect(refs.getByTestId("entry-reference")).toHaveCount(1);
+
+    // + Variant; a variant that a scene picks (s03: night) stays, with the engine's reason.
+    const variants = page.getByTestId("entry-variants");
+    await variants.getByTestId("variant-name").fill("fog");
+    await variants.getByTestId("add-variant").click();
+    await expect(variants).toContainText("fog");
+    expect(yaml()).toContain("variants: [day, dusk, night, storm, fog]");
+    await variants.getByTestId("remove-variant").selectOption("night");
+    await expect(page.getByTestId("shows-notice")).toContainText("scene e02/s03 uses the variant 'night'");
+    await page.screenshot({ path: path.join(shots, "shows_bible_location_variant_refused.png") });
+    await expect(page.getByTestId("shows-health")).toHaveText("Valid OLF v0.1");
+    await page.screenshot({ path: path.join(shots, "shows_bible_location_after.png") });
+    expect(errors.filter((line) => !/status of 400/.test(line))).toEqual([]);
+  });
+
+  test("edit YAML: any field, saved only if the show stays valid (COREPRODUC-683)", async ({ page }) => {
+    test.setTimeout(120_000);
+    const errors: string[] = [];
+    page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));
+    page.on("console", (msg) => {
+      if (msg.type() === "error") errors.push(msg.text());
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("vinci-onboard-v1", "done");
+      localStorage.removeItem("vinci-shows-recent-v1");
+    });
+    await page.goto("/");
+    const sample = String((await (await page.request.post("/vinci-api/olf/sample")).json()).path);
+    rmSync(sample, { recursive: true, force: true });
+    cpSync(SAMPLE, sample, { recursive: true });
+    const file = path.join(sample, "bible/props/brass-key/brass-key.yaml");
+    await page.locator('nav button[aria-label="Shows"]').click();
+    await page.getByTestId("shows-open-sample").click();
+    await page.getByTestId("shows-section-bible").click();
+    await page.getByTestId("shows-bible-list").getByRole("button", { name: "Brass key" }).click();
+
+    // The file as written; Save stays off until the text changes.
+    await page.getByTestId("edit-yaml").click();
+    const editor = page.getByTestId("yaml-editor");
+    const box = editor.getByRole("textbox");
+    await expect(editor).toContainText("bible/props/brass-key/brass-key.yaml");
+    await expect(box).toHaveValue(readFileSync(file, "utf8"));
+    await expect(editor.getByTestId("yaml-save")).toBeDisabled();
+    const text = readFileSync(file, "utf8") + "name: Grandmother's key  # from the attic\n";
+    await box.fill(text);
+    await page.screenshot({ path: path.join(shots, "shows_bible_yaml_edit.png") });
+    await editor.getByTestId("yaml-save").click();
+    await expect(page.getByTestId("shows-notice")).toContainText("Saved bible/props/brass-key/brass-key.yaml");
+    await expect(editor).toHaveCount(0);
+    await expect(page.locator('[data-testid="shows-entry"] h1')).toHaveText("Grandmother's key");
+    expect(readFileSync(file, "utf8")).toBe(text); // the comment stays as typed
+
+    // A field the schema does not know: refused, the file stays, and the editor keeps the text.
+    await page.getByTestId("edit-yaml").click();
+    await box.fill(text + "colour: red\n");
+    await editor.getByTestId("yaml-save").click();
+    await expect(page.getByTestId("shows-notice")).toContainText("the edit adds 1 error(s); nothing was saved");
+    await expect(box).toHaveValue(text + "colour: red\n");
+    expect(readFileSync(file, "utf8")).toBe(text);
+    await page.screenshot({ path: path.join(shots, "shows_bible_yaml_refused.png") });
+    await editor.getByTestId("yaml-cancel").click();
+    await expect(page.getByTestId("entry-references")).toBeVisible();
+    await expect(page.getByTestId("shows-health")).toHaveText("Valid OLF v0.1");
+    expect(errors.filter((line) => !/status of 400/.test(line))).toEqual([]);
   });
 
   test("new show wizard and shot list from script", async ({ page }) => {

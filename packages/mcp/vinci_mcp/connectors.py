@@ -100,6 +100,9 @@ class Connector:
     status_tool: str
     status_arg: str
     balance_tool: str = ""  # free call: the account's credits now (Connect shows it)
+    # A tool error that means the provider ended the account session behind a valid token:
+    # the user must sign in again (COREPRODUC-677). A regex; empty for none.
+    session_ended: str = ""
     rows: tuple[Row, ...] = field(default=())
 
     def tool_for(self, capability: Capability) -> str:
@@ -205,6 +208,8 @@ CONNECTORS: dict[str, Connector] = {
         status_tool="job_status",
         status_arg="jobId",
         balance_tool="balance",
+        # Seen 48 h and 67 h after a sign-in: "FNF API GET /mcp/workspaces failed (403)".
+        session_ended=r"FNF API \S+ \S+ failed \(403\)",
         rows=(
             Row(
                 "seedream_v4_5",

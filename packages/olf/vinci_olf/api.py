@@ -41,6 +41,17 @@ def sample_path() -> Path | None:
     return path if (path / "project.yaml").is_file() else None
 
 
+def lamp_oil_path() -> Path | None:
+    """Return the Lamp Oil sample's text files: Scene 3 of episode 1, rendered (COREPRODUC-671).
+
+    Its media are not in the repository. ``media.json`` lists each file (SHA-256, size, MIME
+    type) with its public URL in Vinci's bucket; the hosted Studio links them
+    (``studio_shows.open_sample``).
+    """
+    path = Path(__file__).resolve().parents[1] / "samples" / "lamp-oil"
+    return path if (path / "media.json").is_file() else None
+
+
 def file_of(p: Project, asset: str) -> str | None:
     """Return the project-relative file of an asset ID, or None."""
     digest = asset.removeprefix("asset/")

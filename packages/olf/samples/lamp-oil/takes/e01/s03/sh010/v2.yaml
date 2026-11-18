@@ -1,0 +1,21 @@
+id: e01/s03/sh010/v2
+kind: video
+status: approved
+output: asset/0c32a0ad5b7d08db8b8c7d132a10026d3ad20923cc3d16ce9f0c1c7850bfb7a9
+duration: 8.0s
+inputs_hash: sha256:9d7eb33bdd1be4ebe6a929a73af4fc0aedebfbf283929b570ceebdff02bd1a91
+inputs:
+  first_frame: e01/s03/sh010/kf1
+provenance:
+  provider: mcp_magnific
+  model: minimax-video-3_0-max-turbo 480p
+  prompt: "Goal: Animate the first frame as one 2D anime shot. The action happens in the first 8 seconds. It is one single, unbroken take in the look of the first frame from the first frame to the last: no cut, dissolve, fade or change of style.\n\nFirst frame: The first frame is the shot's keyframe: keep its look, its framing, and the people, objects and place exactly as they are. Animate only the action below.\n\nCamera: Locked-off camera: the frame does not move, zoom, pan or shake.\n\nAction: Mira and Tomas stand on either side of the great lamp, which is still dark. Mira steps to the burner and pours oil from the can while Tomas watches; then she looks up at him, and he answers her. Static camera. Mira stays at frame left and Tomas stays at frame right. They face each other and talk. Mira's mouth moves to speak a short line; there is no sound and no text. Tomas's mouth moves to speak a short line; there is no sound and no text.\n\nMotion: Limited 2D anime animation: few movements, each one clean, and shapes, hands, faces and objects keep their form from frame to frame.\n\nKeep: Nothing appears that is not in the first frame unless the action brings it in. Every light that is off in the first frame stays off unless the action lights it. No text and no subtitles appear."
+  negative_prompt: text, watermark, extra limbs, extra fingers, painterly texture, both characters face the camera, the characters swap sides, camera movement
+  parameters:
+    aspect_ratio: 16:9
+    duration: 6
+  created: '2026-11-17T11:47:38Z'
+  cost:
+    amount: 192
+    currency: Magnific credits
+kept_from: sha256:e61448c72dbec4a9e4e3bab3f5627b0271bbe8595cbb7fceba3791293a7a1123

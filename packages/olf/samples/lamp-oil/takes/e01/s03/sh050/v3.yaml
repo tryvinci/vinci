@@ -1,0 +1,20 @@
+id: e01/s03/sh050/v3
+kind: video
+status: approved
+output: asset/de1edc0c70a5111d4be5642b92eafdcd0143b3cb47a2122d6c7ce8854530818b
+duration: 8.0s
+inputs_hash: sha256:238d346c7507719dd30df3b27453c760945a0bb39da5c2621beb4952a59e0790
+inputs:
+  first_frame: e01/s03/sh050/kf4
+provenance:
+  provider: mcp_magnific
+  model: minimax-video-3_0-max-turbo 480p
+  prompt: "Goal: Animate the first frame as one 2D anime shot. The action happens in the first 8 seconds. It is one single, unbroken take in the look of the first frame from the first frame to the last: no cut, dissolve, fade or change of style.\n\nFirst frame: The first frame is the shot's keyframe: keep its look, its framing, and the people, objects and place exactly as they are. Animate only the action below.\n\nCamera: Locked-off camera: the frame does not move, zoom, pan or shake.\n\nAction: Close on the burner of the great lamp, on the moment the wide shot ends. Mira's hand in a navy duffle sleeve lowers the oil can beside a box of matches; the lamp is still dark. Then she strikes a match, touches it to the wick, and the wick catches; the flame grows and the glass prisms of the lens fill with gold light.\n\nMotion: Limited 2D anime animation: few movements, each one clean, and shapes, hands, faces and objects keep their form from frame to frame.\n\nKeep: Nothing appears that is not in the first frame unless the action brings it in. Every light that is off in the first frame stays off unless the action lights it. No text and no subtitles appear. No person enters the frame at any moment; a hand that is in the first frame may move, and no other hand or arm appears."
+  negative_prompt: text, watermark, extra limbs, extra fingers, painterly texture
+  parameters:
+    aspect_ratio: 16:9
+    duration: 6
+  created: '2026-11-17T12:36:39Z'
+  cost:
+    amount: 192
+    currency: Magnific credits

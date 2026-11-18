@@ -1,0 +1,8 @@
+id: e01
+title: Lamp Oil
+synopsis: Mira brings the lamp oil up the cliff, and Tomas asks her to light the great lamp tonight.
+scenes: [e01/s03]
+cut:
+  - { take: e01/s03/sh010/v2 }
+  - { take: e01/s03/sh050/v3 }
+  - { take: e01/s03/sh090/v4 }

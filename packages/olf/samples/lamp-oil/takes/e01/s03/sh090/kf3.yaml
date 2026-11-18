@@ -1,0 +1,22 @@
+id: e01/s03/sh090/kf3
+kind: keyframe
+status: approved
+output: asset/645ea0bf44355bbf0432ea55e71fede1d78abca5983a9d68affe5fa2fc8e32e0
+inputs_hash: sha256:ebd433e439b136f4aed71f6a0691cc79260fb3eb123801fe1c63f853930fa309
+inputs:
+  references:
+  - asset/15af924ab240eae3ddbc1319c59018b3f77a27fb9daf8418b96214a6b30b96da
+  - asset/d1585a12ff4c30dfa1ff3e6a3dc332c9fc6029b8e93e33cb6ccb114a85b26124
+  - asset/2ddcb401aa3eb2c4922edcc3fda48663357d66c498d02135d783685d081ba1ef
+  - asset/1a139770d74498220df14cd88f3897e5f7ef5d0e148ae20eb0fe68a03827467b
+provenance:
+  provider: mcp_magnific
+  model: seedream-5-5
+  prompt: "Goal: One 2D anime keyframe, a single still picture. It is the first frame of the shot: draw the moment the shot starts. The great lamp burns at full strength, as at the end of the close-up before it; its lens is a blaze of gold light, and a broad beam shines out through the glass over the dark sea. Mira stands at its left and Tomas at its right, both lit gold, inside the glass lamp room at the top of the tower. The camera pulls back out through the glass.\n\nReferences: Image 1 is Mira's model sheet, one person shown in several views: use it only for Mira's face, hair, build and clothing. Mira appears one time only, in this shot's pose; its background and its row of views are not copied. Image 2 is Tomas's model sheet, one person shown in several views: use it only for Tomas's face, hair, build and clothing. Tomas appears one time only, in this shot's pose; its background and its row of views are not copied. Image 3 shows the great lamp: use it only for its shape and material; its state in this shot (lit or dark, open or shut) comes from these words. Image 4 is a 3D layout render, not a picture of the scene: a plain grey clay set in which each person is replaced by a striped pin, a head on a slim body, as tall as they are and standing where they stand, with a round white dot on the head on the side they face. Read from it only how the shot is framed, where each person stands, how large they are in the frame and which way they face: a dot in the middle of the head faces the viewer, a dot at its edge is a profile, and no dot is a person seen from behind. Each pin becomes the person it stands for and has no pose of its own, so every pose comes from these words. Never draw a pin, a stripe, the white dot, the grey clay or the bare floor: build the real place from the description. The stripe colors only say who is who: no clothing, skin, prop or surface takes those colors or stripes.\n\nPeople and place: Exactly 2 people are in the picture, each one time only. The red-and-black striped pin is Mira: at the left of the frame, turned toward frame right. The yellow-and-black striped pin is Tomas: at the right of the frame, turned toward frame left. Mira: Young lighthouse keeper, about 17. Short dark-brown hair, amber eyes, a long red scarf, a navy duffle coat over a cream cable sweater, a brown plaid skirt, dark grey socks, brown lace-up boots. Tomas: The old lighthouse keeper, about 70. White beard, grey hair under a dark-green knitted cap, small round glasses, a brown scarf, a yellow-brown oilskin coat with dark-blue shoulder and elbow patches over a brown waistcoat with a watch chain, dark-blue trousers, black rubber boots, a brass lantern. Prop: The great lamp. A tall brass drum of ring-shaped glass prisms around a brass oil burner with a thick braided wick, on a round stone pedestal. Location: Lamp room, night. A round glass room at the top of the tower. The great lamp and its ring lens stand at the centre. The sea on all sides. Build the real place from these words, with real materials and wear.\n\nCamera: Extreme wide shot, eye level angle, 24mm lens. From left to right: Mira, then Tomas, as on their side of the scene's line.\n\nLook: Style: medium 2D anime; palette #1d2b44, #f2b25c, #c9563c, #e9e2d0; grade blue dusk shadows, warm lamp light, soft contrast; grain none. Mood: hushed, then warm.\n\nKeep: Keep each person's face, hair and clothing as in their sheet, each person one time only, who stands on which side, and the light of the scene."
+  negative_prompt: text, watermark, extra limbs, extra fingers, painterly texture
+  parameters:
+    aspect_ratio: 16:9
+  created: '2026-11-17T12:44:55Z'
+  cost:
+    amount: 65
+    currency: Magnific credits

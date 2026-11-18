@@ -11,6 +11,7 @@ import asyncio
 import base64
 import json
 import logging
+import re
 import urllib.error
 import urllib.request
 import uuid
@@ -51,6 +52,15 @@ from vinci_mcp.connectors import (
 )
 
 log = logging.getLogger("vinci.mcp.adapter")
+
+
+class SessionEnded(RuntimeError):
+    """The provider ended the account session behind a valid token: sign in again.
+
+    Bug fixed 2026-11-18 (COREPRODUC-677, recurring: 2 episodes on one account, 48 h and 67 h
+    after a sign-in): Higgsfield answered "FNF API GET /mcp/workspaces failed (403)" while its
+    tokens still refreshed, so Connect said "connected" and every run failed.
+    """
 
 _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 _IMAGE_CAPS = {Capability.T2I, Capability.I2I, Capability.EDIT_MULTI}
@@ -204,6 +214,7 @@ class McpProvider(Provider):
         video_tool: str = "vinci.video_generate",
         cas: CasPut | None = None,
         provider_id: str = "mcp",
+        on_session_ended: Callable[[], None] | None = None,
     ) -> None:
         self._transport = transport
         self._models = list(models or [])
@@ -213,6 +224,7 @@ class McpProvider(Provider):
         self._video_tool = video_tool
         self._cas = cas
         self._provider_id = provider_id
+        self._on_session_ended = on_session_ended  # marks the sign-in "needs_reconnect"
         self._connector = connector_for(provider_id)
         self._estimated: set[str] = set()
         self._jobs: dict[str, JobStatus] = {}
@@ -390,11 +402,27 @@ class McpProvider(Provider):
         return credits
 
     def _call(self, name: str, arguments: dict[str, Any]) -> Any:
-        """One tools/call. A tool error raises with the provider's message (no secrets in it)."""
+        """One tools/call. A tool error raises with the provider's message (no secrets in it).
+
+        Raises:
+            SessionEnded: The error says the provider ended the account session. The
+                ``on_session_ended`` callback runs first. The call is not retried (it can be paid).
+            RuntimeError: Any other tool error.
+        """
         result = self._transport.call("tools/call", {"name": name, "arguments": arguments})
         if isinstance(result, dict) and result.get("isError"):
             texts = [b.get("text") for b in result.get("content") or [] if isinstance(b, dict)]
             message = next((t for t in texts if isinstance(t, str) and t), f"{name} failed")
+            ended = self._connector.session_ended if self._connector is not None else ""
+            if ended and re.search(ended, message):
+                log.warning("mcp session ended provider=%s tool=%s", self._provider_id, name)
+                if self._on_session_ended is not None:
+                    self._on_session_ended()
+                label = self._connector.label if self._connector is not None else self._provider_id
+                raise SessionEnded(
+                    f"{label} ended this sign-in on their side. "
+                    f"Open Connect and sign in to {label} again."
+                )
             raise RuntimeError(f"{self._provider_id} {name}: {message[:300]}")
         return result
 
@@ -485,6 +513,8 @@ class McpProvider(Provider):
     def normalize_error(self, exc: BaseException) -> VinciError:
         if isinstance(exc, PermissionError):
             return VinciError(code=ErrorCode.AUTH, message="auth failed", retryable=False)
+        if isinstance(exc, SessionEnded):
+            return VinciError(code=ErrorCode.AUTH, message=str(exc), retryable=False)
         if isinstance(exc, LiveSpendDisabled):
             return VinciError(code=ErrorCode.UNKNOWN, message=str(exc), retryable=False)
         if isinstance(exc, KeyError | ValueError):

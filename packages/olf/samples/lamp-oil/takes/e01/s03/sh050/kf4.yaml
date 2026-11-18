@@ -1,0 +1,19 @@
+id: e01/s03/sh050/kf4
+kind: keyframe
+status: approved
+output: asset/ff1f50dd0c2be5e1f827f76b7aeb80d5cd0aaeb3fc83157404b7f68603985797
+inputs_hash: sha256:db6ca48e32dc2ecb202e36ac9dcaeefd9c661f23492af9b55bcdbf36faa3f070
+inputs:
+  references:
+  - asset/2ddcb401aa3eb2c4922edcc3fda48663357d66c498d02135d783685d081ba1ef
+provenance:
+  provider: mcp_magnific
+  model: "seedream-5-5 (mirror: Mira's hand from the left, her side of the lamp; from SymTD6OUb8)"
+  prompt: "Goal: One 2D anime keyframe, a single still picture. It is the first frame of the shot: draw the moment the shot starts. Close on the burner of the great lamp, on the moment the wide shot ends. Mira's hand in a navy duffle sleeve lowers the oil can beside a box of matches; the lamp is still dark. Then she strikes a match, touches it to the wick, and the wick catches; the flame grows and the glass prisms of the lens fill with gold light.\n\nReferences: Image 1 shows the great lamp: use it only for its shape and material; its state in this shot (lit or dark, open or shut) comes from these words.\n\nPeople and place: Prop: A dented tin oil can with a long spout and a brass cap. Prop: A small box of long wooden matches. Prop: The great lamp. A tall brass drum of ring-shaped glass prisms around a brass oil burner with a thick braided wick, on a round stone pedestal. Location: Lamp room, night. A round glass room at the top of the tower. The great lamp and its ring lens stand at the centre. The sea on all sides. Build the real place from these words, with real materials and wear.\n\nCamera: Close up shot, eye level angle, 50mm lens.\n\nLook: Style: medium 2D anime; palette #1d2b44, #f2b25c, #c9563c, #e9e2d0; grade blue dusk shadows, warm lamp light, soft contrast; grain none. Mood: hushed, then warm."
+  negative_prompt: text, watermark, extra limbs, extra fingers, painterly texture
+  parameters:
+    aspect_ratio: 16:9
+  created: '2026-11-17T12:35:45Z'
+  cost:
+    amount: 0
+    currency: Magnific credits

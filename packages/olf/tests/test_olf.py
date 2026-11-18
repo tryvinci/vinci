@@ -1982,3 +1982,122 @@ def test_import_gives_a_line_in_an_anime_show_kuchipaku(tmp_path: Path) -> None:
         assert (source.data["source"] if source else None) == (
             "anime/kuchipaku-hold@1" if template else None
         )
+
+
+def test_the_lamp_oil_sample_is_valid_with_its_media_links(tmp_path: Path) -> None:
+    """COREPRODUC-671: the sample show of the hosted Studio. The repository has its text files;
+    ``media.json`` lists every media file (hash, size, type, public URL). Loaded as the host loads
+    it (empty stand-ins, hashes from the list), it is valid, every locked file is listed, and every
+    shot has a chosen keyframe and clip."""
+    import json
+
+    from vinci_olf.api import lamp_oil_path, summary
+
+    source = lamp_oil_path()
+    assert source is not None
+    media = json.loads((source / "media.json").read_text())
+    root = Path(shutil.copytree(source, tmp_path / "show"))
+    for rel in media:
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_bytes(b"")  # a stand-in, as on the host
+    p = load(root, hashes={rel: item["sha256"] for rel, item in media.items()})
+    assert not p.problems and not [i.message for i in validate(p) if i.level == "error"]
+    assert {entry["uri"] for entry in p.lock.values()} == set(media)
+    for rel, item in media.items():  # a shared file is named by its hash: it never changes
+        assert item["url"].endswith(item["sha256"] + Path(rel).suffix)
+    shots = summary(p)["shots"]
+    assert len(shots) == 3
+    assert all({"keyframe", "video"} <= set(s["select"] or {}) for s in shots.values())
+
+
+def test_bible_edits_for_every_entry_kind(show: Path, tmp_path: Path, monkeypatch: Any) -> None:
+    """COREPRODUC-682: name, description, references and variants of any bible entry."""
+    from vinci_olf.author import (
+        add_reference,
+        remove_reference,
+        replace_reference,
+        set_entry,
+        set_variant,
+    )
+    from vinci_olf.render import render
+
+    loc = show / "bible/locations/lighthouse/lighthouse.yaml"
+    key = show / "bible/props/brass-key/brass-key.yaml"
+    errors = lambda: [str(i) for i in validate(load(show)) if i.level == "error"]  # noqa: E731
+    # Name and description: only their lines change.
+    set_entry(load(show), "loc/lighthouse", name="Lamp room: top", description='Glass, "brass".')
+    assert loc.read_text().splitlines()[1:3] == [
+        'name: "Lamp room: top"',
+        'description: "Glass, \\"brass\\"."',
+    ]
+    with pytest.raises(OlfError, match="do not leave it empty"):
+        set_entry(load(show), "prop/bell", description=" ")
+    with pytest.raises(OlfError, match="no such character or location"):
+        set_entry(load(show), "style", description="x")
+    # References: a map gets a labelled key, a list gets the file, a missing key becomes a map.
+    assert add_reference(load(show), "loc/lighthouse", _png("red"), label="Gate detail") == (
+        "gate-detail.png"
+    )
+    assert add_reference(load(show), "loc/lighthouse", _png("red"), label="gate detail") == (
+        "gate-detail-2.png"
+    )
+    assert "  gate-detail: gate-detail.png\n" in loc.read_text()
+    assert add_reference(load(show), "prop/brass-key", _png("blue")) == "ref-2.png"
+    assert "references: [ref.png, ref-2.png]\n" in key.read_text()
+    assert add_reference(load(show), "prop/bell", _png("blue")) == "ref.png"
+    assert load(show).docs["prop/bell"].data["references"] == {"ref": "ref.png"}
+    assert errors() == []
+    # A keyframe uses the reference; replacing it makes the take stale.
+    render(load(show), "e02/s03/sh014", kind="keyframe", engine=_demo_engine(tmp_path, monkeypatch))
+    before = loc.read_text()
+    out = replace_reference(load(show), "loc/lighthouse", "gate-detail.png", _png("green"))
+    assert out == "bible/locations/lighthouse/gate-detail.png" and loc.read_text() == before
+    assert stale(load(show), "e02/s03/sh014/kf1") and errors() == []
+    # Remove takes the file out with its key; the last one removes `references`.
+    remove_reference(load(show), "prop/bell", "ref.png")
+    assert "references" not in (show / "bible/props/bell/bell.yaml").read_text()
+    assert not (show / "bible/props/bell/ref.png").exists() and errors() == []
+    with pytest.raises(OlfError, match="has no reference 'nope.png'"):
+        remove_reference(load(show), "loc/lighthouse", "nope.png")
+    edit(key, "references: [ref.png, ref-2.png]", "references: { a: [ref.png] }")
+    with pytest.raises(OlfError, match="nested groups"):
+        add_reference(load(show), "prop/brass-key", _png("blue"))
+    # Variants: a new slug is added; one a scene picks (s03: night) cannot go.
+    assert set_variant(load(show), "loc/lighthouse", "fog")[-2:] == ["storm", "fog"]
+    assert "variants: [day, dusk, night, storm, fog]\n" in loc.read_text()
+    with pytest.raises(OlfError, match="scene e02/s03 uses the variant 'night'"):
+        set_variant(load(show), "loc/lighthouse", "night", remove=True)
+    with pytest.raises(OlfError, match="a variant is a new name"):
+        set_variant(load(show), "loc/lighthouse", "fog")
+    assert set_variant(load(show), "loc/lighthouse", "fog", remove=True)[-1] == "storm"
+
+
+def test_edit_yaml_saves_only_a_file_that_keeps_the_show_valid(show: Path) -> None:
+    """COREPRODUC-683: Edit YAML for a bible entry; a bad edit leaves the file as it was."""
+    from vinci_olf.author import read_source, write_source
+
+    loc = show / "bible/locations/lighthouse/lighthouse.yaml"
+    source = read_source(load(show), "loc/lighthouse")
+    assert source == {"file": "bible/locations/lighthouse/lighthouse.yaml", "text": loc.read_text()}
+    # Any field, comments kept as typed.
+    text = source["text"] + "# the lamp is lit at dusk\ncredits: { design: Ana }\n"
+    assert write_source(load(show), "loc/lighthouse", text) == source["file"]
+    assert loc.read_text() == text
+    assert load(show).docs["loc/lighthouse"].data["credits"] == {"design": "Ana"}
+    # Refused, and the file stays: a parse error, a new id, a schema error, a broken reference.
+    bad = {
+        "id: loc/lighthouse\nname: [unclosed\n": "does not parse",
+        text.replace("loc/lighthouse", "loc/attic"): "keep `id: loc/lighthouse`",
+        text + "colour: red\n": "the edit adds 1 error(s)",
+        text.replace("establishing.png", "gone.png"): "gone.png",
+        text.replace("dusk, night, storm]", "dusk]"): "no variant 'night'",
+    }
+    for new, why in bad.items():
+        with pytest.raises(OlfError, match=re.escape(why)):
+            write_source(load(show), "loc/lighthouse", new)
+        assert loc.read_text() == text
+    # A show that already has an error can still be edited, as long as the edit adds none.
+    edit(show / MIRA, "eyes: details/eyes.png", "eyes: details/missing.png")
+    write_source(load(show), "style", read_source(load(show), "style")["text"] + "# warm\n")
+    with pytest.raises(OlfError, match="no such style"):
+        read_source(load(show), "e02")

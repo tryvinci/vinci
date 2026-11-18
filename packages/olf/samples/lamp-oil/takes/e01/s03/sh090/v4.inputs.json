@@ -1,0 +1,89 @@
+{
+  "camera": {
+    "amount": 0.4,
+    "angle": "eye_level",
+    "ease": "in_out",
+    "framing": "extreme_wide",
+    "hold_end": 2,
+    "lens": "24mm",
+    "move": "pull_out",
+    "render": "engine"
+  },
+  "characters": [
+    {
+      "description": "Young lighthouse keeper, about 17. Short dark-brown hair, amber eyes, a long red scarf, a navy duffle coat over a cream cable sweater, a brown plaid skirt, dark grey socks, brown lace-up boots.\n",
+      "id": "char/mira",
+      "name": "Mira",
+      "sheet": "asset/15af924ab240eae3ddbc1319c59018b3f77a27fb9daf8418b96214a6b30b96da"
+    },
+    {
+      "description": "The old lighthouse keeper, about 70. White beard, grey hair under a dark-green knitted cap, small round glasses, a brown scarf, a yellow-brown oilskin coat with dark-blue shoulder and elbow patches over a brown waistcoat with a watch chain, dark-blue trousers, black rubber boots, a brass lantern.\n",
+      "id": "char/tomas",
+      "name": "Tomas",
+      "sheet": "asset/d1585a12ff4c30dfa1ff3e6a3dc332c9fc6029b8e93e33cb6ccb114a85b26124"
+    }
+  ],
+  "control": {
+    "first_frame": "asset/645ea0bf44355bbf0432ea55e71fede1d78abca5983a9d68affe5fa2fc8e32e0",
+    "storyboard": "asset/1a139770d74498220df14cd88f3897e5f7ef5d0e148ae20eb0fe68a03827467b"
+  },
+  "defaults": {
+    "aspect": "16:9",
+    "fps": 24,
+    "resolution": "1920x1080"
+  },
+  "description": "The great lamp burns at full strength, as at the end of the close-up before it; its lens is a blaze of gold light, and a broad beam shines out through the glass over the dark sea. Mira stands at its left and Tomas at its right, both lit gold, inside the glass lamp room at the top of the tower. The camera pulls back out through the glass.",
+  "dialogue": [
+    {
+      "line": "It's lit.",
+      "speaker": "char/mira"
+    }
+  ],
+  "duration": 8,
+  "heading": "INT. LAMP ROOM - NIGHT",
+  "id": "e01/s03/sh090",
+  "location": {
+    "description": "A round glass room at the top of the tower. The great lamp and its ring lens stand at the centre. The sea on all sides.",
+    "id": "loc/lamp-room",
+    "name": "Lamp room",
+    "variant": "night"
+  },
+  "mood": "hushed, then warm",
+  "props": [
+    {
+      "description": "The great lamp. A tall brass drum of ring-shaped glass prisms around a brass oil burner with a thick braided wick, on a round stone pedestal.",
+      "id": "prop/great-lamp",
+      "references": [
+        "asset/2ddcb401aa3eb2c4922edcc3fda48663357d66c498d02135d783685d081ba1ef"
+      ]
+    }
+  ],
+  "script": "Mira and Tomas stand on either side of the great lamp, still dark.\nMira pours the oil into the burner.\nMIRA: What if it goes out?\nTOMAS: Then you light it again. That is the whole job.\nShe sets the can down, strikes a match and lights the wick. The light grows in the lens.\nMIRA: It's lit.\nThe beam reaches out over the sea.\n",
+  "style": {
+    "id": "style/main",
+    "lenses": [
+      "24mm",
+      "35mm",
+      "50mm",
+      "85mm"
+    ],
+    "look": {
+      "grade": "blue dusk shadows, warm lamp light, soft contrast",
+      "grain": "none",
+      "medium": "2D anime",
+      "palette": [
+        "#1d2b44",
+        "#f2b25c",
+        "#c9563c",
+        "#e9e2d0"
+      ]
+    },
+    "negative": [
+      "text",
+      "watermark",
+      "extra limbs",
+      "extra fingers",
+      "painterly texture"
+    ]
+  }
+}

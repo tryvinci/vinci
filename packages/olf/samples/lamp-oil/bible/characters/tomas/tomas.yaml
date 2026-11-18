@@ -1,0 +1,9 @@
+id: char/tomas
+name: Tomas
+description: >
+  The old lighthouse keeper, about 70. White beard, grey hair under a dark-green knitted cap,
+  small round glasses, a brown scarf, a yellow-brown oilskin coat with dark-blue shoulder and
+  elbow patches over a brown waistcoat with a watch chain, dark-blue trousers, black rubber
+  boots, a brass lantern.
+sheet: sheet.png
+likeness: { real_person: false }
