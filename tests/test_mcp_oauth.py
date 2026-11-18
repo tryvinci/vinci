@@ -12,13 +12,16 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 import pytest
 from fastapi.testclient import TestClient
 from vinci_daemon.app import create_app
-from vinci_mcp.adapter import McpProvider
+from vinci_mcp.adapter import McpProvider, SessionEnded
 from vinci_mcp.connectors import parse_generate, parse_status
 from vinci_mcp.oauth import (
     OAuthError,
     _require_oauth_endpoint,
     access_token,
+    auth_state,
     clear_pending,
+    mark_reconnect,
+    oauth_secret_name,
     result_page,
 )
 from vinci_protocol.enums import Capability
@@ -518,4 +521,54 @@ def test_connector_balance_reads_each_provider_shape() -> None:
     assert provider("mcp_higgsfield", {"balance": {"credits": 37}}).balance() == 37.0
     assert provider("mcp_magnific", {"account_balance": {"credits": {"available": 0}}}).balance() == 0.0
     with pytest.raises(RuntimeError, match="403"):
-        provider("mcp_higgsfield", {"balance": "FNF API GET /mcp/workspaces failed (403)"}).balance()
+        provider("mcp_magnific", {"account_balance": "Forbidden (403)"}).balance()
+
+
+def test_a_session_the_provider_ended_asks_for_a_new_sign_in() -> None:
+    """Higgsfield ends the account session behind valid tokens after 2-3 days (COREPRODUC-677).
+
+    Its error marks the sign-in "needs_reconnect" and says what to do. The call is not retried.
+    """
+    store: dict[str, str] = {}
+
+    class Resolver:
+        def resolve(self, name: str) -> str | None:
+            return store.get(name)
+
+        def put(self, name: str, value: str) -> None:
+            store[name] = value
+
+        def delete(self, name: str) -> None:
+            store.pop(name, None)
+
+    resolver = Resolver()
+    record = {"tokens": {"access_token": "at-1", "refresh_token": "rt-1"}, "expires_at": 4e9, "needs_reconnect": False}
+    resolver.put(oauth_secret_name("mcp_higgsfield"), json.dumps(record))
+    assert auth_state(resolver, "mcp_higgsfield") == "connected"  # type: ignore[arg-type]
+    calls: list[str] = []
+
+    class Transport:
+        url = "https://mcp.higgsfield.ai/mcp"
+
+        def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+            calls.append(str(params.get("name")))
+            text = "FNF API GET /mcp/workspaces failed (403)"
+            return {"isError": True, "content": [{"type": "text", "text": text}]}
+
+    ended = McpProvider(
+        Transport(),  # type: ignore[arg-type]
+        provider_id="mcp_higgsfield",
+        on_session_ended=lambda: mark_reconnect(resolver, "mcp_higgsfield"),  # type: ignore[arg-type]
+    )
+    with pytest.raises(SessionEnded, match="Open Connect and sign in to Higgsfield again"):
+        ended._call("generate_image", {"params": {"model": "soul_2"}})
+    assert calls == ["generate_image"]  # a paid call: never sent twice
+    assert auth_state(resolver, "mcp_higgsfield") == "needs_reconnect"  # type: ignore[arg-type]
+    assert access_token(resolver, "mcp_higgsfield") is None  # type: ignore[arg-type]
+    assert ended.normalize_error(SessionEnded("x")).code.value == "auth"
+    # Magnific has no such error: the same text stays a plain refusal, and the sign-in stays.
+    seen: list[str] = []
+    other = McpProvider(Transport(), provider_id="mcp_magnific", on_session_ended=lambda: seen.append("x"))  # type: ignore[arg-type]
+    with pytest.raises(RuntimeError) as refused:
+        other._call("images_generate", {})
+    assert not isinstance(refused.value, SessionEnded) and seen == []

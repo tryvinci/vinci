@@ -16,6 +16,7 @@ import html
 import http.client
 import ipaddress
 import json
+import logging
 import secrets
 import socket
 import ssl
@@ -52,6 +53,7 @@ class _Pending:
 
 
 _PENDING: dict[str, _Pending] = {}
+log = logging.getLogger("vinci.mcp.oauth")
 _REFRESH_GUARD = threading.Lock()
 _REFRESH_LOCKS: dict[str, threading.Lock] = {}
 
@@ -335,6 +337,22 @@ def disconnect(resolver: CredentialResolver, provider_id: str) -> None:
         stale = [key for key, item in list(_PENDING.items()) if item.provider_id == provider_id]
         for key in stale:
             _PENDING.pop(key, None)
+
+
+def mark_reconnect(resolver: CredentialResolver, provider_id: str) -> None:
+    """Mark a sign-in "needs_reconnect": the provider ended it on their side (COREPRODUC-677).
+
+    The tokens stay (a new sign-in replaces them), but ``access_token`` gives none until then.
+
+    Args:
+        resolver: Where the sign-in record lives.
+        provider_id: Such as ``mcp_higgsfield``.
+    """
+    with _provider_lock(provider_id):
+        record = _load(resolver, provider_id)
+        if record is not None:
+            _mark_reconnect(resolver, provider_id, record)
+            log.warning("mcp oauth needs_reconnect provider=%s reason=session_ended", provider_id)
 
 
 def _refresh(resolver: CredentialResolver, provider_id: str) -> str | None:

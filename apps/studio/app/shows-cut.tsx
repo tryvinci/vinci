@@ -21,6 +21,7 @@ import {
   spendText,
   takeName,
   timelineTicks,
+  upcomingVideos,
 } from "../lib/shows";
 import { message, olf, send } from "./shows-api";
 import { Confirm, Field, OlfOnly, StalePill } from "./shows-parts";
@@ -64,9 +65,12 @@ export function CutView({
   const [signed, setSigned] = useState(true); // C2PA provenance, when the daemon can sign
   const [otio, setOtio] = useState(false); // also OpenTimelineIO and stems
   const [sound, setSound] = useState(true); // off: no audio stream, the lines are only subtitles
+  const [loading, setLoading] = useState(false); // a clip on screen is loading: the clock waits
+  const stage = useRef<HTMLDivElement>(null);
   const duration = cut?.duration || 0;
 
-  // The clock: advance while playing; stop at the end of the cut.
+  // The clock: advance while playing; stop at the end of the cut. It waits while a clip on screen
+  // loads or seeks, so the picture and the playhead stay together (COREPRODUC-680).
   useEffect(() => {
     if (!playing || !duration) return;
     let frame = 0;
@@ -74,7 +78,9 @@ export function CutView({
     const tick = (now: number) => {
       const step = (now - last) / 1000;
       last = now;
-      setTime((at) => Math.min(at + step, duration));
+      const held = [...(stage.current?.querySelectorAll<HTMLVideoElement>("video.olf-cut-layer") || [])].some(stalled);
+      setLoading(held);
+      if (!held) setTime((at) => Math.min(at + step, duration));
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
@@ -112,6 +118,7 @@ export function CutView({
   const fade = fadeAt(cut, time); // the previews draw it as the export does
   const cue = subtitles ? cueAt(cut, time) : "";
   const sel = cut.clips[selected] || cut.clips[0];
+  const rolling = playing && !loading; // while a clip loads, every layer waits with the clock
   const pct = (seconds: number) => `${(seconds / (duration || 1)) * 100}%`;
   const [width, height] = cut.format.resolution.split("x");
   const speech = sel.dialogue_take;
@@ -128,13 +135,17 @@ export function CutView({
   return (
     <section className="olf-cut" data-testid="cut-page">
       <div className="olf-cut-main">
-        <div className="olf-cut-previews">
+        <div className="olf-cut-previews" ref={stage}>
           {/* Only the wide preview plays the take's own sound, so it is heard once. */}
-          <Preview show={show} at={at} fade={fade} playing={playing} cue={cue} sound className="olf-cut-wide" testId="cut-preview" />
-          <Preview show={show} at={at} fade={fade} playing={playing} cue={cue} className="olf-cut-tall" testId="cut-preview-tall" />
-          <DialogueSound show={show} at={at} playing={playing} />
+          <Preview show={show} at={at} fade={fade} playing={rolling} cue={cue} sound className="olf-cut-wide" testId="cut-preview" />
+          <Preview show={show} at={at} fade={fade} playing={rolling} cue={cue} className="olf-cut-tall" testId="cut-preview-tall" />
+          <DialogueSound show={show} at={at} playing={rolling} />
           {cut.audio.map((row) => (
-            <CueSound key={row.take} show={show} row={row} time={time} playing={playing} />
+            <CueSound key={row.take} show={show} row={row} time={time} playing={rolling} />
+          ))}
+          {/* The next clips load before the playhead reaches them; their clip then plays at once. */}
+          {upcomingVideos(cut, time).map((file) => (
+            <video key={file} src={fileUrl(show.path, file)} preload="auto" muted hidden aria-hidden data-testid="cut-preload" />
           ))}
         </div>
         <div className="olf-cut-transport">
@@ -153,6 +164,11 @@ export function CutView({
           <code data-testid="cut-time">
             {clockText(time)} / {clockText(duration)}
           </code>
+          {playing && loading ? (
+            <span className="muted olf-small-text" data-testid="cut-loading">
+              Loading the clip…
+            </span>
+          ) : null}
           <span className="olf-grow" />
           <button type="button" className="ghost" disabled={Boolean(busy || approvedOff)} title={approvedOff || undefined} onClick={onUseApproved} data-testid="cut-use-approved">
             {busy === "approved" ? "Building the cut…" : "Use approved takes"}
@@ -547,6 +563,20 @@ function AddCue({ path, episode, start, onDone }: { path: string; episode: strin
 
 type At = { clip: OlfClip; offset: number };
 
+/** A video on screen that cannot play on yet (loading or seeking). A failed or ended one does not hold the clock. */
+function stalled(video: HTMLVideoElement): boolean {
+  return !video.error && !video.ended && (video.seeking || video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA);
+}
+
+/**
+ * Seek a layer to its second in the take when it drifted, never past the end of its file: a clip's
+ * Out can be longer than the file, and a seek past the end would repeat (CodeRabbit on #660).
+ */
+function follow(video: HTMLVideoElement, offset: number) {
+  const target = Math.min(offset, video.duration || offset);
+  if (Math.abs(video.currentTime - target) > 0.3) video.currentTime = target;
+}
+
 /**
  * One preview: the clip under the playhead (video, or a keyframe still) with the subtitle line.
  * In a fade, the clip that fades in covers the clip before it, more each frame (as in export).
@@ -592,7 +622,8 @@ function Layer({ show, at, playing, sound, opacity }: { show: OlfShow; at: At | 
   useEffect(() => {
     const video = ref.current;
     if (!video || !at) return;
-    if (Math.abs(video.currentTime - at.offset) > 0.3) video.currentTime = at.offset;
+    // Seek once the file's index is in (onLoadedMetadata seeks first), and not over a running seek.
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA && !video.seeking) follow(video, at.offset);
     if (playing && video.paused) void video.play().catch(() => undefined);
     if (!playing && !video.paused) video.pause();
   });
@@ -611,6 +642,10 @@ function Layer({ show, at, playing, sound, opacity }: { show: OlfShow; at: At | 
         preload="auto"
         onLoadedMetadata={(event) => {
           event.currentTarget.currentTime = at?.offset || 0;
+        }}
+        onSeeked={(event) => {
+          // The playhead moved while the seek ran (a click on the timeline): go there now.
+          if (at) follow(event.currentTarget, at.offset);
         }}
       />
     );

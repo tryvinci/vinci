@@ -142,6 +142,13 @@ test.describe("Shows (OLF movie engine)", () => {
     await expect(page.locator(".top-file")).toHaveText("episodes/e02/episode.yaml · cut");
     await expect(page.getByTestId("cut-empty")).toBeVisible();
     await page.screenshot({ path: path.join(shots, "shows_cut_empty.png") });
+    // Hold the clip's file: the playhead must wait for it, not run on over a still picture (COREPRODUC-680).
+    let release = () => {};
+    const held = new Promise<void>((done) => (release = done));
+    await page.route(/\/olf\/file\?.*sh014%2Fv1\.mp4/, async (route) => {
+      await held;
+      await route.continue();
+    });
     await page.getByTestId("cut-use-approved").click();
     await expect(page.getByTestId("cut-clip")).toHaveCount(1); // only sh014 has approved takes
     await expect(page.getByTestId("cut-clip")).toContainText("v1 · stale"); // stale since the bible edit
@@ -151,7 +158,13 @@ test.describe("Shows (OLF movie engine)", () => {
     await page.getByTestId("cut-out").press("Enter");
     await expect(page.getByTestId("cut-time")).toHaveText("0:00.0 / 0:03.0");
     await page.getByTestId("cut-play").click();
+    await expect(page.getByTestId("cut-loading")).toHaveText("Loading the clip…");
+    await page.waitForTimeout(1000);
+    await expect(page.getByTestId("cut-time")).toHaveText("0:00.0 / 0:03.0"); // the clock waits for the clip
+    release();
     await expect(page.getByTestId("cut-time")).not.toHaveText("0:00.0 / 0:03.0"); // the clock runs
+    await expect(page.getByTestId("cut-loading")).toHaveCount(0);
+    await page.unroute(/\/olf\/file\?.*sh014%2Fv1\.mp4/);
     await page.getByTestId("cut-play").click();
     await expect(page.getByTestId("cut-preview")).toContainText("You kept the key?"); // the subtitle line
     await page.screenshot({ path: path.join(shots, "shows_cut.png") });

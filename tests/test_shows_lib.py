@@ -56,6 +56,7 @@ NAMES = [
     "autoLabel",
     "textStepQuestion",
     "hasApprovedTakes",
+    "upcomingVideos",
 ]
 SHOW = """
 const take = (id, kind, stale, file) => ({ id, kind, status: "draft", stale, file });
@@ -295,6 +296,24 @@ eq([half.from.clip.index, half.to.clip.index, half.mix], [0, 1, 0.5], "half way:
 eq([half.from.offset, half.to.offset], [3.75, 1.25], "each clip at its own time in its take");
 eq(fadeAt(faded, 4.0), null, "after the fade");
 eq(fadeAt({ ...faded, clips: [at(0, 0, 4), at(1, 4, 4)] }, 4.1), null, "a cut has no fade");
+"""
+    )
+
+
+def test_cut_preview_loads_the_next_clips() -> None:
+    """COREPRODUC-680: the next video clips load before the playhead reaches them."""
+    _run(
+        """
+const at = (index, start, file, kind = "video") => ({ index, take: `t${index}`, shot: "x", kind, file, in: 0,
+  out: 4, length: 4, start, transition: "cut", audio: "own", dialogue_take: null, stale: false, missing: false,
+  dialogue: [] });
+const cut = { episode: "e01", duration: 20, stale: 0, missing: 0, audio: [],
+  clips: [at(0, 0, "a.mp4"), at(1, 4, "b.png", "keyframe"), at(2, 8, "c.mp4"), at(3, 12, null),
+    at(4, 14, "c.mp4"), at(5, 16, "d.mp4"), at(6, 18, "e.mp4")] };
+eq(upcomingVideos(cut, 1), ["c.mp4", "d.mp4"], "the next two video files: not stills, not a clip with no file");
+eq(upcomingVideos(cut, 9), ["d.mp4", "e.mp4"], "not the file on screen now, even when a later clip repeats it");
+eq(upcomingVideos(cut, 19), [], "the last clip: nothing to load");
+eq(upcomingVideos({ ...cut, clips: [] }, 0), [], "no clips");
 """
     )
 

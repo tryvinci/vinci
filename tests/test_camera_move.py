@@ -108,6 +108,9 @@ def test_camera_move_writes_an_exact_video(tmp_path: Path) -> None:
     ).stdout.strip()
     info = probe(out)
     assert (int(count), info["width"], info["height"]) == (18, 640, 360)  # exact to the frame
+    # The index (moov) comes before the media (mdat): a browser plays it after one request (COREPRODUC-680).
+    data = out.read_bytes()
+    assert 0 < data.find(b"moov") < data.find(b"mdat")
     with pytest.raises(MediaError, match="a still cannot do a crane move"):
         camera_move(still, tmp_path / "no.mp4", width=640, height=360, seconds=1, move="crane")
     # Sizes can come from a show file that nobody checked: each frame is an image in memory.

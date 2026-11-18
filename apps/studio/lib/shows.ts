@@ -708,6 +708,20 @@ export function clipAt(cut: OlfCut, seconds: number): { clip: OlfClip; offset: n
   return clip ? { clip, offset: clip.in + Math.min(Math.max(seconds - clip.start, 0), clip.length) } : null;
 }
 
+/**
+ * The video files the Cut preview loads before the playhead reaches them: the next `count` video
+ * clips after the clip under the playhead, without its own file. A clip that starts cold made the
+ * playhead run on while the picture stood still (COREPRODUC-680).
+ */
+export function upcomingVideos(cut: OlfCut, seconds: number, count = 2): string[] {
+  const here = clipAt(cut, seconds)?.clip;
+  const files = cut.clips
+    .slice(here ? cut.clips.indexOf(here) + 1 : 0)
+    .filter((clip) => clip.kind === "video" && clip.file && clip.file !== here?.file)
+    .map((clip) => clip.file as string);
+  return [...new Set(files)].slice(0, count);
+}
+
 export const FADE = 0.5; // seconds a fade overlaps the clip before it (vinci_olf.cut.FADE)
 
 /**

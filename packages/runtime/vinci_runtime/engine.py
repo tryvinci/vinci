@@ -452,7 +452,7 @@ class Engine:
             url = cfg.get("url")
             if not isinstance(url, str) or not url:
                 continue
-            from vinci_mcp.oauth import access_token
+            from vinci_mcp.oauth import access_token, mark_reconnect
 
             def bearer(provider_name: str = name) -> str | None:
                 token = access_token(resolver, provider_name)
@@ -462,11 +462,15 @@ class Engine:
                     "MCP_API_KEY"
                 )
 
+            def ended(provider_name: str = name) -> None:
+                mark_reconnect(resolver, provider_name)  # Connect then says "Sign in again"
+
             self.providers[name] = McpProvider(
                 HttpMcpTransport(url, token_provider=_mcp_token(name, bearer)),
                 api_key=bearer(name),
                 cas=cas,
                 provider_id=name,
+                on_session_ended=ended,
             )
 
     def _mcp_catalog(self, name: str = "mcp") -> Catalog | None:
