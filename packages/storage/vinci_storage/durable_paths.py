@@ -27,6 +27,10 @@ MUTATION_RULES: tuple[tuple[str, re.Pattern[str], str], ...] = (
     ("POST", re.compile(r"^/collab/sessions$"), "collab_create"),
     ("PUT", re.compile(r"^/collab/sessions/[^/]+$"), "collab_put"),
     ("POST", re.compile(r"^/catalog/refresh$"), "catalog_refresh"),
+    ("POST", re.compile(r"^/projects$"), "project_create"),
+    ("PATCH", re.compile(r"^/projects/[^/]+$"), "project_update"),
+    ("DELETE", re.compile(r"^/projects/[^/]+$"), "project_delete"),
+    ("PUT", re.compile(r"^/projects/[^/]+/board$"), "project_board"),
     ("POST", re.compile(r"^/mcp$"), "mcp_rpc"),
 )
 

@@ -57,6 +57,11 @@ def apply_committed_operation(engine: Any, op: dict[str, Any]) -> None:
     blob_keys = json.loads(op.get("blob_keys_json") or "[]")
     journal = getattr(engine, "_journal", None)
 
+    from vinci_daemon.projects import replay as replay_projects
+
+    # Project rows, and the project links of runs and uploads (COREPRODUC-702).
+    replay_projects(engine, kind, payload, response)
+
     if kind == "init":
         demo = bool(payload.get("demo") or response.get("demo"))
         if demo and not engine.config.demo:
