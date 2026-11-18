@@ -82,6 +82,7 @@ export function ImageFeed({
   pendingTestId = "image-feed-pending",
   hoverTestId = "image-card-hover",
   clock,
+  clocks,
   onFavorite,
   onCopyPrompt,
   onReference,
@@ -98,6 +99,8 @@ export function ImageFeed({
   hoverTestId?: string;
   /** The run in flight: its pending cards fill a progress bar (COREPRODUC-659). */
   clock?: RunClock | null;
+  /** One clock per pending card (a batch): card i uses clocks[i]; null shows "Waiting to start…". */
+  clocks?: (RunClock | null)[];
   onFavorite: (item: ImageFeedItem) => void;
   onCopyPrompt: (item: ImageFeedItem) => void;
   onReference?: (item: ImageFeedItem) => void;
@@ -125,16 +128,16 @@ export function ImageFeed({
   return (
     <div className="image-feed" data-testid={feedTestId}>
       <div className="image-feed-cols">
-        {items.map((item) =>
+        {items.map((item, i) =>
           item.pending ? (
             <article key={item.id} className="image-card pending" data-testid={pendingTestId}>
               <div className="image-card-thumb">
-                {clock ? (
-                  <GenProgress clock={clock} testId={`${pendingTestId}-progress`} />
+                {(clocks ? clocks[i] : clock) ? (
+                  <GenProgress clock={(clocks ? clocks[i] : clock)!} testId={`${pendingTestId}-progress`} />
                 ) : (
                   <>
                     <span className="spinner" aria-hidden="true" />
-                    <span>Generating…</span>
+                    <span>{clocks ? "Waiting to start…" : "Generating…"}</span>
                   </>
                 )}
               </div>

@@ -70,6 +70,7 @@ export function ImagePage({
   cast,
   busy,
   clock,
+  clocks,
   pendingCount,
   runs,
   assets,
@@ -110,6 +111,8 @@ export function ImagePage({
   busy: boolean;
   /** The run in flight, for the pending card's progress bar. */
   clock?: RunClock | null;
+  /** One clock per pending card of a batch; null: its run is not posted yet. */
+  clocks?: (RunClock | null)[];
   pendingCount: number;
   runs: ImageRun[];
   assets: ImageAsset[];
@@ -243,6 +246,7 @@ export function ImagePage({
     <div className="image-page" data-testid="image-page">
       <ImageFeed
         clock={clock}
+        clocks={clocks}
         items={items}
         onFavorite={(item) => void favorite(item)}
         onCopyPrompt={(item) => void copyPrompt(item)}
