@@ -25,6 +25,7 @@ import {
   type EffectRunRow,
 } from "../lib/effect-shell";
 import { providerMentionInputs, type LibraryItem } from "../lib/library";
+import { runBody, uploadForm } from "../lib/projects";
 import { EffectsGalleryOverlay } from "./effects-gallery-overlay";
 import { PromptMention } from "./prompt-mention";
 import "./effects-shell.css";
@@ -70,7 +71,7 @@ async function postRun(payload: { skill: string; model_id?: string; inputs: Reco
   const res = await fetch(`${API}/runs`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(runBody(payload)), // the run stays in the tab's project (COREPRODUC-702)
   });
   const body = (await res.json().catch(() => ({}))) as { detail?: string; state?: string; error?: unknown };
   if (!res.ok) throw new Error(body.detail || res.statusText || "Run failed");
@@ -78,9 +79,7 @@ async function postRun(payload: { skill: string; model_id?: string; inputs: Reco
 }
 
 async function uploadAsset(file: File): Promise<string> {
-  const data = new FormData();
-  data.append("file", file);
-  const res = await fetch(`${API}/assets`, { method: "POST", body: data });
+  const res = await fetch(`${API}/assets`, { method: "POST", body: uploadForm(file) });
   if (!res.ok) throw new Error(await res.text());
   const asset = (await res.json()) as { id: string };
   if (!asset.id) throw new Error("Upload did not finish. Try the file again.");

@@ -12,6 +12,7 @@ import {
   type LibraryStatus,
 } from "./library-types";
 import { plainError } from "./ui/plain-text";
+import { currentProject } from "../lib/projects";
 import { DockIcon, DOCK_ICON } from "./ui/icons";
 
 export type { LibraryItem, LibraryResponse, LibraryStatus } from "./library-types";
@@ -93,6 +94,8 @@ export function AssetsPage({
     if (date !== "all") params.set("date", date);
     const q = next?.q ?? query;
     if (q.trim()) params.set("q", q.trim());
+    const project = currentProject();
+    if (project) params.set("project", project); // the tab's project only (COREPRODUC-702)
     try {
       const res = await fetch(`${LIBRARY_API}/library?${params.toString()}`);
       if (!res.ok) {

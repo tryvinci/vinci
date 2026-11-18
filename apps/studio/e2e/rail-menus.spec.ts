@@ -8,7 +8,7 @@ async function openImage(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem("vinci-onboard-v1", "done");
   });
-  const booted = page.waitForResponse((res) => res.url().endsWith("/vinci-api/runs") && res.request().method() === "GET");
+  const booted = page.waitForResponse((res) => res.url().split("?")[0].endsWith("/vinci-api/runs") && res.request().method() === "GET");
   await page.goto("/");
   await page.locator('nav button[aria-label="Image"]').click();
   await expect(page.getByTestId("image-page")).toBeVisible();

@@ -15,14 +15,14 @@ async function boot(page: Page, hash = "") {
     localStorage.setItem("vinci-onboard-v1", "done");
     localStorage.removeItem("vinci-shows-recent-v1");
   });
-  const booted = page.waitForResponse((res) => res.url().endsWith("/vinci-api/runs") && res.request().method() === "GET");
+  const booted = page.waitForResponse((res) => res.url().split("?")[0].endsWith("/vinci-api/runs") && res.request().method() === "GET");
   await page.goto("/" + hash);
   await booted;
 }
 
 /** Hold each upload for `ms`, so the "Uploading …" line can be seen (a host takes about 4 s). */
 async function slowUploads(page: Page, ms = 800) {
-  await page.route("**/vinci-api/assets", async (route) => {
+  await page.route(/\/vinci-api\/assets(\?.*)?$/, async (route) => {
     if (route.request().method() === "POST") await new Promise((done) => setTimeout(done, ms));
     await route.continue();
   });

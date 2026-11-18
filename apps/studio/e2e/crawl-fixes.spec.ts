@@ -8,8 +8,12 @@ const PNG2 = path.resolve(__dirname, "../../../packages/olf/conformance/tidewatc
 
 async function boot(page: Page, hash = "") {
   await page.addInitScript(() => localStorage.setItem("vinci-onboard-v1", "done"));
-  const booted = page.waitForResponse((res) => res.url().endsWith("/vinci-api/runs") && res.request().method() === "GET");
-  await page.goto("/" + hash);
+  // A new project per test: the board and the feeds live on the daemon (COREPRODUC-702), which every
+  // test of this file shares, so a test would otherwise see the nodes and runs of the ones before it.
+  const made = await page.request.post("/vinci-api/projects", { data: { name: `e2e ${test.info().title.slice(0, 60)}` } });
+  const { id } = (await made.json()) as { id: string };
+  const booted = page.waitForResponse((res) => res.url().split("?")[0].endsWith("/vinci-api/runs") && res.request().method() === "GET");
+  await page.goto(`/?project=${id}${hash}`);
   await booted;
 }
 
@@ -51,7 +55,7 @@ test.describe("Production crawl fixes", () => {
 
   test("STU-02, 04, 22: Video sends its own start frame; Motion control has no Generate; no New (COREPRODUC-659)", async ({ page }) => {
     const posted: Record<string, unknown>[] = [];
-    await page.route("**/vinci-api/runs", async (route) => {
+    await page.route(/\/vinci-api\/runs(\?.*)?$/, async (route) => {
       if (route.request().method() !== "POST") return route.continue();
       posted.push((route.request().postDataJSON() as { inputs: Record<string, unknown> }).inputs);
       await route.fulfill({ json: { id: "run-crawl", state: "completed", outputs: [], nodes: {}, estimate: { total: 0 } } });
@@ -78,7 +82,7 @@ test.describe("Production crawl fixes", () => {
   test("COREPRODUC-659: a start frame shows while it uploads, and Generate waits for it", async ({ page }) => {
     let release = () => {};
     const held = new Promise<void>((done) => (release = done));
-    await page.route("**/vinci-api/assets", async (route) => {
+    await page.route(/\/vinci-api\/assets(\?.*)?$/, async (route) => {
       if (route.request().method() === "POST") await held; // keep the upload in flight
       await route.continue();
     });
@@ -103,7 +107,7 @@ test.describe("Production crawl fixes", () => {
       id: `hist-${n}`, state: "completed", inputs: { model_id: "mock:mp4:v1" }, outputs: [],
       created_at: new Date(t0).toISOString(), completed_at: new Date(t0 + secs * 1000).toISOString(),
     });
-    await page.route("**/vinci-api/runs", async (route) => {
+    await page.route(/\/vinci-api\/runs(\?.*)?$/, async (route) => {
       if (route.request().method() === "GET") {
         const body = (await (await route.fetch()).json()) as { runs?: unknown[] };
         return route.fulfill({ json: { ...body, runs: [...(body.runs || []), past(1, 4), past(2, 6)] } });
@@ -150,7 +154,7 @@ test.describe("Production crawl fixes", () => {
           return route.fulfill({ json: body });
         });
       }
-      await page.route("**/vinci-api/runs", async (route) => {
+      await page.route(/\/vinci-api\/runs(\?.*)?$/, async (route) => {
         if (route.request().method() === "GET") {
           const body = (await (await route.fetch()).json()) as { runs: Parameters<typeof shown>[0][] };
           const past = Array.from({ length: 20 }, (_, n) => ({ id: `hist-${n}`, state: "completed", inputs: { model_id: "mock:png:v1" }, outputs: [], created_at: new Date(t0).toISOString(), completed_at: new Date(t0 + 30_000).toISOString() }));
@@ -199,7 +203,7 @@ test.describe("Production crawl fixes", () => {
   test("COREPRODUC-659: a running canvas node shows the bar; a model with no history counts from its kind's default", async ({ page }) => {
     let release = () => {};
     const held = new Promise<void>((done) => (release = done));
-    await page.route("**/vinci-api/runs", async (route) => {
+    await page.route(/\/vinci-api\/runs(\?.*)?$/, async (route) => {
       if (route.request().method() !== "POST") return route.continue();
       await held;
       await route.fulfill({ json: { id: "run-node", state: "completed", outputs: [], nodes: {}, estimate: { total: 0 } } });
@@ -220,7 +224,7 @@ test.describe("Production crawl fixes", () => {
   test("COREPRODUC-659: an effect run shows the bar under Generate", async ({ page }) => {
     let release = () => {};
     const held = new Promise<void>((done) => (release = done));
-    await page.route("**/vinci-api/runs", async (route) => {
+    await page.route(/\/vinci-api\/runs(\?.*)?$/, async (route) => {
       if (route.request().method() !== "POST") return route.continue();
       await held;
       await route.continue();
@@ -249,13 +253,13 @@ test.describe("Production crawl fixes", () => {
     await openPage(page, "Image");
     for (const n of [1, 2, 3]) {
       await page.getByTestId("image-prompt").fill(`still ${n}`);
-      const done = page.waitForResponse((res) => res.url().endsWith("/vinci-api/runs") && res.request().method() === "POST");
+      const done = page.waitForResponse((res) => res.url().split("?")[0].endsWith("/vinci-api/runs") && res.request().method() === "POST");
       await page.getByTestId("image-generate").click();
       await done;
       await expect(page.getByTestId("image-generate")).toBeEnabled();
     }
     // Come back after the Studio reloads (another app.tryvinci.com page, then back to Studio).
-    const booted = page.waitForResponse((res) => res.url().endsWith("/vinci-api/runs") && res.request().method() === "GET");
+    const booted = page.waitForResponse((res) => res.url().split("?")[0].endsWith("/vinci-api/runs") && res.request().method() === "GET");
     await page.reload();
     await booted;
     await page.getByRole("button", { name: "Canvas", exact: true }).first().click();
@@ -268,7 +272,7 @@ test.describe("Production crawl fixes", () => {
     let started = false;
     let released = false;
     // The host answers POST /runs at once and the run keeps going on the server: model that.
-    await page.route("**/vinci-api/runs", async (route) => {
+    await page.route(/\/vinci-api\/runs(\?.*)?$/, async (route) => {
       if (route.request().method() === "POST") {
         const real = await route.fetch();
         const body = (await real.json()) as { id: string };
@@ -291,7 +295,7 @@ test.describe("Production crawl fixes", () => {
     await gen.locator("[data-node-prompt]").fill("a kite over the sea");
     await gen.getByTestId("node-run").click();
     await expect.poll(() => started).toBe(true);
-    const booted = page.waitForResponse((res) => res.url().endsWith("/vinci-api/runs") && res.request().method() === "GET");
+    const booted = page.waitForResponse((res) => res.url().split("?")[0].endsWith("/vinci-api/runs") && res.request().method() === "GET");
     await page.reload();
     await booted;
     await page.getByRole("button", { name: "Canvas", exact: true }).first().click();
@@ -306,7 +310,7 @@ test.describe("Production crawl fixes", () => {
   test("COREPRODUC-665: a canvas run that ends while you are on Image shows its result back on Canvas", async ({ page }) => {
     let release = () => {};
     const held = new Promise<void>((done) => (release = done));
-    await page.route("**/vinci-api/runs", async (route) => {
+    await page.route(/\/vinci-api\/runs(\?.*)?$/, async (route) => {
       if (route.request().method() === "POST") await held;
       return route.continue();
     });
@@ -314,7 +318,7 @@ test.describe("Production crawl fixes", () => {
     await page.getByRole("button", { name: "Canvas", exact: true }).first().click();
     await page.locator('[data-start="t2v"]').click();
     await page.locator(".node[data-id]").first().locator("[data-node-prompt]").fill("a kite over the sea");
-    const ended = page.waitForResponse((res) => res.url().endsWith("/vinci-api/runs") && res.request().method() === "POST");
+    const ended = page.waitForResponse((res) => res.url().split("?")[0].endsWith("/vinci-api/runs") && res.request().method() === "POST");
     await page.locator(".node[data-id]").first().getByTestId("node-run").click();
     await openPage(page, "Image");
     release();
@@ -343,7 +347,7 @@ test.describe("Production crawl fixes", () => {
       await route.fulfill({ json: body });
     });
     const posted: Record<string, unknown>[] = [];
-    await page.route("**/vinci-api/runs", async (route) => {
+    await page.route(/\/vinci-api\/runs(\?.*)?$/, async (route) => {
       if (route.request().method() !== "POST") return route.continue();
       posted.push((route.request().postDataJSON() as { inputs: Record<string, unknown> }).inputs);
       await route.fulfill({ json: { id: "run-refs", state: "completed", outputs: [], nodes: {}, estimate: { total: 0 } } });
@@ -409,7 +413,7 @@ test.describe("Production crawl fixes", () => {
       await route.fulfill({ response: res, json: body });
     });
     const posted: Record<string, unknown>[] = [];
-    await page.route("**/vinci-api/runs", async (route) => {
+    await page.route(/\/vinci-api\/runs(\?.*)?$/, async (route) => {
       if (route.request().method() !== "POST") return route.continue();
       posted.push(route.request().postDataJSON() as Record<string, unknown>);
       await route.fulfill({ json: { id: "run-648", state: "completed", outputs: [], nodes: {}, estimate: { total: 0 } } });
@@ -457,7 +461,7 @@ test.describe("Production crawl fixes", () => {
   });
 
   test("STU-10, 08: a wrong file type shows the server's reason, in full", async ({ page }) => {
-    await page.route("**/vinci-api/assets", (route) =>
+    await page.route(/\/vinci-api\/assets(\?.*)?$/, (route) =>
       route.request().method() === "POST"
         ? route.fulfill({ status: 415, json: { detail: "Upload an image, a video or an audio file." } })
         : route.continue(),
@@ -472,7 +476,7 @@ test.describe("Production crawl fixes", () => {
   test("STU-03, 06, 09, 21: a Text node feeds Image Gen; count makes copies; a refusal says why", async ({ page }) => {
     const bodies: { workflow?: { nodes: { id: string; params: Record<string, unknown> }[] } }[] = [];
     let refuse = false;
-    await page.route("**/vinci-api/runs", async (route) => {
+    await page.route(/\/vinci-api\/runs(\?.*)?$/, async (route) => {
       if (route.request().method() !== "POST") return route.continue();
       bodies.push(route.request().postDataJSON());
       if (refuse) return route.fulfill({ status: 403, json: { detail: "Studio generation is not available for free users. Please upgrade to a paid plan." } });
@@ -531,7 +535,7 @@ test.describe("Production crawl fixes", () => {
       await route.fulfill({ json: { ...body, models: [...body.models, kling] } });
     });
     const bodies: { workflow?: { nodes: { model_id?: string; params: Record<string, unknown> }[] } }[] = [];
-    await page.route("**/vinci-api/runs", async (route) => {
+    await page.route(/\/vinci-api\/runs(\?.*)?$/, async (route) => {
       if (route.request().method() !== "POST") return route.continue();
       bodies.push(route.request().postDataJSON());
       await route.fulfill({ json: { id: `run-${bodies.length}`, state: "completed", outputs: [], nodes: {}, estimate: { total: 0 } } });
@@ -577,7 +581,7 @@ test.describe("Production crawl fixes", () => {
         await route.fulfill({ json: { ...body, models: [...body.models, model] } });
       });
       const bodies: { workflow?: { nodes: { model_id?: string; params: Record<string, unknown> }[] } }[] = [];
-      await page.route("**/vinci-api/runs", async (route) => {
+      await page.route(/\/vinci-api\/runs(\?.*)?$/, async (route) => {
         if (route.request().method() !== "POST") return route.continue();
         bodies.push(route.request().postDataJSON());
         await route.fulfill({ json: { id: `run-${bodies.length}`, state: "completed", outputs: [], nodes: {}, estimate: { total: 0 } } });
@@ -772,7 +776,7 @@ test.describe("Refused and failed runs on a host (COREPRODUC-692)", () => {
 
   test("a refusal shows above Generate with its button, and clears on a new prompt", async ({ page }) => {
     let answer = { status: 402, detail: CREDITS };
-    await page.route("**/vinci-api/runs", (route) =>
+    await page.route(/\/vinci-api\/runs(\?.*)?$/, (route) =>
       route.request().method() === "POST" ? route.fulfill({ status: answer.status, json: { detail: answer.detail } }) : route.continue(),
     );
     await openWithCredits(page, "#image");
@@ -794,7 +798,7 @@ test.describe("Refused and failed runs on a host (COREPRODUC-692)", () => {
   });
 
   test("Upgrade opens the host's Credits page in the top window, outside the Studio frame", async ({ page }) => {
-    await page.route("**/vinci-api/runs", (route) =>
+    await page.route(/\/vinci-api\/runs(\?.*)?$/, (route) =>
       route.request().method() === "POST" ? route.fulfill({ status: 403, json: { detail: PLAN } }) : route.continue(),
     );
     // The host page (as /studio does): the Studio in a same-origin frame.
@@ -814,7 +818,7 @@ test.describe("Refused and failed runs on a host (COREPRODUC-692)", () => {
     const prompt = `a brass key on oak ${Date.now()}`;
     let n = 0;
     let failOne = true;
-    await page.route("**/vinci-api/runs", (route) => {
+    await page.route(/\/vinci-api\/runs(\?.*)?$/, (route) => {
       if (route.request().method() !== "POST") return route.continue();
       if (n++ === 1 && failOne) return route.fulfill({ json: { id: "run-refused", state: "running", outputs: [], nodes: {}, estimate: { total: 0 } } });
       return route.continue();
@@ -857,7 +861,7 @@ test.describe("Refused and failed runs on a host (COREPRODUC-692)", () => {
   });
 
   test("Video shows a refusal above Generate too", async ({ page }) => {
-    await page.route("**/vinci-api/runs", (route) =>
+    await page.route(/\/vinci-api\/runs(\?.*)?$/, (route) =>
       route.request().method() === "POST" ? route.fulfill({ status: 402, json: { detail: CREDITS } }) : route.continue(),
     );
     await openWithCredits(page, "#video");
