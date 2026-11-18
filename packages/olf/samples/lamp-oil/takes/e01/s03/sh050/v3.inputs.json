@@ -1,0 +1,73 @@
+{
+  "camera": {
+    "angle": "eye_level",
+    "framing": "close_up",
+    "lens": "50mm",
+    "move": "static"
+  },
+  "characters": [],
+  "control": {
+    "first_frame": "asset/ff1f50dd0c2be5e1f827f76b7aeb80d5cd0aaeb3fc83157404b7f68603985797"
+  },
+  "defaults": {
+    "aspect": "16:9",
+    "fps": 24,
+    "resolution": "1920x1080"
+  },
+  "description": "Close on the burner of the great lamp, on the moment the wide shot ends. Mira's hand in a navy duffle sleeve lowers the oil can beside a box of matches; the lamp is still dark. Then she strikes a match, touches it to the wick, and the wick catches; the flame grows and the glass prisms of the lens fill with gold light.",
+  "duration": 8,
+  "heading": "INT. LAMP ROOM - NIGHT",
+  "id": "e01/s03/sh050",
+  "location": {
+    "description": "A round glass room at the top of the tower. The great lamp and its ring lens stand at the centre. The sea on all sides.",
+    "id": "loc/lamp-room",
+    "name": "Lamp room",
+    "variant": "night"
+  },
+  "mood": "hushed, then warm",
+  "props": [
+    {
+      "description": "A dented tin oil can with a long spout and a brass cap.",
+      "id": "prop/oil-can"
+    },
+    {
+      "description": "A small box of long wooden matches.",
+      "id": "prop/matches"
+    },
+    {
+      "description": "The great lamp. A tall brass drum of ring-shaped glass prisms around a brass oil burner with a thick braided wick, on a round stone pedestal.",
+      "id": "prop/great-lamp",
+      "references": [
+        "asset/2ddcb401aa3eb2c4922edcc3fda48663357d66c498d02135d783685d081ba1ef"
+      ]
+    }
+  ],
+  "script": "Mira and Tomas stand on either side of the great lamp, still dark.\nMira pours the oil into the burner.\nMIRA: What if it goes out?\nTOMAS: Then you light it again. That is the whole job.\nShe sets the can down, strikes a match and lights the wick. The light grows in the lens.\nMIRA: It's lit.\nThe beam reaches out over the sea.\n",
+  "style": {
+    "id": "style/main",
+    "lenses": [
+      "24mm",
+      "35mm",
+      "50mm",
+      "85mm"
+    ],
+    "look": {
+      "grade": "blue dusk shadows, warm lamp light, soft contrast",
+      "grain": "none",
+      "medium": "2D anime",
+      "palette": [
+        "#1d2b44",
+        "#f2b25c",
+        "#c9563c",
+        "#e9e2d0"
+      ]
+    },
+    "negative": [
+      "text",
+      "watermark",
+      "extra limbs",
+      "extra fingers",
+      "painterly texture"
+    ]
+  }
+}

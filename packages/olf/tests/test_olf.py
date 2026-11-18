@@ -1982,3 +1982,29 @@ def test_import_gives_a_line_in_an_anime_show_kuchipaku(tmp_path: Path) -> None:
         assert (source.data["source"] if source else None) == (
             "anime/kuchipaku-hold@1" if template else None
         )
+
+
+def test_the_lamp_oil_sample_is_valid_with_its_media_links(tmp_path: Path) -> None:
+    """COREPRODUC-671: the sample show of the hosted Studio. The repository has its text files;
+    ``media.json`` lists every media file (hash, size, type, public URL). Loaded as the host loads
+    it (empty stand-ins, hashes from the list), it is valid, every locked file is listed, and every
+    shot has a chosen keyframe and clip."""
+    import json
+
+    from vinci_olf.api import lamp_oil_path, summary
+
+    source = lamp_oil_path()
+    assert source is not None
+    media = json.loads((source / "media.json").read_text())
+    root = Path(shutil.copytree(source, tmp_path / "show"))
+    for rel in media:
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_bytes(b"")  # a stand-in, as on the host
+    p = load(root, hashes={rel: item["sha256"] for rel, item in media.items()})
+    assert not p.problems and not [i.message for i in validate(p) if i.level == "error"]
+    assert {entry["uri"] for entry in p.lock.values()} == set(media)
+    for rel, item in media.items():  # a shared file is named by its hash: it never changes
+        assert item["url"].endswith(item["sha256"] + Path(rel).suffix)
+    shots = summary(p)["shots"]
+    assert len(shots) == 3
+    assert all({"keyframe", "video"} <= set(s["select"] or {}) for s in shots.values())

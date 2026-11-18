@@ -1,0 +1,8 @@
+id: char/mira
+name: Mira
+description: >
+  Young lighthouse keeper, about 17. Short dark-brown hair, amber eyes, a long red scarf,
+  a navy duffle coat over a cream cable sweater, a brown plaid skirt, dark grey socks,
+  brown lace-up boots.
+sheet: sheet.png              # the whole sheet is the character reference
+likeness: { real_person: false }

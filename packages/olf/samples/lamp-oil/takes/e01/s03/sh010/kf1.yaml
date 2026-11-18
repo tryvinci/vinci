@@ -1,0 +1,21 @@
+id: e01/s03/sh010/kf1
+kind: keyframe
+status: approved
+output: asset/f8add670cf914335ce53c9a245eb52c3cdd3a740dfcfaf293535ae80edfe1316
+inputs_hash: sha256:6458273684c9bb881576558ba308d299ac6f83ec11874b6a94b922c01dda35de
+inputs:
+  references:
+  - asset/15af924ab240eae3ddbc1319c59018b3f77a27fb9daf8418b96214a6b30b96da
+  - asset/d1585a12ff4c30dfa1ff3e6a3dc332c9fc6029b8e93e33cb6ccb114a85b26124
+provenance:
+  provider: mcp_magnific
+  model: seedream-5-5
+  prompt: 'Wide shot, eye level angle, 24mm lens. Mira and Tomas step into the glass room. The great lamp stands dark between them. Mira stands at frame left and Tomas at frame right. They face each other. Mira: Young lighthouse keeper, about 17. Short dark-brown hair, amber eyes, a long red scarf, a navy duffle coat over a cream cable sweater, a brown plaid skirt, dark grey socks, brown lace-up boots. Left of the lamp, the oil can in both hands. Tomas: The old lighthouse keeper, about 70. White beard, grey hair under a dark-green knitted cap, small round glasses, a brown scarf, a yellow-brown oilskin coat with dark-blue shoulder and elbow patches over a brown waistcoat with a watch chain, dark-blue trousers, black rubber boots, a brass lantern. Right of the lamp, the lantern held low. Location: Lamp room, night. A round glass room at the top of the tower. The great lamp and its ring lens stand at the centre. The sea on all sides. Prop: The great lamp. A brass oil burner with a thick wick inside a tall ring lens of glass prisms. Style: medium 2D anime; palette #1d2b44, #f2b25c, #c9563c, #e9e2d0; grade blue dusk shadows, warm lamp light, soft contrast; grain none. Mood: hushed, then warm.'
+  negative_prompt: text, watermark, extra limbs, extra fingers, painterly texture
+  parameters:
+    aspect_ratio: 16:9
+  created: '2026-11-17T07:42:58Z'
+  cost:
+    amount: 45
+    currency: Magnific credits
+kept_from: sha256:cf92011be5856ef66bbd56e0c42202d3126a3851665b38aa77854a614ea3d52b
