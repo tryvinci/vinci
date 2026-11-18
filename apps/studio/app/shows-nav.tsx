@@ -162,12 +162,17 @@ export function ShowTop({
   onRoute,
   onReload,
   onClose,
+  onExport,
+  exporting = false,
 }: {
   show: OlfShow | null;
   route: Route;
   onRoute: (route: Route) => void;
   onReload: () => void;
   onClose: () => void;
+  /** A host packs the show in a worker job, then downloads it (COREPRODUC-699); local Export is a link. */
+  onExport?: () => void;
+  exporting?: boolean;
 }) {
   if (!show) return <span className="top-crumb">Shows</span>;
   if (route.view === "shot" && show.shots[route.shot]) {
@@ -253,17 +258,32 @@ export function ShowTop({
           ↻
         </button>
         {/* Design "Share", named Export (COREPRODUC-699): the show as one .volf package (SPEC.md, Package). */}
-        <OlfOnly path="/olf/share">
-          <a
-            className="ghost olf-small olf-share"
-            href={`${OLF_API}/share?path=${encodeURIComponent(show.path)}`}
-            download
-            title="Download this show as one .volf file. Import show opens it again."
-            data-testid="share"
-          >
-            Export
-          </a>
-        </OlfOnly>
+        {onExport ? (
+          <OlfOnly path="/olf/package">
+            <button
+              type="button"
+              className="ghost olf-small olf-share"
+              disabled={exporting}
+              onClick={onExport}
+              title="Pack this show as one .volf file. The download link works for 24 hours; Import show opens it again."
+              data-testid="share"
+            >
+              {exporting ? "Exporting…" : "Export"}
+            </button>
+          </OlfOnly>
+        ) : (
+          <OlfOnly path="/olf/share">
+            <a
+              className="ghost olf-small olf-share"
+              href={`${OLF_API}/share?path=${encodeURIComponent(show.path)}`}
+              download
+              title="Download this show as one .volf file. Import show opens it again."
+              data-testid="share"
+            >
+              Export
+            </a>
+          </OlfOnly>
+        )}
         <button type="button" className="ghost olf-small" onClick={onClose}>
           Close show
         </button>
