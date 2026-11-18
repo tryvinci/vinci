@@ -10,13 +10,12 @@ from __future__ import annotations
 import logging
 import shutil
 import tempfile
-import zipfile
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypeVar
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
@@ -49,7 +48,8 @@ from vinci_olf.cut import cut_view, use_approved
 from vinci_olf.edit import set_clip, set_select, set_take
 from vinci_olf.explain import explain, keep_take
 from vinci_olf.export import export
-from vinci_olf.project import read
+from vinci_olf.package import pack, unpack
+from vinci_olf.project import EXTS, read
 from vinci_olf.provenance import available as c2pa_available
 from vinci_olf.render import render, run_one
 from vinci_olf.script import bible_names, draft, import_script, preview, split_with_model
@@ -58,7 +58,6 @@ log = logging.getLogger("vinci.olf")
 router = APIRouter(prefix="/olf", tags=["olf"])
 MEDIA = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".webm", ".mov", ".wav", ".mp3", ".m4a"}
 MEDIA |= {".pdf"}  # the e-conte sheet (previs)
-DERIVED = ("exports", "previs")  # made again on request: not in the Share zip
 T = TypeVar("T")
 
 
@@ -335,11 +334,15 @@ def _olf(fn: Callable[[], T]) -> T:
 def list_shows(request: Request) -> dict[str, list[dict[str, str]]]:
     """The shows in ``$VINCI_HOME/shows``, last changed first, for the open screen's list.
 
-    A folder counts when it has ``project.yaml``; its ``title`` names it. A show in another
+    A folder counts when it has a manifest (``project.yaml``, ``.yml`` or ``.json``); its
+    ``title`` names it. A show in another
     folder still opens by its path.
     """
     rows = []
-    for manifest in (Path(request.app.state.engine.config.home) / "shows").glob("*/project.yaml"):
+    home = Path(request.app.state.engine.config.home) / "shows"
+    found = (m for ext in reversed(EXTS) for m in home.glob(f"*/project{ext}") if m.is_file())
+    manifests = {m.parent: m for m in found}
+    for manifest in manifests.values():  # project.yaml wins over .yml and .json, as in load()
         try:
             title = (read(manifest) or {}).get("title")
         except Exception:  # noqa: BLE001 - a broken manifest still lists, by its folder name
@@ -909,26 +912,13 @@ def previs_episode(body: PrevisBody) -> dict[str, Any]:
 def share(path: str) -> FileResponse:
     """The show folder as one ``<show>.volf`` package (design: Share; SPEC.md, Package).
 
-    ``exports/`` and ``previs/`` are left out (derived files). A link that leaves the show is
-    skipped, so a zip never carries a file from outside the folder.
+    ``vinci_olf.package.pack`` leaves out ``exports/``, ``previs/`` and links that leave the show.
     """
     p = _project(path)
-    handle = tempfile.NamedTemporaryFile(prefix="olf-share-", suffix=".zip", delete=False)
+    handle = tempfile.NamedTemporaryFile(prefix="olf-share-", suffix=".volf", delete=False)
     handle.close()
-    count = 0
     try:
-        with zipfile.ZipFile(handle.name, "w", zipfile.ZIP_DEFLATED) as archive:
-            for file in sorted(p.root.rglob("*")):
-                rel = file.relative_to(p.root)
-                if not file.is_file() or rel.parts[0] in DERIVED:
-                    continue
-                try:
-                    p.inside(file)  # resolves links: one that leaves the show is skipped
-                except OlfError:
-                    log.warning("olf: share skips %s (outside the show)", rel)
-                    continue
-                archive.write(file, Path(p.root.name) / rel)
-                count += 1
+        count = _olf(lambda: pack(p, handle.name))  # too large for one package: HTTP 400
     except BaseException:
         Path(handle.name).unlink(missing_ok=True)  # a failed zip leaves no temp file behind
         raise
@@ -940,6 +930,43 @@ def share(path: str) -> FileResponse:
         filename=name,
         background=BackgroundTask(Path(handle.name).unlink, missing_ok=True),
     )
+
+
+@router.post("/import")
+def import_show(request: Request, file: UploadFile) -> dict[str, Any]:
+    """Unpack a ``.volf`` package as a new show in ``$VINCI_HOME/shows`` (design: Import show).
+
+    The folder is named after the show ID (``tidewatch``, then ``tidewatch-2``...), so an import
+    never writes over a show. A show with OLF issues still imports: the Studio lists them, as for
+    any folder. A file that is not a package, or breaks a package rule, is refused (HTTP 400).
+    """
+    shows = Path(request.app.state.engine.config.home) / "shows"
+    shows.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=".import-", dir=shows))  # same disk: a rename moves it
+    try:
+        root = _olf(lambda: unpack(file.file, staging / "show"))
+        p = _olf(lambda: load(root))  # a manifest that does not load is the package's fault: 400
+        name = str(p.manifest.get("show") or Path(file.filename or "show").stem)
+        slug = _slug(name)[:64].strip("-") or "show"  # a folder name has a length limit
+        for n in range(1, 1000):
+            dest = shows / (slug if n == 1 else f"{slug}-{n}")
+            try:
+                dest.mkdir()  # claims the name: a parallel import of one show gets the next
+            except FileExistsError:
+                continue
+            try:
+                root.replace(dest)  # onto the empty folder just claimed (POSIX rename)
+            except OSError:
+                dest.rmdir()  # give the name back: a failed import leaves no empty show
+                raise
+            break
+        else:
+            raise HTTPException(status_code=409, detail=f"too many shows named {slug}")
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+    log.info("olf: imported %s as %s", file.filename, dest)
+    # Resolved, as /shows and /project report it (a URL slug's key hashes it, COREPRODUC-698).
+    return {"path": str(dest.resolve()), "title": str(p.manifest.get("title") or dest.name)}
 
 
 @router.get("/file")

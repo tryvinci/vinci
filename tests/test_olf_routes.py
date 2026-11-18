@@ -39,6 +39,7 @@ def test_routes_are_listed_for_the_studio(client: TestClient) -> None:
         "/olf/camerawork",
         "/olf/previs",
         "/olf/shows",
+        "/olf/import",
     ):
         assert path in paths  # the Studio feature-detects the Shows page with /olf/project
 
@@ -302,7 +303,53 @@ def test_share_leaves_no_temp_file_when_zipping_fails(
     monkeypatch.setattr(zipfile.ZipFile, "write", full_disk)
     failing = TestClient(client.app, raise_server_exceptions=False)
     assert failing.get("/olf/share", params={"path": path}).status_code == 500
-    assert not list(temp.glob("olf-share-*.zip"))
+    assert not list(temp.glob("olf-share-*"))  # any suffix: .volf since 2026-11-18
+
+
+def test_import_a_volf_package(client: TestClient) -> None:
+    """Export then Import (COREPRODUC-699): a new folder next to the show, never over it."""
+    path = client.post("/olf/sample").json()["path"]
+    package = client.get("/olf/share", params={"path": path}).content
+    first = client.post("/olf/import", files={"file": ("tidewatch.volf", package)})
+    assert first.status_code == 200, first.text
+    assert first.json() == {"path": str(Path(path).parent / "tidewatch-2"), "title": "Tidewatch"}
+    again = client.post("/olf/import", files={"file": ("tidewatch.volf", package)}).json()
+    assert again["path"].endswith("tidewatch-3")
+    opened = client.get("/olf/project", params={"path": first.json()["path"]}).json()
+    assert opened["shots"] and not [i for i in opened["issues"] if i["level"] == "error"]
+    rows = client.get("/olf/shows").json()["shows"]
+    assert {Path(r["path"]).name for r in rows} >= {"tidewatch", "tidewatch-2", "tidewatch-3"}
+    bad = client.post("/olf/import", files={"file": ("notes.volf", b"not a zip")})
+    assert bad.status_code == 400 and "not a .volf package" in bad.json()["detail"]
+    shows = Path(path).parent
+    assert not [p for p in shows.iterdir() if p.name.startswith(".import-")]  # no staging left
+    # A show whose manifest is project.json lists too (SPEC.md: the JSON form is valid).
+    (shows / "jsonshow").mkdir()
+    (shows / "jsonshow" / "project.json").write_text('{"spec": "olf/0.1", "show": "j", "title": "J"}')
+    titles = {r["title"] for r in client.get("/olf/shows").json()["shows"]}
+    assert "J" in titles
+    # A very long show ID is cut to a folder name the disk accepts.
+    long = shows / "longshow"
+    shutil.copytree(path, long)
+    manifest = long / "project.yaml"
+    manifest.write_text(manifest.read_text().replace("show: tidewatch", "show: " + "a" * 300))
+    pkg = client.get("/olf/share", params={"path": str(long)}).content
+    named = client.post("/olf/import", files={"file": ("long.volf", pkg)})
+    assert named.status_code == 200 and Path(named.json()["path"]).name == "a" * 64
+
+
+def test_export_too_large_is_a_plain_400(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from functools import partial
+
+    from vinci_daemon import olf_routes
+    from vinci_olf.package import pack
+
+    path = client.post("/olf/sample").json()["path"]
+    monkeypatch.setattr(olf_routes, "pack", partial(pack, max_files=3))
+    shared = client.get("/olf/share", params={"path": path})
+    assert shared.status_code == 400 and "too large for one package" in shared.json()["detail"]
 
 
 def test_voice_routes(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:

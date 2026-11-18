@@ -796,6 +796,46 @@ test.describe("Shows (OLF movie engine)", () => {
     expect(errors).toEqual([]);
   });
 
+  test("export a show as .volf, then import it as a new show (COREPRODUC-699)", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("vinci-onboard-v1", "done");
+      localStorage.removeItem("vinci-shows-recent-v1");
+    });
+    // Boot reads the page from the URL when it ends (GET /runs): a rail click before that is undone.
+    const booted = page.waitForResponse((res) => res.url().endsWith("/vinci-api/runs") && res.request().method() === "GET");
+    await page.goto("/");
+    await booted;
+    const sample = String((await (await page.request.post("/vinci-api/olf/sample")).json()).path);
+    // The package Export downloads: the same bytes the top bar's Export link serves.
+    const share = await page.request.get(`/vinci-api/olf/share?path=${encodeURIComponent(sample)}`);
+    const tmp = mkdtempSync(path.join(os.tmpdir(), "volf-"));
+    const file = path.join(tmp, "tidewatch.volf");
+    writeFileSync(file, await share.body());
+    let imported = "";
+    try {
+      await page.locator('nav button[aria-label="Shows"]').click();
+      await expect(page.getByTestId("shows-import")).toBeEnabled();
+      const chooser = page.waitForEvent("filechooser");
+      const answer = page.waitForResponse((res) => res.url().includes("/olf/import"));
+      await page.getByTestId("shows-import").click();
+      await (await chooser).setFiles(file);
+      const answered = String((await (await answer).json()).path);
+      expect(path.basename(answered)).toMatch(/^tidewatch-\d+$/); // never over the sample
+      imported = answered; // only a checked copy is removed at the end
+      await expect(page.getByTestId("shows-notice")).toContainText("Imported Tidewatch");
+      await expect(page.locator(".top-crumb")).toContainText("Tidewatch");
+      // Both shows are called Tidewatch: the newest recent show proves the copy opened.
+      await expect
+        .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("vinci-shows-recent-v1") || "[]")[0]))
+        .toBe(imported);
+      await expect(page.getByTestId("share")).toHaveText("Export");
+      await page.screenshot({ path: path.join(shots, "shows_imported.png") });
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+      if (imported) rmSync(imported, { recursive: true, force: true });
+    }
+  });
+
   test("Close show sticks: no show opens by itself until one is opened (COREPRODUC-700)", async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem("vinci-onboard-v1", "done");
