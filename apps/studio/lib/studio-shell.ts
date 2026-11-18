@@ -319,7 +319,8 @@ export function pageFromUrl(search: string, hash: string): PageId | "" {
   } catch {
     named = ""; // a malformed hash (`#%`) names no page
   }
-  const want = named || new URLSearchParams(search).get("page") || "";
+  // `#shows/lamp-oil-b1b8cc8b/cut/e01`: the first part names the page, the rest a place in it (COREPRODUC-698).
+  const want = named.split("/")[0] || new URLSearchParams(search).get("page") || "";
   return (PAGE_IDS as readonly string[]).includes(want) ? (want as PageId) : "";
 }
 

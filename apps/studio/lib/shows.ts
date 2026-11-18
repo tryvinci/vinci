@@ -810,3 +810,52 @@ export function cueAt(cut: OlfCut, seconds: number): string {
   }
   return "";
 }
+
+/** Where the Shows page is. Storyboard and Shots belong to an episode; a shot opens its own page. */
+export type ShowRoute =
+  | { view: "storyboard" | "shots" | "cut"; episode: string }
+  | { view: "shot"; shot: string }
+  | { view: "bible"; entry: string }
+  | { view: "issues" };
+
+/**
+ * The 8 characters that pick a show out in a URL: a host's show id (`show:<id>`), else a hash of the
+ * local folder path (FNV-1a, hex), so the title part can change without breaking a link (COREPRODUC-698).
+ */
+export function showKey(path: string): string {
+  if (path.startsWith("show:")) return path.slice(5, 13);
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < path.length; i += 1) hash = Math.imul(hash ^ path.charCodeAt(i), 0x01000193) >>> 0; // each UTF-16 unit
+  return hash.toString(16).padStart(8, "0");
+}
+
+/** A show's slug in the URL: its title, then its key: `Lamp Oil` → `lamp-oil-b1b8cc8b`. */
+export function showSlug(path: string, title: string): string {
+  const words = title.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+  return `${words ? words.replace(/-+$/, "") + "-" : ""}${showKey(path)}`;
+}
+
+/** The key at the end of a slug (`lamp-oil-b1b8cc8b` → `b1b8cc8b`); the title part is ignored. */
+export function slugKey(slug: string): string {
+  return slug.slice(-8);
+}
+
+/** A Shows place as the URL says it: `cut/e01`, `shot/e01/s03/sh010`, `bible/char/ada`, `issues`. */
+export function routePart(route: ShowRoute): string {
+  if (route.view === "shot") return `shot/${route.shot}`;
+  if (route.view === "bible") return `bible/${route.entry}`;
+  if (route.view === "issues") return "issues";
+  return `${route.view}/${route.episode}`;
+}
+
+/** The Shows place a URL part names, or null for a part this page does not know. */
+export function partRoute(part: string): ShowRoute | null {
+  const [view, ...rest] = part.split("/");
+  const arg = rest.join("/");
+  if (view === "issues") return { view: "issues" };
+  if (!arg) return null;
+  if (view === "storyboard" || view === "shots" || view === "cut") return { view, episode: arg };
+  if (view === "shot") return { view: "shot", shot: arg };
+  if (view === "bible") return { view: "bible", entry: arg };
+  return null;
+}

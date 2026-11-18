@@ -10,6 +10,8 @@ export default defineConfig({
   timeout: 90_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
+  // One worker: the specs share one daemon (SQLite) and the one `/olf/sample` folder that some reset.
+  workers: 1,
   retries: 0,
   use: {
     baseURL: process.env.STUDIO_URL || "http://127.0.0.1:4311",

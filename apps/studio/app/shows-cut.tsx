@@ -36,10 +36,25 @@ type ClipFields = Record<string, string | number | null>;
  * the start of the clip, as the export does. "Add music cue" renders a music or SFX cue (price
  * first) and places it at the playhead; the cues play over the preview at their volume.
  */
+/** The steps a host's export job reports (`stage`), as the Cut button says them. */
+const EXPORT_STEPS: Record<string, string> = {
+  starting: "Starting the export",
+  loading: "Getting your takes",
+  rendering: "Rendering",
+  saving: "Saving",
+};
+
+/** The Cut button while an export runs: its step and the time since it started ("Rendering… 2:41"). */
+export function exportLabel(job: { stage: string; since: number }, now: number): string {
+  const secs = Math.max(0, Math.floor((now - job.since) / 1000));
+  return `${EXPORT_STEPS[job.stage] || "Exporting"}… ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+}
+
 export function CutView({
   show,
   cut,
   busy,
+  job,
   result,
   onUseApproved,
   onClip,
@@ -49,6 +64,8 @@ export function CutView({
   show: OlfShow;
   cut: OlfCut | null;
   busy: string;
+  /** The running export: its step and start (ms). */
+  job?: { stage: string; since: number } | null;
   result: OlfExport | null;
   onUseApproved: () => void;
   onClip: (index: number, fields: ClipFields) => void;
@@ -66,6 +83,12 @@ export function CutView({
   const [otio, setOtio] = useState(false); // also OpenTimelineIO and stems
   const [sound, setSound] = useState(true); // off: no audio stream, the lines are only subtitles
   const [loading, setLoading] = useState(false); // a clip on screen is loading: the clock waits
+  const [now, setNow] = useState(() => Date.now()); // the export timer's clock
+  useEffect(() => {
+    if (!job) return;
+    const tick = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(tick);
+  }, [job]);
   const stage = useRef<HTMLDivElement>(null);
   const duration = cut?.duration || 0;
 
@@ -400,8 +423,13 @@ export function CutView({
             onClick={() => onExport(aspects, subtitles, !!cut.c2pa && signed, otio, sound)}
             data-testid="cut-export-button"
           >
-            {busy === "export" ? "Exporting…" : "Export episode"}
+            {busy === "export" ? (job ? exportLabel(job, now) : "Exporting…") : "Export episode"}
           </button>
+          {busy === "export" ? (
+            <p className="muted olf-export-hint" role="status" data-testid="cut-export-hint">
+              An export takes a few minutes. You can leave this page; it goes on, and Cut shows the files when it is done.
+            </p>
+          ) : null}
           {result ? (
             <ul className="olf-export-files" data-testid="cut-export-files">
               {result.files.map((file) => (

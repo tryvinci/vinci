@@ -6,6 +6,7 @@ import {
   OLF_API,
   type OlfEntry,
   type OlfShow,
+  type ShowRoute,
   entryName,
   episodeGroups,
   episodeOf,
@@ -18,12 +19,8 @@ import {
 } from "../lib/shows";
 import { OlfOnly, StalePill, StatusPill } from "./shows-parts";
 
-/** Where the Shows page is. Storyboard and Shots belong to an episode; a shot opens its own page. */
-export type Route =
-  | { view: "storyboard" | "shots" | "cut"; episode: string }
-  | { view: "shot"; shot: string }
-  | { view: "bible"; entry: string }
-  | { view: "issues" };
+/** Where the Shows page is (`lib/shows.ts`, so the URL helpers there can use it). */
+export type Route = ShowRoute;
 
 /** The episode a route belongs to (bible and issues fall back to the first episode). */
 export function routeEpisode(show: OlfShow, route: Route): string | undefined {

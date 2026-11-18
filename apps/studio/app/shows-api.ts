@@ -17,17 +17,21 @@ export const polling = new Set<string>();
 const POLL_MS = 2000;
 const wait = () => new Promise((done) => window.setTimeout(done, POLL_MS));
 
+/** A host's export job as `GET /olf/exports/{id}` answers it: its state, its step and when it started. */
+export type ExportJob = { id: string; state: string; stage?: string | null; created_at?: string };
+
 /**
  * Call the daemon's OLF routes. A 4xx carries the engine's own message, which is written for people.
  * A host answers a long step at once (HTTP 202) and runs it after: a render as a run (`run_id`), an
  * export as a job (`export_id`). This waits for its end, so callers get the finished answer either way.
+ * `onJob` hears each answer of an export job (its id first), so the page can show its step.
  */
-export async function olf<T>(path: string, init?: RequestInit): Promise<T> {
+export async function olf<T>(path: string, init?: RequestInit, onJob?: (job: ExportJob) => void): Promise<T> {
   const res = await fetch(OLF_API + path, init);
   const body = (await res.json().catch(() => ({}))) as { detail?: unknown; run_id?: string; export_id?: string };
   if (!res.ok) throw new Error(String(body.detail || res.statusText || "The request failed"));
   if (res.status === 202 && body.run_id) return { ...body, ...(await waitRun(body.run_id)) } as T;
-  if (res.status === 202 && body.export_id) return (await waitExport(body.export_id)) as T;
+  if (res.status === 202 && body.export_id) return (await waitExport(body.export_id, onJob)) as T;
   return body as T;
 }
 
@@ -62,13 +66,49 @@ export async function waitRun(id: string): Promise<{ takes: string[]; total: num
   }
 }
 
-/** Poll a host's export job (`GET /olf/exports/{id}`) until its files are ready. */
-async function waitExport(id: string): Promise<unknown> {
-  for (;;) {
-    await wait();
-    const job = await olf<{ state: string; error?: string }>(`/exports/${encodeURIComponent(id)}`);
-    if (job.state === "done") return job;
-    if (job.state === "failed") throw new Error(job.error || "The export failed");
+/** The export's status could not be read for a while (network, server): the job may still run, so the page keeps its id. */
+export class ExportUnreachable extends Error {}
+
+/**
+ * Poll a host's export job (`GET /olf/exports/{id}`) until its files are ready. The page also calls
+ * it after a reload, with the id it kept for the tab. A failed status read is tried again, with a
+ * longer wait each time (2, 4, 8, 16, 30 s); only `done`, `failed` or a 404 end the job for good.
+ */
+export async function waitExport(id: string, onJob?: (job: ExportJob) => void): Promise<unknown> {
+  onJob?.({ id, state: "queued" });
+  for (let misses = 0; ; ) {
+    await new Promise((done) => window.setTimeout(done, Math.min(POLL_MS * 2 ** misses, 30_000)));
+    const read = await readExport(id);
+    if (read.job) {
+      misses = 0;
+      onJob?.({ ...read.job, id });
+      if (read.job.state === "done") return read.job;
+      if (read.job.state === "failed") throw new Error(read.job.error || "The export failed");
+      continue;
+    }
+    if (read.status === 404) throw new Error(read.detail || "That export is not in your Studio.");
+    misses += 1;
+    console.warn("[shows] export status failed", { id, status: read.status, misses });
+    if (misses >= 6) throw new ExportUnreachable("Could not reach Vinci for the export. It may still be running: open Cut again later to see its files.");
+  }
+}
+
+/**
+ * One status read of an export job, whole within 20 s (headers and body). A read that times out, fails
+ * or has no `state` gives no `job`, so the caller waits and tries again.
+ */
+async function readExport(id: string): Promise<{ job?: Omit<ExportJob, "id"> & { error?: string }; status: number | string; detail?: string }> {
+  const stop = new AbortController();
+  const timer = window.setTimeout(() => stop.abort(), 20_000);
+  try {
+    const res = await fetch(`${OLF_API}/exports/${encodeURIComponent(id)}`, { signal: stop.signal });
+    const body = (await res.json()) as Omit<ExportJob, "id"> & { error?: string; detail?: string };
+    if (res.ok && typeof body?.state === "string") return { job: body, status: res.status };
+    return { status: res.status, detail: body?.detail ? String(body.detail) : undefined };
+  } catch (err) {
+    return { status: stop.signal.aborted ? "timeout" : err instanceof SyntaxError ? "unreadable" : "network" };
+  } finally {
+    window.clearTimeout(timer);
   }
 }
 

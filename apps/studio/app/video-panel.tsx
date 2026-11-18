@@ -5,6 +5,7 @@ import { useMenuEscape } from "./ui/focus";
 import { asLibraryItem, mentionableItems, type LibraryItem } from "../lib/library";
 import { AdvancedDisclosure } from "./ui/advanced";
 import { PromptMention } from "./prompt-mention";
+import { useUrlPart } from "./url-part";
 import { ProblemNote } from "./ui/problem-note";
 import type { RunAction, RunProblem } from "./ui/plain-text";
 import {
@@ -128,6 +129,9 @@ export function VideoPanel({
   onOpenPresets: () => void;
 }) {
   const [tab, setTab] = useState<VideoTab>("Create");
+  // The tab is in the URL: `#video/motion-control` (COREPRODUC-698). "Create" is the page itself.
+  const tabPart = (name: string) => (name === VIDEO_TABS[0] ? "" : name.toLowerCase().replace(/\s+/g, "-"));
+  useUrlPart("video", true, tabPart(tab), (part) => setTab(VIDEO_TABS.find((name) => tabPart(name) === part) || VIDEO_TABS[0]));
   const [menu, setMenu] = useState<Menu>(null);
   const [over, setOver] = useState(false);
   const [modeNote, setModeNote] = useState(""); // why a grayed-out mode cannot be picked
