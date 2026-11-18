@@ -40,6 +40,7 @@ import {
 import { type ExportJob, ExportUnreachable, OlfRoutes, message, olf, polling, runJobs, send, waitExport, waitRun } from "./shows-api";
 import { setUrlPart, topWindow, urlParts } from "./url-part";
 import { BibleView, IssuesView } from "./shows-bible";
+import { OlfOnly } from "./shows-parts";
 import { CutView } from "./shows-cut";
 import { type Route, ShowNav, ShowTop, routeEpisode } from "./shows-nav";
 import { NewShow } from "./shows-setup";
@@ -177,6 +178,14 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
   // new episode showed only after Reload; an older /project answer (a render poll) could land last.
   // A reload (`keepView`) is for the show on screen only: it never replaces a show being opened.
   const openRun = useRef(0);
+  const [listKey, setListKey] = useState(0); // a bump loads the open screen's list again
+  const mounted = useRef(true); // an import that ends after the page left opens nothing
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const shownPath = useRef<string | null>(null);
   const opening = useRef(false);
   useEffect(() => {
@@ -267,7 +276,7 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
     return () => {
       live = false;
     };
-  }, [available, show, routes]);
+  }, [available, show, routes, listKey]);
 
   useEffect(() => {
     // A host runs renders after its answer: poll the ones that are still running (after a reload
@@ -545,6 +554,28 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new show or episode resumes
   }, [cutKey]);
 
+  /** Import a `.volf` package (SPEC.md, Package) as a new show, then open it. */
+  async function importShow(file: File) {
+    setLoading(true);
+    const run = openRun.current; // a show opened or closed meanwhile moves it on: then do not open
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const { path, title } = await olf<{ path: string; title: string }>("/import", { method: "POST", body: form });
+      console.info("[shows] imported", { file: file.name, bytes: file.size, path, stale: run !== openRun.current });
+      if (!mounted.current) return;
+      setListKey((n) => n + 1); // the list shows the new show even if its first load fails
+      if (run !== openRun.current) {
+        if (!opening.current) setLoading(false); // a newer load owns the spinner while it runs
+        setNotice(`Imported ${title}. It is in Your shows.`);
+      } else if (await open(path)) setNotice(`Imported ${title}`);
+    } catch (err) {
+      console.warn("[shows] import failed", { file: file.name, error: message(err) });
+      setError(message(err));
+      setLoading(false);
+    }
+  }
+
   async function openSample() {
     setLoading(true);
     try {
@@ -718,6 +749,7 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
         folders={!hosted}
         onOpen={(path) => void open(path)}
         onSample={() => void openSample()}
+        onImport={(file) => void importShow(file)}
         onNew={() => setCreating(true)}
       />,
     );
@@ -882,6 +914,7 @@ function OpenShow({
   folders,
   onOpen,
   onSample,
+  onImport,
   onNew,
 }: {
   busy: boolean;
@@ -894,9 +927,12 @@ function OpenShow({
   folders: boolean;
   onOpen: (path: string) => void;
   onSample: () => void;
+  /** A `.volf` package the person picked: `POST /olf/import`. */
+  onImport: (file: File) => void;
   onNew: () => void;
 }) {
   const [path, setPath] = useState("");
+  const picker = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   function submit(ev: FormEvent) {
     ev.preventDefault();
@@ -916,6 +952,23 @@ function OpenShow({
       <button className="ghost" type="button" disabled={busy || !ready} onClick={onSample} data-testid="shows-open-sample">
         {busy ? "Opening…" : "Open the sample show"}
       </button>
+      <OlfOnly path="/olf/import">
+        <button className="ghost" type="button" disabled={busy || !ready} onClick={() => picker.current?.click()} data-testid="shows-import">
+          Import show
+        </button>
+        <input
+          ref={picker}
+          type="file"
+          accept=".volf,.zip"
+          hidden
+          data-testid="shows-import-file"
+          onChange={(ev) => {
+            const file = ev.target.files?.[0];
+            ev.target.value = ""; // the same file can be picked again
+            if (file) onImport(file);
+          }}
+        />
+      </OlfOnly>
     </>
   );
   const folderForm = folders ? (
