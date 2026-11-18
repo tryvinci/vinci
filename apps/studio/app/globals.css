@@ -333,6 +333,7 @@ kbd {
   transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
 }
 .ghost:hover, .chip:hover { border-color: rgb(255 255 255 / 0.16); background: var(--hover); color: var(--ink); }
+.ghost:active:not(:disabled) { transform: translateY(1px); }
 .ghost:disabled { color: var(--mute); cursor: default; border-color: var(--line); background: transparent; }
 .run {
   border: 0;
@@ -633,6 +634,7 @@ form .gen-progress { width: 100%; margin-top: 10px; } /* Effects: under Generate
 label { display: block; font-size: 11px; color: var(--mute); margin: 0 0 4px; letter-spacing: 0.04em; }
 .log { color: var(--dim); white-space: pre-wrap; min-height: 2.2rem; }
 .log.error { color: var(--danger, #f07167); }
+.host-keys .log:empty { min-height: 0; margin: 0; } /* a Connect card keeps its empty status region */
 .foot { padding: 16px 22px 20px; border-top: 1px solid var(--line); }
 .foot .run { width: 100%; display: flex; justify-content: space-between; }
 .keys { padding: 28px 32px 48px; max-width: 44rem; position: relative; }
@@ -1089,6 +1091,7 @@ input[type="range"] { accent-color: var(--teal); width: 100%; padding: 0; border
 }
 .image-card-thumb img,
 .image-card-thumb video { width: 100%; display: block; }
+.image-card.pending .spinner { position: static; } /* stack above "Waiting to start…", not over it */
 .image-card.pending .image-card-thumb {
   min-height: 180px; display: grid; place-items: center; gap: 8px;
   color: var(--ink, #f6f3ee);

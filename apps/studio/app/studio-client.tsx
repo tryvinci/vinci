@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
-import { HostKeys, providerName } from "./host-keys";
+import { HostKeys, providerName, type HostNote } from "./host-keys";
 import { AdaptFlowCanvas } from "./adapt-flow-canvas";
 import { AdaptsPanel, EMPTY_PRESET_DRAFT, type PresetDraft } from "./adapts-panel";
 import { EffectShell } from "./effect-shell";
@@ -739,7 +739,6 @@ export function StudioClient() {
   const [duration, setDuration] = useState("");
   const [scale, setScale] = useState("4x");
   const [uploadId, setUploadId] = useState<string | null>(null);
-  const [keyError, setKeyError] = useState(false); // the last Connect save failed
   const [graphHistory, setGraphHistory] = useState(() => startHistory(EMPTY_GRAPH));
   const graph = graphHistory.present;
   /** Every canvas edit goes through here so it can be undone. */
@@ -884,7 +883,11 @@ export function StudioClient() {
   const linkFromRef = useRef<string | null>(null);
   const composeStillRef = useRef<HTMLInputElement>(null);
   const adaptFileRef = useRef<HTMLInputElement>(null);
-  const oauthAttemptRef = useRef(0);
+  const oauthAttemptRef = useRef<Record<string, number>>({}); // per provider: a newer click or a sign-out ends a wait
+  // Connect feedback per provider (no feedback before, 2026-11-18, COREPRODUC-689): the result and the
+  // sign-in page link stay with their own card, and run messages in the shared log cannot replace them.
+  const [notes, setNotes] = useState<Record<string, HostNote>>({});
+  const [pending, setPending] = useState<Record<string, "in" | "out">>({});
   const localOnlyRef = useRef(false); // set by "Use local models"; boot() then keeps demo on
   const [adaptPresets, setAdaptPresets] = useState<AdaptPresetRow[]>([]);
   const [adaptSourceId, setAdaptSourceId] = useState<string | null>(null);
@@ -995,6 +998,9 @@ export function StudioClient() {
     () => (busySince && selected ? { startedAt: busySince, seconds: averageSeconds(runs, selected.id, modelKind(selected.capabilities)) } : null),
     [busySince, runs, selected],
   );
+  // The cards of an Image run still going, by card number: the clock from when its run was posted,
+  // or null (not posted yet). The estimate is the one of the model the run was sent with.
+  const [cardClocks, setCardClocks] = useState<Record<number, RunClock | null> | null>(null);
   /** A running canvas node's clock, from its own model's average. */
   const nodeClock = (n: GraphNode): RunClock | null => {
     const run = nodeState(n.id);
@@ -2066,22 +2072,49 @@ export function StudioClient() {
       // The pictures of a batch run together. Bug fixed (first occurrence, 2026-11-13 production crawl,
       // COREPRODUC-642): count 4 waited for each run to end before posting the next, so the last started
       // about 60 s after the click. They are posted one after another (a host admits each against the
-      // credits the earlier ones hold, and answers at once), then polled together.
+      // credits the earlier ones hold).
+      // Each run is polled as soon as its POST answers, and its card has its own clock and leaves
+      // the feed when that run ends. Bug fixed (first occurrence, 2026-11-18 prod logs, 1 user report):
+      // a hosted POST takes 15-22 s (it submits to the provider), so the 4th run started about 50 s
+      // after the click, but all 4 cards shared one clock and the results came back only together.
+      // A host POST that answers at once is COREPRODUC-687.
+      const imageCards = !canvasRun && page === "image";
+      const seconds = averageSeconds(runs, model?.id || "", modelKind(model?.capabilities || []));
+      const dropCard = (i: number) => setCardClocks((s) => s && Object.fromEntries(Object.entries(s).filter(([k]) => Number(k) !== i)));
+      if (imageCards) setCardClocks(Object.fromEntries(Array.from({ length: times }, (_, i) => [i, null])));
       const posted: Run[] = [];
+      const followed: Promise<Run>[] = [];
       let refused: unknown = null;
       for (let i = 0; i < times; i += 1) {
         try {
-          posted.push(await postRun(times > 1 ? { ...payload, inputs: { ...inputs, seed: base + i } } : payload));
+          const startedAt = Date.now(); // when this POST is sent, not when React runs the updater
+          if (imageCards) setCardClocks((s) => s && { ...s, [i]: { startedAt, seconds } });
+          const run = await postRun(times > 1 ? { ...payload, inputs: { ...inputs, seed: base + i } } : payload);
+          posted.push(run);
+          console.info("[studio] batch: run posted", { card: i, run: run.id, state: run.state });
+          // When its run ends, the feed reloads (a host has no /library: its feed comes from /runs and
+          // /assets), then its card leaves. This runs beside the batch, so a stalled reload cannot hold
+          // it; it also handles a failed poll at once (the batch still reports it).
+          const follow = waitRun(run);
+          const leave = () => {
+            if (!imageCards || times < 2) return;
+            void loadMedia()
+              .catch((err) => console.warn("[studio] batch: feed reload failed", { card: i, err: String(err) }))
+              .finally(() => dropCard(i));
+          };
+          follow.then(leave, leave);
+          followed.push(follow);
         } catch (err) {
           refused = err;
           break;
         }
       }
+      if (imageCards) for (let i = posted.length; i < times; i += 1) dropCard(i); // never started
       if (posted.length) setRunIds((ids) => [...ids, ...posted.map((run) => run.id)]);
       if (!posted.length) throw refused ?? new Error("Generate did not start a run.");
       if (refused) console.warn("[studio] batch: some runs did not start", { started: posted.length, of: times, err: String(refused) });
       // One failed poll must not drop the runs that finish: keep their results, report the failure apart.
-      const polled = await Promise.allSettled(posted.map(waitRun));
+      const polled = await Promise.allSettled(followed);
       const started = polled.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
       const lost = polled.find((r): r is PromiseRejectedResult => r.status === "rejected");
       if (!started.length) throw lost?.reason ?? new Error("Generate did not start a run.");
@@ -2118,6 +2151,7 @@ export function StudioClient() {
       if (failed.length && epoch === graphEpochRef.current) setNodeRuns((prev) => ({ ...prev, ...Object.fromEntries(failed.map((id) => [id, { state: "error" as const, error: message }])) }));
     } finally {
       trackedRef.current = [];
+      setCardClocks(null);
       setBusy(false);
     }
   }
@@ -2152,6 +2186,11 @@ export function StudioClient() {
 
   /** Re-run an Assets item with the sidecar params, then open the matching compose page. */
   async function rerunFromLibrary(item: AssetItem) {
+    if (busy) {
+      // As in generate: a Re-run must not end an Image batch's busy state and card clocks.
+      setLog("Wait for the run in progress to end, then Re-run.");
+      return;
+    }
     const nextPage = (item.rerun_page as PageId) || "image";
     const params = item.params || {};
     const promptText = item.prompt || (typeof params.prompt === "string" ? params.prompt : "");
@@ -2531,8 +2570,34 @@ export function StudioClient() {
     setTlStatus("Done");
   }
 
+  /**
+   * Show a Connect result for one provider: on its card on a host, and in the page log while that
+   * provider is the picked one (the local Connect page).
+   *
+   * Args:
+   *   id: The provider id.
+   *   text: The message; "" clears it.
+   *   error: The action failed (the card shows an alert).
+   *   url: The sign-in page, linked while the Studio waits for the sign-in.
+   */
+  function note(id: string, text: string, error = false, url = "") {
+    if (text) console.info("[connect]", { id, text, error });
+    setNotes((n) => ({ ...n, [id]: { text, error, url } }));
+    if (connectIdRef.current === id) setLog(text);
+  }
+
+  /** Mark a provider's action as running ("in" or "out"), or as done (no action). */
+  function markPending(id: string, action?: "in" | "out") {
+    setPending((p) => {
+      const next = { ...p };
+      if (action) next[id] = action;
+      else delete next[id];
+      return next;
+    });
+  }
+
   async function saveProvider(id: string) {
-    setKeyError(false);
+    note(id, "");
     const payload: Record<string, string> = { id };
     if (keyDraft[`key-${id}`]) payload.secret = keyDraft[`key-${id}`];
     else if (keyDraft[`env-${id}`]) payload.from_env = keyDraft[`env-${id}`];
@@ -2554,19 +2619,15 @@ export function StudioClient() {
       // typed while the save ran is not saved, so it stays.
       setKeyDraft((d) => ({ ...d, ...Object.fromEntries(fields.filter((f) => d[f] === sent[f]).map((f) => [f, ""])) }));
       // The result shows under the connector it is for, not under one picked while it ran.
-      if (connectIdRef.current === id) {
-        setLog(
-          body.available
-            ? `${id} is on.` + (doctor.live_spend ? "" : " Paid runs are off.")
-            : `${id} is saved. Add a key in Connect if it is still off.`,
-        );
-      }
+      note(
+        id,
+        body.available
+          ? `${id} is on.` + (doctor.live_spend ? "" : " Paid runs are off.")
+          : `${id} is saved. Add a key in Connect if it is still off.`,
+      );
       setPage("keys");
     } catch (err) {
-      if (connectIdRef.current === id) {
-        setLog(plainError(err));
-        setKeyError(true); // shown as an error, not as grey status text (COREPRODUC-642)
-      }
+      note(id, plainError(err), true); // shown as an error, not as grey status text (COREPRODUC-642)
     }
   }
 
@@ -2576,13 +2637,19 @@ export function StudioClient() {
    */
   async function removeProvider(id: string) {
     setConnectId(id);
+    oauthAttemptRef.current[id] = (oauthAttemptRef.current[id] || 0) + 1; // a sign-out ends a sign-in wait
+    note(id, ""); // an old result must not show next to the new action
+    markPending(id, "out");
     const name = doctor.providers?.[id]?.display_name || id;
     try {
       await api(`/providers/${encodeURIComponent(id)}`, { method: "DELETE" });
       await boot();
-      setLog(id.startsWith("mcp_") ? `Signed out of ${name}.` : `${name} key removed.`);
+      note(id, id.startsWith("mcp_") ? `Signed out of ${name}.` : `${name} key removed.`);
     } catch (err) {
-      setLog(plainError(err));
+      console.warn("[connect] remove failed", { id, err });
+      note(id, plainError(err), true);
+    } finally {
+      markPending(id);
     }
   }
 
@@ -2613,48 +2680,65 @@ export function StudioClient() {
     }
   }
 
+  /**
+   * Start a sign-in (`POST /providers/{id}/oauth`), open the provider's page, and wait up to five
+   * minutes for the sign-in to land. A new click ends the old wait.
+   *
+   * Args:
+   *   id: The provider id, such as `mcp_higgsfield`.
+   */
   async function oauthStart(id: string) {
+    const attempt = (oauthAttemptRef.current[id] || 0) + 1;
+    oauthAttemptRef.current[id] = attempt;
+    const live = () => oauthAttemptRef.current[id] === attempt; // false once a newer click or a sign-out took over
+    note(id, "");
+    markPending(id, "in");
     try {
       const body = await api<{ hint?: string; authorize_url?: string; mode?: string }>(
         `/providers/${encodeURIComponent(id)}/oauth`,
         { method: "POST" },
       );
+      if (!live()) return; // a superseded reply opens no tab
+      markPending(id);
       if (body.mode === "key") {
-        setLog(body.hint || "Paste a key for this provider.");
+        note(id, body.hint || "Paste a key for this provider.");
         return;
       }
       if (body.authorize_url) window.open(body.authorize_url, "_blank", "noopener,noreferrer");
       if (body.mode !== "oauth") {
-        setLog(body.hint || "Paste an access token.");
+        note(id, body.hint || "Paste an access token.");
         return;
       }
-      setLog("Finish sign-in in the browser.");
-      const attempt = ++oauthAttemptRef.current;
+      // The tab opens after an await, so a popup blocker can stop it without a sign: link the page too.
+      note(id, "Waiting for sign-in. Finish it in the other tab.", false, body.authorize_url || "");
       // Five minutes, not one: a person can miss the new sign-in tab for a while (seen 2026-11-12, COREPRODUC-614).
       for (let i = 0; i < 150; i += 1) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
-        if (attempt !== oauthAttemptRef.current) return;
+        if (!live()) return;
         let next: Doctor;
         try {
           next = await api<Doctor>("/doctor");
         } catch {
           continue;
         }
-        if (attempt !== oauthAttemptRef.current) return;
+        if (!live()) return;
         const row = next.providers?.[id];
         if (row?.auth_state === "needs_reconnect") {
-          setLog(`${id} needs you to sign in again.`);
+          note(id, `${id} needs you to sign in again.`, true);
           return;
         }
         if (row?.auth_state === "connected") {
           await boot();
-          setLog(`${row.display_name || id} is connected.`);
+          if (live()) note(id, `${row.display_name || id} is connected.`);
           return;
         }
       }
-      if (attempt === oauthAttemptRef.current) setLog("Still waiting for sign-in. Finish it in the browser, then come back.");
+      if (live()) note(id, "Sign-in timed out. Click Sign in again.", true);
     } catch (err) {
-      setLog(plainError(err));
+      console.warn("[connect] sign-in failed", { id, err });
+      if (live()) note(id, plainError(err), true);
+    } finally {
+      if (live()) markPending(id);
     }
   }
 
@@ -3091,7 +3175,8 @@ export function StudioClient() {
         cast={mentionItems.map(asCastRow)}
         busy={busy}
         clock={runClock}
-        pendingCount={batchCount === 4 ? 4 : 1}
+        clocks={cardClocks ? Object.values(cardClocks) : undefined}
+        pendingCount={cardClocks ? Object.keys(cardClocks).length : batchCount === 4 ? 4 : 1}
         runs={runs}
         assets={assets}
         ready={(row) => usable({ ...row, capabilities: row.capabilities || [] })}
@@ -4167,8 +4252,8 @@ export function StudioClient() {
         providers={doctor.providers || {}}
         draft={keyDraft}
         setDraft={setKeyDraft}
-        log={hostKeys.includes(connectId) ? log : ""}
-        error={keyError}
+        notes={notes}
+        pending={pending}
         onSave={(id) => {
           setConnectId(id);
           void saveProvider(id);

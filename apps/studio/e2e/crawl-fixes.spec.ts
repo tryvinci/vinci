@@ -128,6 +128,74 @@ test.describe("Production crawl fixes", () => {
     await expect(bar).toHaveCount(0, { timeout: 10_000 }); // the run ended
   });
 
+  // A host has no /library: its Image feed comes from /runs and /assets. The local daemon has one.
+  for (const library of [true, false]) {
+    test(`COREPRODUC-659: each card of a batch of 4 has its own clock and ends on its own (${library ? "/library" : "feed from /runs"})`, async ({ page }) => {
+      // Like a host: each POST takes 1.5 s (it submits to the provider) and answers "running"; a run
+      // ends when the test lets its polls through. History: the newest 20 Mock PNG runs took 30 s.
+      const t0 = Date.now() + 3_600_000; // newer than runs earlier tests made
+      const prompt = `a brass key on oak ${library ? "L" : "R"}${t0}`;
+      const ids: string[] = [];
+      const ended = new Set<string>();
+      const gates: (() => void)[] = [];
+      const open = Array.from({ length: 4 }, (_, i) => new Promise<void>((done) => (gates[i] = done)));
+      // The feed shows only this batch, and a run only once the test lets it end: the local daemon ends
+      // a run before its POST answers (a host does not), and other tests' runs would change the count.
+      const shown = (row: { id?: string; run_id?: string; prompt?: string; inputs?: { prompt?: string } }) =>
+        (row.prompt ?? row.inputs?.prompt) === prompt && ended.has(row.run_id || row.id || "");
+      if (!library) {
+        await page.route("**/vinci-api/openapi.json", async (route) => {
+          const body = (await (await route.fetch()).json()) as { paths: Record<string, unknown> };
+          delete body.paths["/library"];
+          return route.fulfill({ json: body });
+        });
+      }
+      await page.route("**/vinci-api/runs", async (route) => {
+        if (route.request().method() === "GET") {
+          const body = (await (await route.fetch()).json()) as { runs: Parameters<typeof shown>[0][] };
+          const past = Array.from({ length: 20 }, (_, n) => ({ id: `hist-${n}`, state: "completed", inputs: { model_id: "mock:png:v1" }, outputs: [], created_at: new Date(t0).toISOString(), completed_at: new Date(t0 + 30_000).toISOString() }));
+          return route.fulfill({ json: { ...body, runs: [...body.runs.filter(shown), ...past] } });
+        }
+        await new Promise((done) => setTimeout(done, 1500));
+        const body = (await (await route.fetch()).json()) as { id: string };
+        ids.push(body.id);
+        return route.fulfill({ json: { ...body, state: "running" } });
+      });
+      await page.route("**/vinci-api/runs/*", async (route) => {
+        const id = route.request().url().split("/").pop() || "";
+        await open[ids.indexOf(id)];
+        ended.add(id);
+        return route.continue();
+      });
+      await page.route("**/vinci-api/library?tool=image*", async (route) => {
+        const body = (await (await route.fetch()).json()) as { items: Parameters<typeof shown>[0][] };
+        return route.fulfill({ json: { ...body, items: body.items.filter(shown) } });
+      });
+      await boot(page);
+      await openPage(page, "Image");
+      await page.getByRole("textbox", { name: "Image prompt" }).fill(prompt);
+      await page.getByTestId("image-batch").click();
+      await page.getByRole("option", { name: "4" }).click();
+      const done = page.locator('[data-testid="image-feed"] .image-card:not(.pending)');
+      await page.getByTestId("image-generate").click();
+      const cards = page.getByTestId("image-feed-pending");
+      await expect(cards).toHaveCount(4);
+      await expect(cards.nth(3)).toContainText("Waiting to start…"); // its POST is not sent yet
+      if (library) await page.screenshot({ path: path.join(shots, "crawl_batch_waiting.png") });
+      await expect.poll(() => ids.length, { timeout: 10_000 }).toBe(4);
+      const left = async (i: number) => Number((await cards.nth(i).getByTestId("image-feed-pending-progress").innerText()).match(/About (\d+)s left/)?.[1]);
+      expect(await left(3)).toBeGreaterThan(await left(0)); // card 1 started about 4.5 s before card 4
+      if (library) await page.screenshot({ path: path.join(shots, "crawl_batch_own_clocks.png") });
+      gates[0]();
+      await expect(cards).toHaveCount(3); // the first run ended: its card leaves, its picture shows
+      await expect(done).toHaveCount(1);
+      await page.screenshot({ path: path.join(shots, `crawl_batch_first_done${library ? "" : "_runs_feed"}.png`) });
+      gates.slice(1).forEach((go) => go());
+      await expect(cards).toHaveCount(0);
+      await expect(done).toHaveCount(4);
+    });
+  }
+
   test("COREPRODUC-659: a running canvas node shows the bar; a model with no history counts from its kind's default", async ({ page }) => {
     let release = () => {};
     const held = new Promise<void>((done) => (release = done));
@@ -583,11 +651,103 @@ test.describe("Production crawl fixes on a host", () => {
     const field = page.locator("input[type=password]").first();
     await field.fill("ws-test-key-0000000000000000");
     await page.getByRole("button", { name: /^Save .* key$/ }).first().click();
-    const log = page.getByTestId("host-keys-log");
+    const log = page.getByTestId("host-keys-error");
     await expect(log).toHaveText("Could not reach Vinci. Check your connection, then try again.");
     await expect(log).toHaveClass(/error/);
     await expect(log).toHaveAttribute("role", "alert");
     await page.screenshot({ path: path.join(shots, "crawl_connect_network_error.png") });
+  });
+
+  // COREPRODUC-689, reported 2026-11-18: Sign in and Sign out gave no feedback (the button did not change, the result
+  // showed under the whole list, and a blocked sign-in tab gave no sign).
+  test("Connect: Sign in and Sign out show progress and the result on their own card", async ({ page }) => {
+    const rows: Record<string, Record<string, unknown>> = {
+      mcp_higgsfield: { display_name: "Higgsfield", configured: false, auth_state: "" },
+      mcp_magnific: { display_name: "Magnific", configured: true, auth_state: "connected" },
+    };
+    const host = { ...HOST, keys: ["wavespeed", "mcp_higgsfield", "mcp_magnific"] };
+    await page.addInitScript(() => localStorage.setItem("vinci-onboard-v1", "done"));
+    await page.route(/\/vinci-api\/doctor(\?|$)/, async (route) => {
+      const res = await route.fetch();
+      const body = await res.json();
+      await route.fulfill({ response: res, json: { ...body, host, providers: { ...body.providers, ...rows } } });
+    });
+    await page.route("**/vinci-api/providers/mcp_magnific/balance", (route) => route.fulfill({ json: { amount: 5846, currency: "credits" } }));
+    // Each held route answers when the test calls its release().
+    const hold = () => {
+      let release = () => {};
+      const held = new Promise<void>((done) => (release = done));
+      return { held, release: () => release() };
+    };
+    const signOut = hold();
+    let deletes = 0;
+    await page.route("**/vinci-api/providers/mcp_magnific", async (route) => {
+      if (route.request().method() !== "DELETE") return route.continue();
+      deletes += 1;
+      if (deletes === 1) return route.abort("failed");
+      await signOut.held;
+      rows.mcp_magnific = { display_name: "Magnific", configured: false, auth_state: "" };
+      await route.fulfill({ json: { ok: true } });
+    });
+    const signIn = hold();
+    await page.route("**/vinci-api/providers/*/oauth", async (route) => {
+      if (route.request().url().includes("mcp_magnific")) return route.abort("failed");
+      await signIn.held;
+      await route.fulfill({ json: { mode: "oauth", authorize_url: "about:blank#higgsfield-sign-in" } });
+    });
+    await page.goto("/#keys");
+    const higgs = page.locator('[data-host-key="mcp_higgsfield"]');
+    const magnific = page.locator('[data-host-key="mcp_magnific"]');
+    await expect(magnific.getByTestId("balance-mcp_magnific")).toContainText("5846");
+    await page.screenshot({ path: path.join(shots, "connect_signin_rest.png") });
+
+    // Sign out fails: an alert on the Magnific card, and the button works again.
+    await magnific.getByRole("button", { name: "Sign out" }).click();
+    await expect(magnific.getByTestId("host-keys-error")).toHaveText("Could not reach Vinci. Check your connection, then try again.");
+    await expect(magnific.getByTestId("host-keys-error")).toHaveAttribute("role", "alert");
+    await expect(magnific.getByRole("button", { name: "Sign out" })).toBeEnabled();
+    await page.screenshot({ path: path.join(shots, "connect_signout_error.png") });
+
+    // Sign out again: the button says so and takes no clicks until the reply.
+    await magnific.getByRole("button", { name: "Sign out" }).click();
+    const leaving = magnific.getByRole("button", { name: "Signing out…" });
+    await expect(leaving).toBeDisabled();
+    await expect(leaving).toHaveAttribute("aria-busy", "true");
+    await expect(magnific.getByTestId("host-keys-error")).toHaveCount(0); // the old error went
+    await expect(magnific.getByTestId("host-keys-log")).toHaveText("Signing out…"); // read by screen readers
+    await page.screenshot({ path: path.join(shots, "connect_signout_pending.png") });
+    signOut.release();
+    await expect(magnific.getByTestId("host-keys-log")).toHaveText("Signed out of Magnific.");
+    await expect(magnific.getByTestId("host-keys-log")).toHaveAttribute("role", "status");
+    await expect(magnific.getByText("Not signed in")).toBeVisible();
+    await expect(higgs.getByTestId("host-keys-log")).toHaveText(""); // not on another card
+    await page.screenshot({ path: path.join(shots, "connect_signout_done.png") });
+
+    // Sign in: "Opening sign-in…", then a wait line with a link to the sign-in page.
+    await higgs.getByRole("button", { name: "Sign in to Higgsfield" }).click();
+    await expect(higgs.getByRole("button", { name: "Opening sign-in…" })).toBeDisabled();
+    await page.screenshot({ path: path.join(shots, "connect_signin_pending.png") });
+    const popup = page.waitForEvent("popup");
+    signIn.release();
+    await (await popup).close();
+    await expect(higgs.getByTestId("host-keys-log")).toContainText("Waiting for sign-in. Finish it in the other tab.");
+    await expect(higgs.getByRole("link", { name: "Open the sign-in page" })).toHaveAttribute("href", "about:blank#higgsfield-sign-in");
+    await expect(higgs.getByRole("button", { name: "Sign in to Higgsfield" })).toBeEnabled();
+    await page.screenshot({ path: path.join(shots, "connect_signin_waiting.png") });
+    // Image and back: the wait and its link are still on the Higgsfield card (page changes clear the shared log).
+    await page.locator('nav button[aria-label="Image"]').click();
+    await expect(page.getByTestId("image-page")).toBeVisible();
+    await page.goBack();
+    await expect(higgs.getByRole("link", { name: "Open the sign-in page" })).toBeVisible();
+
+    // Sign in to Magnific fails: the alert is on the Magnific card; the Higgsfield wait and its link stay.
+    await magnific.getByRole("button", { name: "Sign in to Magnific" }).click();
+    await expect(magnific.getByTestId("host-keys-error")).toHaveText("Could not reach Vinci. Check your connection, then try again.");
+    await expect(magnific.getByTestId("host-keys-error")).toHaveAttribute("role", "alert");
+    await expect(magnific.getByRole("link", { name: "Open the sign-in page" })).toHaveCount(0);
+    await expect(higgs.getByRole("link", { name: "Open the sign-in page" })).toBeVisible();
+    await expect(higgs.getByTestId("host-keys-log")).toContainText("Waiting for sign-in.");
+    await page.screenshot({ path: path.join(shots, "connect_signin_error.png") });
   });
 });
 

@@ -96,6 +96,9 @@ function Balance({ id, version }: { id: string; version: string }) {
   );
 }
 
+/** A Connect result on one card: the text, whether it failed, and the sign-in page while a sign-in waits. */
+export type HostNote = { text: string; error?: boolean; url?: string };
+
 /** The status line of a sign-in card. */
 function signInState(row?: KeyRow): string {
   if (row?.auth_state === "connected") return "Signed in";
@@ -114,11 +117,40 @@ export function HostKeys(props: {
   onSave: (id: string) => void;
   onRemove: (id: string) => void;
   onSignIn: (id: string) => void;
-  log: string;
-  /** The log is an error (the last save failed). */
-  error?: boolean;
+  /** The last result per provider: it shows on that provider's card (it was under the list, out of view). */
+  notes: Record<string, HostNote>;
+  /** The action in flight per provider ("in" or "out"): its card shows it and takes no clicks. */
+  pending: Record<string, "in" | "out">;
 }) {
   const { draft, setDraft } = props;
+  /**
+   * A card's feedback. The polite status region stays mounted, so a screen reader hears the progress
+   * and the result; a failure mounts an alert instead.
+   */
+  const cardNote = (id: string, progress: string) => {
+    const n = props.notes[id];
+    return (
+      <>
+        {/* Progress is for screen readers only: the busy button already shows it. */}
+        <p className={progress ? "sr-only" : "log"} role="status" data-testid="host-keys-log">
+          {progress || (n && !n.error ? n.text : null)}
+          {n?.url && !progress ? (
+            <>
+              {" "}
+              <a href={n.url} target="_blank" rel="noreferrer">
+                Open the sign-in page
+              </a>
+            </>
+          ) : null}
+        </p>
+        {n?.error ? (
+          <p className="log error" role="alert" data-testid="host-keys-error">
+            {n.text}
+          </p>
+        ) : null}
+      </>
+    );
+  };
   return (
     <div className="keys connect host-keys" data-testid="host-keys">
       <p className="eyebrow">{props.hostName}</p>
@@ -133,6 +165,8 @@ export function HostKeys(props: {
         {props.keys.map((id) => {
           const row = props.providers[id];
           const name = row?.display_name || NAMES[id] || id;
+          const busy = Boolean(props.pending[id]);
+          const out = props.pending[id] === "out";
           if (id.startsWith("mcp_")) {
             const signedIn = row?.auth_state === "connected";
             return (
@@ -148,21 +182,26 @@ export function HostKeys(props: {
                     <button
                       className="ghost"
                       type="button"
+                      disabled={busy}
+                      aria-busy={out}
                       onClick={() => props.onRemove(id)}
                     >
-                      Sign out
+                      {out ? "Signing out…" : "Sign out"}
                     </button>
                   ) : null}
                   {signedIn ? null : (
                     <button
                       className="run"
                       type="button"
+                      disabled={busy}
+                      aria-busy={busy && !out}
                       onClick={() => props.onSignIn(id)}
                     >
-                      Sign in to {name}
+                      {busy && !out ? "Opening sign-in…" : `Sign in to ${name}`}
                     </button>
                   )}
                 </div>
+                {cardNote(id, busy ? (out ? "Signing out…" : "Opening sign-in…") : "")}
               </div>
             );
           }
@@ -198,9 +237,11 @@ export function HostKeys(props: {
                   <button
                     className="ghost"
                     type="button"
+                    disabled={busy}
+                    aria-busy={out}
                     onClick={() => props.onRemove(id)}
                   >
-                    Remove key
+                    {out ? "Removing…" : "Remove key"}
                   </button>
                 ) : null}
                 <button
@@ -212,15 +253,11 @@ export function HostKeys(props: {
                   Save {name} key
                 </button>
               </div>
+              {cardNote(id, out ? "Removing…" : "")}
             </div>
           );
         })}
       </div>
-      {props.log ? (
-        <p className={props.error ? "log error" : "log"} role={props.error ? "alert" : "status"} data-testid="host-keys-log">
-          {props.log}
-        </p>
-      ) : null}
     </div>
   );
 }
