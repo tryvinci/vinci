@@ -676,7 +676,31 @@
   font-size: 13px;
 }
 .shows-path input:focus { outline: 2px solid rgb(33 218 210 / 0.5); outline-offset: 1px; }
-.shows-recent button { padding: 0 4px; border: 0; background: transparent; color: var(--teal); }
+/* Open screen with shows: top-aligned and scrolling, cards in auto-fill columns (the library-card look) */
+.shows-page.shows-home { place-content: start stretch; overflow: auto; padding: 28px 32px 72px; }
+.shows-home > * { width: 100%; max-width: 1200px; }
+.shows-home .olf-head { margin-bottom: 0; }
+.shows-home-tools { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.shows-home-tools input[type="search"] {
+  flex: 1 1 260px;
+  padding: 8px 14px;
+  border-radius: var(--pill);
+  border: 1px solid var(--line);
+  background: var(--chip);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+.shows-home-tools input[type="search"]:focus { outline: 2px solid rgb(33 218 210 / 0.5); outline-offset: 1px; }
+.shows-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.show-card {
+  display: grid; gap: 4px; min-width: 0; padding: 14px; text-align: left;
+  border: 1px solid var(--line); border-radius: 0.9rem; background: var(--raised); color: var(--ink);
+}
+.show-card:hover:not(:disabled) { border-color: rgb(33 218 210 / 0.45); background: var(--hover); }
+.show-card:disabled { opacity: 0.6; cursor: default; }
+.show-card strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; }
+.show-card span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--mute); }
 
 @media (max-width: 1180px) {
   .olf-shot-grid,
@@ -690,6 +714,9 @@
   .shows-nav { display: none; }
   .shows-main { padding: 20px 16px 56px; }
   .shows-path input { min-width: 0; }
+  .shows-page.shows-home { padding: 20px 16px 56px; }
+  .shows-path { flex: 1 1 100%; }
+  .shows-path input { flex: 1; }
 }
 
 /* Authoring (COREPRODUC-543): the design's dashed "+ Add shot" card and "+ Form" row */

@@ -689,6 +689,34 @@ export function folderName(path: string): string {
   return parts[parts.length - 1] || path;
 }
 
+/** When a show changed, for its card: `Just now`, `5 min ago`, `2 h ago`, `Yesterday`, `3 days ago`, then `Nov 2`.
+ *
+ * Args:
+ *   iso: `updated_at` from `GET /olf/shows`; an empty or bad value gives "".
+ *   now: the clock (a test passes its own).
+ */
+export function updatedText(iso: string | null | undefined, now = new Date()): string {
+  const at = new Date(iso || "");
+  if (!iso || Number.isNaN(at.getTime())) return "";
+  const min = Math.floor((now.getTime() - at.getTime()) / 60_000);
+  if (min < 1) return "Just now";
+  if (min < 60) return `${min} min ago`;
+  if (min < 24 * 60) return `${Math.floor(min / 60)} h ago`;
+  if (min < 48 * 60) return "Yesterday";
+  if (min < 7 * 24 * 60) return `${Math.floor(min / (24 * 60))} days ago`;
+  const year = at.getFullYear() === now.getFullYear() ? undefined : "numeric";
+  return at.toLocaleDateString("en-US", { month: "short", day: "numeric", year });
+}
+
+/** The cards that match a search: by title, and by folder name for a show in a folder (a host's `show:<id>` has none). */
+export function matchShows<T extends { path: string; title: string }>(rows: readonly T[], query: string): T[] {
+  const words = query.trim().toLowerCase();
+  if (!words) return [...rows];
+  return rows.filter((row) =>
+    `${row.title} ${row.path.startsWith("show:") ? "" : folderName(row.path)}`.toLowerCase().includes(words),
+  );
+}
+
 /** Short hash for display: `sha256:ae3b54…68bc0578`. */
 export function shortHash(hash: string | null | undefined): string {
   if (!hash) return "";

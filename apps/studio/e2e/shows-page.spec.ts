@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -32,10 +32,26 @@ test.describe("Shows (OLF movie engine)", () => {
     const sample = String((await (await page.request.post("/vinci-api/olf/sample")).json()).path);
     rmSync(sample, { recursive: true, force: true });
     cpSync(SAMPLE, sample, { recursive: true });
+    // 30 more shows: the open screen lists them as a grid with a search, not as a line of links.
+    const seeded = Array.from({ length: 30 }, (_, i) => path.join(path.dirname(sample), `grid-show-${i}`));
+    seeded.forEach((dir, i) => {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(path.join(dir, "project.yaml"), `title: Grid Show ${i}\n`);
+    });
     await page.locator('nav button[aria-label="Shows"]').click();
-    await expect(page.getByTestId("shows-open")).toContainText("Build the world once. Render every episode.");
+    const grid = page.getByTestId("shows-grid");
+    await expect(grid).toContainText("Tidewatch");
+    expect(await grid.locator(".show-card").count()).toBeGreaterThanOrEqual(31);
     await expect(page.getByTestId("shows-open-sample")).toBeEnabled();
     await page.screenshot({ path: path.join(shots, "shows_open.png") });
+    await page.getByTestId("shows-search").fill("grid show 7");
+    await expect(grid.locator(".show-card")).toHaveCount(1);
+    await expect(grid).toContainText("Grid Show 7");
+    await page.screenshot({ path: path.join(shots, "shows_open_search.png") });
+    await page.getByTestId("shows-search").fill("no such show");
+    await expect(page.getByTestId("shows-no-match")).toHaveText("No show matches \u201cno such show\u201d.");
+    await page.getByTestId("shows-search").fill("");
+    seeded.forEach((dir) => rmSync(dir, { recursive: true, force: true }));
 
     // Storyboard: the show's header sits in the Studio top bar; the cards are for review.
     await page.getByTestId("shows-open-sample").click();
