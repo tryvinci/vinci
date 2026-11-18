@@ -26,7 +26,7 @@ import { nodeDurations, videoBlock, type VideoRefMode } from "../lib/video-page"
 import { type ComboModel } from "./model-combo";
 import { VinciLogo } from "./ui/logo";
 import { DockIcon, DOCK_ICON } from "./ui/icons";
-import { plainError } from "./ui/plain-text";
+import { plainError, runProblem, type RunAction, type RunProblem } from "./ui/plain-text";
 import { availabilityRank, modelAvailability, rankModels } from "../lib/model-search";
 import {
   classifyModel,
@@ -1001,6 +1001,32 @@ export function StudioClient() {
   // The cards of an Image run still going, by card number: the clock from when its run was posted,
   // or null (not posted yet). The estimate is the one of the model the run was sent with.
   const [cardClocks, setCardClocks] = useState<Record<number, RunClock | null> | null>(null);
+  // Why the last Image or Video Generate was refused (red, above Generate), and the runs that failed
+  // after they started (red cards). Bug fixed (first occurrence 2026-11-18, user report, COREPRODUC-692):
+  // both showed only as dim text in the top bar, so the run seemed to stop with no warning.
+  const [problem, setProblem] = useState<RunProblem | null>(null);
+  const [failedRuns, setFailedRuns] = useState<{ page: PageId; problem: RunProblem }[]>([]);
+  // A new prompt, model or page is a new try: the refusal clears, and one that comes back for the old
+  // form later (a slow POST) is not shown (formRev).
+  const formRev = useRef(0);
+  useEffect(() => {
+    formRev.current += 1;
+    setProblem(null);
+  }, [prompt, modelId, page]);
+  /** Each feed shows only the red cards of runs it started. */
+  const failedOn = (on: PageId) => failedRuns.filter((row) => row.page === on).map((row) => row.problem);
+  const creditsHref = doctor.host?.links?.find((link) => link.title === "Credits")?.href;
+  /** A refused or failed run; Add credits and Upgrade need the host's Credits page. */
+  const problemOf = (err: unknown): RunProblem => {
+    const found = runProblem(err);
+    return found.action && found.action !== "connect" && !creditsHref ? { text: found.text } : found;
+  };
+  /** The button of a red message or card: Connect in the Studio, Credits in the host window. */
+  const onProblemAction = (action: RunAction) => {
+    console.info("[studio] run problem action", { action });
+    if (action === "connect") openPage("keys");
+    else if (creditsHref) (window.top || window).location.assign(creditsHref);
+  };
   /** A running canvas node's clock, from its own model's average. */
   const nodeClock = (n: GraphNode): RunClock | null => {
     const run = nodeState(n.id);
@@ -1951,7 +1977,10 @@ export function StudioClient() {
     if (pageModelUsed && model.provider !== "mock" && !usable(model)) {
       const status = modelAvailability(model, doctor.providers?.[model.provider], !!doctor.live_spend);
       if (status === "spend_off") {
-        setLog("This model has a key, but paid runs are off. Turn on live spend, then try again.");
+        const text = "This model has a key, but paid runs are off. Turn on live spend, then try again.";
+        setFailedRuns([]); // a click on Generate clears the old red cards
+        if (page === "image" || page === "video") setProblem({ text });
+        else setLog(text);
         return;
       }
       setPage("keys");
@@ -1978,6 +2007,18 @@ export function StudioClient() {
     setBusy(true);
     setModelsOpen(false);
     setLog("Generating…");
+    setProblem(null);
+    setFailedRuns([]);
+    // Image and Video show a refusal above Generate and a failed run as a red card (COREPRODUC-692);
+    // the canvas shows it on the node.
+    const feedRun = !canvasRun && (page === "image" || page === "video");
+    const runPage = page;
+    const rev = formRev.current;
+    /** The refusal, unless the prompt, model or page changed while the run was sent. */
+    const refuse = (found: RunProblem) => {
+      if (formRev.current === rev) setProblem(found);
+      else console.info("[studio] refusal not shown: the form changed", { text: found.text });
+    };
     try {
       const payload: Record<string, unknown> = { inputs, preference: pref };
       if (animating) {
@@ -2096,13 +2137,20 @@ export function StudioClient() {
           // /assets), then its card leaves. This runs beside the batch, so a stalled reload cannot hold
           // it; it also handles a failed poll at once (the batch still reports it).
           const follow = waitRun(run);
-          const leave = () => {
+          const leave = (ended?: Run) => {
+            if (feedRun && ended?.state === "failed") {
+              // This run's card turns red with its reason; the other cards go on (COREPRODUC-692).
+              console.warn("[studio] run failed", { card: i, run: ended.id, error: ended.error });
+              setFailedRuns((rows) => [...rows, { page: runPage, problem: problemOf(typeof ended.error === "string" ? ended.error : "") }]);
+              if (imageCards) dropCard(i);
+              return;
+            }
             if (!imageCards || times < 2) return;
             void loadMedia()
               .catch((err) => console.warn("[studio] batch: feed reload failed", { card: i, err: String(err) }))
               .finally(() => dropCard(i));
           };
-          follow.then(leave, leave);
+          follow.then(leave, () => leave());
           followed.push(follow);
         } catch (err) {
           refused = err;
@@ -2123,6 +2171,9 @@ export function StudioClient() {
         console.warn("[studio] batch: a run could not be followed", { err: String(lost.reason) });
       }
       const body: Run = started.find((run) => run.state === "completed") || started[started.length - 1];
+      // A refused POST (or a lost poll) in a batch: shown now, so a failed feed reload below cannot hide it.
+      const refusedText = refused ? `${started.length} of ${times} came back. ${plainError(refused)}` : "";
+      if (refused && feedRun) refuse({ ...problemOf(refused), text: refusedText });
       if (tracked.length) {
         const results = await nodeRunStates(body, tracked);
         if (epoch === graphEpochRef.current) setNodeRuns((prev) => ({ ...prev, ...results }));
@@ -2141,12 +2192,16 @@ export function StudioClient() {
             : page === "video"
               ? "Your clip is in History."
               : "Done. It is on the board."
-          : plainError(typeof body.error === "string" ? body.error : ""),
+          : feedRun && body.state === "failed"
+            ? "" // its red card says why
+            : plainError(typeof body.error === "string" ? body.error : ""),
       );
-      if (refused) setLog(`${started.length} of ${times} came back. ${plainError(refused)}`);
+      if (refused && !feedRun) setLog(refusedText); // a feed keeps its success line; the red line says the rest
     } catch (err) {
       const message = plainError(err);
-      setLog(message);
+      console.warn("[studio] run refused", { page, status: (err as { status?: number }).status, message });
+      if (feedRun) refuse(problemOf(err));
+      setLog(feedRun ? "" : message);
       const failed = trackedRef.current;
       if (failed.length && epoch === graphEpochRef.current) setNodeRuns((prev) => ({ ...prev, ...Object.fromEntries(failed.map((id) => [id, { state: "error" as const, error: message }])) }));
     } finally {
@@ -3176,6 +3231,9 @@ export function StudioClient() {
         busy={busy}
         clock={runClock}
         clocks={cardClocks ? Object.values(cardClocks) : undefined}
+        problem={problem}
+        problems={failedOn("image")}
+        onProblemAction={onProblemAction}
         pendingCount={cardClocks ? Object.keys(cardClocks).length : batchCount === 4 ? 4 : 1}
         runs={runs}
         assets={assets}
@@ -3258,6 +3316,9 @@ export function StudioClient() {
         cast={mentionItems.map(asCastRow)}
         busy={busy}
         clock={runClock}
+        problem={problem}
+        problems={failedOn("video")}
+        onProblemAction={onProblemAction}
         runs={runs}
         assets={assets}
         ready={(row) => usable({ ...row, capabilities: row.capabilities || [] })}

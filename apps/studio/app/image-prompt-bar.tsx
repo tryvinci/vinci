@@ -15,6 +15,8 @@ import { ImageModelPicker } from "./image-model-picker";
 import { PromptMention, startMention } from "./prompt-mention";
 import { AdvancedDisclosure } from "./ui/advanced";
 import { DockIcon, DOCK_ICON } from "./ui/icons";
+import { ProblemNote } from "./ui/problem-note";
+import type { RunAction, RunProblem } from "./ui/plain-text";
 
 type Menu = "model" | "aspect" | "quality" | "resolution" | "batch" | "mention" | null;
 
@@ -45,6 +47,8 @@ export function ImagePromptBar({
   busy,
   disabled,
   hint,
+  problem,
+  onProblemAction,
   onModelId,
   onGenerate,
 }: {
@@ -69,6 +73,9 @@ export function ImagePromptBar({
   disabled: boolean;
   /** Why Generate is off (shown above the button and as its title). */
   hint?: string;
+  /** Why the last Generate was refused: red, with its next step, in place of the hint (COREPRODUC-692). */
+  problem?: RunProblem | null;
+  onProblemAction?: (action: RunAction) => void;
   onModelId: (id: string) => void;
   onGenerate: () => void;
 }) {
@@ -284,10 +291,13 @@ export function ImagePromptBar({
         <span>{busy ? "Generating…" : "Generate"}</span>
         <span>{cost}</span>
       </button>
+      {/* What blocks Generate now wins over why the last Generate was refused. */}
       {hint && !busy ? (
         <p className="run-hint" role="status" data-testid="image-blocked">
           {hint}
         </p>
+      ) : problem && !busy ? (
+        <ProblemNote problem={problem} onAction={onProblemAction} className="run-hint" testId="image-problem" />
       ) : null}
     </div>
   );

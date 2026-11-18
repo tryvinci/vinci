@@ -32,7 +32,8 @@ eq(modelKind(["t2v", "i2v"]), "video", "t2v");
 eq(modelKind(["t2i", "i2i"]), "image", "t2i");
 eq(modelKind(["tts"]), "audio", "tts");
 """
-    run_ts(MODULE, NAMES, body)
+    result = run_ts(MODULE, NAMES, body)
+    assert result.returncode == 0, result.stderr  # run_ts does not check: a thrown assertion fails here
 
 
 def test_the_bar_counts_down_to_90_percent_then_waits() -> None:
@@ -46,7 +47,8 @@ eq(progressLabel(12), "About 12s left", "seconds");
 eq(progressLabel(125), "About 2m 05s left", "minutes");
 eq(progressLabel(0), "Almost done…", "at 90%");
 """
-    run_ts(MODULE, NAMES, body)
+    result = run_ts(MODULE, NAMES, body)
+    assert result.returncode == 0, result.stderr  # run_ts does not check: a thrown assertion fails here
 
 
 def test_a_daemon_run_records_when_it_started_and_ended(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

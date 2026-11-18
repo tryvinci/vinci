@@ -5,6 +5,8 @@ import { useMenuEscape } from "./ui/focus";
 import { asLibraryItem, mentionableItems, type LibraryItem } from "../lib/library";
 import { AdvancedDisclosure } from "./ui/advanced";
 import { PromptMention } from "./prompt-mention";
+import { ProblemNote } from "./ui/problem-note";
+import type { RunAction, RunProblem } from "./ui/plain-text";
 import {
   VIDEO_REF_MODES,
   VIDEO_TABS,
@@ -71,6 +73,8 @@ export function VideoPanel({
   busy,
   disabled,
   hint,
+  problem,
+  onProblemAction,
   onGenerate,
   onOpenPresets,
 }: {
@@ -117,6 +121,9 @@ export function VideoPanel({
   disabled: boolean;
   /** Why Generate is off (shown under the button and as its title). */
   hint?: string;
+  /** Why the last Generate was refused: red, with its next step, in place of the hint (COREPRODUC-692). */
+  problem?: RunProblem | null;
+  onProblemAction?: (action: RunAction) => void;
   onGenerate: () => void;
   onOpenPresets: () => void;
 }) {
@@ -402,10 +409,13 @@ export function VideoPanel({
           <span>{cost}</span>
         </button>
       ) : null}
+      {/* What blocks Generate now wins over why the last Generate was refused. */}
       {tab === "Create" && hint && !busy ? (
         <p className="run-hint" role="status" data-testid="video-blocked">
           {hint}
         </p>
+      ) : tab === "Create" && problem && !busy ? (
+        <ProblemNote problem={problem} onAction={onProblemAction} className="run-hint" testId="video-problem" />
       ) : null}
       {tab === "Create" && controls.advanced ? (
         <AdvancedDisclosure testId="video-advanced">

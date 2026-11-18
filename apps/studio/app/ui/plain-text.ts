@@ -34,3 +34,36 @@ export function plainError(err: unknown): string {
   }
   return trimmed;
 }
+
+/** The one next step for a refused or failed run: add Vinci credits, take a paid plan, or open Connect. */
+export type RunAction = "credits" | "upgrade" | "connect";
+/** A refused or failed run: the reason in plain words, and the button that fixes it, if any. */
+export type RunProblem = { text: string; action?: RunAction };
+
+/**
+ * A refused or failed run as a reason and a next step (COREPRODUC-692). The server's reason is
+ * already plain; the HTTP status that `api()` attaches, else the reason's words, picks the button.
+ * On a host, 402 means not enough Vinci credits and 403 the free plan; the local daemon sends neither
+ * for a run. A provider refusal, a sign-in or a key is fixed in Connect.
+ *
+ * Args:
+ *   err: An `api()` error (with `status`), or a failed run's `error` text.
+ * Returns:
+ *   The reason (as `plainError` gives it) and the action, if one fits.
+ */
+export function runProblem(err: unknown): RunProblem {
+  const text = plainError(err);
+  const status = (err as { status?: number } | null)?.status;
+  // The server's own reason, not the shown text: "connection" (network) and the generic fallback
+  // ("…open Connect") are no sign of a provider problem.
+  const reason = err instanceof Error ? err.message : String(err ?? "");
+  const action: RunAction | undefined =
+    status === 402
+      ? "credits"
+      : status === 403
+        ? "upgrade"
+        : /\bconnect\b|\bsign in\b|key was removed|refused the request/i.test(reason)
+          ? "connect"
+          : undefined;
+  return action ? { text, action } : { text };
+}

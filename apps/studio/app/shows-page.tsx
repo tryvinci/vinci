@@ -21,12 +21,14 @@ import {
   episodeGroups,
   folderName,
   issueCounts,
+  matchShows,
   parseRecent,
   price,
   pushRecent,
   readyJobs,
   runtimeText,
   takeName,
+  updatedText,
 } from "../lib/shows";
 import { OlfRoutes, message, olf, polling, runJobs, send, waitRun } from "./shows-api";
 import { BibleView, IssuesView } from "./shows-bible";
@@ -637,72 +639,101 @@ function OpenShow({
   onNew: () => void;
 }) {
   const [path, setPath] = useState("");
+  const [query, setQuery] = useState("");
   function submit(ev: FormEvent) {
     ev.preventDefault();
     if (path.trim()) onOpen(path.trim());
   }
-  return (
-    <div className="shows-page shows-solo" data-testid="shows-open">
-      <EmptyState
-        eyebrow="Shows"
-        title="Build the world once. Render every episode."
-        copy="Write the show bible once: characters, places, props and style. Vinci renders every shot from it on any model, and shows you which takes are out of date when the bible changes."
-        actions={
-          <div className="shows-open-actions">
-            <button className="run" type="button" disabled={busy || !ready} onClick={onNew} data-testid="shows-new">
-              New show
-            </button>
-            <button className="ghost" type="button" disabled={busy || !ready} onClick={onSample} data-testid="shows-open-sample">
-              {busy ? "Opening…" : "Open the sample show"}
-            </button>
-            {folders ? (
-              <form className="shows-path" onSubmit={submit}>
-                <input
-                  value={path}
-                  onChange={(ev) => setPath(ev.target.value)}
-                  placeholder="/path/to/my-show"
-                  aria-label="Show folder"
-                  data-testid="shows-path"
-                />
-                <button className="ghost" type="submit" disabled={busy || !ready || !path.trim()}>
-                  Open folder
-                </button>
-              </form>
-            ) : null}
-          </div>
-        }
-        hint={
-          shows.length || recent.length ? (
-            <>
-              {shows.length ? (
-                <span className="shows-recent" data-testid="shows-list">
-                  Your shows:{" "}
-                  {shows.map((row) => (
-                    <button key={row.path} type="button" title={row.title} onClick={() => onOpen(row.path)}>
-                      {row.title}
-                    </button>
-                  ))}
-                </span>
-              ) : null}
-              {recent.length ? (
-                <span className="shows-recent">
-                  Recent:{" "}
-                  {recent.map((row) => (
-                    <button key={row} type="button" title={row} onClick={() => onOpen(row)}>
-                      {folderName(row)}
-                    </button>
-                  ))}
-                </span>
-              ) : null}
-            </>
-          ) : folders ? (
-            "A show is a folder in the Open Lore Format, with project.yaml at the top. The sample is a short anime show called Tidewatch."
-          ) : (
-            // A host keeps the shows in its storage, not in folders on this computer.
-            "A show keeps its bible, episodes and shots together. The sample is Lamp Oil: one finished scene with its keyframes, clips and subtitles."
-          )
-        }
+  // One grid: recent folders outside the shows folder first (local only), then `GET /olf/shows`, last changed first.
+  const cards = [
+    ...recent.map((row) => ({ path: row, title: folderName(row), note: row })),
+    ...shows.map((row) => ({ path: row.path, title: row.title, note: updatedText(row.updated_at) })),
+  ];
+  const shown = matchShows(cards, query);
+  const buttons = (
+    <>
+      <button className="run" type="button" disabled={busy || !ready} onClick={onNew} data-testid="shows-new">
+        New show
+      </button>
+      <button className="ghost" type="button" disabled={busy || !ready} onClick={onSample} data-testid="shows-open-sample">
+        {busy ? "Opening…" : "Open the sample show"}
+      </button>
+    </>
+  );
+  const folderForm = folders ? (
+    <form className="shows-path" onSubmit={submit}>
+      <input
+        value={path}
+        onChange={(ev) => setPath(ev.target.value)}
+        placeholder="/path/to/my-show"
+        aria-label="Show folder"
+        data-testid="shows-path"
       />
+      <button className="ghost" type="submit" disabled={busy || !ready || !path.trim()}>
+        Open folder
+      </button>
+    </form>
+  ) : null;
+  return (
+    <div className={`shows-page shows-solo${cards.length ? " shows-home" : ""}`} data-testid="shows-open">
+      {cards.length ? (
+        // A person with shows sees them first; 100 shows fit as a grid, with a search past 8.
+        <>
+          <header className="olf-head">
+            <div>
+              <p className="eyebrow">Shows</p>
+              <h1>Your shows · {cards.length}</h1>
+            </div>
+            <div className="olf-head-actions">{buttons}</div>
+          </header>
+          {cards.length > 8 || folders ? (
+            <div className="shows-home-tools">
+              {cards.length > 8 ? (
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(ev) => setQuery(ev.target.value)}
+                  placeholder={`Search ${cards.length} shows…`}
+                  aria-label="Search shows"
+                  data-testid="shows-search"
+                />
+              ) : null}
+              {folderForm}
+            </div>
+          ) : null}
+          <div className="shows-grid" data-testid="shows-grid">
+            {shown.map((row) => (
+              <button key={row.path} type="button" className="show-card" title={row.title} disabled={busy} onClick={() => onOpen(row.path)}>
+                <strong>{row.title}</strong>
+                <span>{row.note}</span>
+              </button>
+            ))}
+          </div>
+          {!shown.length ? (
+            <p className="muted" data-testid="shows-no-match">
+              No show matches &ldquo;{query.trim()}&rdquo;.
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <EmptyState
+          eyebrow="Shows"
+          title="Build the world once. Render every episode."
+          copy="Write the show bible once: characters, places, props and style. Vinci renders every shot from it on any model, and shows you which takes are out of date when the bible changes."
+          actions={
+            <div className="shows-open-actions">
+              {buttons}
+              {folderForm}
+            </div>
+          }
+          hint={
+            folders
+              ? "A show is a folder in the Open Lore Format, with project.yaml at the top. The sample is a short anime show called Tidewatch."
+              : // A host keeps the shows in its storage, not in folders on this computer.
+                "A show keeps its bible, episodes and shots together. The sample is Lamp Oil: one finished scene with its keyframes, clips and subtitles."
+          }
+        />
+      )}
       {error ? (
         <p className="shows-error" role="alert" data-testid="shows-error">
           {error}

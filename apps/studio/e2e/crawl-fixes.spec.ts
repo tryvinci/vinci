@@ -751,3 +751,122 @@ test.describe("Production crawl fixes on a host", () => {
   });
 });
 
+
+// A refused or failed run shows its reason in red with one next step (COREPRODUC-692). Bug fixed (first
+// occurrence 2026-11-18, user report): the reason was only dim text in the top bar, so the run seemed
+// to stop with no warning. Texts are the hosted server's own.
+test.describe("Refused and failed runs on a host (COREPRODUC-692)", () => {
+  const CREDITS = "This run needs up to 2 credits, and you have 0. Add credits, then run it again.";
+  const PLAN = "Studio generation is not available for free users. Please upgrade to a paid plan.";
+  const REFUSED = "Magnific refused the request: not enough credits. Vinci charged nothing.";
+
+  async function openWithCredits(page: Page, hash = "") {
+    await page.addInitScript(() => localStorage.setItem("vinci-onboard-v1", "done"));
+    await page.route(/\/vinci-api\/doctor(\?|$)/, async (route) => {
+      const res = await route.fetch();
+      const host = { ...HOST, links: [...HOST.links, { title: "Credits", href: "/dashboard/pricing" }] };
+      await route.fulfill({ response: res, json: { ...(await res.json()), host } });
+    });
+    await page.goto("/" + hash);
+  }
+
+  test("a refusal shows above Generate with its button, and clears on a new prompt", async ({ page }) => {
+    let answer = { status: 402, detail: CREDITS };
+    await page.route("**/vinci-api/runs", (route) =>
+      route.request().method() === "POST" ? route.fulfill({ status: answer.status, json: { detail: answer.detail } }) : route.continue(),
+    );
+    await openWithCredits(page, "#image");
+    await expect(page.getByTestId("image-page")).toBeVisible();
+    const textbox = page.getByRole("textbox", { name: "Image prompt" });
+    await textbox.fill("a brass key on oak");
+    await page.getByTestId("image-generate").click();
+    const note = page.getByTestId("image-problem");
+    await expect(note).toHaveText(new RegExp(`${CREDITS.slice(0, 40)}.*Add credits`));
+    await expect(note).toHaveAttribute("role", "alert");
+    await expect(page.locator(".top-log")).toHaveCount(0); // once, above Generate, not twice
+    await page.screenshot({ path: path.join(shots, "run_refused_credits.png") });
+    answer = { status: 403, detail: PLAN };
+    await page.getByTestId("image-generate").click();
+    await expect(note).toContainText(PLAN);
+    await expect(note.getByRole("button", { name: "Upgrade" })).toBeVisible();
+    await textbox.fill("a brass key on oak, closer");
+    await expect(note).toHaveCount(0); // a new prompt is a new try
+  });
+
+  test("Upgrade opens the host's Credits page in the top window, outside the Studio frame", async ({ page }) => {
+    await page.route("**/vinci-api/runs", (route) =>
+      route.request().method() === "POST" ? route.fulfill({ status: 403, json: { detail: PLAN } }) : route.continue(),
+    );
+    // The host page (as /studio does): the Studio in a same-origin frame.
+    await page.route("**/host-frame", (route) =>
+      route.fulfill({ contentType: "text/html", body: '<iframe src="/#image" style="width:100%;height:860px;border:0"></iframe>' }),
+    );
+    await openWithCredits(page, "host-frame");
+    const studio = page.frameLocator("iframe");
+    await studio.getByRole("textbox", { name: "Image prompt" }).fill("a brass key on oak");
+    await studio.getByTestId("image-generate").click();
+    await studio.getByTestId("image-problem").getByRole("button", { name: "Upgrade" }).click();
+    await expect(page).toHaveURL(/\/dashboard\/pricing$/); // the top window moved, not only the frame
+  });
+
+  test("a run that fails keeps a red card with Open Connect; the others finish; Generate clears it", async ({ page }) => {
+    // Run 2 of the batch is refused by the provider; the other 3 really run on the daemon (Mock PNG).
+    const prompt = `a brass key on oak ${Date.now()}`;
+    let n = 0;
+    let failOne = true;
+    await page.route("**/vinci-api/runs", (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      if (n++ === 1 && failOne) return route.fulfill({ json: { id: "run-refused", state: "running", outputs: [], nodes: {}, estimate: { total: 0 } } });
+      return route.continue();
+    });
+    await page.route(/\/vinci-api\/runs\/run-refused$/, (route) =>
+      route.fulfill({ json: { id: "run-refused", state: "failed", outputs: [], nodes: {}, estimate: { total: 0 }, error: REFUSED } }),
+    );
+    // The feed shows only this test's pictures, so other runs on the daemon do not change the count.
+    await page.route("**/vinci-api/library?tool=image*", async (route) => {
+      const body = (await (await route.fetch()).json()) as { items: { prompt?: string }[] };
+      return route.fulfill({ json: { ...body, items: body.items.filter((row) => row.prompt === prompt) } });
+    });
+    await openWithCredits(page, "#image");
+    await page.getByRole("textbox", { name: "Image prompt" }).fill(prompt);
+    await page.getByTestId("image-batch").click();
+    await page.getByRole("option", { name: "4" }).click();
+    await page.getByTestId("image-generate").click();
+    const failed = page.getByTestId("image-feed-pending-failed");
+    await expect(failed).toHaveCount(1);
+    await expect(failed).toContainText(REFUSED);
+    await expect(page.getByTestId("image-feed-pending")).toHaveCount(0);
+    await expect(page.getByTestId("image-generate")).toBeEnabled();
+    await expect(failed).toHaveCount(1); // it stays after the batch ends
+    await page.screenshot({ path: path.join(shots, "run_failed_card.png") });
+    await failed.getByRole("button", { name: "Open Connect" }).click();
+    await expect(page).toHaveURL(/#keys$/);
+    await page.locator('nav button[aria-label="Image"]').click();
+    await expect(failed).toHaveCount(1);
+    failOne = false; // the next batch has no refusal; its pictures have another prompt
+    await page.getByRole("textbox", { name: "Image prompt" }).fill(`${prompt} again`);
+    await page.getByTestId("image-generate").click();
+    await expect(failed).toHaveCount(0); // a new Generate is a new try
+    await expect(page.getByTestId("image-feed-pending")).toHaveCount(0);
+    // The other 3 runs of the first batch completed and made pictures. Runs, not distinct pictures: the
+    // daemon stores files by content, and Mock PNG can draw the same picture for two seeds.
+    const runs = (await (await page.request.get("/vinci-api/runs")).json()) as { runs: { state?: string; inputs?: { prompt?: string } }[] };
+    expect(runs.runs.filter((run) => run.inputs?.prompt === prompt && run.state === "completed")).toHaveLength(3);
+    await expect(page.locator('[data-testid="image-feed"] .image-card:not(.pending):not(.failed)').first()).toBeVisible();
+    await page.unrouteAll({ behavior: "ignoreErrors" }); // no route may still run after the test
+  });
+
+  test("Video shows a refusal above Generate too", async ({ page }) => {
+    await page.route("**/vinci-api/runs", (route) =>
+      route.request().method() === "POST" ? route.fulfill({ status: 402, json: { detail: CREDITS } }) : route.continue(),
+    );
+    await openWithCredits(page, "#video");
+    await expect(page.getByTestId("video-page")).toBeVisible();
+    await page.getByTestId("video-prompt").fill("slow push-in on a lighthouse");
+    await page.getByTestId("video-generate").click();
+    const note = page.getByTestId("video-problem");
+    await expect(note).toContainText(CREDITS);
+    await expect(note.getByRole("button", { name: "Add credits" })).toBeVisible();
+    await page.screenshot({ path: path.join(shots, "run_refused_video.png") });
+  });
+});

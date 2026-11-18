@@ -3,6 +3,8 @@
 import { IMAGE_HOW_STEPS, type ImageFeedItem } from "../lib/image-page";
 import { DockIcon, DOCK_ICON } from "./ui/icons";
 import { GenProgress } from "./ui/gen-progress";
+import { ProblemNote } from "./ui/problem-note";
+import type { RunAction, RunProblem } from "./ui/plain-text";
 import type { RunClock } from "../lib/progress";
 
 const FILE = "/vinci-api/assets";
@@ -83,6 +85,8 @@ export function ImageFeed({
   hoverTestId = "image-card-hover",
   clock,
   clocks,
+  problems = [],
+  onProblemAction,
   onFavorite,
   onCopyPrompt,
   onReference,
@@ -101,6 +105,10 @@ export function ImageFeed({
   clock?: RunClock | null;
   /** One clock per pending card (a batch): card i uses clocks[i]; null shows "Waiting to start…". */
   clocks?: (RunClock | null)[];
+  /** Runs that failed: each keeps a red card with its reason until the next Generate (COREPRODUC-692). */
+  problems?: RunProblem[];
+  /** Opens Credits or Connect from a failed card's button. */
+  onProblemAction?: (action: RunAction) => void;
   onFavorite: (item: ImageFeedItem) => void;
   onCopyPrompt: (item: ImageFeedItem) => void;
   onReference?: (item: ImageFeedItem) => void;
@@ -109,10 +117,10 @@ export function ImageFeed({
   /** Copy the file's vinci:// link. Off on a host: the link means nothing there, and Download is beside it. */
   onMore?: (item: ImageFeedItem) => void;
 }) {
-  if (!items.length && emptyLayout === "stage") {
+  if (!items.length && !problems.length && emptyLayout === "stage") {
     return <VideoHow steps={steps} testId={emptyTestId} />;
   }
-  if (!items.length) {
+  if (!items.length && !problems.length) {
     return (
       <div className="image-how" data-testid={emptyTestId}>
         {steps.map((step) => (
@@ -128,6 +136,13 @@ export function ImageFeed({
   return (
     <div className="image-feed" data-testid={feedTestId}>
       <div className="image-feed-cols">
+        {problems.map((problem, i) => (
+          <article key={`failed-${i}`} className="image-card failed" data-testid={`${pendingTestId}-failed`}>
+            <div className="image-card-thumb">
+              <ProblemNote problem={problem} onAction={onProblemAction} className="image-card-problem" />
+            </div>
+          </article>
+        ))}
         {items.map((item, i) =>
           item.pending ? (
             <article key={item.id} className="image-card pending" data-testid={pendingTestId}>

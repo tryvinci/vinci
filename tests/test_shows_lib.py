@@ -57,6 +57,8 @@ NAMES = [
     "textStepQuestion",
     "hasApprovedTakes",
     "upcomingVideos",
+    "updatedText",
+    "matchShows",
 ]
 SHOW = """
 const take = (id, kind, stale, file) => ({ id, kind, status: "draft", stale, file });
@@ -156,6 +158,30 @@ let rows = [];
 for (const path of ["/1", "/2", "/3", "/4", "/5", "/6", "/7", "/2"]) rows = pushRecent(rows, path);
 eq(rows, ["/2", "/7", "/6", "/5", "/4", "/3"], "newest first, no duplicates, at most 6");
 eq([folderName("/Users/me/shows/tidewatch/"), folderName("C:\\\\shows\\\\demo")], ["tidewatch", "demo"], "folder name");
+"""
+    )
+
+
+def test_open_screen_cards() -> None:
+    """The open screen's grid: when each show changed, and the search over titles and folder names."""
+    _run(
+        """
+const now = new Date(2026, 10, 18, 12, 0);
+const ago = (min) => new Date(now.getTime() - min * 60000).toISOString();
+eq([ago(0), ago(5), ago(150), ago(30 * 60), ago(4 * 24 * 60)].map((iso) => updatedText(iso, now)),
+   ["Just now", "5 min ago", "2 h ago", "Yesterday", "4 days ago"], "recent changes");
+eq(updatedText(new Date(2026, 10, 2, 12).toISOString(), now), "Nov 2", "this year: month and day");
+eq(updatedText(new Date(2025, 0, 9, 12).toISOString(), now), "Jan 9, 2025", "another year");
+eq([updatedText(undefined, now), updatedText("", now), updatedText("x", now)], ["", "", ""], "no date");
+const rows = [
+  { path: "/home/me/.vinci/shows/tidewatch", title: "Tidewatch" },
+  { path: "/work/lamp-oil", title: "Untitled" },
+  { path: "show:abc", title: "Night Ferry" },
+];
+eq(matchShows(rows, "").length, 3, "no query: every card");
+eq(matchShows(rows, "  TIDE ").map((r) => r.title), ["Tidewatch"], "title, any case");
+eq(matchShows(rows, "lamp").map((r) => r.title), ["Untitled"], "folder name");
+eq(matchShows(rows, "show").map((r) => r.title), [], "a host path is not searched");
 """
     )
 
