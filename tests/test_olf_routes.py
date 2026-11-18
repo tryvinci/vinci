@@ -275,7 +275,7 @@ def test_model_choices_and_share(client: TestClient) -> None:
     assert detail["plans"]["audio"]["choices"][0]["id"] == "mock:wav:v1"
     shared = client.get("/olf/share", params={"path": path})
     assert (
-        shared.status_code == 200 and "tidewatch.olf.zip" in shared.headers["content-disposition"]
+        shared.status_code == 200 and "tidewatch.volf" in shared.headers["content-disposition"]
     )
     names = zipfile.ZipFile(io.BytesIO(shared.content)).namelist()
     assert (

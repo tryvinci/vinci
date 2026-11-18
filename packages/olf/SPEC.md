@@ -137,6 +137,26 @@ license:                      # default license for assets the engine adds
 - Number new shots in steps of 10 (`sh010`, `sh020`). An insert then takes `sh015` and nothing is renumbered.
 - An ID from another project carries its show ID as a prefix: `tidewatch:char/mira`. Forked bibles use this.
 
+**Package (`.volf`)**
+
+To send a whole project as one file, put it in a `.volf` package (Vinci OLF). A package is a ZIP archive of the project folder. The extension is `.volf`, not `.olf` or `.olf.zip`, so it does not conflict with other formats.
+
+```text
+tidewatch.volf
+  tidewatch/                # one top folder: the project folder
+    project.yaml
+    bible/...
+    episodes/...
+    takes/...
+    assets/lock.yaml
+```
+
+- The archive MUST hold one top folder with the manifest directly in it: `project.yaml`, or the same file as `project.yml` or `project.json`. Writers SHOULD name the folder and the file after the show ID (`tidewatch/` in `tidewatch.volf`).
+- Entry paths are relative, use `/` and are UTF-8. An entry MUST NOT be absolute, contain `..`, or be a symbolic link.
+- Writers MUST leave out the derived folders `exports/` and `previs/`, and every file outside the project folder.
+- Readers MUST refuse an entry that would land outside the target folder, and a package with no manifest. They SHOULD limit the number of files and the unpacked size. They MAY also accept the manifest at the archive root (a folder zipped from the inside).
+- An unpacked package is an ordinary project: readers validate it and check asset hashes against the lock file as usual. A package carries no data that the folder does not.
+
 ## Show bible
 
 The bible holds everything that must stay the same across episodes. Shots refer to bible entries by ID and MUST NOT redefine them. A look that changes on purpose (a form, an outfit, a time of day) is a named variant in the bible.
@@ -537,6 +557,7 @@ The spec uses semantic versioning. Versions 0.x can break compatibility. From v1
 ## Decisions
 
 - [x] What is the spec's name and file extension? Decided: Open Lore Format (OLF), as plain YAML with a spec: olf/0.1 field and no .olf extension.
+- [x] One file for a whole project? Decided (2026-11-18): a `.volf` package (Vinci OLF), a ZIP of the project folder (see Package). The source files keep no extension of their own; `.volf` avoids a clash with other formats that use `.olf`.
 - [x] Default to shots inline in scene files, or one file per shot? Decided: inline by default, split allowed.
 - [x] Previs: which 3D format carries control inputs (USD, glTF, or our own camera-path schema)? Decided for v0.1: 2D first. Previs is storyboard frames, pose sketches and simple camera moves (pan, zoom, push) in YAML. 3D formats come later and stay optional.
 - [x] Identity: is there a portable character-identity format beyond reference images? Decided: no. The character sheet and reference images are the identity. Model-specific identity (LoRA, embeddings) stays in extensions.

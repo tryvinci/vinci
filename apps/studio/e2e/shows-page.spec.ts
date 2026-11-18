@@ -109,8 +109,8 @@ test.describe("Shows (OLF movie engine)", () => {
     await page.getByRole("button", { name: "‹ Storyboard" }).click();
     await expect(page.getByTestId("shows-stats")).toContainText("Keyframes approved1 / 3");
     const download = page.waitForEvent("download");
-    await page.getByTestId("share").click(); // design: Share, the show folder as one .olf.zip
-    expect((await download).suggestedFilename()).toBe("tidewatch.olf.zip");
+    await page.getByTestId("share").click(); // design: Share, the show folder as one .volf package
+    expect((await download).suggestedFilename()).toBe("tidewatch.volf");
     await expect(card).toContainText("kf1 · v1 approved");
     await page.screenshot({ path: path.join(shots, "shows_storyboard_approved.png") });
 
