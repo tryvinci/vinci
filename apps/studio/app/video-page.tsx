@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RunClock } from "../lib/progress";
+import type { RunAction, RunProblem } from "./ui/plain-text";
 import { clipPrice } from "../lib/canvas-node";
 import { daemonHasPath } from "../lib/daemon-routes";
 import { money } from "../lib/model-capabilities";
@@ -175,6 +176,9 @@ export function VideoPage({
   cast,
   busy,
   clock,
+  problem,
+  problems,
+  onProblemAction,
   runs,
   assets,
   ready,
@@ -237,6 +241,10 @@ export function VideoPage({
   busy: boolean;
   /** The run in flight, for the pending card's progress bar. */
   clock?: RunClock | null;
+  /** Why the last Generate was refused (above Generate), and the runs that failed (red cards). */
+  problem?: RunProblem | null;
+  problems?: RunProblem[];
+  onProblemAction?: (action: RunAction) => void;
   runs: VideoRun[];
   assets: VideoAsset[];
   ready: (model: VideoModel) => boolean;
@@ -543,12 +551,16 @@ export function VideoPage({
         busy={busy}
         disabled={busy || !selected || Boolean(hint)}
         hint={hint}
+        problem={problem}
+        onProblemAction={onProblemAction}
         onGenerate={onGenerate}
         onOpenPresets={() => setOverlay(true)}
       />
       <div className="video-main">
         <ImageFeed
           clock={clock}
+          problems={problems}
+          onProblemAction={onProblemAction}
           items={items}
           steps={VIDEO_HOW_STEPS}
           emptyLayout="stage"

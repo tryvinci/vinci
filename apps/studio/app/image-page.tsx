@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RunClock } from "../lib/progress";
+import type { RunAction, RunProblem } from "./ui/plain-text";
 import {
   applyFavorites,
   clampBatch,
@@ -71,6 +72,9 @@ export function ImagePage({
   busy,
   clock,
   clocks,
+  problem,
+  problems,
+  onProblemAction,
   pendingCount,
   runs,
   assets,
@@ -113,6 +117,10 @@ export function ImagePage({
   clock?: RunClock | null;
   /** One clock per pending card of a batch; null: its run is not posted yet. */
   clocks?: (RunClock | null)[];
+  /** Why the last Generate was refused (above Generate), and the runs that failed (red cards). */
+  problem?: RunProblem | null;
+  problems?: RunProblem[];
+  onProblemAction?: (action: RunAction) => void;
   pendingCount: number;
   runs: ImageRun[];
   assets: ImageAsset[];
@@ -247,6 +255,8 @@ export function ImagePage({
       <ImageFeed
         clock={clock}
         clocks={clocks}
+        problems={problems}
+        onProblemAction={onProblemAction}
         items={items}
         onFavorite={(item) => void favorite(item)}
         onCopyPrompt={(item) => void copyPrompt(item)}
@@ -275,6 +285,8 @@ export function ImagePage({
         busy={busy}
         disabled={busy || !selected || Boolean(hint)}
         hint={hint}
+        problem={problem}
+        onProblemAction={onProblemAction}
         onModelId={onPickModel}
         onGenerate={onGenerate}
       />

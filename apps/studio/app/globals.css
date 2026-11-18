@@ -1141,6 +1141,12 @@ input[type="range"] { accent-color: var(--teal); width: 100%; padding: 0; border
   position: absolute; right: 12px; bottom: calc(100% + 6px); margin: 0; padding: 4px 8px; border-radius: 8px;
   background: var(--glass-fallback, #14161c); border: 1px solid var(--glass-line, var(--line));
 }
+.run-problem { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--danger); }
+.run-problem.run-hint { border-color: var(--danger); max-width: min(56ch, 90%); }
+.run-problem-action { padding: 2px 10px; font-size: 12px; color: var(--ink); }
+/* A run that failed keeps its card, in red, with the reason (COREPRODUC-692). */
+.image-card.failed .image-card-thumb { min-height: 180px; display: grid; place-items: center; padding: 16px; border: 1px solid var(--danger); }
+.image-card-problem { justify-content: center; text-align: center; font-size: 13px; line-height: 1.4; }
 .image-bar-refs { display: flex; gap: 6px; align-items: center; flex: none; }
 .image-ref-add {
   width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line);
