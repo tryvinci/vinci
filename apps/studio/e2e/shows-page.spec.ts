@@ -395,8 +395,22 @@ test.describe("Shows (OLF movie engine)", () => {
     // Shot fields: a select or the description writes one line of the scene file.
     await page.locator('[data-testid="shot-card"][data-shot="e02/s03/sh014"]').click();
     const shot = page.getByTestId("shot-page");
+    // A pick shows at once, busy until its save and the show reload end (first report 2026-11-19):
+    // hold the save until the test has seen the pick.
+    let release = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const isSave = (url: URL) => url.pathname.endsWith("/olf/shot");
+    await page.route(isSave, async (route) => {
+      if (route.request().method() === "PATCH") await held;
+      await route.fallback();
+    });
     await shot.getByTestId("shot-framing").selectOption("medium_close");
     await expect(shot.getByTestId("shot-framing")).toHaveValue("medium_close");
+    await expect(shot.getByTestId("shot-framing")).toHaveAttribute("aria-busy", "true");
+    await page.screenshot({ path: path.join(shots, "shows_shot_pick_saving.png") });
+    release();
+    await expect(shot.getByTestId("shot-framing")).toHaveAttribute("aria-busy", "false");
+    await page.unroute(isSave);
     await shot.getByTestId("shot-description").fill("Mira looks up: the door is open.");
     await shot.getByTestId("shot-description").blur();
     const scene = path.join(sample, "episodes/e02/scenes/s03.yaml");
@@ -1062,7 +1076,7 @@ with zipfile.ZipFile(${JSON.stringify(file)}, "w", zipfile.ZIP_STORED) as z:
     // Canvas: the shape of a drawing larger than the frame, for a pan or a tilt across it.
     await shot.getByTestId("shot-canvas").selectOption("21:9");
     await expect(shot.getByTestId("shot-canvas")).toHaveValue("21:9");
-    expect(readFileSync(scene, "utf8")).toContain('canvas: "21:9"');
+    await expect.poll(() => readFileSync(scene, "utf8")).toContain('canvas: "21:9"'); // the pick shows before the save ends
     await page.screenshot({ path: path.join(shots, "shows_previs_crosses.png") });
     expect(errors).toEqual([]);
   });

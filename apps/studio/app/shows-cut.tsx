@@ -24,7 +24,7 @@ import {
   upcomingVideos,
 } from "../lib/shows";
 import { message, olf, send } from "./shows-api";
-import { Confirm, Field, OlfOnly, StalePill } from "./shows-parts";
+import { Confirm, Field, OlfOnly, StalePill, usePick } from "./shows-parts";
 
 type ClipFields = Record<string, string | number | null>;
 
@@ -68,7 +68,7 @@ export function CutView({
   job?: { stage: string; since: number } | null;
   result: OlfExport | null;
   onUseApproved: () => void;
-  onClip: (index: number, fields: ClipFields) => void;
+  onClip: (index: number, fields: ClipFields) => Promise<unknown>;
   onExport: (aspects: string[], subtitles: boolean, c2pa: boolean, otio: boolean, sound: boolean) => void;
   /** A cue was rendered and placed: reload the cut. */
   onCueAdded: (text: string) => void;
@@ -113,6 +113,13 @@ export function CutView({
     if (playing && time >= duration) setPlaying(false);
   }, [playing, time, duration]);
 
+  // The Audio menu shows a pick while it saves (a hook, so before the returns below).
+  const clip = cut?.clips[selected] || cut?.clips[0];
+  const audio = usePick(
+    clip?.audio,
+    (v) => clip && onClip(clip.index, { audio: v === "own" ? null : "separate" }),
+    `${show.path} ${cut?.episode} ${clip?.index}`, // a pick shows only on its own clip
+  );
   if (!cut) return <p className="muted">Loading the cut…</p>;
   const approvedOff = hasApprovedTakes(show, show.episodes.find((row) => row.id === cut.episode))
     ? ""
@@ -349,13 +356,7 @@ export function CutView({
             </div>
           </Field>
           <Field label="Audio">
-            <select
-              className="olf-input"
-              value={sel.audio}
-              disabled={Boolean(busy)}
-              onChange={(event) => onClip(sel.index, { audio: event.target.value === "own" ? null : "separate" })}
-              data-testid="cut-audio"
-            >
+            <select className="olf-input" disabled={Boolean(busy)} data-testid="cut-audio" {...audio}>
               <option value="own">The take's own sound</option>
               <option value="separate" disabled={!speech && sel.audio !== "separate"}>
                 Separate dialogue take{speech ? ` (${takeName(speech.take)})` : " (none chosen)"}
