@@ -1301,7 +1301,7 @@ export function StudioClient() {
     }
     const w = topWindow();
     const picked = pickProject(list, projectFromSearch(w.location.search), last);
-    setCurrentProject(picked?.id || null);
+    setCurrentProject(picked?.id || null, picked?.default);
     if (picked) {
       // The board loads here, before the feeds and before any edit. Bug fixed (first occurrence
       // 2026-11-18, crawl-fixes e2e of COREPRODUC-702 PR 2, before release): loaded later, it replaced
@@ -4245,7 +4245,8 @@ export function StudioClient() {
       />
     );
   } else if (page === "shows") {
-    main = <ShowsPage topSlot={showsTop} hosted={Boolean(doctor.host)} />;
+    const switcher = activeProject ? <ProjectSwitcher projects={projects} active={activeProject} onError={setLog} /> : null;
+    main = <ShowsPage topSlot={showsTop} hosted={Boolean(doctor.host)} switcher={switcher} />;
   } else if (page === "assets") {
     main = (
       <AssetsPage
@@ -5359,7 +5360,7 @@ export function StudioClient() {
                 <path d="M3 5h12M3 9h12M3 13h12" stroke="currentColor" />
               </svg>
             </button>
-            {/* The tab's project (COREPRODUC-702). Shows keeps this slot for its own breadcrumb. */}
+            {/* The tab's project (COREPRODUC-702). Shows puts it in its own header, on the open screen only. */}
             {activeProject && page !== "shows" ? <ProjectSwitcher projects={projects} active={activeProject} onError={setLog} /> : null}
             <h1 className={page === "canvas" || page === "shows" ? "sr-only" : ""}>
               {page === "speak" || page === "upscale" || page === "adapts"
@@ -5398,13 +5399,14 @@ export function StudioClient() {
           <div className="top-meta">
             {/* These pages have no log line of their own. Bug fixed (first occurrence 2026-11-11, hosted
                 Studio check, COREPRODUC-585): a refused or failed run on them showed no reason. Adapts too
-                (2026-11-19, review of #690, COREPRODUC-710): a refused upload or estimate said nothing. */}
+                (2026-11-19, review of #690, COREPRODUC-710): a refused upload or estimate said nothing. Shows too
+                (2026-11-19, review of #691): a failed project create, rename or archive said nothing. */}
             {boardConflict && page === "canvas" ? (
               <span className="top-log" role="alert" data-testid="board-conflict">
                 This board changed in another window. Reload to see it; edits here are not saved.
               </span>
             ) : null}
-            {log && !(boardConflict && page === "canvas") && (page === "image" || page === "video" || page === "canvas" || page === "adapts") ? (
+            {log && !(boardConflict && page === "canvas") && (page === "image" || page === "video" || page === "canvas" || page === "adapts" || page === "shows") ? (
               <span className="top-log" role="status" aria-live="polite" title={log}>
                 {log}
               </span>

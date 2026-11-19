@@ -9,7 +9,9 @@ async function openImage(page: Page) {
   });
   // Boot sets models, then loads media (GET /runs). /skills can take ~2s, so wait before the picker opens.
   const booted = page.waitForResponse((res) => res.url().split("?")[0].endsWith("/vinci-api/runs") && res.request().method() === "GET");
-  await page.goto("/");
+  // An empty project: other specs leave runs in My work on the shared daemon, and this test checks the empty feed.
+  const { id } = (await (await page.request.post("/vinci-api/projects", { data: { name: "e2e Image page" } })).json()) as { id: string };
+  await page.goto(`/?project=${id}`);
   await page.locator('nav button[aria-label="Image"]').click();
   await expect(page.getByTestId("image-page")).toBeVisible();
   await booted;

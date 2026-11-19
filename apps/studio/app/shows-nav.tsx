@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import {
   BIBLE_KINDS,
   OLF_API,
@@ -164,6 +164,7 @@ export function ShowTop({
   onClose,
   onExport,
   exporting = false,
+  switcher,
 }: {
   show: OlfShow | null;
   route: Route;
@@ -173,8 +174,17 @@ export function ShowTop({
   /** A host packs the show in a worker job, then downloads it (COREPRODUC-699); local Export is a link. */
   onExport?: () => void;
   exporting?: boolean;
+  /** The project switcher (COREPRODUC-702): on the open screen only, so a switch never leaves a show of another project open. */
+  switcher?: ReactNode;
 }) {
-  if (!show) return <span className="top-crumb">Shows</span>;
+  if (!show) {
+    return (
+      <span className="top-open">
+        {switcher}
+        <span className="top-crumb">Shows</span>
+      </span>
+    );
+  }
   if (route.view === "shot" && show.shots[route.shot]) {
     const id = route.shot;
     const { prev, next } = neighbors(episodeOf(show, id), id);

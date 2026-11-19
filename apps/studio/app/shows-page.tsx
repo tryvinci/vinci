@@ -3,6 +3,7 @@
 import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { daemonPaths } from "../lib/daemon-routes";
+import { currentProject, projectKey, runBody, uploadForm, withProject } from "../lib/projects";
 import {
   CLOSED_KEY,
   OLF_API,
@@ -62,8 +63,8 @@ type Batches = { episode: string; stale: OlfBatch; animate: OlfBatch };
  */
 function markClosed(closed: boolean): void {
   try {
-    if (closed) window.localStorage.setItem(CLOSED_KEY, "1");
-    else window.localStorage.removeItem(CLOSED_KEY);
+    if (closed) window.localStorage.setItem(projectKey(CLOSED_KEY), "1");
+    else window.localStorage.removeItem(projectKey(CLOSED_KEY));
   } catch (err) {
     console.warn("[shows] could not save the closed flag", { closed, err });
   }
@@ -129,7 +130,7 @@ function keptExport(key: string, id?: string | null): string {
   }
 }
 
-export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement | null; hosted?: boolean }) {
+export function ShowsPage({ topSlot, hosted = false, switcher }: { topSlot?: HTMLElement | null; hosted?: boolean; switcher?: ReactNode }) {
   const [available, setAvailable] = useState<boolean | null>(null);
   const [routes, setRoutes] = useState<Set<string> | null>(null); // the OLF routes this daemon serves
   const [shows, setShows] = useState<OlfShowRow[]>([]); // GET /olf/shows, for the open screen
@@ -243,7 +244,7 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
   }, []);
 
   useEffect(() => {
-    if (recent.length) window.localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
+    if (recent.length) window.localStorage.setItem(projectKey(RECENT_KEY), JSON.stringify(recent));
   }, [recent]);
 
   useEffect(() => {
@@ -273,7 +274,7 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
     // The open screen lists the shows; it loads again each time a show closes.
     if (!available || show || !routes?.has("/olf/shows")) return;
     let live = true;
-    olf<{ shows: OlfShowRow[] }>("/shows")
+    olf<{ shows: OlfShowRow[] }>(withProject("/shows"))
       .then((body) => live && setShows(body.shows || []))
       .catch((err) => console.warn("[shows] list failed", message(err)));
     return () => {
@@ -324,7 +325,7 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
       linking.current = lookup;
       let failed = false;
       const listed = routes?.has("/olf/shows")
-        ? await olf<{ shows: OlfShowRow[] }>("/shows").then((body) => body.shows || []).catch((err) => {
+        ? await olf<{ shows: OlfShowRow[] }>(withProject("/shows")).then((body) => body.shows || []).catch((err) => {
             failed = true;
             console.warn("[shows] list failed for a link", message(err));
             return [] as OlfShowRow[];
@@ -338,7 +339,7 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
           setShow(null); // the open screen says why
           restoring.current = false;
           held.current = failed;
-          setError(failed ? "Could not load your shows, so this link did not open. Reload the page to try again." : "That show is not in your Studio.");
+          setError(failed ? "Could not load your shows, so this link did not open. Reload the page to try again." : `That show is not in ${currentProject() ? "this project" : "your Studio"}.`);
           if (!failed) setUrlPart("shows", "", true);
         }
       }
@@ -349,13 +350,13 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
 
   useEffect(() => {
     if (!available || !routes) return;
-    const rows = parseRecent(window.localStorage.getItem(RECENT_KEY));
+    const rows = parseRecent(window.localStorage.getItem(projectKey(RECENT_KEY)));
     setRecent(rows);
     const { slug, part } = urlShow();
     if (slug) void openSlug(slug, part, rows); // a link or a reload names the show
     // Bug fixed (first occurrence, 2026-11-18 user report, COREPRODUC-700): Close show did not stick;
     // the newest recent show opened again on the next visit. After Close show, nothing opens by itself.
-    else if (rows[0] && !window.localStorage.getItem(CLOSED_KEY)) {
+    else if (rows[0] && !window.localStorage.getItem(projectKey(CLOSED_KEY))) {
       quiet.current = true;
       void open(rows[0]).then((shown) => {
         if (!shown) quiet.current = false; // only this automatic open replaces the bare entry
@@ -402,7 +403,7 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
       linking.current = 0;
       if (!slug) return setShow(null);
       restoring.current = true;
-      void openSlug(slug, part, parseRecent(window.localStorage.getItem(RECENT_KEY)));
+      void openSlug(slug, part, parseRecent(window.localStorage.getItem(projectKey(RECENT_KEY))));
     };
     const w = topWindow();
     w.addEventListener("popstate", onPop);
@@ -567,8 +568,7 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
     setLoading(true);
     const run = openRun.current; // a show opened or closed meanwhile moves it on: then do not open
     try {
-      const form = new FormData();
-      form.append("file", file);
+      const form = uploadForm(file); // the show joins the tab's project
       const { path, title, skipped = [] } = await olf<{ path: string; title: string; skipped?: string[] }>("/import", { method: "POST", body: form });
       // A host keeps only show files (text and media): it names what it left out.
       const left = skipped.length ? ` · ${skipped.length} file${skipped.length === 1 ? "" : "s"} left out (not show files)` : "";
@@ -616,7 +616,7 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
   async function openSample() {
     setLoading(true);
     try {
-      const { path } = await olf<{ path: string }>("/sample", send("POST", {}));
+      const { path } = await olf<{ path: string }>("/sample", send("POST", runBody({})));
       await open(path);
     } catch (err) {
       setError(message(err));
@@ -746,6 +746,7 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
               onClose={closeShow}
               onExport={hosted ? () => void exportPackage() : undefined}
               exporting={packing}
+              switcher={switcher}
             />,
             topSlot,
           )

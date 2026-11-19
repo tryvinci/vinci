@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -145,6 +146,19 @@ def test_shows_are_listed_per_project(client: TestClient) -> None:
     assert len(listed("")) == 2
     assert client.post("/olf/new", json={"title": "X", "project_id": "nope"}).status_code == 404
     assert client.delete(f"/projects/{pid}").status_code == 409
+    # Import and the sample join the project too (the Studio sends it since 2026-11-19).
+    package = client.get("/olf/share", params={"path": pilot}).content
+    up = client.post("/olf/import", files={"file": ("p.volf", package)}, data={"project_id": pid})
+    sample = client.post("/olf/sample", json={"project_id": pid}).json()["path"]
+    assert set(listed(pid)) == {str(Path(pilot).resolve()), up.json()["path"], sample}
+    assert len(listed(DEFAULT_ID)) == 1
+    refused = client.post("/olf/import", files={"file": ("p.volf", package)}, data={"project_id": "nope"})
+    assert refused.status_code == 404
+    # A deleted show's folder name comes back for a new show: its old project link does not stay.
+    shutil.rmtree(pilot)
+    again = client.post("/olf/new", json={"title": "Pilot"}).json()["path"]
+    assert Path(again).resolve() == Path(pilot).resolve()
+    assert str(Path(again).resolve()) in listed(DEFAULT_ID) and str(Path(again).resolve()) not in listed(pid)
 
 
 def test_projects_survive_a_journal_replay(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -204,3 +218,16 @@ def test_review_fixes_of_682(client: TestClient) -> None:
     assert sample({"project_id": pid}) == in_project  # a repeat reopens the project's own copy
     assert str(Path(in_project).resolve()) in shows(pid)
     assert str(Path(default).resolve()) in shows(DEFAULT_ID)
+
+
+def test_new_shows_with_one_title_at_once_get_their_own_folders(client: TestClient) -> None:
+    """CodeRabbit on #691: an exists() check let parallel New shows write one folder."""
+    pytest.importorskip("vinci_olf")
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(6) as pool:
+        made = list(pool.map(lambda _: client.post("/olf/new", json={"title": "Twin"}), range(6)))
+    assert all(res.status_code == 200 for res in made), [res.text for res in made]
+    assert len({res.json()["path"] for res in made}) == 6
+    assert client.post("/olf/new", json={"title": ""}).status_code == 400
+    assert not [p for p in (Path(made[0].json()["path"]).parent).iterdir() if not any(p.iterdir())]

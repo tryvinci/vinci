@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypeVar
 
-from fastapi import APIRouter, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
@@ -436,11 +436,18 @@ def new(body: NewShowBody, request: Request) -> dict[str, Any]:
     project_id = projects.stamp(engine, body.project_id)  # checked before any file is written
     base = Path(request.app.state.engine.config.home) / "shows"
     slug = _slug(body.title) or "show"
-    root = next(
-        base / name
-        for name in (slug, *(f"{slug}-{n}" for n in range(2, 1000)))
-        if not (base / name).exists()
-    )
+    base.mkdir(parents=True, exist_ok=True)
+    # Claim the folder, as Import does: with an exists() check, two New shows with one title at
+    # once wrote one folder, and the second took the show's project link (CodeRabbit on #691).
+    for name in (slug, *(f"{slug}-{n}" for n in range(2, 1000))):
+        root = base / name
+        try:
+            root.mkdir()
+            break
+        except FileExistsError:
+            continue
+    else:
+        raise HTTPException(status_code=409, detail=f"too many shows named {slug}")
 
     def create() -> dict[str, Any]:
         p = new_show(root, body.title, medium=body.medium, aspect=body.aspect)
@@ -469,7 +476,7 @@ def new(body: NewShowBody, request: Request) -> dict[str, Any]:
     )
     try:
         out = _olf(create)
-        projects.store(engine).link("show", projects.show_key(root), project_id, only_once=True)
+        projects.store(engine).link("show", projects.show_key(root), project_id, fresh=True)
         return out
     except Exception:
         shutil.rmtree(root, ignore_errors=True)
@@ -965,14 +972,19 @@ def share(path: str) -> FileResponse:
 
 
 @router.post("/import")
-def import_show(request: Request, file: UploadFile) -> dict[str, Any]:
+def import_show(
+    request: Request, file: UploadFile, project_id: str = Form("")
+) -> dict[str, Any]:
     """Unpack a ``.volf`` package as a new show in ``$VINCI_HOME/shows`` (design: Import show).
 
     The folder is named after the show ID (``tidewatch``, then ``tidewatch-2``...), so an import
     never writes over a show. A show with OLF issues still imports: the Studio lists them, as for
     any folder. A file that is not a package, or breaks a package rule, is refused (HTTP 400).
+    The show joins ``project_id`` (COREPRODUC-702; empty: My work), as on the host.
     """
-    shows = Path(request.app.state.engine.config.home) / "shows"
+    engine = request.app.state.engine
+    project = projects.stamp(engine, project_id)  # checked before any file is written
+    shows = Path(engine.config.home) / "shows"
     shows.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=".import-", dir=shows))  # same disk: a rename moves it
     try:
@@ -996,7 +1008,12 @@ def import_show(request: Request, file: UploadFile) -> dict[str, Any]:
             raise HTTPException(status_code=409, detail=f"too many shows named {slug}")
     finally:
         shutil.rmtree(staging, ignore_errors=True)
-    log.info("olf: imported %s as %s", file.filename, dest)
+    try:
+        projects.store(engine).link("show", projects.show_key(dest), project, fresh=True)
+    except Exception:
+        shutil.rmtree(dest, ignore_errors=True)  # as New show: a failed import leaves no show
+        raise
+    log.info("olf: imported %s as %s (project %s)", file.filename, dest, project or "default")
     # Resolved, as /shows and /project report it (a URL slug's key hashes it, COREPRODUC-698).
     return {"path": str(dest.resolve()), "title": str(p.manifest.get("title") or dest.name)}
 

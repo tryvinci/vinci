@@ -53,16 +53,16 @@ test.describe("URL slugs", () => {
 
     // The show list fails and the show is not in the recent ones: the link stays, to try again.
     await page.evaluate(() => localStorage.removeItem("vinci-shows-recent-v1"));
-    await page.route("**/vinci-api/olf/shows", (route) => route.abort("failed"));
+    await page.route(/\/vinci-api\/olf\/shows(\?.*)?$/, (route) => route.abort("failed")); // `?project=` since COREPRODUC-702
     await page.goto(`/#shows/${show}/cut/e02`);
     await page.reload();
     await expect(page.getByText("Could not load your shows, so this link did not open.")).toBeVisible();
     await expect.poll(() => hash(page)).toBe(`#shows/${show}/cut/e02`);
-    await page.unroute("**/vinci-api/olf/shows");
+    await page.unroute(/\/vinci-api\/olf\/shows(\?.*)?$/);
 
-    // A show that is not in this Studio: the open screen says so, and the URL is the page's own.
+    // A show that is not in this project: the open screen says so, and the URL is the page's own.
     await page.goto("/#shows/nobody-deadbeef/cut/e01");
-    await expect(page.getByText("That show is not in your Studio.")).toBeVisible();
+    await expect(page.getByText("That show is not in this project.")).toBeVisible();
     await expect.poll(() => hash(page)).toBe("#shows");
     await page.screenshot({ path: path.join(shots, "url_unknown_show.png") });
   });

@@ -18,6 +18,7 @@ NAMES = [
     "filterProjects",
     "setCurrentProject",
     "currentProject",
+    "projectKey",
 ]
 SETUP = """
 function eq(got, want, what) {
@@ -75,4 +76,15 @@ def test_the_switcher_lists_open_projects_last_changed_first() -> None:
 eq(filterProjects(all, "").map((row) => row.id), ["ads", "default"], "no archived, newest first");
 eq(filterProjects(all, "summer ADS").map((row) => row.id), ["ads"], "every word, any case");
 eq(filterProjects(all, "reel"), [], "archived stays out of a search");
+""")
+
+
+def test_each_named_project_keeps_its_own_browser_storage() -> None:
+    _check("""
+setCurrentProject(null);
+eq(projectKey("k"), "k", "off: the plain key");
+setCurrentProject("mine", true);
+eq(projectKey("k"), "k", "My work: the plain key, so what it kept before projects stays");
+setCurrentProject("ads");
+eq(projectKey("k"), "k:ads", "a named project: its own key");
 """)
