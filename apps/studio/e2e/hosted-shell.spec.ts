@@ -63,6 +63,37 @@ test.describe("Hosted shell", () => {
     await expect(signOut).toHaveAttribute("target", "_top");
   });
 
+  // Bug fixed (first occurrence 2026-11-19, user report): before /doctor answered, the rail showed every
+  // local page (Explore, Library, Skills, Find, Cost report), the title "Home" and the account "Local" for a moment.
+  test("before /doctor answers, the rail shows no page the host may not serve", async ({ page }) => {
+    let release = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let asked = () => {};
+    const doctorAsked = new Promise<void>((resolve) => (asked = resolve));
+    await page.addInitScript(() => localStorage.setItem("vinci-onboard-v1", "done"));
+    await page.route(/\/vinci-api\/doctor(\?|$)/, async (route) => {
+      asked();
+      await held;
+      const res = await route.fetch();
+      await route.fulfill({ response: res, json: { ...(await res.json()), host: HOST } });
+    });
+    await page.goto("/");
+    await doctorAsked;
+    const rail = page.locator("nav#studio-rail");
+    await expect(rail).toBeVisible();
+    for (const name of ["Explore", "Image", "Library", "Skills", "Find", "Cost report"]) {
+      await expect(rail.locator(`button[aria-label="${name}"]`)).toHaveCount(0);
+    }
+    await expect(page.locator(".top h1")).toHaveText("");
+    await expect(rail.getByRole("button", { name: "Account menu" }).locator(".rail-label")).toHaveText("");
+    release();
+    await expect(rail.locator('button[aria-label="Image"]')).toBeVisible();
+    await expect(page.locator(".top h1")).toHaveText("Image");
+    for (const name of ["Explore", "Library", "Skills", "Find", "Cost report"]) {
+      await expect(rail.locator(`button[aria-label="${name}"]`)).toHaveCount(0);
+    }
+  });
+
   test("All tools shows only tabs with tools the host serves", async ({ page }) => {
     await openHosted(page);
     await page.getByRole("button", { name: "All tools" }).click();

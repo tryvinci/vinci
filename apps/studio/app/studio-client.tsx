@@ -725,6 +725,8 @@ export function StudioClient() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [doctor, setDoctor] = useState<Doctor>({});
+  // False until /doctor answers (or boot fails): the shell does not yet know which pages it serves.
+  const [booted, setBooted] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [modelId, setModelId] = useState("");
   const [camera, setCamera] = useState(OPTICAL_NEUTRAL.camera);
@@ -1215,8 +1217,30 @@ export function StudioClient() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ demo: localOnlyRef.current ? true : null }),
       });
+      // The shell (rail, title, page) follows /doctor alone: it does not wait for the other five requests.
+      const doctorAsk = api<Doctor>("/doctor").then((doc) => {
+        setDoctor(doc);
+        // The server's file limits (COREPRODUC-710); a host that states none yet takes ~30 MB per request.
+        setUploadLimits(doc.limits ?? (doc.host ? { upload_bytes: HOST_REQUEST_BYTES, import_bytes: HOST_REQUEST_BYTES } : null));
+        const host = doc.host;
+        if (host) {
+          // A host bills in its own unit, serves some pages only, and has its own onboarding.
+          setPriceUnit(host.currency);
+          setShowsCredits(host.currency === "credits");
+          // The page the URL names when the host serves it (reload, a link, Back), else today's choice.
+          const asked = urlPage();
+          if (host.pages?.length) setPage((now) => (asked && host.pages!.includes(asked) ? asked : host.pages!.includes(now) ? now : host.pages![0]));
+        } else {
+          openOnboardOnce();
+          const asked = urlPage();
+          if (asked) setPage(asked);
+        }
+        urlReady.current = true;
+        setBooted(true);
+        return doc;
+      });
       const [doc, modelBody, skillBody, tplBody, presetBody, settingsBody] = await Promise.all([
-        api<Doctor>("/doctor"),
+        doctorAsk,
         api<{ models: Model[] }>("/models"),
         api<{ skills: Skill[] }>("/skills"),
         api<{ templates: Template[] }>("/templates"),
@@ -1231,23 +1255,6 @@ export function StudioClient() {
           };
         }>("/settings"),
       ]);
-      setDoctor(doc);
-      // The server's file limits (COREPRODUC-710); a host that states none yet takes ~30 MB per request.
-      setUploadLimits(doc.limits ?? (doc.host ? { upload_bytes: HOST_REQUEST_BYTES, import_bytes: HOST_REQUEST_BYTES } : null));
-      const host = doc.host;
-      if (host) {
-        // A host bills in its own unit, serves some pages only, and has its own onboarding.
-        setPriceUnit(host.currency);
-        setShowsCredits(host.currency === "credits");
-        // The page the URL names when the host serves it (reload, a link, Back), else today's choice.
-        const asked = urlPage();
-        if (host.pages?.length) setPage((now) => (asked && host.pages!.includes(asked) ? asked : host.pages!.includes(now) ? now : host.pages![0]));
-      } else {
-        openOnboardOnce();
-        const asked = urlPage();
-        if (asked) setPage(asked);
-      }
-      urlReady.current = true;
       setPref(doc.preference || "cheapest");
       setMonthlyCap(doc.budget?.monthly_cap_usd != null ? String(doc.budget.monthly_cap_usd) : "");
       const od = settingsBody.output_destination || { kind: "none" };
@@ -1271,6 +1278,7 @@ export function StudioClient() {
         setSessionEnded(plainError(err));
         return;
       }
+      setBooted(true); // a daemon that is down still gets the full local rail
       openOnboardOnce();
       setLog(plainError(err));
     }
@@ -3024,9 +3032,12 @@ export function StudioClient() {
 
   const live = Object.entries(doctor.providers || {}).filter(([id, row]) => id !== "mock" && row && row.available);
   // A host (Vinci Platform) serves only the pages it lists; the local daemon serves them all.
+  // Bug fixed (first occurrence 2026-11-19, user report, hosted Studio, COREPRODUC-726): before /doctor answered, every
+  // page counted as served, so Explore, Library, Skills, Find and Cost report flashed in the rail.
   const hostPages = doctor.host?.pages;
-  const served = (id: PageId) => !hostPages?.length || hostPages.includes(id);
-  const accountName = doctor.host?.user?.name || doctor.host?.name || (live.length ? live.map(([id, row]) => row.display_name || id).join(" · ") : "Local");
+  const served = (id: PageId) => booted && (!hostPages?.length || hostPages.includes(id));
+  // Empty before /doctor: "Local" flashed on a host too.
+  const accountName = !booted ? "" : doctor.host?.user?.name || doctor.host?.name || (live.length ? live.map(([id, row]) => row.display_name || id).join(" · ") : "Local");
   const spent = projectRuns.reduce((sum, r) => sum + Number(r.estimate?.total || 0), 0);
   // Own-key runs cost 0 credits on a host; their dollars are counted apart. Bug fixed (first occurrence,
   // 2026-11-13 production crawl, COREPRODUC-642): two own-key runs ($0.052) left "≈ 0 credits used".
@@ -5363,10 +5374,13 @@ export function StudioClient() {
             </button>
             {/* The tab's project (COREPRODUC-702). Shows puts it in its own header, on the open screen only. */}
             {activeProject && page !== "shows" ? <ProjectSwitcher projects={projects} active={activeProject} onError={setLog} /> : null}
-            <h1 className={page === "canvas" || page === "shows" ? "sr-only" : ""}>
-              {page === "speak" || page === "upscale" || page === "adapts"
-                ? getApp(effectAppId)?.name || titles[page]
-                : titles[page]}
+            {/* No title before /doctor: the first page ("Home") is not one a host serves. */}
+            <h1 className={page === "canvas" || page === "shows" || !booted ? "sr-only" : ""}>
+              {!booted
+                ? ""
+                : page === "speak" || page === "upscale" || page === "adapts"
+                  ? getApp(effectAppId)?.name || titles[page]
+                  : titles[page]}
             </h1>
             {page === "canvas" ? (
               <div className="space-switch" role="group" aria-label="Canvas view">
