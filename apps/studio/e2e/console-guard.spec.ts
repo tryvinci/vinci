@@ -26,7 +26,8 @@ test.describe("console stays clean", () => {
       localStorage.setItem("vinci-onboard-v1", "done");
     });
     await page.goto("/");
-    await expect(page.locator("nav")).toBeVisible();
+    // The rail lists its pages once /doctor has answered.
+    await expect(page.locator('nav button[aria-label="Image"]')).toBeVisible();
 
     await openRail(page, "Image");
     await expect(page.getByTestId("image-page")).toBeVisible();

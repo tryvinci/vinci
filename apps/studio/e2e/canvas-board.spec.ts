@@ -204,7 +204,8 @@ test("selection scopes, pages, history, minimap", async ({ page }) => {
   await shot(page, "board-07-comment");
 
   await page.reload();
-  await page.getByRole("button", { name: "Canvas" }).click();
+  // The rail button: the reload opens #canvas, whose "Canvas view" switch has a Canvas button too.
+  await page.locator('nav button[aria-label="Canvas"]').click();
   await expect(page.getByTestId("page-tab")).toHaveCount(2);
   await expect(page.getByTestId("page-tab").nth(1)).toHaveText("Alt");
   await expect(page.getByTestId("board-comment")).toContainText("keep this");

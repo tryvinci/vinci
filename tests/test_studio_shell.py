@@ -201,7 +201,8 @@ def test_studio_follows_a_host() -> None:
     """A host (Vinci Platform, COREPRODUC-585) lists its pages and price unit in /doctor; runs poll to the end."""
     body = CLIENT.read_text(encoding="utf-8")
     assert "setPriceUnit(host.currency)" in body
-    assert "const served = (id: PageId) => !hostPages?.length || hostPages.includes(id);" in body
+    # Nothing counts as served before /doctor answers, so no local page flashes in a host's rail.
+    assert "const served = (id: PageId) => booted && (!hostPages?.length || hostPages.includes(id));" in body
     for needle in (
         "group.items.filter((item) => served(item.id))",
         "FLYOUT_FEATURES[kind].filter((row) => served(row.id))",
