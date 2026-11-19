@@ -1,7 +1,18 @@
 "use client";
 
 import { type ReactNode, useEffect, useState } from "react";
-import { type OlfPill, type OlfPills, type OlfShow, SLOT_COLORS, mediaUrl } from "../lib/shows";
+import {
+  COPY_PROMPT,
+  type OlfModels,
+  type OlfPill,
+  type OlfPills,
+  type OlfShow,
+  SLOT_COLORS,
+  TEXT_MODEL_KEY,
+  autoLabel,
+  choiceLabel,
+  mediaUrl,
+} from "../lib/shows";
 import { message, olf, useOlfRoute } from "./shows-api";
 
 /** Its children only when the daemon serves `path`. A host serves fewer OLF routes for now. */
@@ -181,6 +192,62 @@ export function Pick({
           {option}
         </option>
       ))}
+    </select>
+  );
+}
+
+/**
+ * The text model menu (`GET /olf/models?capability=t2t`) and the person's pick, kept for the next
+ * visit and shared by the script panel and the scene lab: "" is Auto (routing), `COPY_PROMPT`
+ * copies the prompt for their own agent. An agent CLI is only ever a person's pick.
+ *
+ * @returns The menu (null until it loads), the pick, and a setter that keeps it.
+ */
+export function useTextModel(): [OlfModels | null, string, (id: string) => void] {
+  const [models, setModels] = useState<OlfModels | null>(null);
+  const [pick, setPick] = useState("");
+  useEffect(() => {
+    olf<OlfModels>("/models?capability=t2t")
+      .then((body) => {
+        setModels(body);
+        const saved = window.localStorage.getItem(TEXT_MODEL_KEY) || "";
+        // With no routed model (live mode with only agent CLIs), the first choice is the default;
+        // with no text model at all, copying the prompt is.
+        const known = saved === COPY_PROMPT || body.choices.some((row) => row.id === saved);
+        setPick(known ? saved : body.auto ? "" : body.choices[0]?.id || COPY_PROMPT);
+      })
+      .catch((err) => console.warn("[shows] text models", message(err)));
+  }, []);
+  const keep = (id: string) => {
+    setPick(id);
+    window.localStorage.setItem(TEXT_MODEL_KEY, id);
+  };
+  return [models, pick, keep];
+}
+
+/** The text model select: Auto, each model, and "Your agent · copy prompt". */
+export function TextModelPick({
+  models,
+  value,
+  disabled,
+  onPick,
+  testId,
+}: {
+  models: OlfModels;
+  value: string;
+  disabled?: boolean;
+  onPick: (id: string) => void;
+  testId: string;
+}) {
+  return (
+    <select className="olf-input olf-small" value={value} disabled={disabled} onChange={(event) => onPick(event.target.value)} data-testid={testId}>
+      {models.auto ? <option value="">{autoLabel(models.auto.model, models.choices)}</option> : null}
+      {models.choices.map((row) => (
+        <option key={row.id} value={row.id}>
+          {choiceLabel(row)}
+        </option>
+      ))}
+      <option value={COPY_PROMPT}>Your agent · copy prompt</option>
     </select>
   );
 }

@@ -51,6 +51,7 @@ class Capability(StrEnum):
     T2T = "t2t"  # text in, text out (script drafts, shot lists)
     MUSIC = "music"  # a music cue from a description and a length
     SFX = "sfx"  # a sound effect from a description and a length
+    R2V = "r2v"  # a video that follows a reference video's camera and timing (COREPRODUC-732)
 
 
 class AssetKind(StrEnum):

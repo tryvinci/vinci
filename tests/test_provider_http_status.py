@@ -1555,3 +1555,44 @@ def test_video_start_frame_wins_over_a_stray_reference() -> None:
     assert wavespeed_image(req) == fal_image(req) == _image_ref(both) == "start"
     still = JobRequest(capability=Capability.I2I, model_id="x", inputs={"image": "ref"})
     assert wavespeed_image(still) == fal_image(still) == _image_ref({"image": "ref"}) == "ref"
+
+
+def test_wavespeed_reference_render_sends_the_pin_video(monkeypatch: pytest.MonkeyPatch) -> None:
+    """COREPRODUC-732: Seedance 2.5 in reference mode gets the pin video and the pictures as
+    uploaded URLs, Wavespeed's media tags ("@Video 1"), no first frame and no sound; its price
+    counts the reference seconds (a clip as long as the shot: 0.11 x 2 x 5 s)."""
+    monkeypatch.setenv("VINCI_ALLOW_LIVE_SPEND", "1")
+    mp4 = b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2"  # an MP4's first box
+    cas = _mem_cas({"clip": mp4, "kf": b"\x89PNG\r\n\x1a\nkf", "sheet": b"\x89PNG\r\n\x1a\nsh"})
+    provider = WavespeedProvider(api_key="ws-key", cas=cas)
+    seen: dict[str, Any] = {}
+    uploads: list[str] = []
+
+    def fake_urlopen(request: Any, timeout: int = 30) -> _FakeResp:
+        if request.full_url.endswith("/media/upload/binary"):
+            uploads.append(request.get_header("Content-type"))
+            return _FakeResp({"data": {"download_url": f"https://cdn.example/{len(uploads)}"}})
+        seen["url"], seen["body"] = request.full_url, json.loads(request.data.decode("utf-8"))
+        return _FakeResp({"data": {"id": "job-1"}})
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    inputs = {
+        "prompt": "@Video1 is a coarse 3D blockout. @Image1 is the approved keyframe.",
+        "reference_videos": ["clip"],
+        "reference_images": ["kf", "sheet"],
+        "duration": 5,
+        "aspect_ratio": "16:9",
+    }
+    req = JobRequest(
+        capability=Capability.R2V, model_id="wavespeed:seedance-2.5-r2v:2026-11", inputs=inputs
+    )
+    assert float(provider.estimate(req).amount) == pytest.approx(1.1)
+    provider.submit(req)
+    assert seen["url"].endswith("/api/v3/bytedance/seedance-2.5/reference-to-video")
+    body = seen["body"]
+    assert body["prompt"] == "@Video 1 is a coarse 3D blockout. @Image 1 is the approved keyframe."
+    assert uploads == ["video/mp4", "image/png", "image/png"]
+    assert body["reference_videos"] == ["https://cdn.example/1"]
+    assert body["reference_images"] == ["https://cdn.example/2", "https://cdn.example/3"]
+    assert (body["duration"], body["resolution"], body["generate_audio"]) == (5, "480p", False)
+    assert "image" not in body and "images" not in body  # no first frame in reference mode

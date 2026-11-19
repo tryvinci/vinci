@@ -1740,12 +1740,417 @@ def test_pills_and_the_180_line(show: Path) -> None:
 
     sh016 = show / "episodes/e02/scenes/s03/sh016.yaml"
     edit(
-        sh016, "layout: { start: [{ slot: a, facing: left }] }", "layout: { start: [{ slot: d }] }"
+        sh016, "layout: { start: [{ slot: a, facing: left }] }", "layout: { start: [{ slot: 7 }] }"
     )
     assert any(i.level == "error" and "sh016" in i.where for i in validate(load(show)))
     assert not any("pills" in shot for shot in summary(load(show))["shots"].values())
     with pytest.raises(OlfError, match="previs of e02 stopped: fix the errors that validate"):
         previs(load(show), "e02", sheet=False, animatic=False)
+
+
+def test_pills_have_no_limit_on_people(show: Path) -> None:
+    """COREPRODUC-716: every character of a shot gets a pill; before, only the first three did."""
+    from vinci_olf.api import summary
+    from vinci_olf.layout import _shot_colors, slot_name, slot_place
+    from vinci_olf.render import _template_words
+
+    assert [slot_name(n) for n in (0, 2, 25, 26, 27, 701, 702)] == [
+        "a",
+        "c",
+        "z",
+        "aa",
+        "ab",
+        "zz",
+        "aaa",
+    ]
+    assert all(slot_place(slot_name(n)) == n for n in range(800))
+    for bad in ("D", "7", "", "a1"):
+        with pytest.raises(ValueError):
+            slot_place(bad)
+    names = ("tomas", "ines", "oren", "pell")
+    for name in names:
+        folder = show / f"bible/characters/{name}"
+        folder.mkdir(parents=True)
+        shutil.copy(show / "bible/characters/mira/sheet.png", folder / "sheet.png")
+        (folder / f"{name}.yaml").write_text(
+            f"id: char/{name}\nname: {name.title()}\ndescription: A keeper.\nsheet: sheet.png\n",
+            encoding="utf-8",
+        )
+    cast = "[char/mira, " + ", ".join(f"char/{n}" for n in names) + "]"
+    edit(show / SCENE, "characters: [char/mira]", f"characters: {cast}")
+    pills = summary(load(show))["shots"]["e02/s03/sh014"]["pills"]["start"]
+    assert [(x["slot"], x["name"]) for x in pills] == [
+        ("a", "Mira Sol"),
+        ("b", "Tomas"),
+        ("c", "Ines"),
+        ("d", "Oren"),
+        ("e", "Pell"),
+    ]
+    assert len({x["stripe"] for x in pills}) == 5  # five people, five different stripes
+    # Two characters that share a color in the show get different ones in a shot they share.
+    shared = {"char/x": "#1c9fb8", "char/y": "#1c9fb8"}
+    assert _shot_colors([{"id": "char/x"}, {"id": "char/y"}], shared) == {
+        "char/x": "#1c9fb8",
+        "char/y": "#e08a00",
+    }
+    view = {"characters": [{"id": f"char/{n}", "name": n.title()} for n in ("mira", *names)]}
+    view["camera"] = {"template": {"keyframe": "{a} talks to {d}; {f} is gone."}}
+    assert _template_words(view, "keyframe") == "Mira talks to Oren; {f} is gone."
+    # A name that holds a token is not filled again (CodeRabbit, #697): one scan of the template.
+    view["characters"][0]["name"] = "Agent {d}"
+    assert _template_words(view, "keyframe") == "Agent {d} talks to Oren; {f} is gone."
+    view["characters"][0]["name"] = "Mira"
+    # A slot with a trailing newline fails the schema (Python's `$` matched before the `\n`), so
+    # the layout check never gets it: before, slot_place raised and the summary failed (#697).
+    from types import SimpleNamespace
+
+    from vinci_olf.validate import _check_camerawork, schema_errors
+
+    pill = {"layout": {"start": [{"slot": "a\n"}]}}
+    assert any("does not match" in m for m in schema_errors("shot", pill))
+    good = {"layout": {"start": [{"slot": "aa"}]}}
+    assert not any("does not match" in m for m in schema_errors("shot", good))
+    # A template of only `d` needs four people, not one (CodeRabbit, #697); a bad slot is skipped.
+    found: list[str] = []
+    for slots, cast in ((["d"], 3), (["a"], 1), (["a\n", "b"], 1)):
+        docs = {"cam/x": SimpleNamespace(data={"slots": slots})}
+        shot = {"camera": {"template": {"id": "cam/x"}}, "characters": [{}] * cast}
+        _check_camerawork(SimpleNamespace(docs=docs), shot, "sh", lambda _w, m: found.append(m))
+    assert found == [
+        "cam/x needs 4 characters in the shot: it has 3",
+        "cam/x needs 2 characters in the shot: it has 1",
+    ]
+    # sh016 drops Mira, so its slots are Tomas (a) to Pell (d); `slot: d` was an error before.
+    layout = "layout: { start: [{ slot: d, x: 0.9 }, { slot: a, look_at: d }] }\n"
+    with (show / "episodes/e02/scenes/s03/sh016.yaml").open("a", encoding="utf-8") as file:
+        file.write(layout)
+    assert not [i for i in validate(load(show)) if i.level == "error"]
+    staged = summary(load(show))["shots"]["e02/s03/sh016"]["pills"]["start"]
+    assert [(x["name"], x["facing"]) for x in staged] == [("Pell", "left"), ("Tomas", "right")]
+
+
+def test_scene_room_versions_and_shot_tries(show: Path) -> None:
+    """COREPRODUC-719: a scene's room in versions, shot tries staged in it, and their checks."""
+    import json
+
+    from vinci_olf.scene import (
+        check_try,
+        read_room,
+        room_versions,
+        save_room,
+        save_room_try,
+        save_try,
+        tries,
+    )
+
+    scene, shot = "e02/s03", "e02/s03/sh014"
+    hashed = inputs_hash(resolve(load(show), shot), "keyframe")
+    desk = {"name": "desk", "shape": "box", "size": [1.4, 0.75, 0.7], "at": [-2.2, 0, -0.6]}
+    ledge = {"name": "step", "shape": "box", "size": [0.7, 0.1, 0.6], "at": [0.2, 0, 0.6]}
+    lamp = {
+        "name": "great lamp",
+        "shape": "cylinder",
+        "size": [1.3, 1.3, 1.3],
+        "at": [0.4, 0.5, -1.4],
+    }
+    room = {"set": [desk, ledge, lamp], "request": "The lamp room", "model": "mock"}
+    assert room_versions(load(show), scene) == []
+    assert save_room_try(load(show), scene, room) == 1
+    assert save_room(load(show), scene, room, source="try-1") == 1
+    moved = {"set": [desk | {"at": [-1.9, 0, -0.1], "turn": 30}, ledge, lamp]}
+    assert save_room(load(show), scene, moved, source="v1") == 2
+    assert room_versions(load(show), scene) == [1, 2]
+    v1 = read_room(load(show), scene, 1)
+    assert v1["version"] == 1 and v1["from"] == "try-1" and v1["set"][0]["at"] == [-2.2, 0, -0.6]
+    assert read_room(load(show), scene)["version"] == 2  # the newest
+    sunk = {"set": [ledge | {"at": [0.2, -0.5, 0.6]}]}
+    with pytest.raises(OlfError, match="step is below the floor"):
+        save_room(load(show), scene, sunk)
+    with pytest.raises(OlfError, match="no such scene"):
+        save_room(load(show), "e02/s99", room)
+    # A shot try in room v1 (sh014 is a 50mm shot): Mira by the lamp, then up on the step.
+    camera = {"at": [0.6, 1.5, 5.2], "looks_at": [0, 1.25, 0]}
+    mira = {"slot": "a", "at": [-0.9, 0, 0.4], "faces": "camera", "end": {"at": [0.2, 0.1, 0.6]}}
+    staged = {"room": 1, "camera": camera, "cast": [mira], "groups": [], "request": "By the lamp"}
+    # Warnings only (COREPRODUC-728): this camera is far for a close up, and Mira near its edge.
+    said = [(i.level, i.message) for i in check_try(load(show), shot, staged)]
+    assert said[0] == ("warning", "Mira Sol is at the frame edge at the start")
+    assert said[1][1].startswith("the shot says a close up, but the nearest person reads as a w")
+    assert len(said) == 2
+    assert save_try(load(show), shot, staged) == 1
+    saved = tries(load(show), shot)
+    assert [(t["try"], t["room"], t["issues"]) for t in saved] == [(1, 1, [m for _, m in said])]
+    assert (show / "scenes/e02/s03/sh014/try-1.json").is_file()
+
+    def problems(**person: Any) -> list[str]:
+        trial = staged | {"cast": [{"slot": "a", "at": [-0.9, 0, 0.4]} | person]}
+        return [f"{i.level}: {i.message}" for i in check_try(load(show), shot, trial)]
+
+    assert problems(at=[-1.9, 0, 0.4]) == [
+        "warning: Mira Sol is outside the 50mm frame at the start"
+    ]
+    assert "warning: Mira Sol stands inside the desk at the start" in problems(at=[-2.2, 0, -0.6])
+    assert any(
+        "floats 0.5 m above the floor at the end" in m for m in problems(end={"at": [0, 0.5, 2]})
+    )
+    assert problems(slot="b") == ["error: slot b names no one: e02/s03/sh014 has 1 character"]
+    in_v2 = [i.message for i in check_try(load(show), shot, staged | {"room": 2})]
+    assert in_v2 == [m for _, m in said]  # v2 moved the desk, not the lamp: Mira still stands free
+    with pytest.raises(OlfError, match="no room version 9"):
+        save_try(load(show), shot, staged | {"room": 9})
+    with pytest.raises(OlfError, match="cast"):
+        save_try(load(show), shot, {"room": 1, "camera": camera})
+    # Plans are in no hash, and validate checks them: a broken file is an error, a try left
+    # from a deleted shot a warning.
+    assert inputs_hash(resolve(load(show), shot), "keyframe") == hashed
+    (show / "scenes/e02/s03/room/v3.json").write_text(json.dumps({"scene": scene, "set": []}))
+    (show / "scenes/e02/s03/sh999").mkdir()
+    (show / "scenes/e02/s03/sh999/try-1.json").write_text(
+        json.dumps(staged | {"shot": "e02/s03/sh999"})
+    )
+    found = [
+        str(i)
+        for i in validate(load(show))
+        if i.where.startswith("scenes/") and "sh014" not in i.where  # sh014: the warnings above
+    ]
+    assert found == [
+        "error: scenes/e02/s03/room/v3.json: set: [] should be non-empty",
+        "warning: scenes/e02/s03/sh999/try-1.json: e02/s03/sh999: no such shot"
+        " (a plan left from a deleted shot)",
+    ]
+
+
+def test_scene_lab_prompts_answers_and_use(show: Path) -> None:
+    """COREPRODUC-720: the build step's prompts, answers (a model's or pasted), and a try used as
+    the shot's keyframe layout (the frame, with where it came from, and the pills)."""
+    import base64
+    import io
+    import json
+
+    from PIL import Image
+    from vinci_olf.scene import read_room, room_versions
+    from vinci_olf.scene_lab import (
+        keep_room,
+        overview,
+        parse,
+        pills_of,
+        prompt_for,
+        save_answer,
+        use,
+    )
+
+    scene, shot = "e02/s03", "e02/s03/sh014"
+    system, prompt = prompt_for(load(show), scene, "Round lamp room, the lamp in the middle")
+    assert '"set"' in system and "No colors, no lights" in system
+    assert "INT. LAMP ROOM - NIGHT" in prompt and "Place: Lamp room (night)" in prompt
+    assert prompt.endswith("The person wants:\nRound lamp room, the lamp in the middle")
+    system, prompt = prompt_for(load(show), shot, "Mira by the lamp, then on the step")
+    assert "The scene has no set yet" in system  # the first shot builds the room too
+    assert "a 50mm lens on Super 35 (28° across), frame 16:9" in prompt
+    assert "  a = Mira Sol (red pin). Lighthouse keeper and fox spirit" in prompt
+    with pytest.raises(OlfError, match="describe the scene"):
+        prompt_for(load(show), shot, "  ")
+    with pytest.raises(OlfError, match="no such scene or shot"):
+        prompt_for(load(show), "e02/s99", "x")
+    # Answers: a fenced block or the outermost braces; JSON errors name the line.
+    assert parse('Sure!\n```json\n{"set": []}\n```\nDone.') == {"set": []}
+    assert parse('Here: {"a": {"b": 1}} ok') == {"a": {"b": 1}}
+    with pytest.raises(OlfError, match="not JSON: line 1"):  # an opening brace and no closing one
+        parse("{ nope")
+    with pytest.raises(OlfError, match="not JSON: line 2"):
+        parse('{"set": [\n  {"shape": box}\n]}')
+    # The first shot of a scene with no room: one answer saves room v1 and the shot's try 1.
+    lamp = {
+        "name": "great lamp",
+        "shape": "cylinder",
+        "size": [1.3, 1.3, 1.3],
+        "at": [0.4, 0.5, -1.4],
+    }
+    step = {"name": "step", "shape": "box", "size": [0.7, 0.1, 0.6], "at": [0.2, 0, 0.6]}
+    camera = {"at": [0.6, 1.5, 5.2], "looks_at": [0, 1.25, 0]}
+    mira = {
+        "slot": "a",
+        "at": [-0.4, 0, 0.4],
+        "faces": "camera",
+        "end": {"at": [0.2, 0.1, 0.6], "faces": 90},
+    }
+    answer = json.dumps({"set": [lamp, step], "camera": camera, "cast": [mira]})
+    FAR = (
+        "the shot says a close up, but the nearest person reads as a wide"
+        " (a head 0.17 of the frame height)"
+    )
+    assert save_answer(load(show), shot, answer, request="r", model="m") == {"room": 1, "try": 1}
+    assert (
+        room_versions(load(show), scene) == [1] and read_room(load(show), scene)["from"] == "sh014"
+    )
+    seen = overview(load(show), shot)
+    assert seen["versions"] == [1] and [
+        (t["try"], t["issues"], t["model"]) for t in seen["tries"]
+    ] == [(1, [FAR], "m")]
+    # A room try (a pasted answer for the scene), kept as room v2.
+    assert save_answer(load(show), scene, json.dumps({"set": [lamp]})) == {"room_try": 1}
+    assert keep_room(load(show), scene, room_try=1) == 2
+    with pytest.raises(OlfError, match="no room try 7"):
+        keep_room(load(show), scene, room_try=7)
+    # Pills from the 3D places: Mira a little left of centre, facing the camera, then on the step
+    # facing right (90 degrees turns +z toward +x, which this camera sees as frame right).
+    layout = pills_of(load(show), shot, overview(load(show), shot)["tries"][0])
+    start, end = layout["start"][0], layout["end"][0]
+    assert start["slot"] == "a" and start["facing"] == "camera" and 0.3 < start["x"] < 0.5
+    assert end["facing"] == "right" and end["x"] > start["x"] and 0 < end["y"] < 1
+    # Use: the frame (its PNG notes say where it came from) and the pills, written in the shot.
+    buf = io.BytesIO()
+    Image.new("RGB", (64, 36), "grey").save(buf, "PNG")
+    frame = base64.b64encode(buf.getvalue()).decode()
+    used = use(load(show), shot, 1, frame)
+    assert (
+        used["room"] == 1 and used["layout"] == layout and used["storyboard"].startswith("asset/")
+    )
+    png = Image.open(show / "storyboards/e02/s03/sh014.png")
+    assert png.text["olf-scene-room"] == "1" and png.text["olf-scene-try"] == "1"
+    p = load(show)
+    assert resolve(p, shot)["layout"] == layout and not [
+        i for i in validate(p) if i.level == "error"
+    ]
+    with pytest.raises(OlfError, match="no try 5"):
+        use(load(show), shot, 5, frame)
+
+
+def _grey_frame() -> str:
+    """A small PNG as base64, for a frame the Studio would render."""
+    import base64
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (64, 36), "grey").save(buf, "PNG")
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def test_try_checks_follow_and_jump(show: Path) -> None:
+    """COREPRODUC-728: the checks of a try after the measured pass of the blockout editor
+    (github.com/cbunseng/seedance-blockout-editor-private): the safe area, a piece that hides a
+    face, the shot's framing and angle words against the camera, a lens too near a face, a
+    camera that follows a person, and a jump cut from the shot before."""
+    from vinci_olf.author import set_shot
+    from vinci_olf.scene import aim, check_try, save_room, save_try
+    from vinci_olf.scene_lab import pills_of, use
+
+    scene, shot = "e02/s03", "e02/s03/sh014"  # a close up, eye level, 50mm: Mira only
+    lamp = {"name": "lamp", "shape": "cylinder", "size": [1.3, 1.3, 1.3], "at": [0.4, 0.5, -2.4]}
+    assert save_room(load(show), scene, {"set": [lamp]}) == 1
+    close = {"at": [0, 1.58, 1.65], "looks_at": [0, 1.58, 0]}  # on her eyes, 1.65 m away
+    staged = {"room": 1, "camera": close, "cast": [{"slot": "a", "at": [0, 0, 0]}]}
+
+    def said(**change: Any) -> list[str]:
+        return [f"{i.level}: {i.message}" for i in check_try(load(show), shot, staged | change)]
+
+    def mira(**place: Any) -> list[dict[str, Any]]:
+        return [{"slot": "a", "at": [0, 0, 0]} | place]
+
+    assert said() == []
+    assert said(cast=mira(at=[0.18, 0, 0])) == [
+        "warning: Mira Sol is at the frame edge at the start"
+    ]
+    crate = {"name": "crate", "shape": "box", "size": [0.5, 2, 0.2], "at": [0, 0, 0.8]}
+    assert said(props=[crate]) == ["warning: the crate hides Mira Sol at the start"]
+    far = said(camera={"at": [0, 1.58, 6], "looks_at": [0, 1.58, 0]})
+    assert len(far) == 1 and far[0].startswith(
+        "warning: the shot says a close up, but the nearest person reads as a wide"
+    )
+    assert said(camera={"at": [0, 2.5, 1.3], "looks_at": [0, 1.58, 0]}) == [
+        "warning: the shot says an eye level angle, but the camera looks down 35°"
+    ]
+    assert said(camera={"at": [0, 1.58, 1.0], "looks_at": [0, 1.58, 0]}) == [
+        "warning: the camera is 1.0 m from Mira Sol's face at the start: nearer than 1.5 m a"
+        " lens bends a face; step back with a longer lens"
+    ]
+    # Track subject: a fixed camera loses her as she walks; one that follows her keeps her.
+    walk = mira(at=[-1, 0, 0], end={"at": [1, 0, 0]})
+    assert said(cast=walk) == [
+        "warning: Mira Sol is outside the 50mm frame at the start",
+        "warning: Mira Sol is outside the 50mm frame at the end",
+    ]
+    follow = staged | {"cast": walk, "camera": close | {"looks_at": "a"}}
+    assert check_try(load(show), shot, follow) == []
+    assert aim(follow, "end") == [1, pytest.approx(1.581), 0]
+    pills = pills_of(load(show), shot, follow)
+    assert pills["start"][0]["x"] == 0.5 and pills["end"][0]["x"] == 0.5  # centred all the way
+    assert said(camera=close | {"looks_at": "b"}) == [
+        "error: the camera follows slot b, who is not staged"
+    ]
+    # A jump cut: sh014 uses a try; sh015 (made a close up too) films Mira from the same side.
+    assert save_try(load(show), shot, staged) == 1
+    use(load(show), shot, 1, _grey_frame())
+    set_shot(load(show), "e02/s03/sh015", framing="close_up")  # 35mm, low angle
+    low = {"room": 1, "camera": {"at": [0, 1.2, 1.5], "looks_at": [0, 1.58, 0]}, "cast": mira()}
+    jump = [i.message for i in check_try(load(show), "e02/s03/sh015", low)]
+    assert jump == [
+        "a jump cut from sh014: the camera turns 0° around Mira Sol; turn 30° or more,"
+        " or change the framing two steps"
+    ]
+    turned = low | {"camera": {"at": [1.06, 1.2, 1.06], "looks_at": [0, 1.58, 0]}}
+    assert check_try(load(show), "e02/s03/sh015", turned) == []  # 45° around her: a real cut
+
+
+def test_layout_words_name_the_shapes(show: Path) -> None:
+    """COREPRODUC-728: a keyframe layout from a scene lab try names its grey shapes, says none
+    may stay, gives the camera in numbers, and describes the pin shape in the frame; a plain pill
+    frame keeps its old words. After docs/why/why-the-set-stays-coarse.md of
+    github.com/cbunseng/seedance-blockout-editor-private (cone pines and ball trees came back)."""
+    from vinci_olf.author import add_storyboard
+    from vinci_olf.layout import shot_plan
+    from vinci_olf.render import _staging, prompt
+    from vinci_olf.scene import save_room, save_try
+    from vinci_olf.scene_lab import layout_words, use
+
+    scene, shot = "e02/s03", "e02/s03/sh014"
+    lamp = {
+        "name": "great lamp",
+        "shape": "cylinder",
+        "size": [1.3, 1.3, 1.3],
+        "at": [0.4, 0.5, -2.4],
+    }
+    desk = {"name": "desk", "shape": "box", "size": [1.2, 0.75, 0.7], "at": [-2.2, 0, -0.6]}
+    wall = {"name": "back wall", "shape": "box", "size": [12, 6, 0.2], "at": [0, 0, -4]}
+    assert save_room(load(show), scene, {"set": [lamp, desk, wall]}) == 1
+    camera = {"at": [0, 1.58, 1.65], "looks_at": [0, 1.58, 0]}
+    assert (
+        save_try(
+            load(show),
+            shot,
+            {"room": 1, "camera": camera, "cast": [{"slot": "a", "at": [0, 0, 0]}]},
+        )
+        == 1
+    )
+    with pytest.raises(OlfError, match="no such pin shape: cube"):
+        use(load(show), shot, 1, _grey_frame(), "cube")
+    use(load(show), shot, 1, _grey_frame(), "capsule")
+    words = layout_words(load(show), shot)
+    assert words["pin"] == "capsule"
+    assert words["shapes"].startswith(
+        "The grey shapes stand for real things of the same size in the same place: "
+        "the great lamp (a cylinder, "
+    )
+    assert "desk" not in words["shapes"]  # out of the frame
+    assert "the back wall (a box, in the middle)" in words["shapes"]  # fills it: no corner in it
+    assert words["shapes"].endswith(
+        "no cone, ball, plain box or untextured surface stays in the picture"
+    )
+    assert words["camera"].startswith("The camera is 1.6 m above the floor and looks level, ")
+    assert words["camera"].endswith(" m from Mira Sol")
+    p = load(show)
+    keyframe = prompt(resolve(p, shot), "keyframe", shot_plan(p, shot), staging=_staging(p, shot))
+    assert "each person is replaced by a striped capsule in one piece, with no head" in keyframe
+    assert "a round white dot on the top on the side they face" in keyframe
+    assert words["shapes"] in keyframe and words["camera"] in keyframe
+    # A plain pill frame drawn over it: the try no longer made the frame, so the old words stay.
+    add_storyboard(load(show), shot, _grey_frame())
+    p = load(show)
+    assert layout_words(p, shot) == {}
+    plain = prompt(resolve(p, shot), "keyframe", shot_plan(p, shot), staging=_staging(p, shot))
+    assert "a striped pin, a head on a slim body" in plain and "grey shapes" not in plain
 
 
 def test_storyboard_sends_the_pills_to_the_keyframe(show: Path) -> None:

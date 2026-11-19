@@ -40,6 +40,11 @@ def test_routes_are_listed_for_the_studio(client: TestClient) -> None:
         "/olf/previs",
         "/olf/shows",
         "/olf/import",
+        "/olf/scene",
+        "/olf/scene/build",
+        "/olf/scene/paste",
+        "/olf/scene/room",
+        "/olf/scene/use",
     ):
         assert path in paths  # the Studio feature-detects the Shows page with /olf/project
 
@@ -463,6 +468,13 @@ def test_new_show_script_and_text_routes(client: TestClient) -> None:
     assert split["preview"]["shots"] == 2 and split["text"].startswith(
         "EXT. CLIFF PATH - DUSK\n\n[WS"
     )
+    # "Your agent · copy prompt" (COREPRODUC-713): the whole prompt comes back and no model runs.
+    draft = ("/olf/draft", "idea", "A fox keeps a light.")
+    for route, field, value in (draft, ("/olf/script/model", "script", script)):
+        copied = client.post(route, json={field: value, "copy": True}).json()
+        assert copied["text"] is None and "plan" not in copied and "preview" not in copied
+        assert copied["prompt"].endswith(f"create no files.\n\n---\n\n{value}")
+    assert copied["prompt"].startswith("You turn film scripts into shot lists.")
     # Create the show: project, character with its sheet, and episode 1 from the script.
     body = {
         "title": "Tide Watch",
@@ -537,6 +549,131 @@ def test_add_music_cue_route(client: TestClient, monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr("vinci_daemon.olf_routes.render_cue", down)
     failed = client.post("/olf/cue", json=body | {"description": "Storm drums"})
     assert failed.status_code == 400 and episode.read_text() == before
+
+
+def test_scene_lab_routes(client: TestClient) -> None:
+    """COREPRODUC-720: build on the demo text model (price first), copy the prompt, paste an
+    answer, keep a room try as a version, and use a try as the keyframe layout."""
+    import base64
+    import io
+    import json
+
+    from PIL import Image
+
+    path = client.post("/olf/sample").json()["path"]
+    shot, scene = "e02/s03/sh014", "e02/s03"
+    body = {"path": path, "target": shot, "request": "Mira in the middle"}
+    copied = client.post("/olf/scene/build", json=body | {"copy": True}).json()
+    assert copied["text"] is None and "The scene has no set yet" in copied["prompt"]
+    assert copied["prompt"].endswith("The person wants:\nMira in the middle")
+    plan = client.post("/olf/scene/build", json=body | {"dry_run": True}).json()
+    assert plan["plan"][0]["model"] == "mock:llm:v1" and plan["text"] is None
+    built = client.post("/olf/scene/build", json=body).json()  # the demo room and staging
+    assert built["room"] == 1 and built["try"] == 1
+    seen = client.get("/olf/scene", params={"path": path, "target": shot}).json()
+    assert seen["versions"] == [1] and [t["try"] for t in seen["tries"]] == [1]
+    assert seen["room"]["set"][0]["name"] == "floor" and seen["rooms"] == {"1": seen["room"]}
+    pasted = json.dumps(
+        {"set": [{"name": "crate", "shape": "box", "size": [1, 1, 1], "at": [2, 0, -2]}]}
+    )
+    one = {"path": path, "target": scene, "text": f"```json\n{pasted}\n```"}
+    assert client.post("/olf/scene/paste", json=one).json() == {"room_try": 1}
+    bad = client.post("/olf/scene/paste", json=one | {"text": "{ nope"})
+    assert bad.status_code == 400 and "not JSON" in bad.json()["detail"]
+    kept = client.post("/olf/scene/room", json={"path": path, "scene": scene, "room_try": 1})
+    assert kept.json() == {"version": 2}
+    later = client.get("/olf/scene", params={"path": path, "target": shot}).json()
+    assert later["room"]["set"][0]["name"] == "crate"  # the newest room is v2
+    assert later["rooms"] == {"1": seen["room"]}  # the try still stands in room v1
+    # The scene room screen (COREPRODUC-723): all versions, the room tries, each shot's room.
+    room = client.get("/olf/scene", params={"path": path, "target": scene}).json()
+    assert list(room["rooms"]) == ["1", "2"] and [t["try"] for t in room["room_tries"]] == [1]
+    assert room["shots"][shot] == {"tries": 1, "try": 1, "room": 1}
+    assert room["shots"]["e02/s03/sh015"] == {"tries": 0, "try": None, "room": None}
+    # A try to start from goes in the prompt (the compare screen's "change for a new try").
+    based = client.post("/olf/scene/build", json=body | {"copy": True, "base": 1}).json()
+    assert "Start from this staging; change only what the person asks for:" in based["prompt"]
+    # A hand edit is checked as saving would check it, and nothing is saved.
+    draft = {k: v for k, v in seen["tries"][0].items() if k not in ("try", "issues")}
+    far = draft | {"cast": [{"slot": "a", "at": [40, 0, 0]}]}
+    checked = client.post("/olf/scene/check", json={"path": path, "shot": shot, "data": far})
+    assert any("outside" in i["message"] for i in checked.json()["issues"])
+    wrong = draft | {"room": 9}
+    checked = client.post("/olf/scene/check", json={"path": path, "shot": shot, "data": wrong})
+    assert [i["level"] for i in checked.json()["issues"]] == ["error"]
+    buf = io.BytesIO()
+    Image.new("RGB", (32, 18), "grey").save(buf, "PNG")
+    frame = base64.b64encode(buf.getvalue()).decode()
+    used = client.post(
+        "/olf/scene/use", json={"path": path, "shot": shot, "n": 1, "frame": frame}
+    ).json()
+    assert used["room"] == 1 and used["layout"]["start"][0]["slot"] == "a"
+    assert client.get("/olf/project", params={"path": path}).json()["issues"] == []
+
+
+def test_reference_render_routes(client: TestClient, tmp_path: Path) -> None:
+    """COREPRODUC-732: a shot renders its video from the scene lab's pin video at $0 on the
+    demo models: it waits for a keyframe and a clip, then plans an r2v node with the blockout
+    prompt, records the keyframe it took, and goes stale when Use records a new clip."""
+    import base64
+    import io
+    import subprocess
+
+    from PIL import Image
+
+    if not shutil.which("ffmpeg"):
+        pytest.skip("a reference video is made with ffmpeg")
+    path = client.post("/olf/sample").json()["path"]
+    shutil.rmtree(path)
+    shutil.copytree(SAMPLE, path)  # a fresh copy: other tests edit the same sample folder
+
+    def clip(source: str) -> str:
+        out = tmp_path / f"{source}.mp4"
+        lavfi = f"{source}=size=320x180:rate=24:duration=3"
+        cmd = ["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", lavfi, "-pix_fmt", "yuv420p"]
+        subprocess.run([*cmd, str(out)], check=True)
+        return "data:video/mp4;base64," + base64.b64encode(out.read_bytes()).decode()
+
+    buf = io.BytesIO()
+    Image.new("RGB", (64, 36), "grey").save(buf, "PNG")
+    frame = base64.b64encode(buf.getvalue()).decode()
+    at = {"path": path, "shot": SHOT}
+    client.post("/olf/scene/build", json={"path": path, "target": SHOT, "request": "Mira"})
+    client.patch("/olf/shot", json=at | {"fields": {"render": "reference"}})
+
+    def plan() -> dict[str, Any]:
+        return client.get("/olf/shot", params=at).json()["plans"]["video"]
+
+    assert "approve a keyframe first" in plan()["error"]
+    client.post("/olf/render", json=at | {"kind": "keyframe"})
+    client.patch("/olf/select", json=at | {"choices": {"keyframe": "kf1"}})
+    assert "needs a reference video" in plan()["error"]
+    used = client.post("/olf/scene/use", json=at | {"n": 1, "frame": frame, "video": clip("testsrc")})
+    assert used.status_code == 200 and used.json()["reference_video"].startswith("asset/")
+    detail = client.get("/olf/shot", params=at).json()
+    assert [(r["model"], r["capability"]) for r in detail["plans"]["video"]["plan"]] == [
+        ("mock:mp4:v1", "r2v")
+    ]
+    words = detail["prompts"]["video"]
+    assert "@Video1 is a coarse 3D blockout of this exact shot" in words
+    assert "The red-and-black striped pin in @Video1 is Mira Sol" in words
+    assert "never grey clay or a 3D blockout" in words
+    shows = client.get("/olf/project", params={"path": path}).json()["shots"][SHOT]
+    assert shows["reference_video"] == "storyboards/e02/s03/sh014.mp4"
+    made = client.post("/olf/render", json=at | {"kind": "video"}).json()
+    take = made["takes"][0]
+    assert take.endswith("/v1")
+    taken = client.get("/olf/project", params={"path": path}).json()["takes"][take]
+    assert taken["inputs"]["first_frame"] == f"{SHOT}/kf1" and not taken["stale"]
+    # A new clip (a new Use) makes the video stale; the keyframe's state does not change (the
+    # first Use already made it stale: its frame is a keyframe input).
+    before = client.get("/olf/project", params={"path": path}).json()["takes"]
+    client.post("/olf/scene/use", json=at | {"n": 1, "frame": frame, "video": clip("testsrc2")})
+    takes = client.get("/olf/project", params={"path": path}).json()["takes"]
+    assert takes[take]["stale"] and not before[take]["stale"]
+    assert takes[f"{SHOT}/kf1"]["stale"] == before[f"{SHOT}/kf1"]["stale"]
+    short = client.post("/olf/scene/use", json=at | {"n": 1, "frame": frame, "video": "AAAA"})
+    assert short.status_code == 400 and "does not play" in short.json()["detail"]
 
 
 def test_engine_move_routes(client: TestClient) -> None:

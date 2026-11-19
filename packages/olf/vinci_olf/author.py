@@ -18,6 +18,8 @@ import logging
 import math
 import mimetypes
 import re
+import shutil
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -44,6 +46,7 @@ CAMERA_KEYS = tuple(CAMERA)  # every camera field of the schema, in its order
 SLUG = re.compile(r"^[a-z0-9-]+$")
 HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 MAX_UPLOAD = 20 * 1024 * 1024  # bytes of one uploaded image
+MAX_CLIP = 50 * 1024 * 1024  # bytes of one reference video (Seedance 2.0 takes 50 MB in all)
 PLAIN = re.compile(r"[A-Za-z0-9][\w.\-+/]*( [\w.\-]+)*")
 NOT_TEXT = re.compile(r"[\d.]+|true|false|null|yes|no|on|off|~", re.IGNORECASE)
 ASPECTS = {"16:9": "1920x1080", "9:16": "1080x1920", "1:1": "1080x1080"}  # aspect -> resolution
@@ -644,6 +647,36 @@ def decode_image(data: str) -> Any:
     return image
 
 
+def set_layout(p: Project, shot_id: str, layout: dict[str, Any]) -> dict[str, Any]:
+    """Write a shot's pills (``layout``: ``start``, and ``end`` when people move) as one line.
+
+    The scene lab writes them from the places of a try (COREPRODUC-720), so the keyframe
+    prompt, the sheet, the animatic and the 180° line check follow the 3D staging. Pills are a
+    plan: no take becomes stale.
+
+    Raises:
+        OlfError: The shot is missing, or the layout is off the schema.
+    """
+    doc = p.docs.get(shot_id)
+    if doc is None or p.kind(shot_id) != "shot":
+        raise OlfError(f"{shot_id}: no such shot")
+    if errors := schema_errors("layout", layout):
+        raise OlfError(f"{shot_id} layout: " + "; ".join(errors))
+
+    def pill(row: dict[str, Any]) -> str:
+        return "{ " + ", ".join(f"{k}: {_flow(v)}" for k, v in row.items()) + " }"
+
+    flow = ", ".join(
+        f"{key}: [" + ", ".join(pill(r) for r in rows) + "]" for key, rows in layout.items()
+    )
+    lines = _lines(doc.path)
+    first, end, indent = shot_block(lines, shot_id)
+    _put(lines, first, end, indent, "layout", "{ " + flow + " }")
+    _save(doc.path, lines, lambda d: _node(d, shot_id).get("layout") == layout)
+    log.info("author: %s layout from the scene lab (%d pills)", shot_id, len(layout["start"]))
+    return layout
+
+
 def _save_image(image: Any, target: Path, **opts: Any) -> None:
     """Write an image in the format its file name asks for (``.png``, ``.jpg``, ``.webp``)."""
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -1019,7 +1052,7 @@ def write_source(p: Project, entry_id: str, text: str) -> str:
     return rel
 
 
-def add_storyboard(p: Project, shot_id: str, data: str) -> str:
+def add_storyboard(p: Project, shot_id: str, data: str, notes: dict[str, str] | None = None) -> str:
     """Save a shot's 3D pill frame and name it in ``control.storyboard``.
 
     The Studio renders the frame with three.js (``apps/studio/lib/pillframe.ts``): a clay set and
@@ -1033,6 +1066,7 @@ def add_storyboard(p: Project, shot_id: str, data: str) -> str:
         p: The loaded project.
         shot_id: The shot.
         data: The frame as base64 PNG (a ``data:`` URL is fine).
+        notes: Text chunks kept in the PNG, such as the scene lab try it came from.
 
     Returns:
         The frame's asset ID. The file is ``storyboards/<shot>.png``, locked with the show's
@@ -1043,7 +1077,7 @@ def add_storyboard(p: Project, shot_id: str, data: str) -> str:
     """
     from PIL.PngImagePlugin import PngInfo
 
-    from vinci_olf.render import _lock_entry, take_license
+    from vinci_olf.render import take_license
 
     doc = p.docs.get(shot_id)
     if doc is None or p.kind(shot_id) != "shot":
@@ -1055,18 +1089,85 @@ def add_storyboard(p: Project, shot_id: str, data: str) -> str:
         p.drop_from_lock(p.rel(target))
     named = PngInfo()  # two shots with the same frame get two assets: a redraw of one never
     named.add_text("olf-shot", shot_id)  # drops the lock row of the other
+    for key, value in (notes or {}).items():  # where the frame came from (COREPRODUC-720)
+        named.add_text(key, value)
     _save_image(image, target, pnginfo=named)
-    p.forget(target)  # a redraw: the cached (or host) digest is the old frame's
+    asset = _set_control(p, doc, shot_id, "storyboard", target, "image/png", license_)
+    log.info("shot %s: storyboard %s (%dx%d)", shot_id, p.rel(target), *image.size)
+    return asset
+
+
+def add_reference_video(p: Project, shot_id: str, data: str, *, raw: bool = False) -> str:
+    """Save a shot's reference video and name it in ``control.reference_video``.
+
+    The Studio records the scene lab's pin video of the try a shot uses (COREPRODUC-732): the
+    grey set and the striped pins playing the shot's move. A ``render: reference`` video sends
+    it, so the model follows its camera path and timing (the pin video of
+    github.com/cbunseng/seedance-blockout-editor-private, Apache-2.0).
+
+    Args:
+        p: The loaded project.
+        shot_id: The shot.
+        data: The clip as base64 (a ``data:`` URL is fine): MP4 or WebM, or with ``raw`` a raw
+            H.264 stream (WebCodecs frames, played at 24 fps).
+        raw: ``data`` is a raw H.264 stream.
+
+    Returns:
+        The clip's asset ID. The file is ``storyboards/<shot>.mp4`` (H.264, 24 fps, no sound),
+        locked with the show's license; a new clip replaces it, so the shot's videos go stale.
+
+    Raises:
+        OlfError: The shot is missing, or ``data`` is not a video of 2 to 30 s.
+    """
+    from vinci_media.camera import reference_clip
+    from vinci_media.ops import MediaError
+
+    from vinci_olf.render import take_license
+
+    doc = p.docs.get(shot_id)
+    if doc is None or p.kind(shot_id) != "shot":
+        raise OlfError(f"{shot_id}: no such shot")
+    license_ = take_license(p)
+    raw_data = str(data or "").split(",", 1)[-1] if str(data).startswith("data:") else str(data)
+    try:
+        blob = base64.b64decode(raw_data, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise OlfError("the reference video is not base64 data") from exc
+    if not blob or len(blob) > MAX_CLIP:
+        raise OlfError(f"a reference video must be 1 byte to {MAX_CLIP // (1024 * 1024)} MB")
+    target = p.inside(p.root / "storyboards" / f"{shot_id}.mp4")
+    with tempfile.TemporaryDirectory() as tmp:
+        src, out = Path(tmp) / "clip.in", Path(tmp) / "clip.mp4"
+        src.write_bytes(blob)
+        try:
+            seconds = reference_clip(src, out, raw=raw)
+        except MediaError as exc:
+            raise OlfError(f"the reference video does not play: {str(exc)[-200:]}") from exc
+        if not 2 <= seconds <= 30:  # Seedance takes 2 to 30 s of reference video
+            raise OlfError(f"a reference video must be 2 to 30 s long, not {seconds:.1f} s")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.is_file():  # the old clip goes with its lock entry
+            p.drop_from_lock(p.rel(target))
+        shutil.copyfile(out, target)
+    asset = _set_control(p, doc, shot_id, "reference_video", target, "video/mp4", license_)
+    log.info("shot %s: reference video %s (%.2f s)", shot_id, p.rel(target), seconds)
+    return asset
+
+
+def _set_control(
+    p: Project, doc: Any, shot_id: str, key: str, target: Path, mime: str, license_: Any
+) -> str:
+    """Lock a shot's new control file and name it in ``control.<key>`` (one line of the file)."""
+    from vinci_olf.render import _lock_entry
+
+    p.forget(target)  # a redraw: the cached (or host) digest is the old file's
     digest, rel = p.sha256(target), p.rel(target)
-    p.add_to_lock({f"asset/{digest}": _lock_entry(rel, digest, "image/png", "generated", license_)})
+    p.add_to_lock({f"asset/{digest}": _lock_entry(rel, digest, mime, "generated", license_)})
     lines = _lines(doc.path)
     first, end, indent = shot_block(lines, shot_id)
-    control = dict(_node(read(doc.path), shot_id).get("control") or {}) | {
-        "storyboard": f"asset/{digest}"
-    }
+    control = dict(_node(read(doc.path), shot_id).get("control") or {}) | {key: f"asset/{digest}"}
     flow = "{ " + ", ".join(f"{k}: {_flow(v)}" for k, v in control.items()) + " }"
     _put(lines, first, end, indent, "control", flow)
     _save(doc.path, lines, lambda d: _node(d, shot_id).get("control") == control)
-    doc.data = _node(read(doc.path), shot_id)  # a resolve on this project sees the new frame
-    log.info("shot %s: storyboard %s (%dx%d)", shot_id, rel, *image.size)
+    doc.data = _node(read(doc.path), shot_id)  # a resolve on this project sees the new file
     return f"asset/{digest}"

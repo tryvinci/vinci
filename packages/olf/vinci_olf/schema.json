@@ -118,8 +118,8 @@
           "description": "The shape of a drawing that is larger than the frame, for example 21:9 for a pan or 9:16 for a tilt. The keyframe is drawn in this shape."
         },
         "render": {
-          "enum": ["engine", "model"],
-          "description": "engine: a held drawing, only the frame moves; an engine makes the video from the chosen keyframe with no video model. model (the default): a video model animates the shot."
+          "enum": ["engine", "model", "reference"],
+          "description": "engine: a held drawing, only the frame moves; an engine makes the video from the chosen keyframe with no video model. model (the default): a video model animates the shot. reference: a video model follows the shot's reference video (control.reference_video: the camera path and the timing) and takes the chosen keyframe as the look, with no first frame."
         }
       },
       "additionalProperties": false
@@ -134,17 +134,105 @@
       },
       "additionalProperties": false
     },
+    "vec3": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+    "faces": {
+      "description": "Where a person looks: degrees about the up axis (0 faces +z), camera, away, or the slot of another person.",
+      "oneOf": [{ "type": "number" }, { "type": "string", "pattern": "^(camera|away|[a-z]+)$" }]
+    },
+    "piece": {
+      "type": "object",
+      "description": "A set piece of the scene lab (COREPRODUC-719): a basic shape in grey clay. Metres; y is up.",
+      "required": ["shape", "size", "at"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "description": "What it is, for people (the outline, messages): desk, great lamp." },
+        "shape": { "enum": ["box", "cylinder", "cone", "sphere", "plane", "rock"] },
+        "size": { "$ref": "#/$defs/vec3", "description": "Width, height, depth (a round shape: its diameter as width and depth; a plane: height 0)." },
+        "at": { "$ref": "#/$defs/vec3", "description": "The centre of its bottom: y = 0 stands on the floor." },
+        "turn": { "type": "number", "description": "Degrees about the up axis." }
+      }
+    },
+    "person": {
+      "type": "object",
+      "description": "A named person of the shot, drawn as a pin in the character's color.",
+      "required": ["slot", "at"],
+      "additionalProperties": false,
+      "properties": {
+        "slot": { "type": "string", "pattern": "^[a-z]+$(?!\\n)", "description": "The person's place in the shot's characters (a, b, ...)." },
+        "at": { "$ref": "#/$defs/vec3", "description": "Where the feet are at the start of the shot." },
+        "faces": { "$ref": "#/$defs/faces" },
+        "height": { "type": "number", "exclusiveMinimum": 0, "description": "Metres; 1.7 when left out." },
+        "end": {
+          "type": "object", "required": ["at"], "additionalProperties": false,
+          "description": "Where the person is when the shot ends, when they move.",
+          "properties": { "at": { "$ref": "#/$defs/vec3" }, "faces": { "$ref": "#/$defs/faces" } }
+        }
+      }
+    },
+    "group": {
+      "type": "object",
+      "description": "Background people: a count in an area of the floor. One neutral pin each; never named.",
+      "required": ["count", "area"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "count": { "type": "integer", "minimum": 1 },
+        "area": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4, "description": "x0, z0, x1, z1 on the floor." },
+        "faces": { "$ref": "#/$defs/faces" }
+      }
+    },
+    "room": {
+      "type": "object",
+      "description": "A scene's room (scenes/<scene>/room/v<N>.json, a version) or a room try (room/try-<N>.json): set pieces only, no colors or lights.",
+      "required": ["scene", "set"],
+      "additionalProperties": false,
+      "properties": {
+        "scene": { "$ref": "#/$defs/sceneId" },
+        "version": { "type": "integer", "minimum": 1 },
+        "from": { "type": "string", "description": "The room try or version it was made from." },
+        "set": { "type": "array", "items": { "$ref": "#/$defs/piece" }, "minItems": 1 },
+        "request": { "type": "string" },
+        "model": { "type": "string" },
+        "made_at": { "type": "string" }
+      }
+    },
+    "shotTry": {
+      "type": "object",
+      "description": "A shot staged in its scene's room (scenes/<scene>/<shot>/try-<N>.json).",
+      "required": ["shot", "room", "camera", "cast"],
+      "additionalProperties": false,
+      "properties": {
+        "shot": { "$ref": "#/$defs/shotId" },
+        "room": { "type": "integer", "minimum": 1, "description": "The room version it stands in." },
+        "camera": {
+          "type": "object", "required": ["at", "looks_at"], "additionalProperties": false,
+          "properties": {
+            "at": { "$ref": "#/$defs/vec3" },
+            "looks_at": {
+              "description": "A point, or the slot of a person: the camera follows their eyes.",
+              "oneOf": [{ "$ref": "#/$defs/vec3" }, { "type": "string", "pattern": "^[a-z]+$(?!\\n)" }]
+            }
+          }
+        },
+        "cast": { "type": "array", "items": { "$ref": "#/$defs/person" } },
+        "groups": { "type": "array", "items": { "$ref": "#/$defs/group" } },
+        "props": { "type": "array", "items": { "$ref": "#/$defs/piece" }, "description": "Pieces for this shot only; the room does not change." },
+        "request": { "type": "string" },
+        "model": { "type": "string" },
+        "made_at": { "type": "string" }
+      }
+    },
     "pill": {
       "description": "A flat stand-in for one character of the shot.",
       "type": "object",
       "required": ["slot"],
       "properties": {
-        "slot": { "enum": ["a", "b", "c"], "description": "The shot's first, second or third character." },
+        "slot": { "type": "string", "pattern": "^[a-z]+$(?!\\n)", "description": "The shot's character in that place: a is the first, b the second, then c … z, aa, ab … There is no limit." },
         "x": { "type": "number", "minimum": 0, "maximum": 1, "description": "The centre: 0 is frame left, 1 is frame right." },
         "y": { "type": "number", "minimum": 0, "maximum": 1, "description": "The eye line: 0 is the frame top, 1 is its bottom." },
         "size": { "type": "number", "minimum": 0.03, "maximum": 2, "description": "The head height as a part of the frame height. The body is 7 heads tall." },
         "facing": { "enum": ["left", "right", "camera", "away"] },
-        "look_at": { "enum": ["a", "b", "c"], "description": "The pill looks at this slot. It replaces facing." }
+        "look_at": { "type": "string", "pattern": "^[a-z]+$(?!\\n)", "description": "The pill looks at this slot. It replaces facing." }
       },
       "additionalProperties": false
     },
@@ -176,7 +264,8 @@
             "last_frame": { "$ref": "#/$defs/ref" },
             "depth": { "$ref": "#/$defs/ref" },
             "pose": { "$ref": "#/$defs/ref" },
-            "storyboard": { "$ref": "#/$defs/ref" }
+            "storyboard": { "$ref": "#/$defs/ref" },
+            "reference_video": { "$ref": "#/$defs/ref" }
           },
           "additionalProperties": false
         },
@@ -353,7 +442,7 @@
         "slots": {
           "description": "The cast slots the template uses. An empty list is BG only: the shot has no characters.",
           "type": "array",
-          "items": { "enum": ["a", "b", "c"] },
+          "items": { "type": "string", "pattern": "^[a-z]+$(?!\\n)" },
           "uniqueItems": true
         },
         "framing": {

@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from vinci_olf.explain import save_inputs
-from vinci_olf.layout import shot_plan
+from vinci_olf.layout import shot_plan, slot_place
 from vinci_olf.project import OlfError, Project, sheets_of, write
 from vinci_olf.qa import palette_check, palettes
 from vinci_olf.resolve import from_keyframe, hash_view, inputs_hash, resolve
@@ -94,7 +94,12 @@ def _leaves(value: Any) -> list[str]:
 
 
 def prompt(
-    view: dict[str, Any], kind: str, plan: dict[str, Any] | None = None, *, from_frame: bool = False
+    view: dict[str, Any],
+    kind: str,
+    plan: dict[str, Any] | None = None,
+    *,
+    from_frame: bool = False,
+    staging: dict[str, str] | None = None,
 ) -> str:
     """Write a model-agnostic prompt from a resolved shot.
 
@@ -104,9 +109,13 @@ def prompt(
         plan: The shot's pills (``layout.shot_plan``): a keyframe prompt says who stands where.
         from_frame: A video that starts from a picture (the keyframe) gets motion blocks
             (``_video_words``); with no picture it gets the whole shot in words.
+        staging: A keyframe layout from a scene lab try (``scene_lab.layout_words``): what its
+            grey shapes stand for, and the camera in numbers.
     """
     if kind == "keyframe":
-        return _keyframe_words(view, plan)
+        return _keyframe_words(view, plan, staging or {})
+    if kind == "video" and (view.get("camera") or {}).get("render") == "reference":
+        return _reference_words(view, plan, staging or {})
     if from_frame:
         return _video_words(view)
     cam = view.get("camera") or {}
@@ -120,6 +129,13 @@ def prompt(
             f'{names.get(line["speaker"], line["speaker"])}{delivery} says: "{line["line"]}"'
         )
     return " ".join(_sentence(str(x)) for x in parts if x)
+
+
+def _staging(p: Project, shot: str) -> dict[str, str]:
+    """The scene lab's words for the shot's keyframe layout (``scene_lab.layout_words``)."""
+    from vinci_olf.scene_lab import layout_words
+
+    return layout_words(p, shot)
 
 
 def _shot_words(cam: dict[str, Any], kind: str = "keyframe") -> str:
@@ -162,10 +178,10 @@ def _style_words(view: dict[str, Any]) -> str | None:
 # route of github.com/sirioberati/ai-filmmaking-camera-control-seedance-2-5 (MIT), for a still.
 BOARD = (
     "Image {n} is a 3D layout render, not a picture of the scene: a plain grey clay set in which "
-    "each person is replaced by a striped pin, a head on a slim body, as tall as they are and "
-    "standing where they stand, with a round white dot on the head on the side they face. Read "
+    "each person is replaced by {pin}, as tall as they are and "
+    "standing where they stand, with a round white dot on the {head} on the side they face. Read "
     "from it only how the shot is framed, where each person stands, how large they are in the "
-    "frame and which way they face: a dot in the middle of the head faces the viewer, a dot at "
+    "frame and which way they face: a dot in the middle of the {head} faces the viewer, a dot at "
     "its edge is a profile, and no dot is a person seen from behind. Each pin becomes the person "
     "it stands for and has no pose of its own, so every pose comes from these words. Never draw "
     "a pin, a stripe, the white dot, the grey clay or the bare floor: build the real place from "
@@ -174,7 +190,9 @@ BOARD = (
 )
 
 
-def _keyframe_words(view: dict[str, Any], plan: dict[str, Any] | None) -> str:
+def _keyframe_words(
+    view: dict[str, Any], plan: dict[str, Any] | None, staging: dict[str, str]
+) -> str:
     """The keyframe prompt in blocks: Goal, References, People and place, Camera, Look, Keep.
 
     The blocks follow the previs prompts of
@@ -218,7 +236,10 @@ def _keyframe_words(view: dict[str, Any], plan: dict[str, Any] | None) -> str:
     people += [*_cast_lines(view), *_place_lines(view)]
     if view.get("location"):
         people.append("Build the real place from these words, with real materials and wear")
+    if board:  # a frame from a scene lab try: its grey shapes by name, its camera in numbers
+        people.append(staging.get("shapes"))
     camera = [_shot_words(cam), _template_words(view, "keyframe")]
+    camera.append(staging.get("camera") if board else None)
     if len(pills) > 1:
         order = ", then ".join(names[x["id"]] for x in pills)
         camera.append(f"From left to right: {order}, as on their side of the scene's line")
@@ -237,11 +258,103 @@ def _keyframe_words(view: dict[str, Any], plan: dict[str, Any] | None) -> str:
                 view.get("description"),
             ],
         ),
-        ("References", _reference_roles(view, names)),
+        ("References", _reference_roles(view, names, staging.get("pin", "pin"))),
         ("People and place", people),
         ("Camera", camera),
         ("Look", [_style_words(view), f"Mood: {view['mood']}" if view.get("mood") else None]),
         ("Keep", [keep] if names else []),
+    ]
+    return "\n\n".join(
+        f"{title}: " + " ".join(_sentence(str(x)) for x in words if x)
+        for title, words in blocks
+        if any(words)
+    )
+
+
+# The first line of a reference render, after the bridge's line of the blockout editor
+# (github.com/cbunseng/seedance-blockout-editor-private, DRAFT-FLOW.md, Apache-2.0).
+BLOCKOUT = (
+    "@Video1 is a coarse 3D blockout of this exact shot, a rough previs: a plain grey clay set "
+    "in which each person is a striped pin. Follow its motion exactly, second by second: the "
+    "same camera path, speed, height, angles, turns, lens and timing, and every person in the "
+    "same place, size and facing at the same moment. The pictures only show what things look "
+    "like, never the camera, the framing or the timing"
+)
+REFERENCE_KEYS = ("reference_videos", "reference_images")  # the inputs of a reference render
+REFERENCE_IMAGES = 9  # pictures a Seedance reference render takes
+
+
+def _reference_words(
+    view: dict[str, Any], plan: dict[str, Any] | None, staging: dict[str, str]
+) -> str:
+    """The prompt of a reference video render (``camera.render: reference``, COREPRODUC-732),
+    in the blocks of the blockout editor's camera skill (skills/camera-control/references/
+    prompt-blocks.md): Goal, References, People and place, Camera, Look, Keep. Its three
+    realism lines are in: each grey shape becomes its real object, the stripes only label
+    people, and the look is the show's, never grey clay.
+    """
+    from vinci_olf.layout import STRIPES
+
+    cam = view.get("camera") or {}
+    names = {c["id"]: str(c.get("name", c["id"])) for c in view.get("characters") or []}
+    look = (view.get("style") or {}).get("look") or {}
+    medium = str(look.get("medium") or "animated")
+    pills = sorted(
+        (x for x in (plan or {}).get("start") or [] if x.get("id") in names),
+        key=lambda x: x["x"],
+    )
+    people: list[Any] = [
+        f"The {STRIPES.get(str(x.get('color')), ('', 'grey'))[1]}-and-black striped pin in "
+        f"@Video1 is {names[x['id']]}"
+        for x in pills
+    ]
+    if pills:
+        people.append(
+            "Each pin becomes its person, with a real face, hands and body: the walk, the "
+            "gestures and the expressions come from these words, never from the pin"
+        )
+    people += [*_cast_lines(view), *_place_lines(view)]
+    shapes = staging.get("shapes")
+    people.append(shapes.replace("in the picture", "in the video") if shapes else None)
+    people.append(
+        "The stripe colors only say who is who: no clothing, skin, prop or surface takes those "
+        "colors or stripes, and no striped pin appears at any moment"
+    )
+    blocks: list[tuple[str, list[Any]]] = [
+        (
+            "Goal",
+            [
+                f"One {medium} shot in one take, {float(view.get('duration') or 0):g} s long",
+                view.get("description"),
+            ],
+        ),
+        (
+            "References",
+            [
+                BLOCKOUT,
+                "@Image1 is the shot's approved keyframe: take from it the look of the people, "
+                "the place, the light and the drawing, not its framing",
+                "The other pictures show the cast and the place: faces, hair, clothing and "
+                "materials only",
+            ],
+        ),
+        ("People and place", people),
+        ("Camera", [_shot_words(cam, "video"), _template_words(view, "prompt")]),
+        (
+            "Look",
+            [
+                _style_words(view),
+                f"Mood: {view['mood']}" if view.get("mood") else None,
+                f"A finished {medium} picture in every frame, never grey clay or a 3D blockout",
+            ],
+        ),
+        (
+            "Keep",
+            [
+                "Keep each person's face, hair and clothing, the place, the light and the time "
+                "of day the same from the first frame to the last"
+            ],
+        ),
     ]
     return "\n\n".join(
         f"{title}: " + " ".join(_sentence(str(x)) for x in words if x)
@@ -346,7 +459,16 @@ def _pill_place(pill: dict[str, Any]) -> str:
     return ", ".join(filter(None, [side, "close to the camera" if near else None, look]))
 
 
-def _reference_roles(view: dict[str, Any], names: dict[str, str]) -> list[str]:
+# How the frame's stand-in reads, by pin shape (the comparison, COREPRODUC-718): the words, and
+# where its dot sits. Today's pin keeps its old words, so its keyframes keep their prompt.
+PINS = {
+    "pin": ("a striped pin, a head on a slim body", "head"),
+    "one-piece": ("a striped pin in one piece, its head, neck and body one smooth shape", "head"),
+    "capsule": ("a striped capsule in one piece, with no head", "top"),
+}
+
+
+def _reference_roles(view: dict[str, Any], names: dict[str, str], pin: str = "pin") -> list[str]:
     """One narrow role for each reference image, numbered in the order ``references`` sends."""
     sheets = {r: names[c["id"]] for c in view.get("characters") or [] if c.get("id") in names
               for r in references({"characters": [c]})}  # fmt: skip
@@ -361,7 +483,8 @@ def _reference_roles(view: dict[str, Any], names: dict[str, str]) -> list[str]:
     words = []
     for n, ref in enumerate(references(view), 1):
         if ref in board:
-            words.append(BOARD.format(n=n))
+            stand_in, head = PINS.get(pin, PINS["pin"])
+            words.append(BOARD.format(n=n, pin=stand_in, head=head))
         elif ref in sheets:
             who = sheets[ref]
             words.append(
@@ -384,18 +507,23 @@ def _reference_roles(view: dict[str, Any], names: dict[str, str]) -> list[str]:
 def _template_words(view: dict[str, Any], key: str) -> str | None:
     """The words of the shot's camerawork template for a prompt (``keyframe`` or ``prompt``).
 
-    A slot token (``{a}``, ``{b}``, ``{c}``) becomes the name of the shot's character in that
-    place, so one template serves each cast.
+    A slot token (``{a}``, ``{b}``, ``{c}`` … ``{z}``, ``{aa}``) becomes the name of the shot's
+    character in that place, so one template serves each cast.
     """
     template = (view.get("camera") or {}).get("template")
     text = template.get(key) if isinstance(template, dict) else None
     if not text:
         return None
     names = [str(c.get("name", c["id"])) for c in view.get("characters") or []]
-    for place, slot in enumerate("abc"):
-        name = names[place] if place < len(names) else "the character"
-        text = text.replace("{" + slot + "}", name)
-    return str(text).strip()
+
+    def name(token: re.Match[str]) -> str:  # no limit on people (COREPRODUC-716)
+        place = slot_place(token[1])
+        if place < len(names):
+            return names[place]
+        return "the character" if place < 3 else token[0]  # a missing 4th+ person stays literal
+
+    # One scan of the template: a name that holds a token (`Agent {d}`) is not filled again.
+    return re.sub(r"\{([a-z]+)\}", name, str(text)).strip()
 
 
 def _sentence(text: str) -> str:
@@ -498,7 +626,7 @@ def render(
     staged: dict[str, str] = {}
     nodes: list[dict[str, Any]] = []
     for node in job["nodes"]:  # the run gets runtime CAS IDs; the job keeps the asset IDs
-        for key in ("image", "image_urls", "last_frame_url", "media"):
+        for key in ("image", "image_urls", "last_frame_url", "media", *REFERENCE_KEYS):
             value = node["params"].get(key)
             for ref in value if isinstance(value, list) else [value]:
                 if isinstance(ref, str) and ref.startswith("asset/") and ref not in staged:
@@ -607,10 +735,22 @@ def plan_render(
     control, picked = view.get("control") or {}, (view.get("select") or {}).get("keyframe")
     # An engine move: a held drawing with camera work on top, made with no video model.
     engine_move = kind == "video" and (view.get("camera") or {}).get("render") == "engine"
+    # A reference render: the shot's pin video gives the camera and the timing (COREPRODUC-732).
+    reference = kind == "video" and (view.get("camera") or {}).get("render") == "reference"
     kf_used = f"{shot_id}/{picked}" if picked else None
     if kind == "video" and kf_used and kf_used not in p.docs:
         raise OlfError(f"select.keyframe {picked}: take {kf_used} is missing")
     new_kf = kind == "keyframe" or (kind == "video" and from_keyframe(view) and kf_used is None)
+    if reference and new_kf:  # its look is the approved keyframe: it cannot draw one in-line
+        raise OlfError(
+            f"{shot_id}: a reference video takes the chosen keyframe as its look: approve a "
+            "keyframe first"
+        )
+    if reference and not control.get("reference_video"):
+        raise OlfError(
+            f"{shot_id}: render reference needs a reference video: use a scene lab try "
+            "(Use records the pin video)"
+        )
     if (new_kf or not engine_move) and not engine.routing_providers():
         raise OlfError("no providers are connected: run `vinci init --demo` or add a provider key")
     ids = {
@@ -634,7 +774,11 @@ def plan_render(
     if new_kf:
         params = (
             base
-            | {"prompt": prompt(view, "keyframe", shot_plan(p, shot_id))}
+            | {
+                "prompt": prompt(
+                    view, "keyframe", shot_plan(p, shot_id), staging=_staging(p, shot_id)
+                )
+            }
             | ({"aspect_ratio": canvas} if canvas else {})
         )
         if refs:
@@ -655,6 +799,18 @@ def plan_render(
         if engine_move:
             nodes.append(_move_node(view, source, str(ids["video"])))
             notes = _soft(p, view, source)
+        elif reference:  # the pin video, and the keyframe then the cast's sheets as the look
+            board = _leaves(control.get("storyboard"))
+            looks = [source, *(r for r in references(view) if r not in board)]
+            params = base | {
+                "prompt": prompt(
+                    view, "video", shot_plan(p, shot_id), staging=_staging(p, shot_id)
+                ),
+                "duration": math.ceil(float(view["duration"])),
+                "reference_videos": [control["reference_video"]],
+                "reference_images": list(dict.fromkeys(looks))[:REFERENCE_IMAGES],
+            }
+            nodes.append(_node("video", "r2v", model, params, ids["video"]))
         else:
             params = base | {
                 "prompt": prompt(view, "video", from_frame=bool(source)),
@@ -698,6 +854,11 @@ def plan_render(
             available_providers=engine.routing_providers(),
         )
     except (KeyError, ValueError) as exc:  # the connected providers cannot make a step
+        if reference and model is None:  # no routed model takes a reference video (hosted: none)
+            raise OlfError(
+                "no routed model renders a reference video: pick one in the video model menu "
+                "(Seedance 2.5 reference)"
+            ) from exc
         detail = exc.args[0] if exc.args else exc
         raise OlfError(
             f"no connected model can render this {kind} ({detail}): run `vinci init --demo` or "

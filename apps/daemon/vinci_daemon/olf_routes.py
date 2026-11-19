@@ -17,7 +17,7 @@ from typing import Any, TypeVar
 
 from fastapi import APIRouter, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 from vinci_olf import OlfError, Project, load
 from vinci_olf.api import library, sample_path, shot_detail, summary
@@ -52,6 +52,7 @@ from vinci_olf.package import pack, unpack
 from vinci_olf.project import EXTS, read
 from vinci_olf.provenance import available as c2pa_available
 from vinci_olf.render import render, run_one
+from vinci_olf.scene_lab import build, check, keep_room, overview, save_answer, use
 from vinci_olf.script import bible_names, draft, import_script, preview, split_with_model
 
 from vinci_daemon import projects
@@ -244,6 +245,7 @@ class ScriptBody(BaseModel):
     yes: bool = False
     max_total: float | None = None  # the price the Studio confirmed; a higher plan stops
     dry_run: bool = False
+    copy: bool = False  # answer with the prompt for the person's own agent; no model runs
 
 
 class CueBody(BaseModel):
@@ -515,10 +517,10 @@ def models(capability: str, request: Request) -> dict[str, Any]:
 def script_model(body: ScriptBody, request: Request) -> dict[str, Any]:
     """Split a script into shots with a text model, price first; the reply comes back parsed."""
     eng = request.app.state.engine
-    _no_journal(eng, body.dry_run)
+    _no_journal(eng, body.dry_run or body.copy)
     names = _names(body)
     opts = {"yes": body.yes, "max_total": body.max_total, "dry_run": body.dry_run, "engine": eng}
-    opts["model"] = body.model
+    opts |= {"model": body.model, "copy": body.copy}
     out = _olf(lambda: split_with_model(body.script, lenses=names.get("lenses"), **opts))
     if out["text"] is not None:
         out["preview"] = _olf(lambda: preview(out["text"], **names))
@@ -529,10 +531,10 @@ def script_model(body: ScriptBody, request: Request) -> dict[str, Any]:
 def draft_script(body: ScriptBody, request: Request) -> dict[str, Any]:
     """Draft a first episode script from an idea with a text model (design: Draft from idea)."""
     eng = request.app.state.engine
-    _no_journal(eng, body.dry_run)
+    _no_journal(eng, body.dry_run or body.copy)
     cast = list(_names(body)["characters"].values())
     opts = {"yes": body.yes, "max_total": body.max_total, "dry_run": body.dry_run, "engine": eng}
-    opts["model"] = body.model
+    opts |= {"model": body.model, "copy": body.copy}
     log.info(
         "olf: draft from an idea (%d characters), model=%s, dry_run=%s",
         len(cast),
@@ -622,7 +624,14 @@ def shot(path: str, shot: str, request: Request) -> dict[str, Any]:
             plans[kind]["choices"] = _choices(eng, plans[kind]["plan"][-1]["capability"])
         except OlfError as exc:
             plans[kind] = {"error": str(exc)}
+            if kind == "video" and _by_reference(detail):  # the person picks a reference model
+                plans[kind]["choices"] = _choices(eng, "r2v")
     return detail | {"plans": plans}
+
+
+def _by_reference(detail: dict[str, Any]) -> bool:
+    """Whether a shot renders its video from its pin video (``camera.render: reference``)."""
+    return ((detail.get("resolved") or {}).get("camera") or {}).get("render") == "reference"
 
 
 def _choices(engine: Any, capability: str | None) -> list[dict[str, Any]]:
@@ -773,6 +782,112 @@ def new_sheet(body: SheetBody) -> dict[str, str]:
     if body.add:
         return {"sheet": _olf(lambda: add_sheet(p, body.entry, body.data))}
     return {"file": _olf(lambda: replace_sheet(p, body.entry, body.data, sheet=body.sheet))}
+
+
+class SceneBody(BaseModel):
+    """A scene lab request (COREPRODUC-720): ``target`` is a scene (build its room) or a shot
+    (stage it in the scene's room). ``text`` is an answer pasted from the person's own agent."""
+
+    path: str
+    target: str
+    request: str = ""
+    room: int | None = None  # the room version to stage in; the newest when left out
+    base: int | None = None  # a try to start from (the compare screen)
+    text: str = ""
+    model: str | None = None
+    yes: bool = False
+    max_total: float | None = None
+    dry_run: bool = False
+    copy_prompt: bool = Field(False, alias="copy")  # `copy` would shadow BaseModel.copy
+
+
+class RoomBody(BaseModel):
+    """A new room version: from a room try (``room_try``) or from hand-edited ``pieces``."""
+
+    path: str
+    scene: str
+    room_try: int | None = None
+    pieces: list[dict[str, Any]] | None = None
+    source: str | None = None
+
+
+class SceneCheckBody(BaseModel):
+    """An unsaved try (a hand edit) to check."""
+
+    path: str
+    shot: str
+    data: dict[str, Any]
+
+
+class SceneUseBody(BaseModel):
+    """Use a shot try as the shot's keyframe layout; ``frame`` is its start frame (base64 PNG)."""
+
+    path: str
+    shot: str
+    n: int
+    frame: str
+    pin: str = "pin"  # the pin shape in the frame (the comparison, COREPRODUC-718)
+    video: str | None = None  # the try's pin video, base64 (COREPRODUC-732)
+    video_raw: bool = False  # `video` is a raw H.264 stream (WebCodecs frames at 24 fps)
+
+
+@router.get("/scene")
+def scene_overview(path: str, target: str) -> dict[str, Any]:
+    """The scene lab of a scene or a shot: room versions, the newest room, the shot's tries."""
+    return _olf(lambda: overview(_project(path), target))
+
+
+@router.post("/scene/build")
+def scene_build(body: SceneBody, request: Request) -> dict[str, Any]:
+    """Build a room or stage a shot with a text model, price first, or copy the prompt."""
+    eng = request.app.state.engine
+    _no_journal(eng, body.dry_run or body.copy_prompt)
+    run = {"yes": body.yes, "max_total": body.max_total, "dry_run": body.dry_run, "engine": eng}
+    run |= {"model": body.model, "copy": body.copy_prompt}
+    log.info(
+        "olf: scene lab build %s, model=%s, copy=%s",
+        body.target,
+        body.model or "auto",
+        body.copy_prompt,
+    )
+    return _olf(
+        lambda: build(
+            _project(body.path), body.target, body.request, room=body.room, base=body.base, **run
+        )
+    )
+
+
+@router.post("/scene/paste")
+def scene_paste(body: SceneBody) -> dict[str, Any]:
+    """Save an answer pasted from the person's own agent, read like a model's."""
+    log.info("olf: scene lab paste for %s (%d characters)", body.target, len(body.text))
+    p = _project(body.path)
+    return _olf(
+        lambda: save_answer(p, body.target, body.text, request=body.request, room=body.room)
+    )
+
+
+@router.post("/scene/room")
+def scene_room(body: RoomBody) -> dict[str, int]:
+    """Save a new room version of a scene; older versions and their frames stay as they are."""
+    p = _project(body.path)
+    opts = {"room_try": body.room_try, "pieces": body.pieces, "source": body.source}
+    return {"version": _olf(lambda: keep_room(p, body.scene, **opts))}
+
+
+@router.post("/scene/check")
+def scene_check(body: SceneCheckBody) -> dict[str, Any]:
+    """Check a hand-edited try as saving would, and save nothing."""
+    return {"issues": _olf(lambda: check(_project(body.path), body.shot, body.data))}
+
+
+@router.post("/scene/use")
+def scene_use(body: SceneUseBody) -> dict[str, Any]:
+    """Use a shot try: its start frame as the keyframe layout, its places as the pills."""
+    p = _project(body.path)
+    log.info("olf: scene lab use %s try %d", body.shot, body.n)
+    args = (body.shot, body.n, body.frame, body.pin, body.video, body.video_raw)
+    return _olf(lambda: use(p, *args))
 
 
 @router.post("/storyboard")

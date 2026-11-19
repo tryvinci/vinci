@@ -33,6 +33,7 @@ export type ModelFunction =
   | "video_t2v"
   | "video_i2v"
   | "video_extend"
+  | "video_reference"
   | "image_upscale"
   | "video_upscale"
   | "audio_tts"
@@ -111,6 +112,7 @@ const FUNCTIONS: ModelFunction[] = [
   "video_t2v",
   "video_i2v",
   "video_extend",
+  "video_reference",
   "image_upscale",
   "video_upscale",
   "audio_tts",
@@ -168,6 +170,7 @@ const MEDIA_CAPS = new Set([
   "edit_multi",
   "music",
   "sfx",
+  "r2v",
 ]);
 
 const TEXT_CAPS = new Set(["llm", "chat", "text", "assistant", "t2t"]);
@@ -179,6 +182,7 @@ const CAPABILITY_FUNCTIONS: Record<string, ModelFunction[]> = {
   t2v: ["video_t2v"],
   i2v: ["video_i2v"],
   extend: ["video_extend"],
+  r2v: ["video_reference"], // follows a reference video (a Shows pin video, COREPRODUC-732)
   upscale: ["image_upscale", "video_upscale"],
   tts: ["audio_tts"],
   sts: ["audio_sts"],
@@ -353,6 +357,7 @@ export function classifyModel(model: CatalogRow): ClassifiedModel {
     // Extend sends the clip's last frame as the start frame.
     functions.add("video_extend");
   }
+  if (caps.has("r2v")) functions.add("video_reference");
   if (upscale) {
     const still = caps.has("i2i") || caps.has("t2i") || caps.has("edit_multi");
     const motion = caps.has("t2v") || caps.has("i2v") || caps.has("reframe") || caps.has("caption");

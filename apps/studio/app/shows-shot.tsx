@@ -8,6 +8,7 @@ import {
   FRAMINGS,
   MOVES,
   RENDERS,
+  type Drawn,
   type OlfData,
   type OlfOwnStep,
   type OlfShotDetail,
@@ -35,6 +36,7 @@ import {
   takesOf,
 } from "../lib/shows";
 import { Confirm, Field, OlfOnly, Panel, PillFrame, Pick, PlayBar, RefThumb, StalePill } from "./shows-parts";
+import { SceneLab } from "./shows-scenelab";
 
 const DRAWS = [1, 2, 3, 4]; // keyframe variations per draw (the engine's MAX_VARIATIONS)
 
@@ -86,8 +88,9 @@ export function ShotView({
   onExplain: (take: string) => Promise<OlfStaleCause>;
   /** Keep a stale take on purpose (`POST /olf/keep`). */
   onKeep: (take: string) => void;
-  /** Draw the shot's 3D pill frame (`draw` gives a PNG `data:` URL) and save it as its keyframe layout (`POST /olf/storyboard`). */
-  onStoryboard: (draw: () => Promise<string>) => Promise<unknown>;
+  /** Draw the shot's 3D pill frame (`draw` gives a PNG `data:` URL) and save it as its keyframe layout
+   * (`POST /olf/storyboard`); with `n`, the frame of scene lab try `n`, saved with its pills (`POST /olf/scene/use`). */
+  onStoryboard: (draw: () => Promise<Drawn>, n?: number, pin?: string) => Promise<unknown>;
 }) {
   const shot = show.shots[id];
   const [current, setCurrent] = useState<string | null>(null);
@@ -143,15 +146,16 @@ export function ShotView({
   const from = (field: string) => (origins?.camera_fields?.[field]?.startsWith("cam/") ? " · template" : "");
   // A shot animates from a keyframe when a control points at one (control.first_frame: keyframe),
   // and an engine move has only the keyframe to move.
-  const needs = Object.values(shot.control || {}).includes("keyframe") || engineMove;
+  const needs = Object.values(shot.control || {}).includes("keyframe") || engineMove || cam.render === "reference";
   const canVideo = !needs || Boolean(chosen);
   const plans = detail?.plans;
   const next: RenderKind = canVideo ? "video" : "keyframe"; // the next useful render
   const videoModelRouted = plans?.video.plan?.find((row) => row.node === "video")?.model;
-  const planError = plans?.keyframe.error || plans?.video.error;
   const lines = (resolved.dialogue || []) as OlfData[];
   const spoken = takesOf(show, id, "audio");
   const choice = plans?.video.choices?.find((row) => row.id === videoModel);
+  // A reference video with no routed model (hosted): picking a model in the menu clears it.
+  const planError = plans?.keyframe.error || (choice ? "" : plans?.video.error);
   // A keyframe render draws `draws` variations, each at the keyframe price; a picked video model
   // replaces the routed one's price.
   // A step on the person's own account (COREPRODUC-615) costs 0 credits: `own` lists what the
@@ -180,7 +184,8 @@ export function ShotView({
 
   function renderButton(kind: RenderKind, label: string, primary: boolean) {
     const plan = plans?.[kind];
-    const blocked = Boolean(busy) || locked || !plan || Boolean(plan.error) || (kind === "video" && !canVideo);
+    const picked = kind === "video" && Boolean(choice); // a picked model plans its own step
+    const blocked = Boolean(busy) || locked || !plan || (Boolean(plan.error) && !picked) || (kind === "video" && !canVideo);
     return (
       <button
         type="button"
@@ -456,6 +461,20 @@ export function ShotView({
                   ) : (
                     <span className="muted">No 3D pill frame yet: the keyframe model gets the staging in words only.</span>
                   )}
+                  {shot.reference_video ? (
+                    // The pin video a `render: reference` video follows (COREPRODUC-732).
+                    <video
+                      src={`${fileUrl(show.path, shot.reference_video)}&v=${String(shot.control?.reference_video || "").slice(6, 18)}`}
+                      muted
+                      loop
+                      autoPlay
+                      playsInline
+                      aria-label="Pin video of this shot"
+                      title="The pin video: a reference render follows its camera path and timing"
+                      data-testid="shot-reference-video"
+                    />
+                  ) : null}
+                  {shot.reference_video ? <span className="muted olf-small-text">Pin video · a reference render follows its camera and timing</span> : null}
                   <button
                     type="button"
                     className="ghost olf-small"
@@ -586,7 +605,9 @@ export function ShotView({
               {!needs
                 ? "This shot animates from text: no control points at a keyframe."
                 : chosen
-                  ? `${engineMove ? "The engine moves" : "Video animates from"} the chosen keyframe ${takeName(chosen.id)}.`
+                  ? cam.render === "reference"
+                    ? `Video follows the pin video and takes the chosen keyframe ${takeName(chosen.id)} as its look.`
+                    : `${engineMove ? "The engine moves" : "Video animates from"} the chosen keyframe ${takeName(chosen.id)}.`
                   : "Approve a keyframe first: video renders from the chosen keyframe."}
             </p>
             {chosen?.stale ? (
@@ -618,6 +639,9 @@ export function ShotView({
           </section>
         </aside>
       </div>
+      <OlfOnly path="/olf/scene">
+        <SceneLab show={show} id={id} locked={locked} onUse={(n, draw, pin) => onStoryboard(draw, n, pin)} />
+      </OlfOnly>
     </section>
   );
 }
