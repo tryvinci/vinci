@@ -36,7 +36,8 @@ export type Capability =
   | "edit_multi"
   | "t2t"
   | "music"
-  | "sfx";
+  | "sfx"
+  | "r2v";
 
 export type AssetKind = "image" | "video" | "audio" | "text" | "timeline";
 export type AssetSource = "generated" | "uploaded" | "derived";

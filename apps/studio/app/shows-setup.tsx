@@ -2,14 +2,11 @@
 
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
+  COPY_PROMPT,
   KEYFRAME_OPTIONS,
   type OlfBatch,
-  type OlfModels,
   type OlfScriptPreview,
   type OlfTextStep,
-  TEXT_MODEL_KEY,
-  autoLabel,
-  choiceLabel,
   framingShort,
   keyframeEstimate,
   newEntries,
@@ -22,7 +19,7 @@ import {
 } from "../lib/shows";
 import { projectKey, runBody } from "../lib/projects";
 import { message, olf, runJobs, send } from "./shows-api";
-import { Confirm, OlfOnly, VoicePick, fileData } from "./shows-parts";
+import { Confirm, OlfOnly, TextModelPick, VoicePick, fileData, useTextModel } from "./shows-parts";
 
 const MEDIUMS = ["2D anime", "3D animation", "Live-action", "Stop-motion"];
 const ASPECTS = ["16:9", "9:16", "1:1"];
@@ -36,7 +33,8 @@ function charId(name: string): string {
 /**
  * The script box and its shot list (design: New show, step 3; Storyboard: Shot list from script).
  * The shot list comes from rules, without AI (`POST /olf/script/preview`). "Split with a model" and
- * "Draft from idea" ask a text model, price first, and put its script in the box.
+ * "Draft from idea" ask a text model, price first, and put its script in the box. The text model
+ * "Your agent · copy prompt" copies the whole prompt instead, for Claude Code or any chat, at $0 (COREPRODUC-713).
  *
  * Args:
  *   path: The open show, whose bible names the script's characters and places; else `characters`.
@@ -63,11 +61,12 @@ export function ScriptStep({
   const [idea, setIdea] = useState<string | null>(null); // null: the idea box is closed
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState(""); // a prompt is on the clipboard: what to do next
+  const [prompt, setPrompt] = useState(""); // a prompt the browser did not copy: the Copy button copies it
   // A text step that costs money (or has no flat price) waits here for Confirm.
   const [ask, setAsk] = useState<{ route: string; body: Record<string, unknown>; plan: OlfTextStep; what: string } | null>(null);
   // The text model menu: "" is Auto (routing). An agent CLI is only ever a person's pick.
-  const [models, setModels] = useState<OlfModels | null>(null);
-  const [textModel, setTextModel] = useState("");
+  const [models, textModel, setTextModel] = useTextModel();
   // A model split is waiting (price, Confirm, the run) or was refused: the rules preview is not its
   // result, so it is hidden and Add stays off until the text changes or the split is cancelled. Bug
   // fixed (first occurrence, 2026-11-13 production crawl, COREPRODUC-642): the list looked like the
@@ -76,17 +75,6 @@ export function ScriptStep({
   const heldRef = useRef(false); // read by a rules preview that lands after the split started
   heldRef.current = held;
   const names = JSON.stringify(characters);
-
-  useEffect(() => {
-    olf<OlfModels>("/models?capability=t2t")
-      .then((body) => {
-        setModels(body);
-        const saved = window.localStorage.getItem(TEXT_MODEL_KEY) || "";
-        // With no routed model (live mode with only agent CLIs), the first choice is the default.
-        setTextModel(body.choices.some((row) => row.id === saved) ? saved : body.auto ? "" : body.choices[0]?.id || "");
-      })
-      .catch((err) => console.warn("[shows] text models", message(err)));
-  }, []);
 
   useEffect(() => {
     setHeld(false);
@@ -122,6 +110,30 @@ export function ScriptStep({
   /** Run a text step: a dry run for the price, then the step itself (after Confirm when it costs money). */
   async function textStep(route: string, fields: Record<string, unknown>, what: string, confirmed?: OlfTextStep) {
     setError("");
+    setCopied("");
+    setPrompt("");
+    if (textModel === COPY_PROMPT) {
+      setBusy("Writing the prompt…"); // locks Draft and the model menu: one copy request at a time
+      try {
+        const out = await olf<OlfTextStep>(route, send("POST", { ...fields, copy: true }));
+        try {
+          await navigator.clipboard.writeText(out.prompt || "");
+          setCopied(`Copied the prompt for ${what}. ${PASTE}`);
+        } catch (err) {
+          // Safari refuses a copy after an await (no user gesture): keep the prompt for a Copy click.
+          console.warn("[shows] text step copy refused", { route, error: message(err) });
+          setPrompt(out.prompt || "");
+          setCopied(`The browser did not copy the prompt for ${what}: press Copy. ${PASTE}`);
+        }
+        console.info("[shows] text step prompt", { route, chars: out.prompt?.length });
+        if (route === "/draft") setIdea(null);
+      } catch (err) {
+        setError(message(err));
+      } finally {
+        setBusy("");
+      }
+      return;
+    }
     if (route === "/script/model") {
       heldRef.current = true; // before the next render: a preview may land first
       setHeld(true);
@@ -218,26 +230,10 @@ export function ScriptStep({
         ) : null}
         <div className="olf-row script-label">
           <span className="olf-label">Script (Fountain or plain text)</span>
-          {models?.choices.length ? (
+          {models ? (
             <label className="olf-label script-model">
               Text model
-              <select
-                className="olf-input olf-small"
-                value={textModel}
-                disabled={!!busy}
-                onChange={(event) => {
-                  setTextModel(event.target.value);
-                  window.localStorage.setItem(TEXT_MODEL_KEY, event.target.value);
-                }}
-                data-testid="text-model"
-              >
-                {models.auto ? <option value="">{autoLabel(models.auto.model, models.choices)}</option> : null}
-                {models.choices.map((row) => (
-                  <option key={row.id} value={row.id}>
-                    {choiceLabel(row)}
-                  </option>
-                ))}
-              </select>
+              <TextModelPick models={models} value={textModel} disabled={!!busy} onPick={setTextModel} testId="text-model" />
             </label>
           ) : null}
         </div>
@@ -257,11 +253,36 @@ export function ScriptStep({
           <span className="muted olf-small-text">{found.map((row) => `${row.name.split(" ")[0]} → ${row.id}`).join(" · ")}</span>
         </footer>
         {error ? <p className="olf-error olf-small-text">{error}</p> : null}
+        {copied ? (
+          <p className="muted olf-small-text" data-testid="prompt-copied">
+            {copied}
+          </p>
+        ) : null}
+        {prompt ? (
+          <div className="olf-row" data-testid="prompt-manual">
+            <textarea className="olf-input olf-grow" value={prompt} readOnly rows={4} aria-label="Prompt" onFocus={(e) => e.currentTarget.select()} />
+            <button
+              type="button"
+              className="ghost olf-small"
+              onClick={() =>
+                navigator.clipboard.writeText(prompt).then(
+                  () => (setPrompt(""), setCopied(`Copied the prompt. ${PASTE}`)),
+                  (err) => setError(message(err)),
+                )
+              }
+            >
+              Copy
+            </button>
+          </div>
+        ) : null}
       </section>
       <ShotList view={held ? null : view} />
     </div>
   );
 }
+
+/** What to do with a copied prompt (the "Your agent · copy prompt" text model). */
+const PASTE = "Paste it in your own agent (for example Claude Code), then paste its answer in the script box.";
 
 /** The design's shot list: each scene with its place, then `sh010 · WS · 24mm · text · 5s` rows. */
 function ShotList({ view }: { view: OlfScriptPreview | null }) {

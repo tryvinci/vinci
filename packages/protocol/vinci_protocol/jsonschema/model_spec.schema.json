@@ -12,7 +12,7 @@
     "capabilities": {
       "type": "array",
       "items": {
-        "enum": ["t2i", "i2i", "t2v", "i2v", "lipsync", "tts", "sts", "voice_clone", "upscale", "transcribe", "reframe", "caption", "edit_multi", "t2t", "music", "sfx"]
+        "enum": ["t2i", "i2i", "t2v", "i2v", "lipsync", "tts", "sts", "voice_clone", "upscale", "transcribe", "reframe", "caption", "edit_multi", "t2t", "music", "sfx", "r2v"]
       }
     },
     "constraints": {

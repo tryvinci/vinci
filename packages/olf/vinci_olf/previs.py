@@ -57,7 +57,7 @@ def previs(
     views = {shot: resolve(p, shot) for shot in shots}
     try:
         plans = staging(p, views)
-    except Exception as exc:  # a layout off the schema (`slot: d`): a reason, not HTTP 500
+    except Exception as exc:  # a layout off the schema (`slot: 7`): a reason, not HTTP 500
         from vinci_olf.validate import validate
 
         if not any(i.level == "error" for i in validate(p)):

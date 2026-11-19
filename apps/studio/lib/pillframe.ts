@@ -15,6 +15,16 @@ import type { OlfCamera, OlfPill, OlfPills } from "./shows";
 
 /** Super 35 width in mm: a shot's lens gives the field of view on it. */
 export const SENSOR_MM = 24.89;
+/** The pin shapes of the comparison (COREPRODUC-718): `pin`, today's head on a slim body;
+ * `one-piece`, body, shoulders, neck and head in one smooth surface; `capsule`, no distinct head.
+ * `pillframe-gl.ts` (`fitPin`) draws them; the keyframe prompt describes the one in the frame. */
+export type PinShape = "pin" | "one-piece" | "capsule";
+export const PIN_SHAPES: [PinShape, string][] = [
+  ["pin", "Pin"],
+  ["one-piece", "One piece"],
+  ["capsule", "Capsule"],
+];
+
 /** A 1.7 m adult (metres): the eye line, the head height, the shoulders and the depth. */
 export const BODY = { eye: 1.58, head: 0.23, shoulders: 0.46, depth: 0.28 };
 /** The camera's pitch by shot angle, in degrees (up is positive). */

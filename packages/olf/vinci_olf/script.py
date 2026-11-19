@@ -423,17 +423,30 @@ def import_script(p: Project, episode_id: str, text: str) -> dict[str, Any]:
     return new
 
 
-def ask(prompt: str, system: str, *, mock_reply: str, **run: Any) -> dict[str, Any]:
+def copied(system: str, prompt: str) -> str:
+    """The whole prompt of a text step, for the person's own agent (Claude Code, any chat)."""
+    return f"{system} Reply in this chat only; create no files.\n\n---\n\n{prompt}"
+
+
+def ask(
+    prompt: str, system: str, *, mock_reply: str, copy: bool = False, **run: Any
+) -> dict[str, Any]:
     """Run one text step (``t2t``) with the price first, as a render does (``render.run_one``).
 
     ``mock_reply`` is what the demo text model answers, so demo mode runs the same path at $0.
+    With ``copy`` no model runs: the answer is the whole prompt, for the person to paste into
+    their own agent (Claude Code, any chat) and to paste its reply into the script box. $0.
 
     Returns:
-        ``{"plan", "total", "unpriced", "text"}``; ``text`` is None for a dry run.
+        ``{"plan", "total", "unpriced", "text"}``; ``text`` is None for a dry run. With ``copy``:
+        ``{"prompt", "text": None}``.
 
     Raises:
         OlfError: No text model is connected, the price stops the step, or the run fails.
     """
+    if copy:  # an agent with tools could write files: the reply is what the box needs
+        log.info("text step: copied the prompt (%d characters), no model", len(prompt))
+        return {"prompt": copied(system, prompt), "text": None}
     # olf_request is Vinci-only (providers send prompt and system): each ask is a new reply.
     params = {"prompt": prompt, "system": system, "mock_reply": mock_reply}
     result = run_one("t2t", params | {"olf_request": uuid.uuid4().hex}, **run)

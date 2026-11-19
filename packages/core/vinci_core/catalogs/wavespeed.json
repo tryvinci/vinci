@@ -8,6 +8,7 @@
     "wavespeed:kling-3-turbo-pro-i2v:2026-09": "kwaivgi/kling-v3-turbo-pro/image-to-video",
     "wavespeed:seedance-2.0-turbo:2026-08": "bytedance/seedance-2.0/text-to-video-turbo",
     "wavespeed:seedance-2.0-i2v:2026-09": "bytedance/seedance-2.0/image-to-video",
+    "wavespeed:seedance-2.5-r2v:2026-11": "bytedance/seedance-2.5/reference-to-video",
     "wavespeed:wan-2.6:2026-08": "alibaba/wan-2.6/text-to-video",
     "wavespeed:seedream-4.5:2026-08": "bytedance/seedream-v4.5",
     "wavespeed:nano-banana:2026-09": "google/nano-banana/text-to-image",
@@ -170,6 +171,28 @@
         "currency": "USD",
         "snapshot_at": "2026-11-11T00:00:00+00:00",
         "clip_prices": {"4": 0.96, "5": 1.2, "6": 1.44, "7": 1.68, "8": 1.92, "9": 2.16, "10": 2.4, "11": 2.64, "12": 2.88, "13": 3.12, "14": 3.36, "15": 3.6}
+      },
+      "quality_tier": "quality",
+      "status": "active",
+      "secret_names": ["WAVESPEED_API_KEY"]
+    },
+    {
+      "id": "wavespeed:seedance-2.5-r2v:2026-11",
+      "display_name": "Seedance 2.5 reference (480p)",
+      "provider": "wavespeed",
+      "capabilities": ["r2v"],
+      "constraints": {
+        "aspect_ratios": ["16:9", "9:16", "4:3", "3:4", "1:1", "21:9"],
+        "max_duration": 15,
+        "durations": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        "resolutions": ["480p"]
+      },
+      "pricing": {
+        "unit": "video_5s",
+        "amount": 1.1,
+        "currency": "USD",
+        "snapshot_at": "2026-11-19T00:00:00+00:00",
+        "clip_prices": {"4": 0.88, "5": 1.1, "6": 1.32, "7": 1.54, "8": 1.76, "9": 1.98, "10": 2.2, "11": 2.42, "12": 2.64, "13": 2.86, "14": 3.08, "15": 3.3}
       },
       "quality_tier": "quality",
       "status": "active",

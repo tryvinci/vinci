@@ -21,7 +21,7 @@
       "id": "mock:mp4:v1",
       "display_name": "Mock MP4",
       "provider": "mock",
-      "capabilities": ["t2v", "i2v", "lipsync", "upscale", "reframe", "caption"],
+      "capabilities": ["t2v", "i2v", "r2v", "lipsync", "upscale", "reframe", "caption"],
       "constraints": {
         "aspect_ratios": ["16:9", "9:16", "21:9"],
         "max_duration": 8,

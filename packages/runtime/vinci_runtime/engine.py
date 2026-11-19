@@ -285,6 +285,7 @@ CAP_KIND = {
     Capability.EDIT_MULTI: (AssetKind.IMAGE, "image/png"),
     Capability.T2V: (AssetKind.VIDEO, "video/mp4"),
     Capability.I2V: (AssetKind.VIDEO, "video/mp4"),
+    Capability.R2V: (AssetKind.VIDEO, "video/mp4"),
     Capability.LIPSYNC: (AssetKind.VIDEO, "video/mp4"),
     Capability.UPSCALE: (AssetKind.VIDEO, "video/mp4"),
     Capability.TTS: (AssetKind.AUDIO, "audio/mpeg"),

@@ -435,7 +435,8 @@
 .olf-prov dd { margin: 2px 0 0; font: 12px var(--font-mono); color: var(--dim); overflow-wrap: anywhere; }
 .olf-cast { display: grid; gap: 6px; margin-bottom: 8px; }
 .olf-storyboard { display: grid; gap: 8px; justify-items: start; }
-.olf-storyboard img { display: block; width: 100%; border-radius: 6px; }
+.olf-storyboard img,
+.olf-storyboard video { display: block; width: 100%; border-radius: 6px; }
 .olf-render { margin-top: 6px; }
 .olf-cost { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--dim); }
 .olf-cost b { font-weight: 500; color: var(--ink); }
@@ -707,6 +708,7 @@
 
 @media (max-width: 1180px) {
   .olf-shot-grid,
+  .scene-lab-grid,
   .olf-two,
   .olf-cut { grid-template-columns: minmax(0, 1fr); }
   .olf-cut-side { padding-left: 0; border-left: 0; }
@@ -871,3 +873,39 @@
 
 /* Why the storyboard is locked (COREPRODUC-642). */
 .olf-locked { margin: 0 0 12px; padding: 8px 12px; border-radius: 10px; color: var(--danger, #f07167); border: 1px solid currentColor; font-size: 13px; }
+
+/* Scene lab on the shot page (COREPRODUC-722): the 3D view and its tries, then the request. */
+.scene-lab { margin-top: 22px; }
+.scene-lab-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 22px; align-items: start; }
+.scene-lab-view { position: relative; overflow: hidden; border-radius: var(--radius-lg); border: 1px solid var(--glass-line); background: var(--media); }
+.scene-lab-view canvas { display: block; width: 100%; height: 100%; }
+.scene-lab-tools { position: absolute; left: 10px; top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+.scene-lab-tools .olf-chip-btn:not([aria-pressed="true"]) { background: rgb(8 10 12 / 0.55); }
+.scene-lab-tries { flex-wrap: wrap; }
+.scene-lab-issues { margin: 0; padding-left: 26px; }
+.scene-lab-from { display: grid; gap: 3px; color: var(--dim); }
+.scene-lab-from b { color: var(--ink); font-weight: 600; }
+.scene-lab-pin { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; }
+.scene-lab-pin i { width: 9px; height: 9px; border-radius: 50%; }
+.scene-lab-use { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+/* The scene lab's other screens (COREPRODUC-723) open full screen over the Studio. */
+.scene-lab.is-full { position: fixed; inset: 0; z-index: 60; margin: 0; overflow: auto; border-radius: 0; align-content: start; background: var(--bg); }
+.scene-lab-head-tools .scene-lab-tools { position: static; }
+.scene-lab-play { position: absolute; left: 10px; bottom: 10px; }
+.scene-lab-links { flex-wrap: wrap; }
+.scene-lab-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.scene-lab-tabs { flex-wrap: wrap; }
+.scene-lab-item { display: grid; gap: 6px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); }
+.scene-lab-vec { display: grid; grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: 6px; }
+.scene-lab-num { display: grid; gap: 2px; font-size: 11px; color: var(--mute); }
+.scene-lab-num input { width: 100%; min-width: 0; }
+.scene-lab-count { align-items: end; }
+.scene-lab-faces select { flex: 1; }
+.scene-lab-time { align-items: center; }
+.scene-lab-time input[type="range"] { flex: 1; accent-color: var(--teal); }
+.scene-lab-changes { margin: 0; padding-left: 18px; color: var(--dim); }
+.scene-room-shots { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.scene-room-shots li { align-items: center; }
+@media (max-width: 1180px) { .scene-lab-pair { grid-template-columns: minmax(0, 1fr); } }
+.scene-lab-pair .olf-row select { width: auto; }
+.scene-lab-tools select { width: auto; }

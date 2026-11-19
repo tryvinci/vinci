@@ -924,9 +924,18 @@ export function ShowsPage({ topSlot, hosted = false, switcher }: { topSlot?: HTM
             onCamerawork={(template) => void author("POST", "/camerawork", { shot: shotId, template })}
             onExplain={(take) => olf<OlfStaleCause>(`/stale?path=${encodeURIComponent(show.path)}&take=${encodeURIComponent(take)}`)}
             onKeep={(take) => void author("POST", "/keep", { take }, () => `Kept ${takeName(take)}: it is fresh until an input changes again`)}
-            onStoryboard={(draw) =>
+            onStoryboard={(draw, n, pin) =>
               draw().then(
-                (data) => author("POST", "/storyboard", { shot: shotId, data }, () => "Saved the 3D pill frame: the next keyframe of this shot gets it as its layout"),
+                (drawn) => {
+                  const [data, clip] = typeof drawn === "string" ? [drawn, null] : [drawn.frame, drawn];
+                  if (n === undefined) {
+                    return author("POST", "/storyboard", { shot: shotId, data }, () => "Saved the 3D pill frame: the next keyframe of this shot gets it as its layout");
+                  }
+                  const video = clip ? { video: clip.video, video_raw: clip.raw } : {}; // a reference render's pin video
+                  return author("POST", "/scene/use", { shot: shotId, n, frame: data, pin, ...video }, () =>
+                    clip ? `Used try ${n}: its frame, pills and pin video are this shot's layout and reference` : `Used try ${n}: its frame and pills are this shot's keyframe layout`,
+                  );
+                },
                 (err) => {
                   console.error("[shows] pill frame not drawn", err); // e.g. no WebGL, or three.js did not load
                   setNotice(`Could not draw the 3D pill frame: ${message(err)}. Try again.`);

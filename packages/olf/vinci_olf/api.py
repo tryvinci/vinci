@@ -13,7 +13,7 @@ from typing import Any
 
 from vinci_olf.layout import shot_plan, staging
 from vinci_olf.project import ASSET_REF, LIBRARY, OlfError, Project, read
-from vinci_olf.render import prompt, references
+from vinci_olf.render import _staging, prompt, references
 from vinci_olf.resolve import awaits_keyframe, inputs_hash, origins, resolve, stale, take_frames
 from vinci_olf.validate import validate
 
@@ -176,9 +176,11 @@ def summary(p: Project) -> dict[str, Any]:
         }
         board = _map(_map(view).get("control")).get("storyboard")  # `control: x` is a schema error
         shots[shot_id]["storyboard"] = file_of(p, board) if isinstance(board, str) else None
+        clip = _map(_map(view).get("control")).get("reference_video")  # the pin video (#732)
+        shots[shot_id]["reference_video"] = file_of(p, clip) if isinstance(clip, str) else None
     try:  # pills for a shot with no picture yet
         plans = staging(p, cache)
-    except Exception as exc:  # a layout off the schema (`slot: d`) broke GET /olf/project (#530)
+    except Exception as exc:  # a layout off the schema (`slot: 7`) broke GET /olf/project (#530)
         if not invalid:
             raise
         log.warning("summary: no pills, a layout is off the schema: %r", exc)
@@ -302,9 +304,15 @@ def shot_detail(p: Project, shot_id: str) -> dict[str, Any]:
             "audio": inputs_hash(view, "audio"),
         },
         "prompts": {
-            "keyframe": prompt(view, "keyframe", shot_plan(p, shot_id)),
+            "keyframe": prompt(
+                view, "keyframe", shot_plan(p, shot_id), staging=_staging(p, shot_id)
+            ),
             "video": prompt(
-                view, "video", from_frame=bool((view.get("control") or {}).get("first_frame"))
+                view,
+                "video",
+                shot_plan(p, shot_id),
+                from_frame=bool((view.get("control") or {}).get("first_frame")),
+                staging=_staging(p, shot_id),  # a reference render names the pins and shapes
             ),
         },
         "references": refs,

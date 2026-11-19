@@ -50,6 +50,10 @@ class Row:
         end_frame: The model takes an end frame.
         refs: The reference images it takes (image edit, or a video's References mode).
         ref_role: Higgsfield's media role of a reference image (``image_references``, ``image``).
+        reference: A reference video render (``r2v``, COREPRODUC-732): the model follows a pin
+            video and takes pictures as the look, with no start frame. Its own Studio id
+            (``<model>:reference``) and its own price: the reference seconds are billed too.
+        video_refs: The reference videos it takes.
     """
 
     model: str
@@ -64,6 +68,8 @@ class Row:
     end_frame: bool = False
     refs: int = 0
     ref_role: str = ""
+    reference: bool = False
+    video_refs: int = 0
 
     @property
     def capabilities(self) -> tuple[str, ...]:
@@ -71,7 +77,12 @@ class Row:
 
     @property
     def video(self) -> bool:
-        return self.capability in ("i2v", "t2v")
+        return self.capability in ("i2v", "t2v", "r2v")
+
+    @property
+    def key(self) -> str:
+        """The row's part of its Studio id: the model, and ``:reference`` for a reference row."""
+        return self.model + (":reference" if self.reference else "")
 
     def length(self, asked: Any) -> int | None:
         """The clip length a run sends: the asked one fitted to ``durations``, else the fixed."""
@@ -115,7 +126,7 @@ class Connector:
         """The row of a Studio model id such as ``mcp_higgsfield:soul_2``."""
         model = model_id.split(":", 1)[-1]
         for row in self.rows:
-            if row.model == model:
+            if row.key == model:
                 return row
         raise KeyError(model_id)
 
@@ -126,6 +137,7 @@ class Connector:
         start: str | None = None,
         end: str | None = None,
         refs: tuple[str, ...] = (),
+        videos: tuple[str, ...] = (),
     ) -> dict[str, Any]:
         """Tool arguments of one run.
 
@@ -136,6 +148,7 @@ class Connector:
                 creation identifier), for a video row.
             end: The end frame, the same way, for a row that takes one.
             refs: Reference images the same way: an image edit, or a video's References mode.
+            videos: Reference videos the same way, for a reference row (the pin video).
 
         Returns:
             The ``arguments`` of the generate tool.
@@ -161,6 +174,9 @@ class Connector:
             medias = [{"value": start, "role": "start_image"}] if start else []
             medias += [{"value": end, "role": "end_image"}] if end else []
             medias += [{"value": ref, "role": row.ref_role or "image_references"} for ref in refs]
+            if row.reference:  # Seedance 2.5's omni_reference mode; a show adds its own sound
+                params |= {"mode": "omni_reference", "generate_audio": False}
+                medias += [{"value": video, "role": "video_references"} for video in videos]
             if medias:
                 params["medias"] = medias
             return {"params": params}
@@ -175,8 +191,9 @@ class Connector:
             frames |= {"end": end} if end else {}
             if frames:
                 args["keyframes"] = frames
-            if refs:
-                args["references"] = [{"type": "image", "url": ref} for ref in refs]
+            if refs or videos:  # a reference row: the pin video, then the pictures
+                args["references"] = [{"type": "video", "url": v} for v in videos]
+                args["references"] += [{"type": "image", "url": ref} for ref in refs]
             return args
         args |= {"mode": row.model, "count": 1}
         if ratio:
@@ -204,6 +221,7 @@ CONNECTORS: dict[str, Connector] = {
             "i2i": "generate_image",
             "t2v": "generate_video",
             "i2v": "generate_video",
+            "r2v": "generate_video",
         },
         status_tool="job_status",
         status_arg="jobId",
@@ -243,6 +261,7 @@ CONNECTORS: dict[str, Connector] = {
             "i2i": "images_generate",
             "t2v": "video_generate",
             "i2v": "video_generate",
+            "r2v": "video_generate",
         },
         status_tool="creation_status",
         status_arg="creationIdentifier",
@@ -309,11 +328,44 @@ def snapshot_rows(provider_id: str, skip: set[str] = frozenset()) -> tuple[Row, 
     return tuple(rows)
 
 
+# The models proven with the pin video method run as reference rows too (COREPRODUC-732; user
+# decision 2026-11-19: list only models that work with it). The blockout editor tested Seedance
+# 2.5 alone. Checked signed in, 2026-11-19: Higgsfield `seedance_2_5` takes `video_references`
+# in mode `omni_reference`; Magnific's `video_generate` takes `references` of type `video`.
+REFERENCE = {"mcp_higgsfield": "seedance_2_5", "mcp_magnific": "bytedance-seedance-pro-2.5"}
+LENGTHS = tuple(range(4, 16))  # Seedance 2.5 makes 4 to 30 s; a shot stays under 15 s
+
+
+def reference_row(row: Row) -> Row:
+    """A model's reference row: ``r2v`` with no start frame, priced for the pin video too.
+
+    A provider bills the reference seconds on top of the output (Magnific's docs; Wavespeed at
+    the same rate), and the pin video is as long as the shot, so a length costs twice its clip
+    price. The provider's free preview still runs before each job and stops one that costs more.
+    """
+    lengths = row.durations or LENGTHS
+    per_second = (row.credits or 0) / 5  # a row with no lengths is priced for its default 5 s
+    clips = dict(row.clip_credits) or {n: per_second * n for n in lengths}
+    return replace(
+        row,
+        label=f"{row.label} reference",
+        capability="r2v",
+        caps=("r2v",),
+        credits=(row.credits or 0) * 2 or None,
+        durations=lengths,
+        clip_credits=tuple((n, clips[n] * 2) for n in lengths if n in clips),
+        end_frame=False,
+        refs=9,
+        reference=True,
+        video_refs=3,
+    )
+
+
 # The 3 hand-tuned rows of each provider stay first; its snapshot adds every other model.
 for _id, _connector in list(CONNECTORS.items()):
-    CONNECTORS[_id] = replace(
-        _connector, rows=_connector.rows + snapshot_rows(_id, {r.model for r in _connector.rows})
-    )
+    _rows = _connector.rows + snapshot_rows(_id, {r.model for r in _connector.rows})
+    _rows += tuple(reference_row(r) for r in _rows if r.model == REFERENCE.get(_id))
+    CONNECTORS[_id] = replace(_connector, rows=_rows)
 
 
 def connector_for(provider_id: str) -> Connector | None:
@@ -334,7 +386,7 @@ def models_for(connector: Connector, tool_names: set[str] | None) -> list[ModelS
         )
         specs.append(
             ModelSpec(
-                id=f"{connector.id}:{row.model}",
+                id=f"{connector.id}:{row.key}",
                 display_name=f"{connector.label} {row.label}",
                 provider=connector.id,
                 capabilities=[Capability(cap) for cap in row.capabilities],

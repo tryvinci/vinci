@@ -22,6 +22,9 @@ TEMPLATE_WORDS = ("keyframe", "prompt", "avoid")  # the template fields that cha
 # Camera fields that only a video uses: a keyframe take leaves them out of its hash. A keyframe
 # keeps `canvas`: a drawing of another shape is a new drawing.
 MOTION = ("move", "direction", "amount", "ease", "hold_start", "hold_end", "center", "render")
+# Renders whose video takes the chosen keyframe: an engine move moves it; a reference video
+# render takes it as the look (COREPRODUC-732).
+FROM_KEYFRAME = ("engine", "reference")
 
 
 def merge(base: Any, over: Any) -> Any:
@@ -205,13 +208,13 @@ def hash_view(
         if isinstance(v.get("camera"), dict):  # of a template, a keyframe uses its keyframe words
             _drop(v["camera"], "template", "id", "prompt", "avoid")
         _drop(v, "camera", *MOTION)
-        _drop(v, "control", "first_frame", "last_frame")
+        _drop(v, "control", "first_frame", "last_frame", "reference_video")
         for char in v.get("characters") or []:
             char.pop("voice", None)
     else:
-        if (v.get("camera") or {}).get("render") == "engine":
-            # An engine move animates the chosen keyframe, so the video hashes that keyframe's
-            # output as a `keyframe` first frame does.
+        if (v.get("camera") or {}).get("render") in FROM_KEYFRAME:
+            # An engine move animates the chosen keyframe, and a reference render takes it as
+            # its look, so the video hashes that keyframe's output as a `keyframe` first frame does.
             v.setdefault("control", {}).setdefault("first_frame", "keyframe")
         control = v.get("control") or {}
         for key in ("first_frame", "last_frame"):
@@ -222,10 +225,10 @@ def hash_view(
 
 def from_keyframe(view: dict[str, Any]) -> bool:
     """True when a video of this shot animates its chosen keyframe: a ``keyframe`` first frame,
-    or an engine move (``camera.render: engine``) with no other first frame to move."""
+    or an engine move or a reference render (``camera.render``) with no other first frame."""
     first = (view.get("control") or {}).get("first_frame")
-    engine_move = (view.get("camera") or {}).get("render") == "engine"
-    return first == "keyframe" or (first is None and engine_move)
+    takes_it = (view.get("camera") or {}).get("render") in FROM_KEYFRAME
+    return first == "keyframe" or (first is None and takes_it)
 
 
 def awaits_keyframe(view: dict[str, Any], frames: dict[str, str]) -> bool:

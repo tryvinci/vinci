@@ -24,11 +24,12 @@ HEADS = {
     "close_up": (0.75, 0.42),
     "extreme_close_up": (1.6, 0.5),
 }
-SLOTS = "abc"  # a layout names its pills by cast slot: the shot's first, second, third character
 OFF = 0.35  # how far outside the frame a pill is before it enters or after it leaves
 # One color per character for the whole show (by the order of the bible), so a character keeps
 # its color in each cut, whatever its slot there. A pill with no character is grey.
-COLORS = ("#1c9fb8", "#e08a00", "#c2255c", "#2f9e44", "#7048e8", "#e8590c")
+# Ten colors (six until COREPRODUC-716), so more people of one shot have stripes of their own.
+COLORS: tuple[str, ...] = ("#1c9fb8", "#e08a00", "#c2255c", "#2f9e44", "#7048e8", "#e8590c")
+COLORS += ("#5c940d", "#a61e4d", "#0b7285", "#862e9c")
 NO_ONE = "#868e96"
 # The stripes of each character's pin in the 3D pill frame that a keyframe model gets, one
 # loud color per COLORS entry, with near-black diagonal stripes: nothing in a set looks like it,
@@ -41,11 +42,39 @@ STRIPES = {
     "#2f9e44": ("#1f5fe3", "blue"),
     "#7048e8": ("#d81fb5", "magenta"),
     "#e8590c": ("#ff7a00", "orange"),
+    "#5c940d": ("#9fe01f", "lime"),
+    "#a61e4d": ("#ff5fa2", "pink"),
+    "#0b7285": ("#8a4b1d", "brown"),
+    "#862e9c": ("#7a1fd8", "purple"),
     NO_ONE: ("#00c8d7", "cyan"),
 }
 ROOM = (
     0.1  # look room: a single that looks off screen sits this far from the centre, behind its gaze
 )
+
+
+def slot_name(place: int) -> str:
+    """The slot of the shot's character at ``place`` (0 is the first): ``a`` to ``z``, then
+    ``aa``, ``ab``, and so on. There is no limit on people in a shot (COREPRODUC-716)."""
+    name, n = "", place + 1
+    while n:
+        n, rest = divmod(n - 1, 26)
+        name = chr(97 + rest) + name
+    return name
+
+
+def slot_place(slot: str) -> int:
+    """The place in the shot's cast that a slot names (``slot_name`` backwards).
+
+    Raises:
+        ValueError: The slot is off the schema (not lower-case letters), as before the limit went.
+    """
+    if not (isinstance(slot, str) and slot.isascii() and slot.isalpha() and slot.islower()):
+        raise ValueError(f"not a slot: {slot!r}")
+    n = 0
+    for letter in slot:
+        n = n * 26 + ord(letter) - 96
+    return n - 1
 
 
 def staging(p: Project, views: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -83,8 +112,9 @@ def staging(p: Project, views: dict[str, dict[str, Any]]) -> dict[str, dict[str,
         cast = [c for c in view.get("characters") or [] if isinstance(c, dict)]
         rows = stated.get("start") if stated else None  # `start: []`: nobody is in frame yet
         if rows is None:
-            rows = [{"slot": slot} for slot, _ in zip(SLOTS, cast, strict=False)]
-        start = _pills(rows, cast, camera.get("framing"), colors)
+            rows = [{"slot": slot_name(n)} for n in range(len(cast))]  # one pill per character
+        shot_colors = _shot_colors(cast, colors)
+        start = _pills(rows, cast, camera.get("framing"), shot_colors)
         sets = bool((entry.get("rules") or {}).get("sets_axis")) and len(start) > 1
         crosses = None if sets or not stated else _crosses(start, axis, setter)
         if not stated and len(start) > 1 and all(pill["id"] in axis for pill in start):
@@ -94,7 +124,7 @@ def staging(p: Project, views: dict[str, dict[str, Any]]) -> dict[str, dict[str,
         if sets:
             axis, setter = {pill["id"]: pill["x"] for pill in start if pill["id"]}, shot_id
         end = (
-            _pills(stated["end"], cast, camera.get("framing"), colors)
+            _pills(stated["end"], cast, camera.get("framing"), shot_colors)
             if stated.get("end")
             else None
         )
@@ -115,6 +145,21 @@ def staging(p: Project, views: dict[str, dict[str, Any]]) -> dict[str, dict[str,
     return out
 
 
+def _shot_colors(cast: list[dict[str, Any]], colors: dict[str, str]) -> dict[str, str]:
+    """Each character's color in one shot: its color in the show, unless an earlier character
+    of the shot has that color; then the first color no one in the shot has. Two people of one
+    shot never share stripes while colors last, because the stripes say who is who."""
+    out: dict[str, str] = {}
+    for char in cast:
+        cid = str(char.get("id"))
+        color = colors.get(cid, NO_ONE)
+        if color != NO_ONE and color in out.values():
+            color = next((c for c in COLORS if c not in out.values()), color)
+            log.info("staging: %s takes %s in this shot; its show color is taken", cid, color)
+        out[cid] = color
+    return out
+
+
 def _pills(
     rows: list[dict[str, Any]], cast: list[dict[str, Any]], framing: Any, colors: dict[str, str]
 ) -> list[Any]:
@@ -124,7 +169,7 @@ def _pills(
     size, y = HEADS.get(str(framing), HEADS["medium"])
     out = []
     for n, row in enumerate(rows):
-        place = SLOTS.index(row["slot"])
+        place = slot_place(row["slot"])
         char = cast[place] if place < len(cast) else {}
         default = {"x": (n + 1) / (len(rows) + 1), "y": y, "size": size, "facing": None}
         who = {"id": char.get("id"), "name": char.get("name") or char.get("id")}

@@ -39,6 +39,7 @@ CAPABILITIES = (
     "t2t",
     "music",
     "sfx",
+    "r2v",
 )
 
 ASSET_KINDS = ("image", "video", "audio", "text", "timeline")

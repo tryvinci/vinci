@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 from typing import Any
 from urllib.parse import quote
 
@@ -311,6 +312,26 @@ class WavespeedProvider(CatalogBackedProvider):
                 resolution = "720p"
             if resolution in {"480p", "720p"}:
                 payload["resolution"] = resolution
+        elif "/reference-to-video" in endpoint:
+            # Seedance reference mode (COREPRODUC-732): a pin video carries the camera and the
+            # timing, pictures carry the look. It has no first frame: the two modes do not mix.
+            # Wavespeed tags media "@Video 1", "@Image 1"; OLF writes "@Video1", "@Image1".
+            text = re.sub(r"@(Video|Image|Audio)(\d)", r"@\1 \2", self.prompt_text(req))
+            payload["prompt"] = text
+            videos = [v for v in req.inputs.get("reference_videos") or [] if isinstance(v, str)]
+            images = [v for v in req.inputs.get("reference_images") or [] if isinstance(v, str)]
+            if not videos:
+                raise ValueError("a reference video render needs reference_videos")
+            payload["reference_videos"] = [self._provider_image(v) or v for v in videos[:3]]
+            payload["reference_images"] = [self._provider_image(v) or v for v in images[:9]]
+            duration = _as_int(req.inputs.get("duration"))
+            if duration is not None:
+                payload["duration"] = duration
+            if req.inputs.get("aspect_ratio"):
+                payload["aspect_ratio"] = str(req.inputs["aspect_ratio"])
+            resolution = str(req.inputs.get("resolution") or "480p")  # the catalog row's tier
+            payload["resolution"] = resolution if resolution in {"480p", "720p"} else "480p"
+            payload["generate_audio"] = False  # a show adds dialogue and sound itself
         else:
             payload["prompt"] = self.prompt_text(req)
             first = _image_input(req)

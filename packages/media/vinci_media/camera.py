@@ -17,7 +17,7 @@ from typing import Any
 
 from vinci_media.encoders import pick_video_encoder
 from vinci_media.episode import BITRATE
-from vinci_media.ops import FFMPEG, MediaError, require_ffmpeg
+from vinci_media.ops import FFMPEG, MediaError, probe, require_ffmpeg
 
 log = logging.getLogger(__name__)
 MOVES = ("static", "push_in", "pull_out", "pan", "tilt", "truck", "shake")  # moves a still can do
@@ -239,6 +239,31 @@ def encode(frames: Iterable[bytes], dst: Path, *, width: int, height: int, fps: 
     if proc.returncode != 0:
         raise MediaError(err.decode(errors="replace").strip()[-600:] or "ffmpeg encode failed")
     return dst
+
+
+def reference_clip(src: Path, dst: Path, *, raw: bool = False, fps: int = 24) -> float:
+    """Make a reference clip a video model takes (COREPRODUC-732): H.264 MP4 at ``fps``
+    frames a second, no sound, even sides, the index first. A raw H.264 stream (the Studio's
+    WebCodecs frames) has no clock, so it plays at ``fps``; a browser recording (MP4 or WebM,
+    a frame whenever one was drawn) is resampled to ``fps``.
+
+    Returns:
+        The clip's length in seconds.
+
+    Raises:
+        MediaError: ffmpeg cannot read the source or write the clip.
+    """
+    require_ffmpeg()
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    head = ["-f", "h264", "-r", str(fps)] if raw else []
+    cmd = [FFMPEG, "-y", "-v", "error", *head, "-i", str(src), "-an"]
+    cmd += ["-vf", f"fps={fps},scale=trunc(iw/2)*2:trunc(ih/2)*2"]
+    cmd += ["-c:v", pick_video_encoder(), "-b:v", BITRATE, "-pix_fmt", "yuv420p"]
+    cmd += ["-movflags", "+faststart", str(dst)]
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if proc.returncode != 0:
+        raise MediaError(proc.stderr.strip()[-600:] or "ffmpeg could not make the clip")
+    return float(probe(dst).get("duration") or 0)
 
 
 def camera_move(

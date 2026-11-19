@@ -15,6 +15,7 @@ export const OLF_API = "/vinci-api/olf";
 export const RECENT_KEY = "vinci-shows-recent-v1";
 export const CLOSED_KEY = "vinci-shows-closed-v1"; // set by Close show: the next visit opens no show by itself
 export const TEXT_MODEL_KEY = "vinci-shows-text-model-v1"; // the text model a person picked last
+export const COPY_PROMPT = "copy"; // the "Your agent · copy prompt" text model: copy the prompt, run no model
 export const RECENT_LIMIT = 6;
 
 export type OlfIssue = { level: "error" | "warning"; where: string; message: string };
@@ -53,6 +54,8 @@ export type OlfShot = {
   pills?: OlfPills;
   /** The 3D pill frame that a keyframe gets as its layout (`control.storyboard`), as a file. */
   storyboard?: string | null;
+  /** The pin video a `render: reference` video follows (`control.reference_video`), as a file. */
+  reference_video?: string | null;
 };
 
 /** A flat stand-in for one character: its centre and eye line (0 to 1 of the frame), its head
@@ -189,7 +192,10 @@ export const FRAMINGS = ["extreme_wide", "wide", "medium", "medium_close", "clos
 export const ANGLES = ["eye_level", "low", "high", "overhead", "dutch"];
 export const MOVES = ["static", "pan", "tilt", "push_in", "pull_out", "dolly", "truck", "crane", "orbit", "handheld", "shake"];
 export const EASES = ["none", "in", "out", "in_out"];
-export const RENDERS = ["model", "engine"];
+export const RENDERS = ["model", "engine", "reference"]; // reference: the pin video (COREPRODUC-732)
+/** What Use draws: the frame, and for a `render: reference` shot its pin video too (base64; `raw`:
+ * a raw H.264 stream the daemon or host wraps as an MP4). */
+export type Drawn = string | { frame: string; video: string; raw: boolean };
 /** Drawing shapes for a pan (wider than the frame) or a tilt (taller). */
 export const CANVASES = ["21:9", "2:1", "9:16", "1:1"];
 /** A pill's stripe when it has no color of its own (a pill keeps its character's color). */
@@ -631,7 +637,8 @@ export type OlfScriptPreview = {
   keyframe?: { model: string; amount: number; currency?: string; unpriced: boolean } | null;
 };
 /** A text-model step (`/olf/draft`, `/olf/script/model`): the plan, then the model's text. */
-export type OlfTextStep = OlfPlan & { text: string | null; preview?: OlfScriptPreview };
+/** A text step's answer; `prompt` is the whole prompt when the step was only copied (`copy: true`). */
+export type OlfTextStep = OlfPlan & { text: string | null; preview?: OlfScriptPreview; prompt?: string };
 export const KEYFRAME_OPTIONS = 2; // keyframes a new show draws per shot (vinci_olf.batch)
 
 /** `2 scenes · 1 character found`, under the script box. */

@@ -64,7 +64,7 @@ class SessionEnded(RuntimeError):
 
 _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 _IMAGE_CAPS = {Capability.T2I, Capability.I2I, Capability.EDIT_MULTI}
-_VIDEO_CAPS = {Capability.T2V, Capability.I2V}
+_VIDEO_CAPS = {Capability.T2V, Capability.I2V, Capability.R2V}  # r2v: a pin video render (#732)
 _SUBMIT_CAPS = _IMAGE_CAPS | _VIDEO_CAPS
 
 
@@ -339,7 +339,14 @@ class McpProvider(Provider):
         tool = connector.tools[row.capability]
         inputs = req.inputs
         start = end = None
-        if row.video:
+        videos: tuple[str, ...] = ()
+        if row.reference:  # the pin video and the pictures; no start frame (COREPRODUC-732)
+            clips = [v for v in inputs.get("reference_videos") or [] if isinstance(v, str) and v]
+            if not clips:
+                raise ValueError("a reference render needs its pin video (reference_videos)")
+            videos = tuple(self._upload(clip, "video") for clip in clips[: row.video_refs])
+            asked = inputs.get("reference_images")
+        elif row.video:
             first = _image_ref(inputs)
             if first and "i2v" in row.capabilities:
                 start = self._upload(first)
@@ -355,17 +362,18 @@ class McpProvider(Provider):
         # a video's References mode.
         listed = [ref for ref in asked or [] if isinstance(ref, str) and ref][: row.refs]
         refs = tuple(self._upload(ref) for ref in listed)
-        args = connector.arguments(row, inputs, start, end, refs)
+        args = connector.arguments(row, inputs, start, end, refs, videos)
         preview_tool, preview = connector.cost_call(tool, args)
         live = parse_cost(self._call(preview_tool, preview))
         expected = row.price(row.length(inputs.get("duration")))
         log.info(
-            "mcp price provider=%s model=%s live=%s row=%s refs=%s end=%s",
+            "mcp price provider=%s model=%s live=%s row=%s refs=%s videos=%s end=%s",
             connector.id,
-            row.model,
+            row.key,
             live,
             expected,
             len(refs),
+            len(videos),
             bool(end),
         )
         if live is not None and expected is not None and live > expected + 1e-9:
@@ -426,32 +434,37 @@ class McpProvider(Provider):
             raise RuntimeError(f"{self._provider_id} {name}: {message[:300]}")
         return result
 
-    def _upload(self, ref: str) -> str:
-        """Put one image (a start or end frame, a reference) in the provider's storage; its id.
+    def _upload(self, ref: str, kind: str = "image") -> str:
+        """Put one image (a start or end frame, a reference) or a video (a reference render's pin
+        video) in the provider's storage; its id.
 
-        A public https link is imported by the provider. A content digest or a ``data:`` URI is
-        uploaded: Higgsfield ``media_upload`` + PUT + ``media_confirm``; Magnific
-        ``creations_request_upload`` + PUT + ``creations_finalize_upload`` (not in the library).
+        A public https link is imported by the provider (Magnific reads a video's link as it is).
+        A content digest or a ``data:`` URI is uploaded: Higgsfield ``media_upload`` + PUT +
+        ``media_confirm``; Magnific ``creations_request_upload`` + PUT +
+        ``creations_finalize_upload`` (not in the library).
         """
         higgsfield = self._provider_id == "mcp_higgsfield"
         if ref.startswith("https://"):
             if higgsfield:
-                imported = self._call("media_import_url", {"url": ref, "type": "image"})
+                imported = self._call("media_import_url", {"url": ref, "type": kind})
                 return _need(imported, "media_id")
+            if kind == "video":  # an asset URL is a video reference as it is (video_generate)
+                return ref
             uploaded = self._call(
                 "creations_upload_image", {"url": ref, "fileName": "vinci-start.png"}
             )
             return _need(uploaded, "identifier")
         blob = self._image_bytes(ref)
-        mime = sniff_media_mime(blob) or "image/png"
-        name = "vinci-start." + mime.split("/")[-1].replace("jpeg", "jpg")
+        mime = sniff_media_mime(blob) or ("video/mp4" if kind == "video" else "image/png")
+        stem = "vinci-pin." if kind == "video" else "vinci-start."
+        name = stem + mime.split("/")[-1].replace("jpeg", "jpg")
         if higgsfield:
             asked = self._call("media_upload", {"filename": name, "content_type": mime})
             uploads = payload_from_tool(asked)
             upload = (uploads.get("uploads") or [{}])[0] if isinstance(uploads, dict) else {}
             media_id = _need(upload, "media_id")
             _put(_need(upload, "upload_url"), blob, str(upload.get("content_type") or mime))
-            self._call("media_confirm", {"type": "image", "media_id": media_id})
+            self._call("media_confirm", {"type": kind, "media_id": media_id})
             return media_id
         ticket = payload_from_tool(self._call("creations_request_upload", {"mimeType": mime}))
         _put(_need(ticket, "proxyUploadUrl"), blob, mime)

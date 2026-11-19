@@ -11,7 +11,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from vinci_olf.layout import staging
+from vinci_olf.layout import slot_place, staging
 from vinci_olf.project import ASSET_REF, OlfError, Project, frames, seconds
 from vinci_olf.resolve import cue_view, resolve
 
@@ -123,6 +123,9 @@ def validate(p: Project) -> list[Issue]:
         for shot_id, plan in staging(p, views).items():  # pills: the 180° line of each scene
             if plan["crosses"]:
                 warn(at[shot_id], f"Crosses the 180° line: {plan['crosses']}")
+        from vinci_olf.scene import scene_issues  # here: scene.py imports this module
+
+        issues += scene_issues(p)  # the scene lab's rooms and tries (COREPRODUC-719)
     if "license" not in p.manifest:
         warn("project.yaml", "add license (owner, terms): render copies it into the lock file")
     return issues
@@ -244,10 +247,13 @@ def _check_camerawork(p: Project, view: dict[str, Any], where: str, warn: Report
     if high is not None and length > seconds(high):
         warn(where, f"{name} suits at most {high}: the shot is {frames(length)}")
     slots, cast = entry.get("slots"), view.get("characters") or []
+    # The highest slot counts, not how many: a template of only `d` needs a 4th person.
+    places = [slot_place(s) + 1 for s in slots or [] if re.fullmatch("[a-z]+", str(s))]
+    people = max([len(slots or []), *places])
     if slots == [] and cast:
         warn(where, f"{name} is a BG-only move: set `characters: []` on the shot")
-    elif slots and len(cast) < len(slots):
-        warn(where, f"{name} needs {len(slots)} characters in the shot: it has {len(cast)}")
+    elif slots and len(cast) < people:
+        warn(where, f"{name} needs {people} characters in the shot: it has {len(cast)}")
     if "needs_dialogue" in rules and rules["needs_dialogue"] != bool(view.get("dialogue")):
         need = "with a dialogue line" if rules["needs_dialogue"] else "with no dialogue"
         warn(where, f"{name} is for a shot {need}")
