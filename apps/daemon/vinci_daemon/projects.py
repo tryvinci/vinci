@@ -152,16 +152,29 @@ class ProjectStore:
             self._conn.commit()
 
     def link(
-        self, kind: str, item_id: str, project_id: str | None, *, only_once: bool = False
+        self,
+        kind: str,
+        item_id: str,
+        project_id: str | None,
+        *,
+        only_once: bool = False,
+        fresh: bool = False,
     ) -> None:
         """Put an item in a project. ``only_once``: keep an existing link (a run, a show).
 
         No link means the default project. An upload is the exception: the same bytes can be in a
         named project and in My work (one CAS id), so My work gets an explicit link too.
+        ``fresh``: a show folder just made. A deleted show with the same path left its link, which
+        would keep the new show in the old project, so it goes first (CodeRabbit on #691).
         """
-        if not project_id or (project_id == DEFAULT_ID and kind != "asset"):
-            return
         with _LOCK:
+            if fresh:
+                self._conn.execute(
+                    "DELETE FROM project_links WHERE kind=? AND item_id=?", (kind, item_id)
+                )
+                self._conn.commit()
+            if not project_id or (project_id == DEFAULT_ID and kind != "asset"):
+                return
             if (
                 only_once
                 and self._conn.execute(

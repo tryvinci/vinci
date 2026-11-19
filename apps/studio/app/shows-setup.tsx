@@ -20,6 +20,7 @@ import {
   spendText,
   textStepQuestion,
 } from "../lib/shows";
+import { projectKey, runBody } from "../lib/projects";
 import { message, olf, runJobs, send } from "./shows-api";
 import { Confirm, OlfOnly, VoicePick, fileData } from "./shows-parts";
 
@@ -305,6 +306,7 @@ function ShotList({ view }: { view: OlfScriptPreview | null }) {
 }
 
 // Bug fixed (first occurrence, 2026-11-13 production crawl, COREPRODUC-642): a reload lost the wizard.
+// One draft per project (`projectKey`, review of #691): a draft from another project was sent with this one's project_id.
 const DRAFT_KEY = "vinci-new-show-draft-v1";
 type Draft = {
   step?: number;
@@ -315,7 +317,7 @@ type Draft = {
 
 function readDraft(): Draft {
   try {
-    return (JSON.parse(sessionStorage.getItem(DRAFT_KEY) || "null") as Draft | null) || {};
+    return (JSON.parse(sessionStorage.getItem(projectKey(DRAFT_KEY)) || "null") as Draft | null) || {};
   } catch {
     return {};
   }
@@ -323,7 +325,7 @@ function readDraft(): Draft {
 
 function dropDraft() {
   try {
-    sessionStorage.removeItem(DRAFT_KEY);
+    sessionStorage.removeItem(projectKey(DRAFT_KEY));
   } catch {
     /* blocked storage */
   }
@@ -349,7 +351,7 @@ export function NewShow({ onCancel, onOpen }: { onCancel: () => void; onOpen: (p
   // The draft lives in this tab's session, without the sheet image (it can be megabytes).
   useEffect(() => {
     try {
-      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ step, show, cast: { name: cast.name, description: cast.description, voice: cast.voice, voiceName: cast.voiceName }, script }));
+      sessionStorage.setItem(projectKey(DRAFT_KEY), JSON.stringify({ step, show, cast: { name: cast.name, description: cast.description, voice: cast.voice, voiceName: cast.voiceName }, script }));
     } catch {
       /* storage blocked or full: the draft is a convenience */
     }
@@ -382,7 +384,7 @@ export function NewShow({ onCancel, onOpen }: { onCancel: () => void; onOpen: (p
             : null,
         script: !empty && step === 2 && script.trim() ? script : null,
       };
-      const made = await olf<{ path: string; episode?: string; scenes?: string[] }>("/new", send("POST", body));
+      const made = await olf<{ path: string; episode?: string; scenes?: string[] }>("/new", send("POST", runBody(body)));
       console.info("[shows] new show", { path: made.path, episode: made.episode, scenes: made.scenes });
       let notice = `Created ${title}`;
       if (keyframes && made.episode) {

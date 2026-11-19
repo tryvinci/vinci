@@ -82,3 +82,43 @@ test("a second window cannot overwrite the board", async ({ context }) => {
   await boot(second, url);
   await expect(second.getByTestId("page-tab")).toHaveCount(2);
 });
+
+test("each project lists only its own shows, and Shows has the switcher", async ({ page }) => {
+  await boot(page, "/?project=default#shows");
+  await expect(page.getByTestId("project-switch")).toHaveText("My work"); // on the open screen
+  const id = await newProject(page, `Series ${Date.now()}`);
+  expect(new URL(page.url()).hash).toBe("#shows");
+
+  // The sample opens as this project's own copy; with a show open, the header has no switcher.
+  await page.getByTestId("shows-open-sample").click();
+  await expect(page.getByTestId("shows-health")).toBeVisible();
+  await expect(page.getByTestId("project-switch")).toHaveCount(0);
+  await page.getByRole("button", { name: "Close show" }).click();
+  // New show joins the tab's project too.
+  await page.getByTestId("shows-new").click();
+  await page.getByTestId("setup-title").fill(`Pilot ${id.slice(0, 6)}`);
+  await page.getByRole("button", { name: "Skip to an empty project" }).click();
+  await expect(page.getByTestId("shows-health")).toBeVisible();
+  await page.getByRole("button", { name: "Close show" }).click();
+  const grid = page.getByTestId("shows-grid");
+  await expect(grid.locator(".show-card")).toHaveCount(2);
+  await page.screenshot({ path: path.join(shots, "projects_shows_own_list.png") });
+
+  // The project's show is not in My work, and My work's shows are not in the project.
+  const listed = async (project: string) =>
+    ((await (await page.request.get(`/vinci-api/olf/shows?project=${project}`)).json()) as { shows: { path: string }[] }).shows.map((row) => row.path);
+  const mine = await listed(id);
+  expect(mine).toHaveLength(2);
+  expect(mine.some((row) => row.endsWith(`tidewatch-${id.slice(0, 8)}`))).toBe(true);
+  const others = await listed("default");
+  expect(mine.filter((row) => others.includes(row))).toEqual([]);
+
+  await page.getByTestId("project-switch").click();
+  const back = page.waitForResponse((res) => res.url().includes("/vinci-api/olf/shows?project=default"));
+  await page.getByRole("menu", { name: "Projects" }).getByRole("menuitem", { name: "My work" }).click();
+  await back;
+  await expect(page.getByTestId("project-switch")).toHaveText("My work");
+  await expect(page.getByTestId("shows-health")).toHaveCount(0); // the project's show does not open here by itself
+  await expect(page.locator(".show-card", { hasText: id.slice(0, 6) })).toHaveCount(0);
+  await page.screenshot({ path: path.join(shots, "projects_shows_my_work.png") });
+});

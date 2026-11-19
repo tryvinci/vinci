@@ -22,14 +22,21 @@ export type Project = {
 export const LAST_PROJECT_KEY = "vinci-last-project-v1";
 
 let current: string | null = null;
+let named = false; // the tab's project is not the default one
 
 /** The tab's project id, or null while projects are off (or not picked yet). */
 export function currentProject(): string | null {
   return current;
 }
 
-export function setCurrentProject(id: string | null): void {
+export function setCurrentProject(id: string | null, isDefault = false): void {
   current = id;
+  named = Boolean(id) && !isDefault;
+}
+
+/** A browser storage key for the tab's project. My work keeps the plain key, so what it kept before projects stays. */
+export function projectKey(key: string): string {
+  return named ? `${key}:${current}` : key;
 }
 
 /** The `?project=` of a URL search string ("" when none). */
