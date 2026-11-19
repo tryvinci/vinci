@@ -867,7 +867,7 @@ export function ShowsPage({ topSlot, hosted = false, switcher }: { topSlot?: HTM
             job={cutView && !cutView.result ? cutView : null}
             result={cutView?.result || null}
             onUseApproved={() => void editCut("approved", { use_approved: true })}
-            onClip={(clip, fields) => void editCut("clip", { clip, fields })}
+            onClip={(clip, fields) => editCut("clip", { clip, fields })}
             onExport={(aspects, subtitles, c2pa, otio, sound) => void exportEpisode(aspects, subtitles, c2pa, otio, sound)}
             onCueAdded={(text) => {
               setNotice(text);
@@ -920,8 +920,8 @@ export function ShowsPage({ topSlot, hosted = false, switcher }: { topSlot?: HTM
             }
             onOpenEntry={openEntry}
             library={library}
-            onEdit={(fields) => void author("PATCH", "/shot", { shot: shotId, fields })}
-            onCamerawork={(template) => void author("POST", "/camerawork", { shot: shotId, template })}
+            onEdit={(fields) => author("PATCH", "/shot", { shot: shotId, fields })}
+            onCamerawork={(template) => author("POST", "/camerawork", { shot: shotId, template })}
             onExplain={(take) => olf<OlfStaleCause>(`/stale?path=${encodeURIComponent(show.path)}&take=${encodeURIComponent(take)}`)}
             onKeep={(take) => void author("POST", "/keep", { take }, () => `Kept ${takeName(take)}: it is fresh until an input changes again`)}
             onStoryboard={(draw, n, pin) =>

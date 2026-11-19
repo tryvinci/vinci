@@ -631,6 +631,9 @@
   color: var(--ink);
   font: 13px var(--font-mono);
 }
+/* A menu pick that is saving (usePick): the border pulses teal until the show reloads. */
+.olf-input[aria-busy="true"] { cursor: progress; animation: olf-saving 1s ease-in-out infinite; }
+@keyframes olf-saving { 50% { border-color: var(--teal); } }
 .olf-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .olf-choice button { padding: 9px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--dim); }
 .olf-choice button[aria-pressed="true"] { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal); color: var(--ink); }

@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ChangeEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import {
   COPY_PROMPT,
   type OlfModels,
@@ -161,6 +161,37 @@ export function fileData(file: File): Promise<string> {
   });
 }
 
+/**
+ * Props for a select that shows a pick at once. Bug fixed (first report 2026-11-19, prod, COREPRODUC-737): a shot
+ * menu was bound to the saved value, so a pick snapped back until the save and the show reload
+ * ended (seconds on a host), and the person saw no change.
+ *
+ * Args:
+ *   value: The saved value.
+ *   onPick: Saves a pick (`null` for ""); its promise ends after the save and the reload.
+ *   scope: What the menu edits (a Cut clip); a pick shows only while the menu edits the same thing.
+ *
+ * Returns:
+ *   `value`, `onChange` and `aria-busy` for a `<select>`: the pick shows (busy) until `onPick`
+ *   ends, then the saved value shows again, so a failed save shows the old value. Only the
+ *   newest pick ends the busy state, so an older save cannot hide a newer pick (CodeRabbit, #715).
+ */
+export function usePick(value: string | undefined, onPick: (value: string | null) => unknown, scope = "") {
+  const [pending, setPending] = useState<{ value: string; scope: string } | null>(null);
+  const newest = useRef(0);
+  const shown = pending?.scope === scope ? pending.value : null;
+  return {
+    value: shown ?? value ?? "",
+    "aria-busy": shown !== null,
+    onChange: (event: ChangeEvent<HTMLSelectElement>) => {
+      const next = event.target.value;
+      const run = ++newest.current;
+      setPending({ value: next, scope });
+      void Promise.resolve(onPick(next || null)).finally(() => run === newest.current && setPending(null));
+    },
+  };
+}
+
 /** A select for one shot field; `blank` adds a "—" option that removes an optional field. */
 export function Pick({
   value,
@@ -174,18 +205,12 @@ export function Pick({
   options: readonly string[];
   blank?: boolean;
   disabled?: boolean;
-  onPick: (value: string | null) => void;
+  onPick: (value: string | null) => unknown;
   testId?: string;
 }) {
   const list = value && !options.includes(value) ? [value, ...options] : options;
   return (
-    <select
-      className="olf-input"
-      value={value || ""}
-      disabled={disabled}
-      onChange={(event) => onPick(event.target.value || null)}
-      data-testid={testId}
-    >
+    <select className="olf-input" disabled={disabled} data-testid={testId} {...usePick(value, onPick)}>
       {blank || !value ? <option value="">—</option> : null}
       {list.map((option) => (
         <option key={option} value={option}>

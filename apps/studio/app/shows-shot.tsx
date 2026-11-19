@@ -35,7 +35,7 @@ import {
   takeName,
   takesOf,
 } from "../lib/shows";
-import { Confirm, Field, OlfOnly, Panel, PillFrame, Pick, PlayBar, RefThumb, StalePill } from "./shows-parts";
+import { Confirm, Field, OlfOnly, Panel, PillFrame, Pick, PlayBar, RefThumb, StalePill, usePick } from "./shows-parts";
 import { SceneLab } from "./shows-scenelab";
 
 const DRAWS = [1, 2, 3, 4]; // keyframe variations per draw (the engine's MAX_VARIATIONS)
@@ -81,9 +81,9 @@ export function ShotView({
   onReject: (take: OlfTake) => void;
   onOpenEntry: (id: string) => void;
   /** Change shot fields in its file (description, duration, camera); `null` removes an optional field. */
-  onEdit: (fields: Record<string, string | null>) => void;
+  onEdit: (fields: Record<string, string | null>) => Promise<unknown>;
   /** Put a camerawork template on the shot (a library ID or `cam/<slug>`), or take it off (`null`). */
-  onCamerawork: (template: string | null) => void;
+  onCamerawork: (template: string | null) => Promise<unknown>;
   /** What changed since a take was rendered (`GET /olf/stale`). */
   onExplain: (take: string) => Promise<OlfStaleCause>;
   /** Keep a stale take on purpose (`POST /olf/keep`). */
@@ -142,6 +142,7 @@ export function ShotView({
   const engineMove = cam.render === "engine";
   const template = findEntry(show, cam.template?.id);
   const menu = cameraworkMenu(show, library);
+  const camerawork = usePick(cam.template?.id, onCamerawork); // shows a pick while it saves
   /** A camera field that the template fills says so; a value typed here goes in the shot and wins. */
   const from = (field: string) => (origins?.camera_fields?.[field]?.startsWith("cam/") ? " · template" : "");
   // A shot animates from a keyframe when a control points at one (control.first_frame: keyframe),
@@ -362,14 +363,7 @@ export function ShotView({
           </Field>
           {/* A template fills the move fields and the length (POST /olf/camerawork); each field stays editable. */}
           <Field label="Camerawork">
-            <select
-              className="olf-input"
-              value={cam.template?.id || ""}
-              disabled={locked}
-              onChange={(event) => onCamerawork(event.target.value || null)}
-              aria-label="Camerawork"
-              data-testid="shot-camerawork"
-            >
+            <select className="olf-input" disabled={locked} aria-label="Camerawork" data-testid="shot-camerawork" {...camerawork}>
               <option value="">—</option>
               {menu.map((group) => (
                 <optgroup key={group.label} label={group.label}>
