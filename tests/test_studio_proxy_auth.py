@@ -147,6 +147,17 @@ def test_proxy_requires_session_cookie(studio_bundle: Path, tmp_path: Path) -> N
             timeout=5.0,
         )
         assert patch_cross.status_code == 403
+        # COREPRODUC-710: an upload over 10 MB passes the bundled proxy whole. With the old
+        # middleware.ts, Next.js cut the body at 10 MB and the request hung.
+        big = bytes(range(256)) * (40 * 4096)  # 40 MiB
+        upload = httpx.post(
+            base + "/vinci-api/assets",
+            headers={"Origin": "http://127.0.0.1:4394", "Cookie": f"vinci_studio_session={session}"},
+            files={"file": ("clip.mp4", big, "video/mp4")},
+            timeout=120.0,
+        )
+        assert upload.status_code == 200, upload.text[:300]
+        assert upload.json()["bytes"] == len(big)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.bind(("127.0.0.1", 0))
             free_port = sock.getsockname()[1]

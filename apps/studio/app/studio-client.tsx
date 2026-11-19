@@ -17,7 +17,6 @@ import {
   runBody,
   saveBoard,
   setCurrentProject,
-  uploadForm,
   withProject,
   type Project,
 } from "../lib/projects";
@@ -32,6 +31,7 @@ import { ImagePage } from "./image-page";
 import { LibraryPage } from "./library-page";
 import { ShowsPage } from "./shows-page";
 import { setShowsCredits } from "../lib/shows";
+import { HOST_REQUEST_BYTES, type UploadLimits, setUploadLimits, uploadFile } from "../lib/upload";
 import { VideoPage } from "./video-page";
 import { imageBlock } from "../lib/image-page";
 import { nodeDurations, videoBlock, type VideoRefMode } from "../lib/video-page";
@@ -411,6 +411,7 @@ type Doctor = {
   providers?: Record<string, ProviderRow>;
   budget?: { monthly_cap_usd?: number };
   host?: StudioHost;
+  limits?: UploadLimits;
 };
 type AdaptEstimateBody = {
   total: number;
@@ -1083,14 +1084,14 @@ export function StudioClient() {
 
   const uploadAdaptSource = useCallback(
     async (file: File) => {
-      const res = await fetch(`${API}/assets`, { method: "POST", body: uploadForm(file) });
-      if (!res.ok) {
-        throw new Error(await res.text());
+      try {
+        const asset = await uploadFile(API, file);
+        setAdaptSourceId(asset.id);
+        await loadMedia();
+        setLog("Source added.");
+      } catch (err) {
+        setLog(plainError(err)); // a too-large file is refused before upload: say why
       }
-      const asset = (await res.json()) as { id: string };
-      setAdaptSourceId(asset.id);
-      await loadMedia();
-      setLog("Source added.");
     },
     [loadMedia],
   );
@@ -1231,6 +1232,8 @@ export function StudioClient() {
         }>("/settings"),
       ]);
       setDoctor(doc);
+      // The server's file limits (COREPRODUC-710); a host that states none yet takes ~30 MB per request.
+      setUploadLimits(doc.limits ?? (doc.host ? { upload_bytes: HOST_REQUEST_BYTES, import_bytes: HOST_REQUEST_BYTES } : null));
       const host = doc.host;
       if (host) {
         // A host bills in its own unit, serves some pages only, and has its own onboarding.
@@ -1966,11 +1969,7 @@ export function StudioClient() {
     // callers then say what they did with the file.
     const uploading = `Uploading ${file.name}…`;
     setLog(uploading);
-    const res = await fetch(API + "/assets", { method: "POST", body: uploadForm(file) }).finally(() =>
-      setLog((cur) => (cur === uploading ? "" : cur)),
-    );
-    if (!res.ok) throw new Error(await res.text());
-    const asset = (await res.json()) as Asset;
+    const asset = await uploadFile<Asset>(API, file).finally(() => setLog((cur) => (cur === uploading ? "" : cur)));
     const mime = asset.mime && asset.mime !== "application/octet-stream" ? asset.mime : file.type || asset.mime;
     const stored = { ...asset, mime };
     setAssets((rows) => (rows.some((row) => row.id === stored.id) ? rows : [stored, ...rows]));
@@ -4196,13 +4195,15 @@ export function StudioClient() {
               const role = nodeRefRole.current;
               nodeRefTarget.current = null;
               if (!file || !id) return;
-              void ingest(file).then((asset) => {
-                setGraph((g) => {
-                  const row = g.nodes.find((n) => n.id === id);
-                  if (!row || refsOf(row.params).length >= REF_LIMIT) return g;
-                  return setParams(g, id, addRef(row.params, role, asset.id));
-                });
-              });
+              void ingest(file)
+                .then((asset) => {
+                  setGraph((g) => {
+                    const row = g.nodes.find((n) => n.id === id);
+                    if (!row || refsOf(row.params).length >= REF_LIMIT) return g;
+                    return setParams(g, id, addRef(row.params, role, asset.id));
+                  });
+                })
+                .catch((err) => setLog(plainError(err))); // a refused upload says why
             }}
           />
         </main>
@@ -5396,13 +5397,14 @@ export function StudioClient() {
           )}
           <div className="top-meta">
             {/* These pages have no log line of their own. Bug fixed (first occurrence 2026-11-11, hosted
-                Studio check, COREPRODUC-585): a refused or failed run on them showed no reason. */}
+                Studio check, COREPRODUC-585): a refused or failed run on them showed no reason. Adapts too
+                (2026-11-19, review of #690, COREPRODUC-710): a refused upload or estimate said nothing. */}
             {boardConflict && page === "canvas" ? (
               <span className="top-log" role="alert" data-testid="board-conflict">
                 This board changed in another window. Reload to see it; edits here are not saved.
               </span>
             ) : null}
-            {log && !(boardConflict && page === "canvas") && (page === "image" || page === "video" || page === "canvas") ? (
+            {log && !(boardConflict && page === "canvas") && (page === "image" || page === "video" || page === "canvas" || page === "adapts") ? (
               <span className="top-log" role="status" aria-live="polite" title={log}>
                 {log}
               </span>

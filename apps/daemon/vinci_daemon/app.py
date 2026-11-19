@@ -13,6 +13,7 @@ from typing import Any
 
 import yaml
 from fastapi import FastAPI, Form, HTTPException, Query, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
     FileResponse,
@@ -193,6 +194,16 @@ def _oauth_redirect_uri(request: Request) -> str:
     return f"{base}/providers/oauth/callback"
 
 
+def _import_limit() -> int | None:
+    """The largest .volf a show import unpacks to (``vinci_olf.package.MAX_BYTES``), or None
+    when the Shows engine is not installed."""
+    try:
+        from vinci_olf.package import MAX_BYTES
+    except ImportError:
+        return None
+    return MAX_BYTES
+
+
 def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -> FastAPI:
     persistence = None
     journal = None
@@ -355,7 +366,9 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
 
     @app.get("/doctor")
     def doctor() -> dict[str, Any]:
-        return eng.doctor()
+        # File limits the Studio checks before an upload (COREPRODUC-710): no cap on a local
+        # upload (it streams to disk); a .volf import unpacks to at most vinci_olf's limit.
+        return eng.doctor() | {"limits": {"upload_bytes": None, "import_bytes": _import_limit()}}
 
     @app.get("/settings")
     def get_settings() -> dict[str, Any]:
@@ -655,9 +668,13 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
         request: Request, file: UploadFile, project_id: str = Form("")
     ) -> dict[str, Any]:
         project_id = projects.stamp(eng, project_id or None) or ""
-        data = await file.read()
-        asset = eng.ingest_bytes(
-            data, mime=file.content_type or "application/octet-stream", filename=file.filename
+        # The upload streams from its spooled file into the store, never whole in memory.
+        # (COREPRODUC-710)
+        asset = await run_in_threadpool(
+            eng.ingest_stream,
+            file.file,
+            mime=file.content_type or "application/octet-stream",
+            filename=file.filename,
         )
         dumped = asset.model_dump(mode="json")
         projects.store(eng).link("asset", str(asset.id), project_id)
@@ -667,7 +684,7 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
             path="/assets",
             payload={
                 "filename": file.filename,
-                "bytes": len(data),
+                "bytes": asset.bytes,
                 "project_id": project_id or None,
             },
             blob_keys=[str(asset.id)],

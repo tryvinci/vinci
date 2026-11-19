@@ -20,8 +20,15 @@ const staticExport = {
 const nextConfig = {
   output: "standalone",
   outputFileTracingRoot: path.join(dir, "../.."),
-  // POST /runs blocks until a live job ends. The rewrite proxy default (30 s) turned every video into a 500.
-  experimental: { proxyTimeout: 15 * 60 * 1000 },
+  experimental: {
+    // POST /runs blocks until a live job ends. The rewrite proxy default (30 s) turned every video into a 500.
+    proxyTimeout: 15 * 60 * 1000,
+    // The dev rewrite proxy clones each request body and stops at this size (default 10 MB): a
+    // larger upload then hung (COREPRODUC-710). 5 GB is the largest .volf an import unpacks to.
+    // The bundled Studio proxies in app/vinci-api/[...path]/route.ts with no middleware, so its
+    // bodies stream and this limit never applies there.
+    middlewareClientMaxBodySize: 5_000_000_000,
+  },
   async rewrites() {
     // Dev-only fallback; production Mac bundle uses app/vinci-api/[...path]/route.ts
     if (process.env.VINCI_STUDIO_USE_REWRITE === "1") {

@@ -3,8 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import uuid
 from pathlib import Path
-from typing import Protocol
+from typing import BinaryIO, Protocol
 
 
 class CasStore(Protocol):
@@ -35,6 +36,35 @@ class ContentAddressedStore:
             tmp.write_bytes(data)
             os.replace(tmp, path)
         return digest
+
+    def put_stream(self, source: BinaryIO) -> tuple[str, int]:
+        """Store a file-like object without holding it in memory (COREPRODUC-710).
+
+        The bytes are hashed while they are copied, 1 MB at a time, into a temp file in this
+        store, which then moves into place; an upload of any size uses about 1 MB of memory.
+
+        Returns:
+            The SHA-256 digest and the size in bytes.
+        """
+        tmp = self.root / f".incoming-{uuid.uuid4().hex}"
+        sha, size = hashlib.sha256(), 0
+        try:
+            with tmp.open("wb") as out:
+                while chunk := source.read(1 << 20):
+                    sha.update(chunk)
+                    size += len(chunk)
+                    out.write(chunk)
+            digest = sha.hexdigest()
+            path = self._path(digest)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if path.exists():
+                tmp.unlink()  # the same bytes are stored already
+            else:
+                os.replace(tmp, path)
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
+        return digest, size
 
     def get(self, digest: str) -> bytes:
         path = self._path(digest)

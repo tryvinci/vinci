@@ -42,6 +42,7 @@ import { type ExportJob, ExportUnreachable, OlfRoutes, message, olf, polling, ru
 import { setUrlPart, topWindow, urlParts } from "./url-part";
 import { BibleView, IssuesView } from "./shows-bible";
 import { OlfOnly } from "./shows-parts";
+import { tooLarge } from "../lib/upload";
 import { CutView } from "./shows-cut";
 import { type Route, ShowNav, ShowTop, routeEpisode } from "./shows-nav";
 import { NewShow } from "./shows-setup";
@@ -127,8 +128,6 @@ function keptExport(key: string, id?: string | null): string {
     return ""; // no session storage (a private window): the export still runs, a reload only loses its progress
   }
 }
-
-const HOST_IMPORT_BYTES = 50 * 1024 * 1024; // the host's upload limit (studio_service.MAX_UPLOAD_BYTES)
 
 export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement | null; hosted?: boolean }) {
   const [available, setAvailable] = useState<boolean | null>(null);
@@ -560,9 +559,9 @@ export function ShowsPage({ topSlot, hosted = false }: { topSlot?: HTMLElement |
 
   /** Import a `.volf` package (SPEC.md, Package) as a new show, then open it. */
   async function importShow(file: File) {
-    if (hosted && file.size > HOST_IMPORT_BYTES) {
-      // The host takes packages up to the Studio's upload limit: refused here, before the upload.
-      setError("The package is larger than 50 MB. Import it in the local Studio.");
+    const refused = tooLarge(file.name, file.size, "import"); // the server's limit, before the upload
+    if (refused) {
+      setError(refused);
       return;
     }
     setLoading(true);

@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
 import { OLF_API, type OlfBatchJob, type OlfPlan } from "../lib/shows";
+import { errorText } from "../lib/upload";
 
 /**
  * The OLF routes the daemon serves (from `/openapi.json`). A host serves fewer for now (Vinci
@@ -28,8 +29,8 @@ export type ExportJob = { id: string; state: string; stage?: string | null; crea
  */
 export async function olf<T>(path: string, init?: RequestInit, onJob?: (job: ExportJob) => void): Promise<T> {
   const res = await fetch(OLF_API + path, init);
-  const body = (await res.json().catch(() => ({}))) as { detail?: unknown; run_id?: string; export_id?: string };
-  if (!res.ok) throw new Error(String(body.detail || res.statusText || "The request failed"));
+  if (!res.ok) throw new Error(await errorText(res)); // a proxy's HTML page (413) becomes a sentence
+  const body = (await res.json().catch(() => ({}))) as { run_id?: string; export_id?: string };
   if (res.status === 202 && body.run_id) return { ...body, ...(await waitRun(body.run_id)) } as T;
   if (res.status === 202 && body.export_id) return (await waitExport(body.export_id, onJob)) as T;
   return body as T;

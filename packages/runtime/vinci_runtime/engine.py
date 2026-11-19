@@ -18,7 +18,7 @@ import zipfile
 from collections import defaultdict, deque
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 from vinci_core.catalog import (
     Catalog,
@@ -130,6 +130,9 @@ from vinci_runtime.provider_reconciliation import (
 from vinci_runtime.writer_effect_trace import record_writer_effect
 
 LOG = logging.getLogger("vinci.engine")
+# Search indexes the words of a text asset up to this size; a larger one (a log, an unknown type
+# that falls back to text) is not read into memory and is found by its file name (COREPRODUC-710).
+INDEX_TEXT_BYTES = 1_000_000
 
 PROVIDER_DOCS = {
     "mock": "https://github.com/tryvinci/vinci",
@@ -2303,26 +2306,40 @@ class Engine:
     def import_comfy_graph(self, graph: dict[str, Any]) -> WorkflowSpec:
         return import_comfy(graph)
 
+    def ingest_stream(self, source: BinaryIO, *, mime: str, filename: str | None = None) -> Asset:
+        """``ingest_bytes`` for a file-like object (an upload): a local store copies it to disk in
+        1 MB chunks, so a large upload is never held in memory (COREPRODUC-710). A store with no
+        ``put_stream`` (R2) takes the bytes as before."""
+        put_stream = getattr(self.cas, "put_stream", None)
+        if put_stream is None:
+            return self.ingest_bytes(source.read(), mime=mime, filename=filename)
+        self._require_journal_writer_live()
+        record_writer_effect("cas")
+        self._bump_test_counter("VINCI_TEST_CAS_PUT_COUNTER_PATH")
+        digest, size = put_stream(source)
+        return self._ingested(digest, size, mime=mime, filename=filename)
+
     def ingest_bytes(self, data: bytes, *, mime: str, filename: str | None = None) -> Asset:
+        return self._ingested(self._cas_put(data), len(data), mime=mime, filename=filename)
+
+    def _ingested(self, digest: str, size: int, *, mime: str, filename: str | None) -> Asset:
+        """Index stored bytes as an uploaded asset (``ingest_bytes`` and ``ingest_stream``)."""
         if (not mime or mime == "application/octet-stream") and filename:
             mime = _mime_from_path(Path(filename))
-        digest = self._cas_put(data)
         kind = _kind_from_mime(mime)
         asset = Asset(
             id=digest,
             kind=kind,
             mime=mime or "application/octet-stream",
-            bytes=len(data),
+            bytes=size,
             source=AssetSource.UPLOADED,
             created_at=datetime.now(tz=UTC),
             uri=f"vinci://assets/{digest}",
             metadata={"filename": filename} if filename else {},
         )
         self.store.put_asset(asset)
-        extra = filename or ""
-        if kind == AssetKind.TEXT:
-            extra = data.decode("utf-8", errors="replace")
-        self._index_asset(asset, extra_text=extra)
+        # _index_asset swaps in a small text asset's own words; a large one keeps its file name.
+        self._index_asset(asset, extra_text=filename or "")
         return asset
 
     def adapt_presets(self) -> list[dict[str, Any]]:
@@ -2828,7 +2845,8 @@ class Engine:
 
     def _index_asset(self, asset: Asset, extra_text: str = "") -> None:
         transcript = extra_text
-        if asset.kind == AssetKind.TEXT and self.cas.exists(asset.id):
+        small = asset.bytes <= INDEX_TEXT_BYTES
+        if asset.kind == AssetKind.TEXT and small and self.cas.exists(asset.id):
             transcript = self.cas.get(asset.id).decode("utf-8", errors="replace")
         self.index.upsert(
             asset.id,

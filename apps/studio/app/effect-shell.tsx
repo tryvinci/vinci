@@ -25,7 +25,8 @@ import {
   type EffectRunRow,
 } from "../lib/effect-shell";
 import { providerMentionInputs, type LibraryItem } from "../lib/library";
-import { runBody, uploadForm } from "../lib/projects";
+import { runBody } from "../lib/projects";
+import { uploadFile } from "../lib/upload";
 import { EffectsGalleryOverlay } from "./effects-gallery-overlay";
 import { PromptMention } from "./prompt-mention";
 import "./effects-shell.css";
@@ -79,9 +80,7 @@ async function postRun(payload: { skill: string; model_id?: string; inputs: Reco
 }
 
 async function uploadAsset(file: File): Promise<string> {
-  const res = await fetch(`${API}/assets`, { method: "POST", body: uploadForm(file) });
-  if (!res.ok) throw new Error(await res.text());
-  const asset = (await res.json()) as { id: string };
+  const asset = await uploadFile(API, file);
   if (!asset.id) throw new Error("Upload did not finish. Try the file again.");
   return asset.id;
 }
