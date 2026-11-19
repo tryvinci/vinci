@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { execFileSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -830,6 +831,43 @@ test.describe("Shows (OLF movie engine)", () => {
         .toBe(imported);
       await expect(page.getByTestId("share")).toHaveText("Export");
       await page.screenshot({ path: path.join(shots, "shows_imported.png") });
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+      if (imported) rmSync(imported, { recursive: true, force: true });
+    }
+  });
+
+  test("a 40 MB package imports through the Studio's proxy (COREPRODUC-710)", async ({ page }) => {
+    test.setTimeout(180_000);
+    // Before COREPRODUC-710 the Studio's proxy cut request bodies at 10 MB: this import hung.
+    const tmp = mkdtempSync(path.join(os.tmpdir(), "volf-big-"));
+    const file = path.join(tmp, "big.volf");
+    execFileSync("python3", ["-c", `import os, zipfile
+with zipfile.ZipFile(${JSON.stringify(file)}, "w", zipfile.ZIP_STORED) as z:
+    z.writestr("big/project.yaml", "spec: olf/0.1\\nshow: big\\ntitle: Big Reel\\n")
+    z.writestr("big/takes/clip.mp4", os.urandom(40 * 1024 * 1024))`]);
+    await page.addInitScript(() => {
+      localStorage.setItem("vinci-onboard-v1", "done");
+      localStorage.removeItem("vinci-shows-recent-v1");
+    });
+    // The boot asks for /runs?project=… since the projects work: match the path, not the whole URL.
+    const booted = page.waitForResponse((res) => new URL(res.url()).pathname.endsWith("/vinci-api/runs") && res.request().method() === "GET");
+    await page.goto("/");
+    await booted;
+    let imported = "";
+    try {
+      await page.locator('nav button[aria-label="Shows"]').click();
+      const chooser = page.waitForEvent("filechooser");
+      const answer = page.waitForResponse((res) => res.url().includes("/olf/import"), { timeout: 120_000 });
+      await page.getByTestId("shows-import").click();
+      await (await chooser).setFiles(file);
+      const res = await answer;
+      expect(res.status()).toBe(200);
+      const answered = String((await res.json()).path);
+      expect(path.basename(answered)).toMatch(/^big(-\d+)?$/);
+      imported = answered;
+      await expect(page.getByTestId("shows-notice")).toContainText("Imported Big Reel");
+      await page.screenshot({ path: path.join(shots, "shows_import_40mb.png") });
     } finally {
       rmSync(tmp, { recursive: true, force: true });
       if (imported) rmSync(imported, { recursive: true, force: true });
