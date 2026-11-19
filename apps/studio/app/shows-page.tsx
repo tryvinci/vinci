@@ -43,7 +43,7 @@ import { type ExportJob, ExportUnreachable, OlfRoutes, message, olf, polling, ru
 import { setUrlPart, topWindow, urlParts } from "./url-part";
 import { BibleView, IssuesView } from "./shows-bible";
 import { OlfOnly } from "./shows-parts";
-import { tooLarge } from "../lib/upload";
+import { directUploads, sendDirect, tooLarge } from "../lib/upload";
 import { CutView } from "./shows-cut";
 import { type Route, ShowNav, ShowTop, routeEpisode } from "./shows-nav";
 import { NewShow } from "./shows-setup";
@@ -137,6 +137,7 @@ export function ShowsPage({ topSlot, hosted = false, switcher }: { topSlot?: HTM
   const [recent, setRecent] = useState<string[]>([]);
   const [show, setShow] = useState<OlfShow | null>(null);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(""); // a host import's upload percent, then its job: kept until it ends
   const [error, setError] = useState("");
   const [route, setRoute] = useState<Route>({ view: "issues" });
   // The detail remembers its shot, so a reload keeps the old one on screen and a new shot never shows it.
@@ -568,8 +569,10 @@ export function ShowsPage({ topSlot, hosted = false, switcher }: { topSlot?: HTM
     setLoading(true);
     const run = openRun.current; // a show opened or closed meanwhile moves it on: then do not open
     try {
-      const form = uploadForm(file); // the show joins the tab's project
-      const { path, title, skipped = [] } = await olf<{ path: string; title: string; skipped?: string[] }>("/import", { method: "POST", body: form });
+      type Imported = { path: string; title: string; skipped?: string[] };
+      const { path, title, skipped = [] } = directUploads()
+        ? await importDirect(file)
+        : await olf<Imported>("/import", { method: "POST", body: uploadForm(file) }); // the show joins the tab's project
       // A host keeps only show files (text and media): it names what it left out.
       const left = skipped.length ? ` · ${skipped.length} file${skipped.length === 1 ? "" : "s"} left out (not show files)` : "";
       console.info("[shows] imported", { file: file.name, bytes: file.size, path, stale: run !== openRun.current });
@@ -583,6 +586,24 @@ export function ShowsPage({ topSlot, hosted = false, switcher }: { topSlot?: HTM
       console.warn("[shows] import failed", { file: file.name, error: message(err) });
       setError(message(err));
       setLoading(false);
+    }
+  }
+
+  /** A host import (COREPRODUC-710): the package goes straight to storage, then a worker unpacks it. */
+  async function importDirect(file: File): Promise<{ path: string; title: string; skipped?: string[] }> {
+    const api = OLF_API.replace(/\/olf$/, "");
+    try {
+      const job = await sendDirect<{ export_id: string }>(api, file, "import", (share) => setProgress(`Uploading ${file.name}… ${Math.round(share * 100)}%`));
+      setProgress(`Importing ${file.name}. The worker can take a minute or two to start.`);
+      console.info("[shows] import queued", { file: file.name, bytes: file.size, id: job.export_id });
+      return (await waitExport(job.export_id).catch((err: unknown) => {
+        if (!(err instanceof ExportUnreachable)) throw err;
+        console.warn("[shows] import status unreachable", { id: job.export_id });
+        // Not Cut's words (that resumes episode exports): the import may still finish.
+        throw new Error(`Could not reach Vinci for the import of ${file.name}. It may still finish: reload Your shows in a minute before you upload it again.`);
+      })) as { path: string; title: string; skipped?: string[] };
+    } finally {
+      setProgress("");
     }
   }
 
@@ -782,6 +803,7 @@ export function ShowsPage({ topSlot, hosted = false, switcher }: { topSlot?: HTM
     return top(
       <OpenShow
         busy={loading}
+        status={loading ? progress : ""} // COREPRODUC-710
         ready={available !== null}
         error={error}
         recent={hosted ? [] : recent.filter((path) => !shows.some((row) => row.path === path))}
@@ -949,6 +971,7 @@ function OpenShow({
   busy,
   ready,
   error,
+  status,
   recent,
   shows,
   folders,
@@ -960,6 +983,8 @@ function OpenShow({
   busy: boolean;
   ready: boolean;
   error: string;
+  /** What a long step is doing (an upload's percent), shown while `busy`. */
+  status: string;
   recent: readonly string[];
   /** `GET /olf/shows`. */
   shows: readonly OlfShowRow[];
@@ -1085,6 +1110,11 @@ function OpenShow({
           }
         />
       )}
+      {status ? (
+        <p className="olf-small-text" role="status" data-testid="shows-status">
+          {status}
+        </p>
+      ) : null}
       {error ? (
         <p className="shows-error" role="alert" data-testid="shows-error">
           {error}

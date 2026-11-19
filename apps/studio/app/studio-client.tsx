@@ -1967,9 +1967,10 @@ export function StudioClient() {
   async function ingest(file: File): Promise<Asset> {
     // COREPRODUC-650 image-14: a 4 s upload showed nothing. The line goes when the upload ends;
     // callers then say what they did with the file.
-    const uploading = `Uploading ${file.name}…`;
+    let uploading = `Uploading ${file.name}…`;
     setLog(uploading);
-    const asset = await uploadFile<Asset>(API, file).finally(() => setLog((cur) => (cur === uploading ? "" : cur)));
+    const progress = (share: number) => setLog((uploading = `Uploading ${file.name}… ${Math.round(share * 100)}%`)); // a large file on a host
+    const asset = await uploadFile<Asset>(API, file, progress).finally(() => setLog((cur) => (cur === uploading ? "" : cur)));
     const mime = asset.mime && asset.mime !== "application/octet-stream" ? asset.mime : file.type || asset.mime;
     const stored = { ...asset, mime };
     setAssets((rows) => (rows.some((row) => row.id === stored.id) ? rows : [stored, ...rows]));
