@@ -103,6 +103,8 @@ export type LibraryRow = {
   duration?: unknown;
   aspect_ratio?: unknown;
   resolution?: unknown;
+  /** The run inputs the daemon saved with the file. The settings are here, not on the row. */
+  params?: Record<string, unknown>;
 };
 
 
@@ -484,9 +486,13 @@ export function feedFromLibrary(items: readonly LibraryRow[]): VideoFeedItem[] {
       createdAt: item.saved_at || item.run_completed_at || "",
       favorite: Boolean(item.favorite),
       mediaKind: "video",
-      duration: item.duration == null ? "" : String(item.duration),
-      aspect: item.aspect_ratio == null ? "" : String(item.aspect_ratio),
-      resolution: item.resolution == null ? "" : String(item.resolution),
+      // Bug fixed (first occurrence 2026-11-19, COREPRODUC-729 e2e; 0 user reports): the daemon keeps the
+      // settings in `params`, so a local card had no length or aspect, and Extend did not fill them.
+      duration: String(item.params?.duration ?? item.duration ?? ""),
+      aspect: String(item.params?.aspect_ratio ?? item.aspect_ratio ?? ""),
+      resolution: String(item.params?.resolution ?? item.resolution ?? ""),
+      seed: String(item.params?.seed ?? ""),
+      steps: String(item.params?.steps ?? ""),
     });
   }
   rows.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));

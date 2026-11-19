@@ -1198,9 +1198,20 @@ class Engine:
         return saved
 
     def _index_cas_outputs(
-        self, run_id: str, run: dict[str, Any], digests: list[str]
+        self, run_id: str, run: dict[str, Any], digests: list[str], *, restore_trashed: bool = False
     ) -> int:
-        """Index every completed-run digest from CAS so destination=none still appears."""
+        """Index every completed-run digest from CAS so destination=none still appears.
+
+        Args:
+            run_id: The run.
+            run: The run row.
+            digests: Its output asset ids.
+            restore_trashed: True when the run just finished: a file the person deleted comes
+                back, because they made it again (the run cache, or the same bytes, gives the same
+                id). Bug fixed (first occurrence 2026-11-19, COREPRODUC-729 e2e; 0 user reports):
+                Generate said "Your still is in the feed." and the feed showed nothing. The
+                backfill keeps the trash.
+        """
         dest = (self.config.output_destination.kind or "none").strip().lower() or "none"
         completed_at = now_utc()
         indexed = 0
@@ -1208,7 +1219,18 @@ class Engine:
             if not digest or not self.cas.exists(str(digest)):
                 continue
             digest_str = str(digest)
-            if self.library.get(item_id_for_asset(digest_str)):
+            existing = self.library.get(item_id_for_asset(digest_str))
+            if existing:
+                if restore_trashed and existing.get("trashed_at"):
+                    LOG.info(
+                        "run=%s made trashed library item %s again; restoring it",
+                        run_id,
+                        existing["id"],
+                    )
+                    try:
+                        self.library.restore(existing["id"])
+                    except Exception as exc:  # noqa: BLE001 — library must not fail the run
+                        LOG.warning("library restore failed for %s: %s", existing["id"], exc)
                 continue
             asset = self.store.get_asset(digest_str)
             if asset is not None:
@@ -1784,7 +1806,7 @@ class Engine:
             run["asset_uris"] = [f"vinci://assets/{digest}" for digest in final_outputs]
             run["job_uris"] = [f"vinci://jobs/{jid}" for jid in job_ids]
             run["receipt_uris"] = [f"vinci://receipts/{jid}" for jid in job_ids]
-            self._index_cas_outputs(run_id, run, final_outputs)
+            self._index_cas_outputs(run_id, run, final_outputs, restore_trashed=True)
             exported = self._export_run_outputs(run_id, run, final_outputs)
             if exported:
                 run["exported_outputs"] = exported

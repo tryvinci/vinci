@@ -24,7 +24,10 @@ export const DOCK_ICON = {
   gear: "M8 5.4a2.6 2.6 0 1 1 0 5.2 2.6 2.6 0 0 1 0-5.2zM8 2.2v1.3M8 12.5v1.3M2.6 4.4l1.1.7M12.3 10.9l1.1.7M2.6 11.6l1.1-.7M12.3 5.1l1.1-.7",
   heart: "M8 13.2S3.2 10.2 3.2 6.8A2.6 2.6 0 0 1 8 5.6a2.6 2.6 0 0 1 4.8 1.2c0 3.4-4.8 6.4-4.8 6.4z",
   download: "M8 2.5v7M5.2 7.2L8 10l2.8-2.8M3.5 12.5h9",
-  copy: "M6 5.5h6.5V13H6zM4 3.5h6.5",
+  // Two squares. The old glyph (a box under a bar) looked like a trash can beside the real one (COREPRODUC-729).
+  copy: "M6 6h7v7H6zM3.5 10V3.5H10",
+  trash: "M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5M7 7v3.5M9 7v3.5",
+  expand: "M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5L9 7M2.5 13.5L7 9",
   reference: "M3 4.5h10v7H3zM3 9.5l2.2-2 1.6 1.5L8.6 7 13 10",
   pin: "M8 2.5l1.6 3.2 3.5.5-2.5 2.5.6 3.5L8 10.6 4.8 12.2l.6-3.5L2.9 6.2l3.5-.5z",
   close: "M4 4l8 8M12 4l-8 8",
