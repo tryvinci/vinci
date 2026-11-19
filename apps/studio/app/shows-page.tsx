@@ -592,6 +592,8 @@ export function ShowsPage({ topSlot, hosted = false, switcher }: { topSlot?: HTM
   /** A host import (COREPRODUC-710): the package goes straight to storage, then a worker unpacks it. */
   async function importDirect(file: File): Promise<{ path: string; title: string; skipped?: string[] }> {
     const api = OLF_API.replace(/\/olf$/, "");
+    // Shown at once: the first percent comes only when the first 8 MiB piece is stored (a few seconds).
+    setProgress(`Uploading ${file.name}… 0%`);
     try {
       const job = await sendDirect<{ export_id: string }>(api, file, "import", (share) => setProgress(`Uploading ${file.name}… ${Math.round(share * 100)}%`));
       setProgress(`Importing ${file.name}. The worker can take a minute or two to start.`);
