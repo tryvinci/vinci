@@ -113,6 +113,19 @@ def test_tool_feed_and_favorite(home: Path) -> None:
     assert [row["id"] for row in favs["items"]] == [item["id"]]
 
 
+def test_a_run_that_makes_a_deleted_file_again_brings_it_back(home: Path) -> None:
+    """COREPRODUC-729: Delete on an Image card trashes the library item. The same prompt again hits the
+    run cache (same file), so the run restores it: the feed showed nothing after "in the feed"."""
+    engine = Engine(home)
+    engine.init_home(demo=True)
+    engine.start_run("@tryvinci/image-generate", {"prompt": "same still"})
+    item = engine.list_library(tool="image")["items"][0]
+    engine.delete_library_item(item["id"])
+    assert engine.list_library(tool="image", refresh=True)["items"] == []  # the backfill keeps the trash
+    engine.start_run("@tryvinci/image-generate", {"prompt": "same still"})
+    assert [row["id"] for row in engine.list_library(tool="image")["items"]] == [item["id"]]
+
+
 def test_daemon_library_routes(home: Path) -> None:
     engine = Engine(home)
     engine.init_home(demo=True)

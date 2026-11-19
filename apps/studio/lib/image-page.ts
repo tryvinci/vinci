@@ -40,6 +40,10 @@ export type ImageFeedItem = {
   favorite: boolean;
   pending?: boolean;
   mediaKind: string;
+  /** The run's settings, for the viewer's Details and Recreate (COREPRODUC-729). Empty when unknown. */
+  aspect?: string;
+  resolution?: string;
+  quality?: string;
 };
 
 export type ImageControls = {
@@ -54,7 +58,7 @@ export type ImageRun = {
   state?: string;
   outputs?: string[];
   created_at?: string;
-  inputs?: { prompt?: unknown; model_id?: unknown };
+  inputs?: { prompt?: unknown; model_id?: unknown; aspect_ratio?: unknown; resolution?: unknown; quality?: unknown };
   skill?: string;
   workflow?: { nodes?: { model_id?: string; capability?: string }[] };
 };
@@ -72,7 +76,14 @@ export type LibraryRow = {
   media_kind?: string;
   mime?: string;
   trashed_at?: string | null;
+  /** The run inputs the daemon saved with the file (aspect_ratio, resolution, quality). */
+  params?: Record<string, unknown>;
 };
+
+/** A setting as text: "" when it is missing. */
+function setting(value: unknown): string {
+  return value == null ? "" : String(value);
+}
 
 /** Higgsfield Video empty strip, applied to Image: prompt, model, generate. */
 export const IMAGE_HOW_STEPS = [
@@ -298,6 +309,9 @@ export function feedFromLibrary(items: readonly LibraryRow[]): ImageFeedItem[] {
       createdAt: item.saved_at || item.run_completed_at || "",
       favorite: Boolean(item.favorite),
       mediaKind: "image",
+      aspect: setting(item.params?.aspect_ratio),
+      resolution: setting(item.params?.resolution),
+      quality: setting(item.params?.quality),
     });
   }
   rows.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
@@ -332,6 +346,9 @@ export function feedFromRuns(runs: readonly ImageRun[], assets: readonly ImageAs
         createdAt: run.created_at || "",
         favorite: false,
         mediaKind: "image",
+        aspect: setting(run.inputs?.aspect_ratio),
+        resolution: setting(run.inputs?.resolution),
+        quality: setting(run.inputs?.quality),
       });
     }
   }
@@ -373,6 +390,26 @@ export function generateCost(amount: number | undefined, batch: number): number 
 /** Clamp Higgsfield batch to 1 or 4. */
 export function clampBatch(value: number): number {
   return value === 4 ? 4 : 1;
+}
+
+/**
+ * The request that deletes a feed card, or undoes the delete (COREPRODUC-729). Both are soft:
+ * a /library feed (local daemon) trashes the library row, a /runs feed (hosted Studio) the asset.
+ *
+ * Args:
+ *   item: The feed card.
+ *   fromLibrary: True when the feed came from GET /library.
+ *   restore: True for Undo.
+ * Returns:
+ *   The method and the path under the Studio API.
+ */
+export function trashRequest(
+  item: { id: string; assetId: string },
+  fromLibrary: boolean,
+  restore = false,
+): { method: "DELETE" | "POST"; path: string } {
+  const base = fromLibrary ? `/library/items/${encodeURIComponent(item.id)}` : `/assets/${encodeURIComponent(item.assetId)}`;
+  return restore ? { method: "POST", path: `${base}/restore` } : { method: "DELETE", path: base };
 }
 
 /** Toggle an id in the local favorite set. */

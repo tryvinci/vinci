@@ -166,11 +166,13 @@ if (ext.duration !== "8" || ext.aspect !== "9:16" || ext.resolution !== "1280x72
   throw new Error("extend settings " + JSON.stringify(ext));
 }
 const lib = feedFromLibrary([
-  { id: "1", asset_id: "vid", prompt: "clip", media_kind: "video", saved_at: "2026-02-03" },
+  // The daemon keeps the settings in params (COREPRODUC-729: the card had no length or aspect).
+  { id: "1", asset_id: "vid", prompt: "clip", media_kind: "video", saved_at: "2026-02-03", params: { duration: 5, aspect_ratio: "16:9", seed: 7, steps: 30 } },
   { id: "2", asset_id: "img", prompt: "still", media_kind: "image", saved_at: "2026-02-04" },
   { id: "3", asset_id: "gone", prompt: "x", media_kind: "video", trashed_at: "2026-02-05", saved_at: "2026-02-05" },
 ]);
 if (lib.length !== 1 || lib[0].assetId !== "vid") throw new Error("library filter");
+if (lib[0].duration !== "5" || lib[0].aspect !== "16:9" || lib[0].resolution !== "" || lib[0].seed !== "7" || lib[0].steps !== "30") throw new Error("library settings " + JSON.stringify(lib[0]));
 """
     result = _run(script)
     assert result.returncode == 0, result.stderr or result.stdout

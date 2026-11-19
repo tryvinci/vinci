@@ -1105,9 +1105,65 @@ input[type="range"] { accent-color: var(--teal); width: 100%; padding: 0; border
   background: linear-gradient(180deg, transparent 28%, rgb(8 10 10 / 0.88));
   transition: opacity 120ms;
 }
-.image-card-hover a.image-card-open,
-.image-card-hover a.image-card-open:hover {
+.image-card-hover .image-card-open,
+.image-card-hover .image-card-open:hover {
   position: absolute; inset: 0; z-index: -1; padding: 0; border: 0; border-radius: 0; background: none; cursor: zoom-in;
+}
+/* A card deleted from the feed keeps its place with Undo until the feed reloads (COREPRODUC-729). */
+.image-card.deleted .image-card-thumb {
+  min-height: 120px; display: flex; align-items: center; justify-content: center; gap: 10px;
+  color: var(--dim); border: 1px dashed var(--line); box-shadow: none;
+}
+/* Full-screen viewer, as Higgsfield opens a generation (COREPRODUC-729): media left, glass panel right. */
+.media-viewer {
+  position: fixed; inset: 0; z-index: 130; display: grid; grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 12px; padding: 12px; background: #060709; color: var(--ink);
+}
+.media-viewer.wide { grid-template-columns: minmax(0, 1fr); }
+.media-viewer-stage {
+  position: relative; min-width: 0; min-height: 0; display: grid; place-items: center;
+  overflow: hidden; border-radius: 1rem;
+}
+.media-viewer-glow {
+  position: absolute; inset: -10%; background: center / cover no-repeat;
+  filter: blur(64px) brightness(0.45) saturate(1.2);
+}
+.media-viewer-stage img,
+.media-viewer-stage video {
+  position: relative; max-width: 100%; max-height: calc(100vh - 24px); object-fit: contain; border-radius: 0.75rem;
+}
+/* .media-viewer first: .icon-btn (brand.css, loaded later) sets position, border and background. */
+.media-viewer .media-viewer-expand {
+  position: absolute; right: 12px; bottom: 12px; color: var(--ink);
+  background: var(--glass-fallback); border: 1px solid var(--glass-line);
+}
+.media-viewer-panel {
+  display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; padding: 14px;
+  border: 1px solid var(--glass-line); border-radius: 1.1rem; background: var(--glass-fallback);
+  box-shadow: var(--glass-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+}
+.media-viewer-panel header { display: flex; align-items: center; justify-content: space-between; }
+.media-viewer-box { margin: 0; padding: 12px; border-radius: 0.9rem; background: var(--hover); }
+.media-viewer-label {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+  font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute);
+}
+.media-viewer-label .ghost { padding: 3px 10px; font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--ink); }
+.media-viewer-prompt { margin: 0; max-height: 40vh; overflow: auto; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.media-viewer-details div { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: 13px; }
+.media-viewer-details dt { color: var(--mute); }
+.media-viewer-details dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.media-viewer-actions { margin-top: auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.media-viewer-row { display: flex; gap: 8px; }
+.media-viewer-row > * {
+  flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 7px 8px; color: var(--ink); text-decoration: none; white-space: nowrap; overflow: hidden;
+}
+.media-viewer-delete:hover { color: var(--danger); border-color: var(--danger); }
+@media (max-width: 760px) {
+  .media-viewer { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; overflow: auto; }
+  .media-viewer-stage img,
+  .media-viewer-stage video { max-height: 60vh; }
 }
 .image-card:hover .image-card-hover,
 .image-card:focus-within .image-card-hover { opacity: 1; pointer-events: auto; }

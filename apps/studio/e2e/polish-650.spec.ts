@@ -31,7 +31,7 @@ async function slowUploads(page: Page, ms = 800) {
 const log = (page: Page) => page.locator(".top-log");
 
 test.describe("COREPRODUC-650 Studio polish", () => {
-  test("image-12, image-14, paid-8: All tools tabs, upload status, a picture opens full size", async ({ page, context }) => {
+  test("image-12, image-14, paid-8: All tools tabs, upload status, a picture opens full size", async ({ page }) => {
     await slowUploads(page);
     await boot(page, "#image");
     await page.getByRole("button", { name: "All tools" }).click();
@@ -57,17 +57,14 @@ test.describe("COREPRODUC-650 Studio polish", () => {
     const card = page.locator(".image-card:not(.pending)").first();
     await expect(card).toBeVisible({ timeout: 60_000 });
     await card.hover();
-    const open = card.getByTestId("image-card-open");
-    await expect(open).toHaveAttribute("target", "_blank");
     await page.screenshot({ path: path.join(shots, "p650_paid8_hover.png") });
-    const popup = context.waitForEvent("page");
     const box = await card.boundingBox();
     if (!box) throw new Error("no card");
     await page.mouse.click(box.x + box.width / 2, box.y + 30); // the picture, away from the buttons
-    const full = await popup;
-    expect(full.url()).toMatch(/\/vinci-api\/assets\/[^/]+\/file$/);
-    await full.screenshot({ path: path.join(shots, "p650_paid8_full.png") });
-    await full.close();
+    // Full size in the viewer since COREPRODUC-729 (a new tab before); media-viewer.spec.ts covers it.
+    await expect(page.getByTestId("media-viewer").locator("img")).toHaveAttribute("src", /\/vinci-api\/assets\/[^/]+\/file$/);
+    await page.screenshot({ path: path.join(shots, "p650_paid8_full.png") });
+    await page.keyboard.press("Escape");
   });
 
   test("video-8, video-9, video-12: clip notices, removes, Advanced hints", async ({ page }) => {

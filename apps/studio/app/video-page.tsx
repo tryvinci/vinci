@@ -7,7 +7,7 @@ import { clipPrice } from "../lib/canvas-node";
 import { daemonHasPath } from "../lib/daemon-routes";
 import { withProject } from "../lib/projects";
 import { money } from "../lib/model-capabilities";
-import { ImageFeed } from "./image-feed";
+import { ImageFeed, useFeedTrash } from "./image-feed";
 import { VideoPanel, type PendingRef } from "./video-panel";
 import { VideoPresetOverlay } from "./video-preset-overlay";
 import { plainError } from "./ui/plain-text";
@@ -506,6 +506,28 @@ export function VideoPage({
     [onAspect, onClip, onDuration, onExtendMode, onIngest, onLog, onPickModel, onPrompt, onResolution, onSeed, onStart, onSteps],
   );
 
+  const onTrash = useFeedTrash(libraryItems !== null, onLog);
+
+  /**
+   * Recreate (COREPRODUC-729): the clip's prompt, model and settings go back in the panel, as a new
+   * clip (not Extend). The seed stays out, so Generate makes a new take.
+   */
+  const recreate = useCallback(
+    (item: VideoFeedItem) => {
+      onExtendMode(false);
+      onSeed(""); // a seed typed earlier would repeat an old take (CodeRabbit on #710)
+      onPrompt(item.prompt);
+      if (videoRows.some((row) => row.id === item.modelId)) onPickModel(item.modelId);
+      if (item.duration) onDuration(item.duration);
+      if (item.aspect) onAspect(item.aspect);
+      if (item.resolution) onResolution(item.resolution);
+      if (item.steps) onSteps(item.steps);
+      console.info("[video-page] recreate", { id: item.id, modelId: item.modelId, duration: item.duration });
+      onLog("Recreate filled the prompt and the settings. Press Generate to make it again.");
+    },
+    [onAspect, onDuration, onExtendMode, onLog, onPickModel, onPrompt, onResolution, onSeed, onSteps, videoRows],
+  );
+
   const cost = money(generateCost(clipPrice(selected, duration)), selected?.pricing?.currency);
   const hint = uploading ? "Wait for the upload to finish." : videoBlock(selected, { prompt, startId, clipId, extendMode });
 
@@ -573,6 +595,9 @@ export function VideoPage({
           onCopyPrompt={(item) => void copyPrompt(item)}
           onExtend={(item) => void extend(item)}
           onMore={hosted ? undefined : (item) => void more(item)}
+          onRecreate={recreate}
+          onTrash={onTrash}
+          modelName={(id) => models.find((row) => row.id === id)?.display_name || id}
         />
       </div>
       {overlay ? (

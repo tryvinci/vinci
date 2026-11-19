@@ -29,6 +29,7 @@ NAMES = [
     "searchImageModels",
     "takesReference",
     "toggleFavorite",
+    "trashRequest",
     "visibleControls",
     "withPendingCards",
 ]
@@ -173,6 +174,27 @@ const items = [
 ];
 const feed = feedFromLibrary(items);
 if (feed.length !== 1 || feed[0].assetId !== "img") throw new Error("library filter");
+"""
+    result = _run(script)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_delete_paths_and_recreate_settings() -> None:
+    """COREPRODUC-729: Delete is soft on both backends; Recreate reads the run's settings."""
+    script = """
+const eq = (a, b, m) => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(m + ": " + JSON.stringify(a)); };
+const card = { id: "run 1:a/b", assetId: "a/b" };
+eq(trashRequest(card, true), { method: "DELETE", path: "/library/items/run%201%3Aa%2Fb" }, "library trash");
+eq(trashRequest(card, true, true), { method: "POST", path: "/library/items/run%201%3Aa%2Fb/restore" }, "library undo");
+eq(trashRequest(card, false), { method: "DELETE", path: "/assets/a%2Fb" }, "hosted trash");
+eq(trashRequest(card, false, true), { method: "POST", path: "/assets/a%2Fb/restore" }, "hosted undo");
+const run = feedFromRuns(
+  [{ id: "r", outputs: ["x"], inputs: { prompt: "p", model_id: "m", aspect_ratio: "16:9", resolution: "2K", quality: "high" } }],
+  [{ id: "x", mime: "image/png" }],
+)[0];
+eq([run.aspect, run.resolution, run.quality], ["16:9", "2K", "high"], "run settings");
+const lib = feedFromLibrary([{ id: "1", asset_id: "y", media_kind: "image", params: { aspect_ratio: "1:1" } }])[0];
+eq([lib.aspect, lib.resolution, lib.quality], ["1:1", "", ""], "library settings");
 """
     result = _run(script)
     assert result.returncode == 0, result.stderr or result.stdout

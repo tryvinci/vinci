@@ -24,7 +24,7 @@ import {
 import { daemonHasPath } from "../lib/daemon-routes";
 import { withProject } from "../lib/projects";
 import { isUnpriced, money, PRICE_VARIES } from "../lib/model-capabilities";
-import { ImageFeed } from "./image-feed";
+import { ImageFeed, useFeedTrash } from "./image-feed";
 import { ImagePromptBar } from "./image-prompt-bar";
 import { plainError } from "./ui/plain-text";
 
@@ -248,6 +248,22 @@ export function ImagePage({
     [onLog],
   );
 
+  const onTrash = useFeedTrash(libraryItems !== null, onLog);
+
+  /** Recreate (COREPRODUC-729): the card's prompt, model and settings go back in the prompt bar. */
+  const recreate = useCallback(
+    (item: ImageFeedItem) => {
+      onPrompt(item.prompt);
+      if (imageRows.some((row) => row.id === item.modelId)) onPickModel(item.modelId);
+      if (item.aspect) onAspect(item.aspect);
+      if (item.resolution) onResolution(item.resolution);
+      if (item.quality) onQuality(item.quality);
+      console.info("[image-page] recreate", { id: item.id, modelId: item.modelId, aspect: item.aspect });
+      onLog("Recreate filled the prompt and the settings. Press Generate to make it again.");
+    },
+    [imageRows, onAspect, onLog, onPickModel, onPrompt, onQuality, onResolution],
+  );
+
   const cost = selected && isUnpriced(selected) ? PRICE_VARIES : money(generateCost(selected?.pricing?.amount, batch), selected?.pricing?.currency);
   const hint = imageBlock(selected, prompt, refs.length, imageRows);
 
@@ -264,6 +280,9 @@ export function ImagePage({
         onReference={(item) => onReference(item.assetId)}
         onAnimate={(item) => onAnimate(item.assetId)}
         onMore={hosted ? undefined : (item) => void more(item)}
+        onRecreate={recreate}
+        onTrash={onTrash}
+        modelName={(id) => models.find((row) => row.id === id)?.display_name || id}
       />
       <ImagePromptBar
         models={imageRows}
