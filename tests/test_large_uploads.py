@@ -82,3 +82,48 @@ eq(await errorText(new Response("<html>oops</html>", { status: 502, statusText: 
 """,
     )
     assert proc.returncode == 0, proc.stderr or proc.stdout
+
+
+def test_studio_sends_a_file_straight_to_host_storage() -> None:
+    """lib/upload.ts sendDirect (COREPRODUC-710, phase 2): pieces, a resume after a network failure and after a 503, complete."""
+    proc = run_ts(
+        "apps/studio/lib/upload.ts",
+        ["setUploadLimits", "uploadFile", "directUploads"],
+        """
+const eq = (a, b, what) => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(what + ": " + JSON.stringify(a)); };
+const calls = [];
+let failed = false;
+let hiccup = false;
+const stored = [];
+globalThis.fetch = async (url, init = {}) => {
+  const range = init.headers?.["content-range"];
+  calls.push(`${init.method || "GET"} ${url}${range ? " " + range : ""}`);
+  if (url === "/api/uploads") return Response.json({ id: "u1", url: "https://storage.test/s", chunk_bytes: 4 });
+  if (url === "/api/uploads/u1/complete") return Response.json({ id: "asset1", bytes: stored.length });
+  if (range === "bytes 4-7/10" && !failed) { failed = true; throw new TypeError("network"); }
+  if (range === "bytes 8-9/10" && !hiccup) { hiccup = true; return new Response("busy", { status: 503 }); }
+  if (range?.startsWith("bytes */")) return new Response(null, { status: 308, headers: { range: `bytes=0-${stored.length - 1}` } });
+  const [, from, to] = range.match(/bytes (\\d+)-(\\d+)/);
+  stored.splice(Number(from), Number(to) - Number(from) + 1, ...new Uint8Array(await init.body.arrayBuffer()));
+  return Number(to) === 9 ? new Response("{}", { status: 200 }) : new Response(null, { status: 308, headers: { range: `bytes=0-${to}` } });
+};
+setUploadLimits({ upload_bytes: 2e9, import_bytes: 2e9, direct: true });
+eq(directUploads(), true, "direct");
+const shares = [];
+const asset = await uploadFile("/api", new File([new Uint8Array(10).fill(7)], "a.png", { type: "image/png" }), (s) => shares.push(s));
+eq(asset, { id: "asset1", bytes: 10 }, "asset");
+eq(calls, [
+  "POST /api/uploads",
+  "PUT https://storage.test/s bytes 0-3/10",
+  "PUT https://storage.test/s bytes 4-7/10",
+  "PUT https://storage.test/s bytes */10",
+  "PUT https://storage.test/s bytes 4-7/10",
+  "PUT https://storage.test/s bytes 8-9/10",
+  "PUT https://storage.test/s bytes */10",
+  "PUT https://storage.test/s bytes 8-9/10",
+  "POST /api/uploads/u1/complete",
+], "calls");
+eq(shares, [0.4, 0.4, 0.8, 0.8, 1], "progress");
+""",
+    )
+    assert proc.returncode == 0, proc.stderr or proc.stdout
