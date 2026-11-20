@@ -16,6 +16,6 @@ layout:
     - { slot: b, x: 0.7, look_at: a }
 keyframe: "{a} stands at frame left and {b} at frame right. They face each other."
 prompt: >
-  Static camera. {a} stays at frame left and {b} stays at frame right.
+  Static camera. {a} keeps to the left side of the frame and {b} to the right side.
   They face each other and talk.
 avoid: [both characters face the camera, the characters swap sides, camera movement]

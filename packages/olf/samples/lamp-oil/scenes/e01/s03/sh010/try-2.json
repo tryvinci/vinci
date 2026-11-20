@@ -22,9 +22,9 @@
       "faces": "b",
       "end": {
         "at": [
-          -0.82,
+          -0.6,
           0,
-          0.15
+          0.75
         ],
         "faces": "b"
       }
@@ -42,7 +42,7 @@
   "groups": [],
   "props": [],
   "room": 1,
-  "request": "The great lamp stands in the middle of the round glass lamp room. Mira stands left of the lamp and pours oil from the can into the burner; Tomas stands right of it, the lantern held low, and watches her. Wide two-shot across the lamp.",
+  "request": "Mira takes one step to the front of the lamp, the oil can in both hands, while Tomas watches.",
   "shot": "e01/s03/sh010",
-  "made_at": "2026-11-20T02:48:06+00:00"
+  "made_at": "2026-11-20T11:26:21+00:00"
 }

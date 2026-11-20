@@ -807,6 +807,9 @@ def plan_render(
             nodes.append(_move_node(view, source, str(ids["video"])))
             notes = _soft(p, view, source)
         elif reference:  # the pin video, and the keyframe then the cast's sheets as the look
+            # Only when the chosen keyframe is the look: a stated first_frame file is not it.
+            look = kf_used if from_keyframe(view) and not new_kf else None
+            notes = _layout_note(p, control, look)
             board = _leaves(control.get("storyboard"))
             looks = [source, *(r for r in references(view) if r not in board)]
             params = base | {
@@ -1118,6 +1121,28 @@ def _move_node(view: dict[str, Any], still: Any, take_id: str) -> dict[str, Any]
         "olf_take": take_id,
     }
     return {"id": "video", "type": "media", "params": params}
+
+
+def _layout_note(p: Project, control: dict[str, Any], take: str | None) -> list[str]:
+    """Say when a reference render's keyframe was not drawn from the shot's keyframe layout: the
+    clip copies the keyframe's framing (COREPRODUC-742). A keyframe drawn from the pin frame has it
+    in its recorded references (``references`` puts it last), so a keyframe drawn from an older pin
+    frame gets the note too (CodeRabbit on #736).
+
+    Measured on Lamp Oil sh010 (2026-11-20): with kf1, drawn before the scene lab and kept, the
+    clip came out wide (people about 0.45 of the frame height); with a keyframe drawn from the
+    pin frame, it kept the pin video's framing (about 0.85).
+    """
+    board = _leaves(control.get("storyboard"))[:1]
+    if not take or not board or take not in p.docs:
+        return []
+    if board[0] in ((p.docs[take].data or {}).get("inputs") or {}).get("references", []):
+        return []
+    name = take.rsplit("/", 1)[-1]
+    return [
+        f"{name} was not drawn from this shot's keyframe layout, so the clip copies {name}'s "
+        "framing, not the pin video's. Draw a new keyframe: it starts from the pin frame"
+    ]
 
 
 def _soft(p: Project, view: dict[str, Any], still: Any) -> list[str]:

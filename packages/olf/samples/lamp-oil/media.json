@@ -19,15 +19,15 @@
  },
  "storyboards/e01/s03/sh010.mp4": {
   "mime": "video/mp4",
-  "sha256": "07e6175645968eba2f7f47a01e2b2b28a119d9db7d30f211ca2b5c4ee45dd90e",
-  "size": 2158292,
-  "url": "https://storage.googleapis.com/vinci-dev-engram-backend-workloads/samples/lamp-oil/07e6175645968eba2f7f47a01e2b2b28a119d9db7d30f211ca2b5c4ee45dd90e.mp4"
+  "sha256": "dfd3d394693c23047d0559c5955c40abc96085c5319bea5e3297d9932e5a44dc",
+  "size": 2312718,
+  "url": "https://storage.googleapis.com/vinci-dev-engram-backend-workloads/samples/lamp-oil/dfd3d394693c23047d0559c5955c40abc96085c5319bea5e3297d9932e5a44dc.mp4"
  },
  "storyboards/e01/s03/sh010.png": {
   "mime": "image/png",
-  "sha256": "f6a783c8c3bc6f20a3248d52c798fd0b8522805ec9df6308f6da93feb714c540",
+  "sha256": "a2af9664a0a4e2ecca4c1897318ff21dd947f56af4a56f2101f14fbbd31c4c3e",
   "size": 257843,
-  "url": "https://storage.googleapis.com/vinci-dev-engram-backend-workloads/samples/lamp-oil/f6a783c8c3bc6f20a3248d52c798fd0b8522805ec9df6308f6da93feb714c540.png"
+  "url": "https://storage.googleapis.com/vinci-dev-engram-backend-workloads/samples/lamp-oil/a2af9664a0a4e2ecca4c1897318ff21dd947f56af4a56f2101f14fbbd31c4c3e.png"
  },
  "storyboards/e01/s03/sh090.png": {
   "mime": "image/png",
@@ -35,17 +35,17 @@
   "size": 83508,
   "url": "https://storage.googleapis.com/vinci-dev-engram-backend-workloads/samples/lamp-oil/1a139770d74498220df14cd88f3897e5f7ef5d0e148ae20eb0fe68a03827467b.png"
  },
- "takes/e01/s03/sh010/kf1.png": {
-  "mime": "image/png",
-  "sha256": "f8add670cf914335ce53c9a245eb52c3cdd3a740dfcfaf293535ae80edfe1316",
-  "size": 3494790,
-  "url": "https://storage.googleapis.com/vinci-dev-engram-backend-workloads/samples/lamp-oil/f8add670cf914335ce53c9a245eb52c3cdd3a740dfcfaf293535ae80edfe1316.png"
+ "takes/e01/s03/sh010/kf2.jpg": {
+  "mime": "image/jpeg",
+  "sha256": "bda882c669f7b0da66a02648cdc12f86c4187b1f442e78d7bf272f3df16845d8",
+  "size": 664720,
+  "url": "https://storage.googleapis.com/vinci-dev-engram-backend-workloads/samples/lamp-oil/bda882c669f7b0da66a02648cdc12f86c4187b1f442e78d7bf272f3df16845d8.jpg"
  },
- "takes/e01/s03/sh010/v3.mp4": {
+ "takes/e01/s03/sh010/v4.mp4": {
   "mime": "video/mp4",
-  "sha256": "ff49bc558dbcb19e6221266d27a8ab2cf3de0163354989c67562164b3a044388",
-  "size": 993671,
-  "url": "https://storage.googleapis.com/vinci-dev-engram-backend-workloads/samples/lamp-oil/ff49bc558dbcb19e6221266d27a8ab2cf3de0163354989c67562164b3a044388.mp4"
+  "sha256": "3c6ae829c068cc57acfebf2def9fb602f2d014f86ea16f87acc9a7e9ffb2ff9b",
+  "size": 1030151,
+  "url": "https://storage.googleapis.com/vinci-dev-engram-backend-workloads/samples/lamp-oil/3c6ae829c068cc57acfebf2def9fb602f2d014f86ea16f87acc9a7e9ffb2ff9b.mp4"
  },
  "takes/e01/s03/sh050/kf3.png": {
   "mime": "image/png",

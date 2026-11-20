@@ -22,14 +22,6 @@ asset/d1585a12ff4c30dfa1ff3e6a3dc332c9fc6029b8e93e33cb6ccb114a85b26124:
     magnific:
       provider: mcp_magnific
       model: seedream-5-5
-asset/f8add670cf914335ce53c9a245eb52c3cdd3a740dfcfaf293535ae80edfe1316:
-  uri: takes/e01/s03/sh010/kf1.png
-  hash: sha256:f8add670cf914335ce53c9a245eb52c3cdd3a740dfcfaf293535ae80edfe1316
-  type: image/png
-  source: generated
-  license:
-    owner: Vinci
-    terms: CC-BY-4.0
 asset/2ddcb401aa3eb2c4922edcc3fda48663357d66c498d02135d783685d081ba1ef:
   uri: bible/props/great-lamp/ref.png
   hash: sha256:2ddcb401aa3eb2c4922edcc3fda48663357d66c498d02135d783685d081ba1ef
@@ -89,25 +81,33 @@ asset/52a15e0f62005dfffb48f15eda870a23b959ac4b6a716847bd3fcbb2d3c3b75d:
   license:
     owner: Vinci
     terms: CC-BY-4.0
-asset/f6a783c8c3bc6f20a3248d52c798fd0b8522805ec9df6308f6da93feb714c540:
+asset/a2af9664a0a4e2ecca4c1897318ff21dd947f56af4a56f2101f14fbbd31c4c3e:
   uri: storyboards/e01/s03/sh010.png
-  hash: sha256:f6a783c8c3bc6f20a3248d52c798fd0b8522805ec9df6308f6da93feb714c540
+  hash: sha256:a2af9664a0a4e2ecca4c1897318ff21dd947f56af4a56f2101f14fbbd31c4c3e
   type: image/png
   source: generated
   license:
     owner: Vinci
     terms: CC-BY-4.0
-asset/07e6175645968eba2f7f47a01e2b2b28a119d9db7d30f211ca2b5c4ee45dd90e:
+asset/dfd3d394693c23047d0559c5955c40abc96085c5319bea5e3297d9932e5a44dc:
   uri: storyboards/e01/s03/sh010.mp4
-  hash: sha256:07e6175645968eba2f7f47a01e2b2b28a119d9db7d30f211ca2b5c4ee45dd90e
+  hash: sha256:dfd3d394693c23047d0559c5955c40abc96085c5319bea5e3297d9932e5a44dc
   type: video/mp4
   source: generated
   license:
     owner: Vinci
     terms: CC-BY-4.0
-asset/ff49bc558dbcb19e6221266d27a8ab2cf3de0163354989c67562164b3a044388:
-  uri: takes/e01/s03/sh010/v3.mp4
-  hash: sha256:ff49bc558dbcb19e6221266d27a8ab2cf3de0163354989c67562164b3a044388
+asset/bda882c669f7b0da66a02648cdc12f86c4187b1f442e78d7bf272f3df16845d8:
+  uri: takes/e01/s03/sh010/kf2.jpg
+  hash: sha256:bda882c669f7b0da66a02648cdc12f86c4187b1f442e78d7bf272f3df16845d8
+  type: image/jpeg
+  source: generated
+  license:
+    owner: Vinci
+    terms: CC-BY-4.0
+asset/3c6ae829c068cc57acfebf2def9fb602f2d014f86ea16f87acc9a7e9ffb2ff9b:
+  uri: takes/e01/s03/sh010/v4.mp4
+  hash: sha256:3c6ae829c068cc57acfebf2def9fb602f2d014f86ea16f87acc9a7e9ffb2ff9b
   type: video/mp4
   source: generated
   license:
