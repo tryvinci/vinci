@@ -34,6 +34,7 @@ from vinci_olf.scene import (
     _unit,
     check_try,
     frame_of,
+    measured,
     read_room,
     room_tries,
     room_versions,
@@ -295,8 +296,11 @@ def overview(p: Project, target: str) -> dict[str, Any]:
     out["room"] = read_room(p, scene) if versions else None
     if p.kind(target) == "shot":
         out["tries"] = tries(p, target)
-        used = {t["room"] for t in out["tries"]} & set(versions)
-        out["rooms"] = {str(v): read_room(p, scene, v) for v in sorted(used)}
+        # The try the shot's keyframe layout came from, and the framing and angle it measured.
+        mark = used(p, target) or {}
+        out["used"] = {k: mark[k] for k in ("try", "framing", "angle") if k in mark} or None
+        rooms = {t["room"] for t in out["tries"]} & set(versions)
+        out["rooms"] = {str(v): read_room(p, scene, v) for v in sorted(rooms)}
         return out
     # The scene room screen: every version, the room tries, and the room each shot stands in.
     out["rooms"] = {str(v): read_room(p, scene, v) for v in versions}
@@ -350,8 +354,9 @@ def use(
     Raises:
         OlfError: The try is missing or has errors.
     """
-    from vinci_olf.author import add_reference_video, add_storyboard, set_layout
+    from vinci_olf.author import add_reference_video, add_storyboard, set_layout, set_shot
     from vinci_olf.render import PINS
+    from vinci_olf.resolve import resolve
 
     if pin not in PINS:
         raise OlfError(f"no such pin shape: {pin} (one of {', '.join(PINS)})")
@@ -363,9 +368,21 @@ def use(
     asset = add_storyboard(p, shot, frame, notes)
     clip = add_reference_video(p, shot, video, raw=raw) if video else None
     set_layout(p, shot, layout)
+    # The shot's framing and angle become what the try's camera shows (COREPRODUC-739): the words
+    # go in the keyframe prompt, and words that contradict the layout made results worse
+    # (COREPRODUC-728). An insert or a dutch angle is a choice the 3D camera cannot measure.
+    # The resolved camera: a template's insert or dutch counts too (CodeRabbit on #727).
+    camera = resolve(p, shot).get("camera") or {}
+    words = {
+        k: v
+        for k, v in measured(p, shot, staged).items()
+        if camera.get(k) not in ("insert", "dutch")
+    }
+    if any(camera.get(k) != v for k, v in words.items()):
+        set_shot(p, shot, **words)
     # Which try the frame came from: the keyframe prompt names its grey shapes (`layout_words`).
     scene, name = shot.rsplit("/", 1)
-    mark = {"try": n, "room": staged["room"], "storyboard": asset, "pin": pin}
+    mark = {"try": n, "room": staged["room"], "storyboard": asset, "pin": pin} | words
     mark |= {"reference_video": clip} if clip else {}
     (_scene_dir(p, scene) / name / "used.json").write_text(json.dumps(mark), encoding="utf-8")
     log.info("scene lab: %s uses try %d (room v%s): %s", shot, n, staged["room"], asset)

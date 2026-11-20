@@ -459,6 +459,41 @@ def _hides(piece: dict[str, Any], start: list[float], end: list[float]) -> bool:
     return True
 
 
+def words_of(frame: Frame, heads: list[float]) -> dict[str, str]:
+    """The framing and angle a try's camera shows at the start: the framing whose head size is
+    nearest the nearest person's (``layout.HEADS``), and the angle of the camera's pitch
+    (``ANGLES``). No framing when no one is in the frame."""
+    pitch = math.degrees(math.asin(max(-1.0, min(1.0, frame.forward[1]))))
+    angle = "eye_level"
+    if abs(pitch) > 10:
+        angle = "low" if pitch > 0 else "overhead" if pitch <= -55 else "high"
+    if not heads:
+        return {"angle": angle}
+    size = max(max(heads), 1e-3)
+    return {
+        "framing": min(FRAMINGS, key=lambda f: abs(math.log(size / HEADS[f][0]))),
+        "angle": angle,
+    }
+
+
+def measured(p: Project, shot: str, data: dict[str, Any]) -> dict[str, str]:
+    """``words_of`` a shot try: the framing and angle its camera shows (COREPRODUC-739). The shot
+    takes them when the try is used, so its words and its layout agree."""
+    from vinci_olf.resolve import resolve
+
+    view = resolve(p, shot)
+    camera = view.get("camera") or {}
+    aspect = _aspect(camera.get("canvas") or (view.get("defaults") or {}).get("aspect"))
+    frame = frame_of(data, "start", _lens(camera.get("lens")), aspect)
+    heads = []
+    for person in data.get("cast") or []:
+        height = float(person.get("height") or HEIGHT)
+        reach = _reach(frame, person["at"], height)
+        if reach is not None and reach <= 1:
+            heads.append(_head(frame, person["at"], height))
+    return words_of(frame, heads)
+
+
 def _words(camera: dict[str, Any], frame: Frame, heads: list[float], where: str) -> list[Issue]:
     """The shot's framing and angle words against the try: the nearest person's head size and
     the camera's pitch at the start."""
@@ -466,7 +501,7 @@ def _words(camera: dict[str, Any], frame: Frame, heads: list[float], where: str)
     framing, angle = camera.get("framing"), camera.get("angle")
     if framing in FRAMINGS and heads:
         size = max(heads)
-        read = min(FRAMINGS, key=lambda f: abs(math.log(max(size, 1e-3) / HEADS[f][0])))
+        read = words_of(frame, heads)["framing"]
         if abs(FRAMINGS.index(read) - FRAMINGS.index(framing)) >= 2:
             out.append(
                 Issue(

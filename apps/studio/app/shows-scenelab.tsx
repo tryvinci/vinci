@@ -1,6 +1,6 @@
 "use client";
 
-import { type MutableRefObject, useEffect, useRef, useState } from "react";
+import { type MutableRefObject, type ReactNode, useEffect, useRef, useState } from "react";
 import { PIN_SHAPES, type PinShape, aspectOf } from "../lib/pillframe";
 import type { OlfRoom, OlfShotTry, ShotMove } from "../lib/scenelab";
 import type { SceneOptions, SceneViewer } from "../lib/scenelab-gl";
@@ -112,17 +112,21 @@ export function SceneView({
  *
  * @param onUse Renders the frame (`draw`) and saves try `n` with it and its pin shape; the page
  *   reloads the show.
+ * @param camera The shot camera's fields (lens, move), shown under "From the shot": the lab plays
+ *   and records the move (COREPRODUC-739).
  */
 export function SceneLab({
   show,
   id,
   locked,
   onUse,
+  camera,
 }: {
   show: OlfShow;
   id: string;
   locked: boolean;
   onUse: (n: number, draw: () => Promise<Drawn>, pin: PinShape) => Promise<unknown>;
+  camera?: ReactNode;
 }) {
   const shot = show.shots[id];
   const scene = id.slice(0, id.lastIndexOf("/"));
@@ -427,10 +431,6 @@ export function SceneLab({
   ];
   return (
     <section className="olf-panel scene-lab" data-testid="scene-lab">
-      <header>
-        <h3>Scene lab</h3>
-        <span className="olf-panel-aside">Before you render</span>
-      </header>
       <div className="scene-lab-grid">
         <div className="olf-col">
           <div className="scene-lab-view" style={{ aspectRatio: String(aspect) }}>
@@ -560,6 +560,7 @@ export function SceneLab({
               </span>
             </div>
           ) : null}
+          {camera}
         </div>
       </div>
     </section>

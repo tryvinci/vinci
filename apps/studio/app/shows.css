@@ -373,6 +373,21 @@
   font-size: 13px;
 }
 .olf-shot-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 22px; align-items: start; }
+/* The shot's steps (COREPRODUC-739): stage, keyframe, video; the current one is teal. */
+.olf-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-bottom: 16px; }
+.olf-step {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px; text-align: left;
+  border: 1px solid var(--line); border-radius: 0.9rem; background: var(--raised); color: var(--ink);
+}
+.olf-step:hover { border-color: rgb(33 218 210 / 0.45); background: var(--hover); }
+.olf-step > span:last-child { display: grid; gap: 2px; min-width: 0; }
+.olf-step-n {
+  display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 50%;
+  border: 1px solid var(--line); font-size: 12px; color: var(--dim);
+}
+.olf-step[aria-current="step"] { border-color: var(--teal); }
+.olf-step[aria-current="step"] .olf-step-n { background: var(--teal); border-color: var(--teal); color: var(--btn-ink); }
+.olf-camera { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
 .olf-shot-main,
 .olf-shot-side,
 .olf-col { display: grid; gap: 14px; min-width: 0; }
