@@ -690,6 +690,18 @@ def test_reference_render_routes(client: TestClient, tmp_path: Path) -> None:
     assert used.status_code == 200 and used.json()["reference_video"].startswith("asset/")
     # COREPRODUC-742: kf1 was drawn before the layout, so the clip would copy its framing.
     assert "kf1 was not drawn from this shot's keyframe layout" in " ".join(plan().get("notes", []))
+    # Hosted, no routed model takes a reference video: the note comes with the error (the #736
+    # production check found it missing).
+    import vinci_core.cost
+
+    def no_r2v(*args: Any, **kwargs: Any) -> Any:
+        raise KeyError("no model for r2v")
+
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(vinci_core.cost, "plan_workflow", no_r2v)
+        stopped = plan()
+    assert "pick one in the video model menu" in stopped["error"]
+    assert "kf1 was not drawn from" in " ".join(stopped.get("notes", []))
     # A stated first frame is the look then, not kf1: no note about kf1 (CodeRabbit on #736).
     scene = Path(path) / "episodes/e02/scenes/s03.yaml"
     text = scene.read_text()
