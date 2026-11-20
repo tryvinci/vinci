@@ -320,7 +320,10 @@ def test_connector_uploads_the_start_frame(tmp_path: Path, monkeypatch: pytest.M
                 if method == "tools/list":
                     return {"tools": [{"name": name} for name in answers]}
                 name = str(params.get("name"))
-                seen.setdefault(name, []).append(params.get("arguments") or {})  # type: ignore[arg-type]
+                args = params.get("arguments") or {}
+                if (args.get("params") or {}).get("get_cost"):  # type: ignore[union-attr]
+                    return {"structuredContent": {"cost": {"credits": 4}}}  # the free preview
+                seen.setdefault(name, []).append(args)  # type: ignore[arg-type]
                 return {"structuredContent": answers[name]}
 
         return Transport()

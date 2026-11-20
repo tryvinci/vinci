@@ -8,6 +8,7 @@ A project is a folder on this computer; every file the routes read or write stay
 from __future__ import annotations
 
 import logging
+import math
 import shutil
 import tempfile
 from collections.abc import Callable
@@ -618,14 +619,17 @@ def shot(path: str, shot: str, request: Request) -> dict[str, Any]:
     detail = _olf(lambda: shot_detail(p, shot))
     eng = request.app.state.engine
     plans: dict[str, Any] = {}
+    # A video row is priced for the clip the engine asks: the shot's length, rounded up.
+    length = math.ceil(float((detail.get("resolved") or {}).get("duration") or 0)) or None
     for kind in ("video", "keyframe", "audio"):
         try:
             plans[kind] = render(p, shot, kind=kind, dry_run=True, engine=eng)
-            plans[kind]["choices"] = _choices(eng, plans[kind]["plan"][-1]["capability"])
+            seconds = length if kind == "video" else None
+            plans[kind]["choices"] = _choices(eng, plans[kind]["plan"][-1]["capability"], seconds)
         except OlfError as exc:
             plans[kind] = {"error": str(exc)}
             if kind == "video" and _by_reference(detail):  # the person picks a reference model
-                plans[kind]["choices"] = _choices(eng, "r2v")
+                plans[kind]["choices"] = _choices(eng, "r2v", length)
     return detail | {"plans": plans}
 
 
@@ -634,11 +638,20 @@ def _by_reference(detail: dict[str, Any]) -> bool:
     return ((detail.get("resolved") or {}).get("camera") or {}).get("render") == "reference"
 
 
-def _choices(engine: Any, capability: str | None) -> list[dict[str, Any]]:
+def _choices(
+    engine: Any, capability: str | None, seconds: float | None = None
+) -> list[dict[str, Any]]:
     """Models a person may pick for the last step (design: the video model menu): active, from a
     connected provider, cheapest first. ``unpriced`` marks a model with no flat price. An agent
-    CLI row has ``tools``: True when the CLI keeps some of its own tools (the Studio warns)."""
+    CLI row has ``tools``: True when the CLI keeps some of its own tools (the Studio warns).
+
+    ``amount`` is one job of ``seconds`` (``vinci_core.cost.clip_price``), as the engine bills it.
+    Bug fixed (first occurrence, 2026-11-20, a live run): a picked video model showed its 5 s
+    price ($1.10 for a 6 s shot that bills $1.32), so the confirm was below the plan and
+    ``max_total`` would stop the run (seen at the confirm, before the click).
+    """
     from vinci_core.catalog import price_key
+    from vinci_core.cost import clip_price
     from vinci_provider_sdk.agent_cli import AGENT_CLIS
 
     if not capability:
@@ -649,18 +662,20 @@ def _choices(engine: Any, capability: str | None) -> list[dict[str, Any]]:
         for m in engine.catalog().by_capability(capability)
         if m.provider in connected and m.status.value == "active"
     ]
-    return [
+    rows = [
         {
             "id": m.id,
             "name": m.display_name,
             "provider": m.provider,
-            "amount": float(m.pricing.amount),
+            "amount": float(clip_price(m, seconds)),
             "currency": m.pricing.currency,
             "unpriced": price_key(m)[0],
         }
         | ({"tools": not AGENT_CLIS[m.provider].tools_off} if m.provider in AGENT_CLIS else {})
-        for m in sorted(models, key=price_key)
+        for m in models
     ]
+    # Cheapest first at this length: a row with a per-length table can pass another (CodeRabbit).
+    return sorted(rows, key=lambda row: (row["unpriced"], row["amount"]))
 
 
 @router.post("/render")

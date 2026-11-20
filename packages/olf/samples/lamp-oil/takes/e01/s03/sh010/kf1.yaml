@@ -2,7 +2,7 @@ id: e01/s03/sh010/kf1
 kind: keyframe
 status: approved
 output: asset/f8add670cf914335ce53c9a245eb52c3cdd3a740dfcfaf293535ae80edfe1316
-inputs_hash: sha256:6458273684c9bb881576558ba308d299ac6f83ec11874b6a94b922c01dda35de
+inputs_hash: sha256:b84203d7697fdafb024bf97d25fbd74029aad38c1d1e9b99eb41a7d2733a5c90
 inputs:
   references:
   - asset/15af924ab240eae3ddbc1319c59018b3f77a27fb9daf8418b96214a6b30b96da
@@ -18,4 +18,4 @@ provenance:
   cost:
     amount: 45
     currency: Magnific credits
-kept_from: sha256:cf92011be5856ef66bbd56e0c42202d3126a3851665b38aa77854a614ea3d52b
+kept_from: sha256:6458273684c9bb881576558ba308d299ac6f83ec11874b6a94b922c01dda35de

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -334,26 +335,39 @@ def snapshot_rows(provider_id: str, skip: set[str] = frozenset()) -> tuple[Row, 
 # in mode `omni_reference`; Magnific's `video_generate` takes `references` of type `video`.
 REFERENCE = {"mcp_higgsfield": "seedance_2_5", "mcp_magnific": "bytedance-seedance-pro-2.5"}
 LENGTHS = tuple(range(4, 16))  # Seedance 2.5 makes 4 to 30 s; a shot stays under 15 s
+# A reference render is a 480p draft, as in the blockout editor (user, 2026-11-19: "lets do a
+# 480p"). The published plain Seedance 2.5 rates at 480p, in the provider's credits per second:
+# Magnific 200 (its Seedance 2.5 page: 200/s Draft 480p, 440/s 720p, 1,100/s 1080p) and
+# Higgsfield 3 (15 credits for 5 s at 480p, a public quote of Higgsfield's price).
+DRAFT = {"mcp_higgsfield": 3.0, "mcp_magnific": 200.0}
+# Both providers bill the output seconds plus the reference video's seconds, at a lower rate
+# (Magnific's API docs). ByteDance's own meter puts that rate at 0.6 of the plain one (Volcano
+# Engine ¥42 vs ¥70 per million tokens; Tein lists $0.1323 vs $0.2205 per second).
+REFERENCE_RATE = 0.6
 
 
-def reference_row(row: Row) -> Row:
-    """A model's reference row: ``r2v`` with no start frame, priced for the pin video too.
+def reference_row(row: Row, per_second: float) -> Row:
+    """A model's reference row: ``r2v`` at 480p with no start frame, priced for the pin video too.
 
-    A provider bills the reference seconds on top of the output (Magnific's docs; Wavespeed at
-    the same rate), and the pin video is as long as the shot, so a length costs twice its clip
-    price. The provider's free preview still runs before each job and stops one that costs more.
+    The pin video is as long as the shot, so a length ``n`` bills ``2n`` seconds at the
+    reference rate. Before, each length cost twice the row's own clip price (at its 720p
+    setting): Magnific 5,280 credits for 6 s, where the rule above gives 1,440. The provider's
+    free preview still runs before each job, and a job that costs more than this does not run.
+
+    Args:
+        row: The model's own row (``REFERENCE``).
+        per_second: The provider's plain 480p price per second (``DRAFT``).
     """
-    lengths = row.durations or LENGTHS
-    per_second = (row.credits or 0) / 5  # a row with no lengths is priced for its default 5 s
-    clips = dict(row.clip_credits) or {n: per_second * n for n in lengths}
+    clips = tuple((n, float(math.ceil(2 * n * per_second * REFERENCE_RATE))) for n in LENGTHS)
     return replace(
         row,
         label=f"{row.label} reference",
         capability="r2v",
         caps=("r2v",),
-        credits=(row.credits or 0) * 2 or None,
-        durations=lengths,
-        clip_credits=tuple((n, clips[n] * 2) for n in lengths if n in clips),
+        credits=dict(clips)[5],
+        settings=tuple({**dict(row.settings), "resolution": "480p"}.items()),
+        durations=LENGTHS,
+        clip_credits=clips,
         end_frame=False,
         refs=9,
         reference=True,
@@ -364,7 +378,7 @@ def reference_row(row: Row) -> Row:
 # The 3 hand-tuned rows of each provider stay first; its snapshot adds every other model.
 for _id, _connector in list(CONNECTORS.items()):
     _rows = _connector.rows + snapshot_rows(_id, {r.model for r in _connector.rows})
-    _rows += tuple(reference_row(r) for r in _rows if r.model == REFERENCE.get(_id))
+    _rows += tuple(reference_row(r, DRAFT[_id]) for r in _rows if r.model == REFERENCE.get(_id))
     CONNECTORS[_id] = replace(_connector, rows=_rows)
 
 

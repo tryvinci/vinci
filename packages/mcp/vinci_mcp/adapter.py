@@ -376,7 +376,13 @@ class McpProvider(Provider):
             len(videos),
             bool(end),
         )
-        if live is not None and expected is not None and live > expected + 1e-9:
+        # A job runs only at a price the provider stated (COREPRODUC-736). Before, a preview with
+        # no price let the job run at any price; prod had none in 14 days (2026-11-19).
+        if live is None:
+            raise ValueError(
+                f"{connector.label} gave no price for {spec.display_name}. Nothing ran."
+            )
+        if expected is not None and live > expected + 1e-9:
             raise ValueError(
                 f"{spec.display_name} costs {live:g} {connector.currency} now, "
                 f"not {expected:g}. Nothing ran."
