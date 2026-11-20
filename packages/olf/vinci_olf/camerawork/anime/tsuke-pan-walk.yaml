@@ -1,6 +1,6 @@
 # Vinci OLF camerawork library, follow family. CC0-1.0: copy it and change it, no credit needed.
 id: anime/tsuke-pan-walk
-version: 1
+version: 2
 family: follow
 name: Follow a walk
 notation: Tsuke pan
@@ -13,6 +13,6 @@ layout:            # the same place at both ends: the camera goes with them
   start: [{ slot: a, x: 0.5, facing: right }]
   end: [{ slot: a, x: 0.5, facing: right }]
 prompt: >
-  The camera moves along with {a}, who walks to the right. {a} stays in the middle of the
+  The camera moves along with {a}, who walks to the right. {a} keeps to the middle of the
   frame and the background passes behind.
 avoid: [the character leaves the middle of the frame, camera shake]

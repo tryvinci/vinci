@@ -25,6 +25,8 @@ from vinci_olf.scene import (
     HEIGHT,
     NEAR,
     SENSOR_MM,
+    SMALL_MOVE,
+    STEP,
     Frame,
     _aspect,
     _dot,
@@ -35,6 +37,7 @@ from vinci_olf.scene import (
     check_try,
     frame_of,
     measured,
+    moved,
     read_room,
     room_tries,
     room_versions,
@@ -77,7 +80,8 @@ SHOT_SYSTEM = (
     '"end": { "at": [x, y, z], "faces": ... } }], '
     '"groups": [{ "name": "villagers", "count": 8, "area": [x0, z0, x1, z1], "faces": "camera" }], '
     f'"props": [{PIECE}] }}. A person\'s `at` is where the feet are; `end` only when they '
-    "move during the shot. `looks_at` as a slot makes the camera follow that person's eyes. "
+    "move during the shot, and then at least one full step (0.6 m) away: a smaller move does not "
+    "show in the video. `looks_at` as a slot makes the camera follow that person's eyes. "
     "Keep every named person inside the camera's frame at the start and "
     "the end. `groups` are background people, never named. `props` are pieces for this shot "
     "only. " + RULES
@@ -490,7 +494,96 @@ def layout_words(p: Project, shot: str) -> dict[str, str]:
             name = cast[k].get("name") or cast[k].get("id")
             words.append(f"{math.dist(frame.at, eyes):.1f} m from {name}")
     out["camera"] = ", ".join(words)
+    names = [str(c.get("name") or c.get("id")) for c in cast]
+    pieces = room["set"] + (staged.get("props") or [])
+    out |= _motion_words(staged, names, pieces, frame, frame_of(staged, "end", lens, aspect))
     return out
+
+
+def _motion_words(
+    staged: dict[str, Any],
+    names: list[str],
+    pieces: list[dict[str, Any]],
+    start: Frame,
+    end: Frame,
+) -> dict[str, str]:
+    """A reference render's words for the try's people (COREPRODUC-741): ``moves``, each move as
+    start, direction and arrival, and ``framing``, each person's size and place in the first
+    frame, measured as the pin video shows them.
+
+    After github.com/sirioberati/ai-filmmaking-camera-control-seedance-2-5 (MIT;
+    docs/prompt-anatomy.md, docs/why/why-words-beat-a-specific-video.md): the pin carries no body,
+    so a walk that the words do not name does not happen, words that say a person stays still
+    make a statue, and measured framing numbers keep the model from re-centring the person or
+    pulling the shot wider. Bug: Lamp Oil sh010 v3 (2026-11-20) kept Mira in place while her pin
+    stepped toward the lamp.
+    """
+    moves, framing = [], []
+    for person in staged["cast"]:
+        k = slot_place(person["slot"])
+        if k >= len(names):
+            continue
+        name, height = names[k], float(person.get("height") or HEIGHT)
+        x, low, depth = start.screen(person["at"])
+        top = start.screen([person["at"][0], person["at"][1] + height, person["at"][2]])[1]
+        if depth > 0 and abs(x) <= 1:
+            tall = (top - low) / 2
+            size = f"{tall:.2f} of the frame height" if tall <= 1 else "taller than the frame"
+            framing.append(f"{name} is about {size}, {(x + 1) / 2:.2f} of the way from the left")
+        far = moved(person)
+        if far < 0.05:
+            moves.append(f"{name} keeps their place, breathing and shifting their weight naturally")
+            continue
+        a, b = person["at"], person["end"]["at"]
+        step = (
+            "a small half step"
+            if far < SMALL_MOVE
+            else "one step"
+            if far < 0.9
+            else f"about {max(2, round(far / STEP))} steps"
+        )
+        dx = end.screen(b)[0] - start.screen(a)[0]
+        side = " to the right" if dx > 0.05 else " to the left" if dx < -0.05 else ""
+        nearer = math.dist(start.at, a) - math.dist(end.at, b)  # metres toward the lens
+        way = " toward the camera" if nearer > 0.25 else ""
+        way = way or (" away from the camera" if nearer < -0.25 else "")
+        side = " and".join(x for x in (side, way) if x)
+        moves.append(f"{name} takes {step} ({far:.1f} m){side}{_toward(a, b, pieces)}, then stops")
+    out: dict[str, str] = {}
+    if moves:
+        out["moves"] = (
+            "As the pins move in @Video1, at the same moments: "
+            + "; ".join(moves)
+            + ". Every step is a natural, planted walking step, never in slow motion"
+        )
+    if framing:
+        out["framing"] = (
+            "In the first frame, as in @Video1: "
+            + "; ".join(framing)
+            + ". Keep these sizes and places: do not re-centre anyone or pull the shot wider"
+        )
+    return out
+
+
+NEAR_PIECE = 1.5  # metres: a move goes "toward" a piece only when it ends this near it
+
+
+def _toward(a: list[float], b: list[float], pieces: list[dict[str, Any]]) -> str:
+    """ " toward the <piece>" for the nearest set piece a move gets closer to (by more than half
+    the move) and ends within ``NEAR_PIECE`` of, measured to the piece's edge; "" when none. The
+    nearest, not the one it gains most on: a far wall straight ahead gains as much as the lamp
+    beside it (a 0.6 m step read "toward the window post 7", 4.6 m away)."""
+    best, near = "", math.inf
+    far = math.dist((a[0], a[2]), (b[0], b[2]))
+    for piece in pieces:
+        if piece.get("shape") == "plane":
+            continue
+        c, edge = (piece["at"][0], piece["at"][2]), max(piece["size"][0], piece["size"][2]) / 2
+        closer = math.dist((a[0], a[2]), c) - math.dist((b[0], b[2]), c)
+        end = math.dist((b[0], b[2]), c) - edge
+        if closer > far / 2 and end < min(near, NEAR_PIECE):
+            best, near = f" toward the {_label(piece)}", end
+    return best
 
 
 SHAPE_WORDS = {

@@ -43,6 +43,10 @@ EYE = 0.93  # the eye line as a part of a person's height (a body 7 heads tall)
 SAFE = 0.9  # the action-safe part of the frame (broadcast): heads and sides stay inside it
 NEAR = 1.5  # metres: in a close framing, a lens nearer a face than this bends it (Ward 2018)
 TURN = 30.0  # degrees: two shots in a row of one person turn this much, or the framing 2 steps
+STEP = 0.6  # metres: one natural walking step
+# A move shorter than this reads as standing in a video: sh010 of Lamp Oil moved Mira 0.2 m in
+# its pin video, and Seedance 2.5 kept her in place (COREPRODUC-741, 2026-11-20).
+SMALL_MOVE = 0.4
 FRAMINGS = ("extreme_wide", "wide", "medium", "medium_close", "close_up", "extreme_close_up")
 # The checks of a try's camera against the shot's words, after the measured pass of
 # github.com/cbunseng/seedance-blockout-editor-private (Apache-2.0, docs/qa-engine-side.md):
@@ -369,7 +373,51 @@ def check_try(p: Project, shot: str, data: Any) -> list[Issue]:
                 )
     issues += _words(camera, frames["start"], heads, where)
     issues += _jump(p, shot, data, camera, names, where)
+    issues += _stiff(data, camera, names, where)
     return issues
+
+
+def moved(person: dict[str, Any]) -> float:
+    """How far a person moves on the floor during the shot, in metres (0 with no ``end``)."""
+    if not person.get("end"):
+        return 0.0
+    a, b = person["at"], person["end"]["at"]
+    return math.dist((a[0], a[2]), (b[0], b[2]))
+
+
+def _stiff(
+    data: dict[str, Any], camera: dict[str, Any], names: list[str], where: str
+) -> list[Issue]:
+    """Warnings for motion a video model may not show (COREPRODUC-741), after the rules of
+    github.com/sirioberati/ai-filmmaking-camera-control-seedance-2-5 (MIT; docs/why/
+    why-no-static-shots.md): a move shorter than ``SMALL_MOVE``, and a reference render whose
+    pin video hardly moves (a static camera and no one moving a full step): it comes back stiff."""
+    out: list[Issue] = []
+    for person in data["cast"]:
+        far, k = moved(person), slot_place(person["slot"])
+        if 0 < far < SMALL_MOVE and k < len(names):
+            out.append(
+                Issue(
+                    "warning",
+                    where,
+                    f"{names[k]} moves only {far:.1f} m: a video model may not show a move this "
+                    f"small. Make it a full step ({STEP:g} m) or more, or no move",
+                )
+            )
+    still = camera.get("move") in (None, "", "static") and not isinstance(
+        data["camera"]["looks_at"], str
+    )
+    if camera.get("render") == "reference" and still:
+        if all(moved(x) < STEP for x in data["cast"]):  # "no one moves a full step"
+            out.append(
+                Issue(
+                    "warning",
+                    where,
+                    "the shot hardly moves: the camera is static and no one moves a full step. "
+                    "A reference render of a still shot often comes back stiff",
+                )
+            )
+    return out
 
 
 def _reach(frame: Frame, at: list[float], height: float) -> float | None:
