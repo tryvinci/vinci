@@ -331,10 +331,10 @@ def test_the_snapshots_list_every_model_after_the_hand_tuned_rows() -> None:
 def test_reference_rows_send_the_pin_video(tmp_path: Path) -> None:
     """COREPRODUC-732: Seedance 2.5's reference rows (Higgsfield, Magnific) send the pin video and
     the pictures with no start frame, as the providers' tools take them (checked signed in on
-    2026-11-19), as 480p drafts priced for the output plus the pin video at 0.6 of the plain
+    2026-11-19), as 480p drafts priced for the output plus the pin video at its measured rate
     rate; a live price above that, or no live price (COREPRODUC-736), stops the job."""
     seen: dict[str, list[dict]] = {}
-    live: dict[str, float | None] = {"credits": 20}
+    live: dict[str, float | None] = {"credits": 18}
 
     class Transport:
         url = "http://127.0.0.1:9/mcp"
@@ -368,7 +368,7 @@ def test_reference_rows_send_the_pin_video(tmp_path: Path) -> None:
         capability=Capability.R2V, model_id="mcp_higgsfield:seedance_2_5:reference", inputs=inputs
     )
     higgsfield.estimate(req)
-    higgsfield.submit(req)  # 20 credits live, 22 listed (12 s x 3 credits x 0.6): it runs
+    higgsfield.submit(req)  # 18 credits live, 18 listed (6 s x 3; the pin video is free): it runs
     params = seen["generate_video"][-1]["params"]
     assert (params["model"], params["mode"], params["generate_audio"]) == (
         "seedance_2_5",
@@ -386,7 +386,7 @@ def test_reference_rows_send_the_pin_video(tmp_path: Path) -> None:
     assert seen["estimate_video_cost"] == [{"params": params}] and len(seen["generate_video"]) == 1
     live["credits"] = 30  # above the listed 22: nothing runs
     higgsfield.estimate(req)
-    with pytest.raises(ValueError, match="costs 30 Higgsfield credits now, not 22"):
+    with pytest.raises(ValueError, match="costs 30 Higgsfield credits now, not 18"):
         higgsfield.submit(req)
     live["credits"] = None  # the preview gave no price: nothing runs (COREPRODUC-736)
     higgsfield.estimate(req)
