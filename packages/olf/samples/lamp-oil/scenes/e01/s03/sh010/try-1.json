@@ -1,0 +1,48 @@
+{
+  "camera": {
+    "at": [
+      0,
+      1.45,
+      3.6
+    ],
+    "looks_at": [
+      0,
+      1.15,
+      0
+    ]
+  },
+  "cast": [
+    {
+      "slot": "a",
+      "at": [
+        -1.0,
+        0,
+        0.25
+      ],
+      "faces": "b",
+      "end": {
+        "at": [
+          -0.82,
+          0,
+          0.15
+        ],
+        "faces": "b"
+      }
+    },
+    {
+      "slot": "b",
+      "at": [
+        0.84,
+        0,
+        0.15
+      ],
+      "faces": "a"
+    }
+  ],
+  "groups": [],
+  "props": [],
+  "room": 1,
+  "request": "The great lamp stands in the middle of the round glass lamp room. Mira stands left of the lamp and pours oil from the can into the burner; Tomas stands right of it, the lantern held low, and watches her. Wide two-shot across the lamp.",
+  "shot": "e01/s03/sh010",
+  "made_at": "2026-11-20T02:48:06+00:00"
+}

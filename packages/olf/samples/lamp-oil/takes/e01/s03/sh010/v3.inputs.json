@@ -8,7 +8,7 @@
     "framing": "wide",
     "lens": "24mm",
     "move": "static",
-    "render": "model",
+    "render": "reference",
     "template": {
       "avoid": [
         "both characters face the camera",
@@ -35,7 +35,9 @@
     }
   ],
   "control": {
-    "first_frame": "asset/f8add670cf914335ce53c9a245eb52c3cdd3a740dfcfaf293535ae80edfe1316"
+    "first_frame": "asset/f8add670cf914335ce53c9a245eb52c3cdd3a740dfcfaf293535ae80edfe1316",
+    "reference_video": "asset/07e6175645968eba2f7f47a01e2b2b28a119d9db7d30f211ca2b5c4ee45dd90e",
+    "storyboard": "asset/f6a783c8c3bc6f20a3248d52c798fd0b8522805ec9df6308f6da93feb714c540"
   },
   "defaults": {
     "aspect": "16:9",

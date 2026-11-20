@@ -18,7 +18,7 @@ shots:
   - id: e01/s03/sh010
     duration: 6+00
     description: Mira and Tomas stand on either side of the great lamp, which is still dark. Mira pours oil from the can into the burner while Tomas watches; she asks her question and he answers. At the cut she is still pouring.
-    camera: { framing: wide, angle: eye_level, lens: 24mm, template: cam/two-shot-axis }
+    camera: { framing: wide, angle: eye_level, lens: 24mm, template: cam/two-shot-axis, render: reference }
     props: [prop/oil-can, prop/great-lamp]
     blocking:
       char/mira: left of the lamp, the oil can in both hands
@@ -26,8 +26,9 @@ shots:
     dialogue:
       - { speaker: char/mira, line: "What if it goes out?" }
       - { speaker: char/tomas, line: "Then you light it again. That is the whole job." }
-    control: { first_frame: keyframe }  # the clip starts from the approved keyframe
-    select: { keyframe: kf1, video: v2 }
+    control: { first_frame: keyframe, storyboard: asset/f6a783c8c3bc6f20a3248d52c798fd0b8522805ec9df6308f6da93feb714c540, reference_video: asset/07e6175645968eba2f7f47a01e2b2b28a119d9db7d30f211ca2b5c4ee45dd90e }
+    select: { keyframe: kf1, video: v3 }
+    layout: { start: [{ slot: a, x: 0.21, y: 0.289, size: 0.119, facing: right }, { slot: b, x: 0.736, y: 0.291, size: 0.116, facing: left }], end: [{ slot: a, x: 0.269, y: 0.291, size: 0.116, facing: right }, { slot: b, x: 0.736, y: 0.291, size: 0.116, facing: left }] }
   - id: e01/s03/sh050
     duration: 8+00
     description: Close on the burner of the great lamp, on the moment the wide shot ends. Mira's hand in a navy duffle sleeve lowers the oil can beside a box of matches; the lamp is still dark. Then she strikes a match, touches it to the wick, and the wick catches; the flame grows and the glass prisms of the lens fill with gold light.

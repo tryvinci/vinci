@@ -25,6 +25,9 @@
       "sheet": "asset/d1585a12ff4c30dfa1ff3e6a3dc332c9fc6029b8e93e33cb6ccb114a85b26124"
     }
   ],
+  "control": {
+    "storyboard": "asset/f6a783c8c3bc6f20a3248d52c798fd0b8522805ec9df6308f6da93feb714c540"
+  },
   "defaults": {
     "aspect": "16:9",
     "fps": 24,

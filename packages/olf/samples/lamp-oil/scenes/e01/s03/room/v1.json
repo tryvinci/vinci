@@ -1,0 +1,159 @@
+{
+  "set": [
+    {
+      "name": "lamp pedestal",
+      "shape": "cylinder",
+      "size": [
+        1.1,
+        0.6,
+        1.1
+      ],
+      "at": [
+        0,
+        0,
+        0
+      ],
+      "turn": 0
+    },
+    {
+      "name": "great lamp lens",
+      "shape": "cylinder",
+      "size": [
+        0.85,
+        1.6,
+        0.85
+      ],
+      "at": [
+        0,
+        0.6,
+        0
+      ],
+      "turn": 0
+    },
+    {
+      "name": "lamp cap",
+      "shape": "cone",
+      "size": [
+        0.6,
+        0.35,
+        0.6
+      ],
+      "at": [
+        0,
+        2.2,
+        0
+      ],
+      "turn": 0
+    },
+    {
+      "name": "window post 1",
+      "shape": "box",
+      "size": [
+        0.12,
+        2.8,
+        0.12
+      ],
+      "at": [
+        -4.0,
+        0,
+        0.0
+      ],
+      "turn": 0
+    },
+    {
+      "name": "window post 2",
+      "shape": "box",
+      "size": [
+        0.12,
+        2.8,
+        0.12
+      ],
+      "at": [
+        -3.46,
+        0,
+        -2.0
+      ],
+      "turn": 0
+    },
+    {
+      "name": "window post 3",
+      "shape": "box",
+      "size": [
+        0.12,
+        2.8,
+        0.12
+      ],
+      "at": [
+        -2.0,
+        0,
+        -3.46
+      ],
+      "turn": 0
+    },
+    {
+      "name": "window post 4",
+      "shape": "box",
+      "size": [
+        0.12,
+        2.8,
+        0.12
+      ],
+      "at": [
+        -0.0,
+        0,
+        -4.0
+      ],
+      "turn": 0
+    },
+    {
+      "name": "window post 5",
+      "shape": "box",
+      "size": [
+        0.12,
+        2.8,
+        0.12
+      ],
+      "at": [
+        2.0,
+        0,
+        -3.46
+      ],
+      "turn": 0
+    },
+    {
+      "name": "window post 6",
+      "shape": "box",
+      "size": [
+        0.12,
+        2.8,
+        0.12
+      ],
+      "at": [
+        3.46,
+        0,
+        -2.0
+      ],
+      "turn": 0
+    },
+    {
+      "name": "window post 7",
+      "shape": "box",
+      "size": [
+        0.12,
+        2.8,
+        0.12
+      ],
+      "at": [
+        4.0,
+        0,
+        -0.0
+      ],
+      "turn": 0
+    }
+  ],
+  "request": "The great lamp stands in the middle of the round glass lamp room. Mira stands left of the lamp and pours oil from the can into the burner; Tomas stands right of it, the lantern held low, and watches her. Wide two-shot across the lamp.",
+  "scene": "e01/s03",
+  "made_at": "2026-11-20T02:48:06+00:00",
+  "from": "sh010",
+  "version": 1
+}

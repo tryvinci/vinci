@@ -17,6 +17,18 @@
   "size": 873720,
   "url": "https://storage.googleapis.com/vinci-dev-engram-backend-workloads/samples/lamp-oil/2ddcb401aa3eb2c4922edcc3fda48663357d66c498d02135d783685d081ba1ef.png"
  },
+ "storyboards/e01/s03/sh010.mp4": {
+  "mime": "video/mp4",
+  "sha256": "07e6175645968eba2f7f47a01e2b2b28a119d9db7d30f211ca2b5c4ee45dd90e",
+  "size": 2158292,
+  "url": "https://storage.googleapis.com/vinci-dev-engram-backend-workloads/samples/lamp-oil/07e6175645968eba2f7f47a01e2b2b28a119d9db7d30f211ca2b5c4ee45dd90e.mp4"
+ },
+ "storyboards/e01/s03/sh010.png": {
+  "mime": "image/png",
+  "sha256": "f6a783c8c3bc6f20a3248d52c798fd0b8522805ec9df6308f6da93feb714c540",
+  "size": 257843,
+  "url": "https://storage.googleapis.com/vinci-dev-engram-backend-workloads/samples/lamp-oil/f6a783c8c3bc6f20a3248d52c798fd0b8522805ec9df6308f6da93feb714c540.png"
+ },
  "storyboards/e01/s03/sh090.png": {
   "mime": "image/png",
   "sha256": "1a139770d74498220df14cd88f3897e5f7ef5d0e148ae20eb0fe68a03827467b",
@@ -29,11 +41,11 @@
   "size": 3494790,
   "url": "https://storage.googleapis.com/vinci-dev-engram-backend-workloads/samples/lamp-oil/f8add670cf914335ce53c9a245eb52c3cdd3a740dfcfaf293535ae80edfe1316.png"
  },
- "takes/e01/s03/sh010/v2.mp4": {
+ "takes/e01/s03/sh010/v3.mp4": {
   "mime": "video/mp4",
-  "sha256": "0c32a0ad5b7d08db8b8c7d132a10026d3ad20923cc3d16ce9f0c1c7850bfb7a9",
-  "size": 3823462,
-  "url": "https://storage.googleapis.com/vinci-dev-engram-backend-workloads/samples/lamp-oil/0c32a0ad5b7d08db8b8c7d132a10026d3ad20923cc3d16ce9f0c1c7850bfb7a9.mp4"
+  "sha256": "ff49bc558dbcb19e6221266d27a8ab2cf3de0163354989c67562164b3a044388",
+  "size": 993671,
+  "url": "https://storage.googleapis.com/vinci-dev-engram-backend-workloads/samples/lamp-oil/ff49bc558dbcb19e6221266d27a8ab2cf3de0163354989c67562164b3a044388.mp4"
  },
  "takes/e01/s03/sh050/kf3.png": {
   "mime": "image/png",

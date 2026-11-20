@@ -290,6 +290,24 @@ def test_model_choices_and_share(client: TestClient) -> None:
     assert not [n for n in names if "/exports/" in n]  # derived files stay out
 
 
+def test_menu_prices_the_shot_length() -> None:
+    """A video row costs the clip the engine asks, not its 5 s price (bug found 2026-11-20: the
+    confirm said $1.10 for a 6 s Seedance reference shot that bills $1.32)."""
+    from vinci_core.catalog import load_bundled_catalog
+    from vinci_daemon.olf_routes import _choices
+
+    rows = load_bundled_catalog("wavespeed").by_capability("r2v")
+    engine = SimpleNamespace(
+        routing_providers=lambda: {"wavespeed"},
+        catalog=lambda: SimpleNamespace(by_capability=lambda capability: rows),
+    )
+    prices = {c["id"]: c["amount"] for c in _choices(engine, "r2v", 6)}
+    assert prices["wavespeed:seedance-2.5-r2v:2026-11"] == 1.32
+    assert {c["id"]: c["amount"] for c in _choices(engine, "r2v")}[
+        "wavespeed:seedance-2.5-r2v:2026-11"
+    ] == 1.1
+
+
 def test_share_leaves_no_temp_file_when_zipping_fails(
     client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

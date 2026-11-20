@@ -331,9 +331,10 @@ def test_the_snapshots_list_every_model_after_the_hand_tuned_rows() -> None:
 def test_reference_rows_send_the_pin_video(tmp_path: Path) -> None:
     """COREPRODUC-732: Seedance 2.5's reference rows (Higgsfield, Magnific) send the pin video and
     the pictures with no start frame, as the providers' tools take them (checked signed in on
-    2026-11-19), at twice the clip price; a live price above that stops the job."""
+    2026-11-19), as 480p drafts priced for the output plus the pin video at 0.6 of the plain
+    rate; a live price above that, or no live price (COREPRODUC-736), stops the job."""
     seen: dict[str, list[dict]] = {}
-    live = {"credits": 80}
+    live: dict[str, float | None] = {"credits": 20}
 
     class Transport:
         url = "http://127.0.0.1:9/mcp"
@@ -347,7 +348,8 @@ def test_reference_rows_send_the_pin_video(tmp_path: Path) -> None:
             if name == "media_import_url":
                 return {"structuredContent": {"media_id": f"m-{args['type']}"}}
             if args.get("params", {}).get("get_cost") or name == "simulate_cost":
-                return {"structuredContent": {"cost": {"credits": live["credits"]}}}
+                cost = {} if live["credits"] is None else {"cost": {"credits": live["credits"]}}
+                return {"structuredContent": cost}
             if name == "creations_upload_image":
                 return {"structuredContent": {"identifier": "c-img"}}
             job = {"results": [{"id": "r1", "status": "queued"}]}
@@ -366,26 +368,30 @@ def test_reference_rows_send_the_pin_video(tmp_path: Path) -> None:
         capability=Capability.R2V, model_id="mcp_higgsfield:seedance_2_5:reference", inputs=inputs
     )
     higgsfield.estimate(req)
-    higgsfield.submit(req)  # 80 credits live, 84 listed (2 x 7 credits a second x 6 s): it runs
+    higgsfield.submit(req)  # 20 credits live, 22 listed (12 s x 3 credits x 0.6): it runs
     params = seen["generate_video"][-1]["params"]
     assert (params["model"], params["mode"], params["generate_audio"]) == (
         "seedance_2_5",
         "omni_reference",
         False,
     )
-    assert params["duration"] == 6
+    assert (params["duration"], params["resolution"]) == (6, "480p")
     assert params["medias"] == [
         {"value": "m-image", "role": "image_references"},
         {"value": "m-image", "role": "image_references"},
         {"value": "m-video", "role": "video_references"},
     ]
     assert [a["type"] for a in seen["media_import_url"]] == ["video", "image", "image"]
-    live["credits"] = 100  # above the listed 84: nothing runs
+    live["credits"] = 30  # above the listed 22: nothing runs
     higgsfield.estimate(req)
-    with pytest.raises(ValueError, match="costs 100 Higgsfield credits now, not 84"):
+    with pytest.raises(ValueError, match="costs 30 Higgsfield credits now, not 22"):
+        higgsfield.submit(req)
+    live["credits"] = None  # the preview gave no price: nothing runs (COREPRODUC-736)
+    higgsfield.estimate(req)
+    with pytest.raises(ValueError, match="gave no price"):
         higgsfield.submit(req)
     magnific = McpProvider(Transport(), cas=cas, provider_id="mcp_magnific")  # type: ignore[arg-type]
-    live["credits"] = 5000  # 5,280 listed for 6 s: 2 x 2,640
+    live["credits"] = 1440  # 1,440 listed for 6 s: 12 s x 200 credits x 0.6 (was 5,280)
     req = JobRequest(
         capability=Capability.R2V,
         model_id="mcp_magnific:bytedance-seedance-pro-2.5:reference",
@@ -395,6 +401,7 @@ def test_reference_rows_send_the_pin_video(tmp_path: Path) -> None:
     magnific.submit(req)
     args = seen["video_generate"][-1]
     assert args["slug"] == "bytedance-seedance-pro-2.5" and "keyframes" not in args
+    assert args["resolution"] == "480p"  # the row's own setting is 720p
     assert args["references"] == [
         {"type": "video", "url": "https://cdn.test/pin.mp4"},  # an asset URL, as it is
         {"type": "image", "url": "c-img"},
@@ -403,7 +410,7 @@ def test_reference_rows_send_the_pin_video(tmp_path: Path) -> None:
     specs = {m.id: m for c in CONNECTORS.values() for m in models_for(c, None)}
     reference = specs["mcp_magnific:bytedance-seedance-pro-2.5:reference"]
     assert [c.value for c in reference.capabilities] == ["r2v"]
-    assert reference.pricing.clip_prices["6"] == 5280
+    assert reference.pricing.clip_prices["6"] == 1440
     no_clip = JobRequest(
         capability=Capability.R2V,
         model_id="mcp_magnific:bytedance-seedance-pro-2.5:reference",
