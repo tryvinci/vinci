@@ -2,8 +2,9 @@
 """Refresh ``vinci_mcp/catalogs/<provider>.json``: every Higgsfield and Magnific model, priced.
 
 Free and read-only: it calls each provider's model list and its price preview (Higgsfield
-``get_cost``, Magnific ``simulate_cost``), never a generate tool. The sign-in is a throwaway: the
-token stays in memory and is revoked at the end (COREPRODUC-669).
+``estimate_video_cost`` / ``estimate_image_cost``, Magnific ``simulate_cost``), never a generate
+tool. The sign-in is a throwaway: the token stays in memory and is revoked at the end
+(COREPRODUC-669).
 
 Usage:
     python scripts/refresh_connector_catalogs.py [mcp_higgsfield] [mcp_magnific]
@@ -65,9 +66,9 @@ ALLOWED = {
     "images_models_list",
     "video_models_list",
     "simulate_cost",
-    "generate_image",
-    "generate_video",
-}
+    "estimate_image_cost",
+    "estimate_video_cost",
+}  # previews only: no generate tool, so the refresh never spends
 
 
 def run(provider_id: str, store: Memory) -> dict[str, Any]:
@@ -83,9 +84,6 @@ def run(provider_id: str, store: Memory) -> dict[str, Any]:
     def call(name: str, arguments: dict[str, Any]) -> Any:
         if name not in ALLOWED:
             raise RuntimeError(f"refresh does not call {name}")
-        params = arguments.get("params") if isinstance(arguments.get("params"), dict) else None
-        if name.startswith("generate_") and not (params and params.get("get_cost") is True):
-            raise RuntimeError("a generate call without get_cost would spend")  # previews only
         return transport.call("tools/call", {"name": name, "arguments": arguments})
 
     return refresh(connector, call)

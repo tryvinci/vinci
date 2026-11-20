@@ -277,7 +277,7 @@ def test_connector_submit_via_provider(tmp_path: Path) -> None:
                 return {"tools": [{"name": "generate_image"}, {"name": "generate_video"}, {"name": "job_status"}]}
             name, args = str(params.get("name")), params.get("arguments") or {}
             calls.append((name, args))  # type: ignore[arg-type]
-            if name == "generate_image" and args["params"].get("get_cost"):  # type: ignore[index]
+            if name == "estimate_image_cost":
                 return {"structuredContent": {"cost": {"credits": 1, "credits_exact": 1}}}
             if name == "generate_image":
                 return {"structuredContent": {"results": [{"id": "h1", "status": "queued"}]}}
@@ -296,7 +296,8 @@ def test_connector_submit_via_provider(tmp_path: Path) -> None:
     assert status.state.value == "completed"
     assert status.outputs == ["https://cdn.example/h1.png"]
     preview, generate, poll = calls
-    assert preview[1]["params"]["get_cost"] is True  # type: ignore[index]
+    # The free estimate tool with the same params, never generate_image (COREPRODUC-736).
+    assert preview == ("estimate_image_cost", generate[1])
     assert generate[1] == {"params": {"model": "seedream_v4_5", "prompt": "cube", "count": 1, "use_unlim": False, "aspect_ratio": "16:9"}}
     assert poll == ("job_status", {"jobId": "h1"})
 
@@ -321,7 +322,7 @@ def test_connector_uploads_the_start_frame(tmp_path: Path, monkeypatch: pytest.M
                     return {"tools": [{"name": name} for name in answers]}
                 name = str(params.get("name"))
                 args = params.get("arguments") or {}
-                if (args.get("params") or {}).get("get_cost"):  # type: ignore[union-attr]
+                if name.startswith("estimate_"):
                     return {"structuredContent": {"cost": {"credits": 4}}}  # the free preview
                 seen.setdefault(name, []).append(args)  # type: ignore[arg-type]
                 return {"structuredContent": answers[name]}

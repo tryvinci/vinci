@@ -249,7 +249,7 @@ def test_an_image_edit_uploads_its_references_and_checks_the_price_of_its_length
                 return {"tools": [{"name": n} for n in answers]}
             name, args = str(params["name"]), params.get("arguments") or {}
             seen.setdefault(name, []).append(args)
-            if args.get("params", {}).get("get_cost"):
+            if name.startswith("estimate_"):
                 return {
                     "structuredContent": {
                         "cost": {"credits": 80 if args["params"].get("duration") == 10 else 2}
@@ -347,7 +347,7 @@ def test_reference_rows_send_the_pin_video(tmp_path: Path) -> None:
             seen.setdefault(name, []).append(args)
             if name == "media_import_url":
                 return {"structuredContent": {"media_id": f"m-{args['type']}"}}
-            if args.get("params", {}).get("get_cost") or name == "simulate_cost":
+            if name in ("estimate_video_cost", "simulate_cost"):
                 cost = {} if live["credits"] is None else {"cost": {"credits": live["credits"]}}
                 return {"structuredContent": cost}
             if name == "creations_upload_image":
@@ -382,6 +382,8 @@ def test_reference_rows_send_the_pin_video(tmp_path: Path) -> None:
         {"value": "m-video", "role": "video_references"},
     ]
     assert [a["type"] for a in seen["media_import_url"]] == ["video", "image", "image"]
+    # The price check is the free estimate tool with the run's params; generate ran once.
+    assert seen["estimate_video_cost"] == [{"params": params}] and len(seen["generate_video"]) == 1
     live["credits"] = 30  # above the listed 22: nothing runs
     higgsfield.estimate(req)
     with pytest.raises(ValueError, match="costs 30 Higgsfield credits now, not 22"):
