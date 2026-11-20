@@ -1,7 +1,8 @@
 """Tool mappings for the MCP servers that sign in with OAuth: Higgsfield and Magnific.
 
 Each connector lists the models it runs. A row's price is in the provider's own credits, from the
-provider's free price preview (Higgsfield ``get_cost``, Magnific ``simulate_cost``) on 2026-11-12.
+provider's free price preview (Higgsfield ``estimate_*_cost``, before 2026-11-20 ``get_cost``;
+Magnific ``simulate_cost``), first on 2026-11-12.
 The tool names and argument shapes come from a live, signed-in ``tools/list`` on that date
 (COREPRODUC-610 and 614). Before, the Higgsfield names were guesses, both servers got only
 ``prompt`` and ``image_url``, and every row cost "1 credit".
@@ -204,9 +205,15 @@ class Connector:
         return args
 
     def cost_call(self, tool: str, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-        """The provider's free price preview of a generate call: no job, no spend."""
+        """The provider's free price preview of a generate call: no job, no spend.
+
+        Higgsfield prices with ``estimate_video_cost`` / ``estimate_image_cost`` (the same
+        ``params``). Bug (COREPRODUC-736, found 2026-11-20 by a signed-in check, no prod run hit
+        it): Higgsfield dropped ``params.get_cost`` from ``generate_*`` between 2026-11-18 and
+        11-20 ("get_cost is not accepted here"), so the old preview could start a paid job.
+        """
         if self.id == "mcp_higgsfield":
-            return tool, {"params": {**args["params"], "get_cost": True}}
+            return tool.replace("generate_", "estimate_") + "_cost", {"params": args["params"]}
         return "simulate_cost", {"tool": tool, "arguments": args}
 
 
