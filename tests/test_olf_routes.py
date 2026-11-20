@@ -688,6 +688,17 @@ def test_reference_render_routes(client: TestClient, tmp_path: Path) -> None:
     assert "needs a reference video" in plan()["error"]
     used = client.post("/olf/scene/use", json=at | {"n": 1, "frame": frame, "video": clip("testsrc")})
     assert used.status_code == 200 and used.json()["reference_video"].startswith("asset/")
+    # COREPRODUC-742: kf1 was drawn before the layout, so the clip would copy its framing.
+    assert "kf1 was not drawn from this shot's keyframe layout" in " ".join(plan().get("notes", []))
+    # A stated first frame is the look then, not kf1: no note about kf1 (CodeRabbit on #736).
+    scene = Path(path) / "episodes/e02/scenes/s03.yaml"
+    text = scene.read_text()
+    head, shot = text.split("id: e02/s03/sh014", 1)
+    board = re.search(r"storyboard: (asset/[0-9a-f]+)", shot).group(1)
+    stated = shot.replace("first_frame: keyframe", f"first_frame: {board}", 1)
+    scene.write_text(head + "id: e02/s03/sh014" + stated)
+    assert stated != shot and "not drawn from" not in " ".join(plan().get("notes", []))
+    scene.write_text(text)
     detail = client.get("/olf/shot", params=at).json()
     assert [(r["model"], r["capability"]) for r in detail["plans"]["video"]["plan"]] == [
         ("mock:mp4:v1", "r2v")
@@ -731,6 +742,17 @@ def test_reference_render_routes(client: TestClient, tmp_path: Path) -> None:
     for data, warning in ((small, "Mira Sol moves only 0.2 m"), (still, "the shot hardly moves")):
         checked = client.post("/olf/scene/check", json={"path": path, "shot": SHOT, "data": data})
         assert any(warning in i["message"] for i in checked.json()["issues"]), warning
+    # COREPRODUC-742: a keyframe drawn from this pin frame gets no layout note; after a Use with
+    # another pin frame it does, as it was drawn from the old one (CodeRabbit on #736).
+    client.post("/olf/render", json=at | {"kind": "keyframe"})
+    client.patch("/olf/select", json=at | {"choices": {"keyframe": "kf2"}})
+    video = plan()
+    assert "error" not in video and "not drawn from" not in " ".join(video.get("notes", []))
+    buf = io.BytesIO()
+    Image.new("RGB", (64, 36), "white").save(buf, "PNG")
+    other = base64.b64encode(buf.getvalue()).decode()
+    client.post("/olf/scene/use", json=at | {"n": two, "frame": other, "video": clip("testsrc")})
+    assert "kf2 was not drawn from" in " ".join(plan().get("notes", []))
 
 
 def test_camerawork_has_no_still_words() -> None:

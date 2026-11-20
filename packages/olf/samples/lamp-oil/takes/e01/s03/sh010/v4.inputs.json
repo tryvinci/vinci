@@ -17,7 +17,7 @@
       ],
       "id": "cam/two-shot-axis",
       "keyframe": "{a} stands at frame left and {b} at frame right. They face each other.",
-      "prompt": "Static camera. {a} stays at frame left and {b} stays at frame right. They face each other and talk.\n"
+      "prompt": "Static camera. {a} keeps to the left side of the frame and {b} to the right side. They face each other and talk.\n"
     }
   },
   "characters": [
@@ -35,9 +35,9 @@
     }
   ],
   "control": {
-    "first_frame": "asset/f8add670cf914335ce53c9a245eb52c3cdd3a740dfcfaf293535ae80edfe1316",
-    "reference_video": "asset/07e6175645968eba2f7f47a01e2b2b28a119d9db7d30f211ca2b5c4ee45dd90e",
-    "storyboard": "asset/f6a783c8c3bc6f20a3248d52c798fd0b8522805ec9df6308f6da93feb714c540"
+    "first_frame": "asset/bda882c669f7b0da66a02648cdc12f86c4187b1f442e78d7bf272f3df16845d8",
+    "reference_video": "asset/dfd3d394693c23047d0559c5955c40abc96085c5319bea5e3297d9932e5a44dc",
+    "storyboard": "asset/a2af9664a0a4e2ecca4c1897318ff21dd947f56af4a56f2101f14fbbd31c4c3e"
   },
   "defaults": {
     "aspect": "16:9",
