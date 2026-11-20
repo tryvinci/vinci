@@ -627,7 +627,7 @@ def shot(path: str, shot: str, request: Request) -> dict[str, Any]:
             seconds = length if kind == "video" else None
             plans[kind]["choices"] = _choices(eng, plans[kind]["plan"][-1]["capability"], seconds)
         except OlfError as exc:
-            plans[kind] = {"error": str(exc)}
+            plans[kind] = {"error": str(exc)} | ({"notes": list(exc.notes)} if exc.notes else {})
             if kind == "video" and _by_reference(detail):  # the person picks a reference model
                 plans[kind]["choices"] = _choices(eng, "r2v", length)
     return detail | {"plans": plans}

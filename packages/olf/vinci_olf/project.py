@@ -63,6 +63,8 @@ def sheets_of(data: Any) -> list[str]:
 class OlfError(ValueError):
     """A project problem that the user must fix (bad reference, missing file, bad input)."""
 
+    notes: tuple[str, ...] = ()  # what a plan that stopped still says (the shot page shows them)
+
 
 def seconds(value: Any, default: float = 0.0) -> float:
     """Read a duration as seconds: ``4s``, ``2.5``, a number, or seconds+frames (``3+12``).

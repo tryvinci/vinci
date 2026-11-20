@@ -865,10 +865,15 @@ def plan_render(
         )
     except (KeyError, ValueError) as exc:  # the connected providers cannot make a step
         if reference and model is None:  # no routed model takes a reference video (hosted: none)
-            raise OlfError(
+            stop = OlfError(
                 "no routed model renders a reference video: pick one in the video model menu "
                 "(Seedance 2.5 reference)"
-            ) from exc
+            )
+            # Hosted always stops here, so the Video step gets the notes with the error. Bug
+            # (first occurrence 2026-11-20, the #736 production check): the layout note never
+            # showed on app.tryvinci.com.
+            stop.notes = tuple(notes)
+            raise stop from exc
         detail = exc.args[0] if exc.args else exc
         raise OlfError(
             f"no connected model can render this {kind} ({detail}): run `vinci init --demo` or "
