@@ -598,6 +598,13 @@ def test_scene_lab_routes(client: TestClient) -> None:
     assert client.post("/olf/scene/paste", json=one).json() == {"room_try": 1}
     bad = client.post("/olf/scene/paste", json=one | {"text": "{ nope"})
     assert bad.status_code == 400 and "not JSON" in bad.json()["detail"]
+    # COREPRODUC-738: a floor slab under the floor is dropped, a sunk piece stands on the floor.
+    slab = {"name": "floor", "shape": "box", "size": [8, 0.12, 8], "at": [0, -0.12, 0]}
+    sunk = {"name": "lamp", "shape": "cylinder", "size": [1, 1.3, 1], "at": [0, -0.2, -1]}
+    settled = one | {"text": json.dumps({"set": [slab, sunk]})}
+    assert client.post("/olf/scene/paste", json=settled).json() == {"room_try": 2}
+    last = client.get("/olf/scene", params={"path": path, "target": scene}).json()["room_tries"][-1]
+    assert [(piece["name"], piece["at"]) for piece in last["set"]] == [("lamp", [0, 0, -1])]
     kept = client.post("/olf/scene/room", json={"path": path, "scene": scene, "room_try": 1})
     assert kept.json() == {"version": 2}
     later = client.get("/olf/scene", params={"path": path, "target": shot}).json()
@@ -605,7 +612,7 @@ def test_scene_lab_routes(client: TestClient) -> None:
     assert later["rooms"] == {"1": seen["room"]}  # the try still stands in room v1
     # The scene room screen (COREPRODUC-723): all versions, the room tries, each shot's room.
     room = client.get("/olf/scene", params={"path": path, "target": scene}).json()
-    assert list(room["rooms"]) == ["1", "2"] and [t["try"] for t in room["room_tries"]] == [1]
+    assert list(room["rooms"]) == ["1", "2"] and [t["try"] for t in room["room_tries"]] == [1, 2]
     assert room["shots"][shot] == {"tries": 1, "try": 1, "room": 1}
     assert room["shots"]["e02/s03/sh015"] == {"tries": 0, "try": None, "room": None}
     # A try to start from goes in the prompt (the compare screen's "change for a new try").
