@@ -131,7 +131,7 @@ export function SceneLab({
   const [pick, setPick] = useState<number | null>(null);
   const [mode, setMode] = useState<Mode>("lab");
   const [request, setRequest] = useState("");
-  const [models, textModel, setTextModel] = useTextModel();
+  const [models, textModel, setTextModel] = useTextModel("scene");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -205,8 +205,13 @@ export function SceneLab({
       }
       const who = models?.choices.find((row) => row.id === textModel)?.name;
       setBusy(`Building the ${mode === "room" ? "room" : "scene"}${who ? ` with ${who}` : ""}…`);
-      const out = await olf<{ try?: number; room?: number; room_try?: number }>("/scene/build", send("POST", { ...run, yes: true, max_total: confirmed.total || 0 }));
-      console.info("[shows] scene lab try", { target, try: out.try, room: out.room, room_try: out.room_try });
+      const out = await olf<{ try?: number; room?: number; room_try?: number; error?: string; text?: string | null }>("/scene/build", send("POST", { ...run, yes: true, max_total: confirmed.total || 0 }));
+      console.info("[shows] scene lab try", { target, try: out.try, room: out.room, room_try: out.room_try, error: out.error });
+      if (out.error) {
+        // A refused answer is kept: it opens in the paste box to fix and save (COREPRODUC-738).
+        setPaste(out.text || "");
+        return setError(`The answer was not saved: ${out.error}. It is in the box below: fix it, then click Save as a try.`);
+      }
       await saved(out);
     } catch (err) {
       setError(message(err));

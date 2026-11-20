@@ -14,12 +14,14 @@ import json
 import logging
 import math
 import re
+import threading
 from typing import Any
 
 from vinci_olf.layout import COLORS, HEADS, STRIPES, _shot_colors, slot_name, slot_place
 from vinci_olf.project import OlfError, Project
 from vinci_olf.scene import (
     EYE,
+    GAP,
     HEIGHT,
     NEAR,
     SENSOR_MM,
@@ -44,6 +46,9 @@ from vinci_olf.scene import (
 
 log = logging.getLogger(__name__)
 STAGING = ("camera", "cast", "groups", "props")  # what a shot try holds beside its room
+# One save at a time: a refused first try deletes its new room, which another save could have
+# staged a try in (CodeRabbit on #725). Saves take milliseconds; the model call is outside.
+_SAVING = threading.Lock()
 
 PIECE = (
     '{ "name": "desk", "shape": "box|cylinder|cone|sphere|plane|rock", '
@@ -57,7 +62,8 @@ RULES = (
 )
 ROOM_SYSTEM = (
     "You build the 3D set of one scene of an animated show, as a list of set pieces. "
-    f'Answer as {{ "set": [{PIECE}] }}. A wall is a thin box; a floor or ground is a plane. '
+    f'Answer as {{ "set": [{PIECE}] }}. A wall is a thin box. The floor at y = 0 is drawn '
+    "already: add no floor or ground piece. "
     "Keep the set coarse: the walls and ground, and only the pieces the action uses or that "
     "stand in a person's way. No trees, plants, rocks, lamps, benches or decoration nobody uses: "
     "a model copies small shapes it sees (a cone comes back as a cone pine), so the words of "
@@ -133,7 +139,9 @@ def build(
     ``copy``. Demo mode answers with a simple room or staging, so a $0 run takes the same path.
 
     Returns:
-        ``script.ask``'s answer; when a model answered, also what ``save_answer`` saved.
+        ``script.ask``'s answer; when a model answered, also what ``save_answer`` saved, or
+        ``error`` when the answer was refused: the Studio then opens it in the paste box, so the
+        paid answer is not lost (COREPRODUC-738).
     """
     from vinci_olf.script import ask
 
@@ -142,7 +150,16 @@ def build(
     if out.get("text") is None:  # a copied prompt, or a dry run for the price
         return out
     model = str(((out.get("plan") or [{}])[0] or {}).get("model") or "")
-    return out | save_answer(p, target, out["text"], request=request, model=model, room=room)
+    return out | answer_or_error(p, target, out["text"], request=request, model=model, room=room)
+
+
+def answer_or_error(p: Project, target: str, text: str, **saving: Any) -> dict[str, Any]:
+    """``save_answer``, or ``{"error": why}`` when the answer is refused (nothing is saved)."""
+    try:
+        return save_answer(p, target, text, **saving)
+    except OlfError as exc:
+        log.warning("scene lab answer refused %s: %s", target, exc)
+        return {"error": str(exc)}
 
 
 def save_answer(
@@ -157,22 +174,73 @@ def save_answer(
     """Read a model's or a pasted answer and save it: a room try for a scene; a shot try for a
     shot (and the scene's first room version, when the scene had none).
 
+    Before the check, ``settle`` fixes the floor mistakes of a model (COREPRODUC-738).
+
     Raises:
         OlfError: The answer is not JSON, or what it describes has errors.
     """
     data = parse(text)
+    for key in ("set", "props"):
+        if key in data:
+            data[key] = settle(data[key], target)
     words = {k: v for k, v in (("request", request), ("model", model)) if v}
     if p.kind(target) == "scene":
         n = save_room_try(p, target, {"set": data.get("set")} | words)
         return {"room_try": n}
     scene, name = target.rsplit("/", 1)
     out: dict[str, Any] = {}
-    if not room_versions(p, scene):  # the first shot of a scene builds its room too
-        room = out["room"] = save_room(p, scene, {"set": data.get("set")} | words, source=name)
-    staged: dict[str, Any] = {k: data[k] for k in STAGING if k in data}
-    staged["room"] = room or room_versions(p, scene)[-1]
-    out["try"] = save_try(p, target, staged | words)
+    with _SAVING:
+        if not room_versions(p, scene):  # the first shot of a scene builds its room too
+            room = out["room"] = save_room(p, scene, {"set": data.get("set")} | words, source=name)
+        staged: dict[str, Any] = {k: data[k] for k in STAGING if k in data}
+        staged["room"] = room or room_versions(p, scene)[-1]
+        try:
+            out["try"] = save_try(p, target, staged | words)
+        except OlfError:
+            # A refused try takes its new room with it, so the fixed answer builds the room again.
+            # Bug (CodeRabbit on #725): room v1 stayed, and the fixed answer's set was ignored.
+            if "room" in out:
+                (_scene_dir(p, scene) / "room" / f"v{out['room']}.json").unlink(missing_ok=True)
+            raise
     return out
+
+
+def settle(pieces: Any, where: str = "") -> Any:
+    """Fix the floor mistakes of a model's pieces: the floor at y = 0 is drawn already.
+
+    A piece under the floor (its top at y <= GAP, for example a floor slab at y -0.12) is
+    dropped; a piece that sinks below the floor is lifted to stand on it. Bug (COREPRODUC-738,
+    first occurrence 2026-11-19, the hosted DeepSeek room build): a floor box at y -0.12 refused
+    the whole answer.
+
+    Args:
+        pieces: The ``set`` or ``props`` of an answer; anything else is returned as it is.
+        where: The scene or shot, for the log.
+
+    Returns:
+        The pieces, settled. Pieces the schema check refuses are kept for it.
+    """
+    if not isinstance(pieces, list):
+        return pieces
+    out = []
+    for piece in pieces:
+        at, size = (piece.get("at"), piece.get("size")) if isinstance(piece, dict) else (None, None)
+        if not (isinstance(at, list) and isinstance(size, list) and len(at) == len(size) == 3):
+            out.append(piece)  # the schema check refuses it
+            continue
+        if not (_number(at[1]) and _number(size[1]) and at[1] < -GAP):
+            out.append(piece)
+            continue
+        if at[1] + max(size[1], 0) <= GAP:  # all of it under the floor: the floor is drawn already
+            log.info("scene lab settle %s: dropped %s (y %g)", where, piece.get("name"), at[1])
+            continue
+        log.info("scene lab settle %s: lifted %s (y %g)", where, piece.get("name"), at[1])
+        out.append({**piece, "at": [at[0], 0, at[2]]})
+    return out
+
+
+def _number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def keep_room(

@@ -226,13 +226,15 @@ export function Pick({
  * visit and shared by the script panel and the scene lab: "" is Auto (routing), `COPY_PROMPT`
  * copies the prompt for their own agent. An agent CLI is only ever a person's pick.
  *
+ * @param step "scene" asks for the scene lab's prices: the hosted scene build is free, so Vinci's
+ *   row there says 0 credits, not the 1 credit of a script step (COREPRODUC-738).
  * @returns The menu (null until it loads), the pick, and a setter that keeps it.
  */
-export function useTextModel(): [OlfModels | null, string, (id: string) => void] {
+export function useTextModel(step?: "scene"): [OlfModels | null, string, (id: string) => void] {
   const [models, setModels] = useState<OlfModels | null>(null);
   const [pick, setPick] = useState("");
   useEffect(() => {
-    olf<OlfModels>("/models?capability=t2t")
+    olf<OlfModels>(`/models?capability=t2t${step ? `&step=${step}` : ""}`)
       .then((body) => {
         setModels(body);
         const saved = window.localStorage.getItem(TEXT_MODEL_KEY) || "";
