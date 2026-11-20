@@ -629,10 +629,22 @@ def test_scene_lab_routes(client: TestClient) -> None:
     buf = io.BytesIO()
     Image.new("RGB", (32, 18), "grey").save(buf, "PNG")
     frame = base64.b64encode(buf.getvalue()).decode()
+    # A dutch angle from the shot's template is a choice the 3D camera cannot measure: it stays.
+    body = {"path": path, "shot": shot, "template": "anime/tu-slow"}
+    assert client.post("/olf/camerawork", json=body).status_code == 200
+    template = Path(path) / "bible/camerawork/tu-slow/tu-slow.yaml"
+    template.write_text(template.read_text().replace("camera: {", "camera: { angle: dutch,", 1))
+    unset = {"path": path, "shot": shot, "fields": {"angle": None}}  # the shot's own angle wins
+    assert client.patch("/olf/shot", json=unset).status_code == 200
     used = client.post(
         "/olf/scene/use", json={"path": path, "shot": shot, "n": 1, "frame": frame}
     ).json()
     assert used["room"] == 1 and used["layout"]["start"][0]["slot"] == "a"
+    # COREPRODUC-739: the shot takes the framing the try's camera shows; the dutch angle stays.
+    lab = client.get("/olf/scene", params={"path": path, "target": shot}).json()
+    assert lab["used"]["try"] == 1 and set(lab["used"]) == {"try", "framing"}
+    camera = client.get("/olf/shot", params={"path": path, "shot": shot}).json()["resolved"]["camera"]
+    assert (camera["framing"], camera["angle"]) == (lab["used"]["framing"], "dutch")
     assert client.get("/olf/project", params={"path": path}).json()["issues"] == []
 
 

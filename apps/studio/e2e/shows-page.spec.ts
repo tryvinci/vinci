@@ -71,8 +71,13 @@ test.describe("Shows (OLF movie engine)", () => {
     await card.click();
     const shot = page.getByTestId("shot-page");
     await expect(page.getByTestId("shows-nav")).toHaveCount(0);
+    // Steps (COREPRODUC-739): a shot with no chosen keyframe opens on Keyframe; Video waits for one.
+    await expect(shot.getByTestId("shot-step-keyframe")).toHaveAttribute("aria-current", "step");
+    await expect(shot.getByTestId("shot-step-stage")).toContainText("optional");
+    await shot.getByTestId("shot-step-video").click();
     await expect(shot.getByTestId("render-hint")).toHaveText("Approve a keyframe first: video renders from the chosen keyframe.");
     await expect(shot.getByTestId("render-video")).toBeDisabled();
+    await shot.getByTestId("shot-step-keyframe").click();
     await expect(shot.getByTestId("shot-cast")).toContainText("form: winter · from episode");
     await expect(shot.getByTestId("shot-cast")).toContainText("outfit: night · from scene");
     await page.screenshot({ path: path.join(shots, "shows_shot_empty.png") });
@@ -85,15 +90,16 @@ test.describe("Shows (OLF movie engine)", () => {
     await expect(details).toContainText("QA palette"); // does the render keep the forms' colors?
     await details.getByRole("button", { name: "Approve" }).click(); // approving also chooses it
     await expect(shot.locator('[data-take="e02/s03/sh014/kf1"]')).toHaveClass(/chosen/);
+    await expect(shot.getByTestId("shot-step-keyframe")).toContainText("kf1 chosen");
+    await page.screenshot({ path: path.join(shots, "shows_shot_keyframe.png") });
+    await shot.getByTestId("shot-step-video").click();
     await expect(shot.getByTestId("render-hint")).toHaveText("Video animates from the chosen keyframe kf1.");
     await expect(shot.getByTestId("render-video")).toHaveText("Render video");
     await expect(shot.getByTestId("video-model")).toContainText("Mock MP4 · $0"); // design: the model menu
-    await page.screenshot({ path: path.join(shots, "shows_shot_keyframe.png") });
 
-    // A take picked in the strip gives way to the render's new take (live test, COREPRODUC-558).
-    await shot.locator('[data-take="e02/s03/sh014/kf1"]').click();
+    // The render's new take shows (live test, COREPRODUC-558): the Video step's strip has it.
     await shot.getByTestId("render-video").click();
-    await expect(shot.getByTestId("strip-take")).toHaveCount(2, { timeout: 60_000 });
+    await expect(shot.getByTestId("strip-take")).toHaveCount(1, { timeout: 60_000 });
     await expect(page.getByTestId("shows-notice")).toContainText("Rendered v1 for e02/s03/sh014");
     await expect(details).toContainText("Provenance · v1");
     await expect(details).toContainText("From keyframe");
@@ -268,10 +274,11 @@ test.describe("Shows (OLF movie engine)", () => {
     await details.getByRole("button", { name: "Approve" }).click();
     await expect(shot.locator('[data-take="e02/s03/sh014/kf1"]')).toHaveClass(/chosen/);
 
-    // Dialogue: each line in its speaker's voice, as one audio take that plays over the picture.
+    // Dialogue (the Video step): each line in its speaker's voice, as one audio take over the picture.
+    await shot.getByTestId("shot-step-video").click();
     await expect(shot.getByTestId("dialogue-plan")).toContainText("mock:wav:v1 · $0");
     await shot.getByTestId("render-audio").click();
-    await expect(shot.getByTestId("strip-take")).toHaveCount(3, { timeout: 60_000 });
+    await expect(shot.getByTestId("strip-take")).toHaveCount(1, { timeout: 60_000 });
     await expect(page.getByTestId("shows-notice")).toContainText("Rendered a1 for e02/s03/sh014");
     await shot.locator('[data-take="e02/s03/sh014/a1"]').click();
     await expect(details).toContainText("Provenance · a1");
@@ -729,9 +736,11 @@ test.describe("Shows (OLF movie engine)", () => {
     await expect(shot.getByTestId("strip-take")).toHaveCount(1, { timeout: 60_000 });
     await shot.getByTestId("take-details").getByRole("button", { name: "Approve" }).click();
     await expect(shot.locator('[data-take="e02/s03/sh014/kf1"]')).toHaveClass(/chosen/); // approving also chooses it
+    await shot.getByTestId("shot-step-video").click();
     await expect(shot.getByTestId("video-model")).toContainText("Mock MP4 · $0"); // a model shot so far
 
-    // The Camerawork menu: the show's own templates, then the library by family.
+    // The move presets (Camerawork, in the Stage step's camera): the show's own, then the library.
+    await shot.getByTestId("shot-step-stage").click();
     const menu = shot.getByTestId("shot-camerawork");
     await expect(menu.locator('optgroup[label="In this show"] option')).toHaveText(["Slow push on an object · T.U. (jiwa) · Model · 2+00"]);
     await expect(menu.locator('optgroup[label="Library · Push"] option')).toHaveCount(5);
@@ -742,11 +751,12 @@ test.describe("Shows (OLF movie engine)", () => {
     await menu.selectOption("anime/tu-to-eyes");
     await expect(menu).toHaveValue("cam/tu-to-eyes");
     await expect(shot.getByTestId("camerawork-intent")).toContainText("Push from a close-up to the eyes for a realization or a decision.");
-    await expect(shot.getByTestId("shot-length")).toHaveValue("3+00");
     await expect(shot.getByTestId("shot-move")).toHaveValue("push_in");
-    await expect(shot.getByTestId("shot-render")).toHaveValue("engine");
     await expect(shot.getByTestId("shot-amount")).toHaveValue("0.35");
     await expect(shot.locator(".olf-field", { hasText: "Amount · template" })).toHaveCount(1); // the template fills it
+    await shot.getByTestId("shot-step-video").click();
+    await expect(shot.getByTestId("shot-length")).toHaveValue("3+00");
+    await expect(shot.getByTestId("shot-render")).toHaveValue("engine");
     await expect(shot.getByTestId("engine-move")).toContainText("Engine move · $0. The frame moves over the chosen keyframe. No video model runs.");
     await expect(shot.getByTestId("video-model")).toHaveCount(0);
     await expect(shot.getByTestId("render-hint")).toHaveText("The engine moves the chosen keyframe kf1.");
@@ -755,7 +765,7 @@ test.describe("Shows (OLF movie engine)", () => {
 
     // Render video: no confirm, no model, $0. The take is a normal video take.
     await shot.getByTestId("render-video").click();
-    await expect(shot.getByTestId("strip-take")).toHaveCount(2, { timeout: 60_000 });
+    await expect(shot.getByTestId("strip-take")).toHaveCount(1, { timeout: 60_000 });
     const details = shot.getByTestId("take-details");
     await expect(details).toContainText("Provenance · v1");
     await expect(details).toContainText("local:ffmpeg:v1");
@@ -764,6 +774,7 @@ test.describe("Shows (OLF movie engine)", () => {
     await page.screenshot({ path: path.join(shots, "shows_camerawork_take.png") });
 
     // The bible page of the template: what the camera does, what it suits, and who uses it.
+    await shot.getByTestId("shot-step-stage").click();
     await shot.getByTestId("camerawork-intent").getByRole("button", { name: "cam/tu-to-eyes" }).click();
     const entry = page.getByTestId("shows-entry");
     await expect(entry).toHaveAttribute("data-entry", "cam/tu-to-eyes");
@@ -785,10 +796,12 @@ test.describe("Shows (OLF movie engine)", () => {
     await page.getByTestId("shows-section-storyboard").click();
     await card.click();
     await expect(shot.getByTestId("stale-banner")).toContainText("Stale: cam/tu-to-eyes (camera.ease) changed after v1 was rendered.");
+    await shot.getByTestId("shot-step-keyframe").click();
     await expect(shot.locator('[data-take="e02/s03/sh014/kf1"]')).not.toHaveClass(/is-stale/); // the keyframe stays fresh
     await page.screenshot({ path: path.join(shots, "shows_camerawork_stale.png") });
 
     // A value typed on the shot wins over the template, and it goes in the shot's own line.
+    await shot.getByTestId("shot-step-stage").click();
     await shot.getByTestId("shot-amount").fill("0.5");
     await shot.getByTestId("shot-amount").blur();
     await expect(shot.locator(".olf-field", { hasText: "Amount · template" })).toHaveCount(0);
@@ -798,13 +811,16 @@ test.describe("Shows (OLF movie engine)", () => {
     // A model template on another shot keeps the model menu; its words go to the model.
     await page.locator(".top-shows").getByRole("button", { name: "Next shot" }).click();
     await expect(shot).toHaveAttribute("data-shot", "e02/s03/sh015");
+    await shot.getByTestId("shot-step-stage").click();
     await shot.getByTestId("shot-camerawork").selectOption("anime/reaction-cu");
     await expect(shot.getByTestId("shot-camerawork")).toHaveValue("cam/reaction-cu");
+    await shot.getByTestId("shot-step-video").click();
     await expect(shot.getByTestId("shot-length")).toHaveValue("1+12");
     await expect(shot.getByTestId("video-model")).toContainText("Mock MP4 · $0");
     await page.screenshot({ path: path.join(shots, "shows_camerawork_model.png") });
 
     // Off again: the menu is blank, and the template's line is gone.
+    await shot.getByTestId("shot-step-stage").click();
     await shot.getByTestId("shot-camerawork").selectOption("");
     await expect(shot.getByTestId("shot-camerawork")).toHaveValue("");
     await expect(shot.getByTestId("camerawork-intent")).toHaveCount(0);
@@ -1065,8 +1081,10 @@ with zipfile.ZipFile(${JSON.stringify(file)}, "w", zipfile.ZIP_STORED) as z:
     // A two-shot sets the 180° line: the layout of sh015 crosses it, and its shot page says so.
     await page.locator('[data-testid="shot-card"][data-shot="e02/s03/sh014"]').click();
     const shot = page.getByTestId("shot-page");
+    await shot.getByTestId("shot-step-stage").click();
     await shot.getByTestId("shot-camerawork").selectOption("anime/two-shot-axis");
     await expect(shot.getByTestId("shot-camerawork")).toHaveValue("cam/two-shot-axis");
+    await shot.getByTestId("shot-step-keyframe").click();
     await expect(shot.getByTestId("pill")).toHaveCount(2); // the template's pills: Mira left, Tomas right
     await page.locator(".top-shows").getByRole("button", { name: "Next shot" }).click();
     await expect(shot).toHaveAttribute("data-shot", "e02/s03/sh015");
