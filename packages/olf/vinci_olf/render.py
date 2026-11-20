@@ -277,8 +277,8 @@ BLOCKOUT = (
     "@Video1 is a coarse 3D blockout of this exact shot, a rough previs: a plain grey clay set "
     "in which each person is a striped pin. Follow its motion exactly, second by second: the "
     "same camera path, speed, height, angles, turns, lens and timing, and every person in the "
-    "same place, size and facing at the same moment. The pictures only show what things look "
-    "like, never the camera, the framing or the timing"
+    "same place, size and facing at the same moment, moving when their pin moves. The pictures "
+    "only show what things look like, never the camera, the framing or the timing"
 )
 REFERENCE_KEYS = ("reference_videos", "reference_images")  # the inputs of a reference render
 REFERENCE_IMAGES = 9  # pictures a Seedance reference render takes
@@ -291,7 +291,10 @@ def _reference_words(
     in the blocks of the blockout editor's camera skill (skills/camera-control/references/
     prompt-blocks.md): Goal, References, People and place, Camera, Look, Keep. Its three
     realism lines are in: each grey shape becomes its real object, the stripes only label
-    people, and the look is the show's, never grey clay.
+    people, and the look is the show's, never grey clay. From a scene lab try, the Camera block
+    gets each person's measured size and place, and the Action block names each move
+    (``scene_lab.layout_words``, COREPRODUC-741: the pin carries no body, so a move the words do
+    not name does not happen).
     """
     from vinci_olf.layout import STRIPES
 
@@ -339,7 +342,11 @@ def _reference_words(
             ],
         ),
         ("People and place", people),
-        ("Camera", [_shot_words(cam, "video"), _template_words(view, "prompt")]),
+        (
+            "Camera",
+            [_shot_words(cam, "video"), _template_words(view, "prompt"), staging.get("framing")],
+        ),
+        ("Action", [staging.get("moves")]),
         (
             "Look",
             [

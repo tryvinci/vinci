@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from pathlib import Path
 from types import SimpleNamespace
@@ -711,6 +712,40 @@ def test_reference_render_routes(client: TestClient, tmp_path: Path) -> None:
     assert takes[f"{SHOT}/kf1"]["stale"] == before[f"{SHOT}/kf1"]["stale"]
     short = client.post("/olf/scene/use", json=at | {"n": 1, "frame": frame, "video": "AAAA"})
     assert short.status_code == 400 and "does not play" in short.json()["detail"]
+    # COREPRODUC-741: the prompt names each move and the first frame's sizes and places, as
+    # the pin carries no body; a move under 0.4 m and a still reference shot get warnings.
+    first = client.get("/olf/scene", params={"path": path, "target": SHOT}).json()["tries"][0]
+    staged = {k: v for k, v in first.items() if k in ("room", "camera", "cast", "groups", "props")}
+    mira = staged["cast"][0]
+    step = staged | {"cast": [mira | {"end": {"at": [mira["at"][0], 0, mira["at"][2] - 0.7]}}]}
+    pasted = client.post("/olf/scene/paste", json=at | {"target": SHOT, "text": json.dumps(step)})
+    two = pasted.json()["try"]
+    client.post("/olf/scene/use", json=at | {"n": two, "frame": frame, "video": clip("testsrc")})
+    words = client.get("/olf/shot", params=at).json()["prompts"]["video"]
+    assert "Mira Sol takes one step (0.7 m) away from the camera toward the table, then stops" in words
+    assert "In the first frame, as in @Video1: Mira Sol is about" in words
+    assert "moving when their pin moves" in words
+    small = staged | {"cast": [mira | {"end": {"at": [mira["at"][0] + 0.2, 0, mira["at"][2]]}}]}
+    still = staged | {"cast": [mira | {"end": {"at": [mira["at"][0] + 0.5, 0, mira["at"][2]]}}]}
+    client.patch("/olf/shot", json=at | {"fields": {"move": "static"}})
+    for data, warning in ((small, "Mira Sol moves only 0.2 m"), (still, "the shot hardly moves")):
+        checked = client.post("/olf/scene/check", json={"path": path, "shot": SHOT, "data": data})
+        assert any(warning in i["message"] for i in checked.json()["issues"]), warning
+
+
+def test_camerawork_has_no_still_words() -> None:
+    """COREPRODUC-741: no library template tells a person to stand still. The banned words of
+    github.com/sirioberati/ai-filmmaking-camera-control-seedance-2-5 (MIT; qa4.py rule Q4) turn
+    the person into a statue."""
+    from vinci_olf.project import LIBRARY
+
+    still = re.compile(
+        r"\b(very still|motionless|does not move|stands still|completely still|frozen|"
+        r"without moving|stays (at|in|still))\b",
+        re.I,
+    )
+    found = [f.name for f in LIBRARY.rglob("*.yaml") if still.search(f.read_text())]
+    assert found == []
 
 
 def test_engine_move_routes(client: TestClient) -> None:
@@ -755,7 +790,7 @@ def test_camerawork_routes(client: TestClient) -> None:
     shutil.rmtree(path)
     shutil.copytree(SAMPLE, path)  # a fresh copy: other tests edit the same sample folder
     rows = client.get("/olf/camerawork").json()["library"]
-    assert len(rows) == 32 and rows[0]["id"] == "anime/ambient-hold" and rows[0]["version"] == 1
+    assert len(rows) == 32 and rows[0]["id"] == "anime/ambient-hold" and rows[0]["version"] == 2
     body = {"path": path, "shot": SHOT, "template": "anime/tu-slow"}
     done = client.post("/olf/camerawork", json=body)
     assert done.status_code == 200 and (done.json()["template"], done.json()["duration"]) == (
