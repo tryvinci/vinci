@@ -347,25 +347,30 @@ LENGTHS = tuple(range(4, 16))  # Seedance 2.5 makes 4 to 30 s; a shot stays unde
 # Magnific 200 (its Seedance 2.5 page: 200/s Draft 480p, 440/s 720p, 1,100/s 1080p) and
 # Higgsfield 3 (15 credits for 5 s at 480p, a public quote of Higgsfield's price).
 DRAFT = {"mcp_higgsfield": 3.0, "mcp_magnific": 200.0}
-# Both providers bill the output seconds plus the reference video's seconds, at a lower rate
-# (Magnific's API docs). ByteDance's own meter puts that rate at 0.6 of the plain one (Volcano
-# Engine ¥42 vs ¥70 per million tokens; Tein lists $0.1323 vs $0.2205 per second).
-REFERENCE_RATE = 0.6
+# What each provider bills for the pin video's seconds, as a part of its plain 480p rate. Measured
+# with the free price tools on 2026-11-20 (COREPRODUC-736), 4 to 15 s with and without a pin video:
+# Higgsfield bills only the output (3 credits/s; 6 s is 18 with or without it), Magnific adds
+# 40 credits/s for the video (6 s: 1,200 without it, 1,440 with it). Pictures add nothing on
+# either. Before, one rule (the video at 0.6 of the rate, ByteDance's meter) put Higgsfield's 6 s
+# at 22 credits, 22% above its real 18; it matched Magnific by chance.
+PIN_RATE = {"mcp_higgsfield": 0.0, "mcp_magnific": 0.2}
 
 
-def reference_row(row: Row, per_second: float) -> Row:
+def reference_row(row: Row, per_second: float, pin_rate: float) -> Row:
     """A model's reference row: ``r2v`` at 480p with no start frame, priced for the pin video too.
 
-    The pin video is as long as the shot, so a length ``n`` bills ``2n`` seconds at the
-    reference rate. Before, each length cost twice the row's own clip price (at its 720p
-    setting): Magnific 5,280 credits for 6 s, where the rule above gives 1,440. The provider's
-    free preview still runs before each job, and a job that costs more than this does not run.
+    The pin video is as long as the shot, so a length ``n`` bills ``n`` seconds of output and
+    ``n`` seconds of pin video at ``pin_rate`` (``PIN_RATE``, measured). Before, each length cost
+    twice the row's own clip price (at its 720p setting): Magnific 5,280 credits for 6 s, where
+    the measured price is 1,440. The provider's free preview still runs before each job, and a
+    job that costs more than this does not run.
 
     Args:
         row: The model's own row (``REFERENCE``).
         per_second: The provider's plain 480p price per second (``DRAFT``).
+        pin_rate: What a second of the pin video costs, as a part of ``per_second``.
     """
-    clips = tuple((n, float(math.ceil(2 * n * per_second * REFERENCE_RATE))) for n in LENGTHS)
+    clips = tuple((n, float(math.ceil(n * per_second * (1 + pin_rate)))) for n in LENGTHS)
     return replace(
         row,
         label=f"{row.label} reference",
@@ -385,7 +390,9 @@ def reference_row(row: Row, per_second: float) -> Row:
 # The 3 hand-tuned rows of each provider stay first; its snapshot adds every other model.
 for _id, _connector in list(CONNECTORS.items()):
     _rows = _connector.rows + snapshot_rows(_id, {r.model for r in _connector.rows})
-    _rows += tuple(reference_row(r, DRAFT[_id]) for r in _rows if r.model == REFERENCE.get(_id))
+    _rows += tuple(
+        reference_row(r, DRAFT[_id], PIN_RATE[_id]) for r in _rows if r.model == REFERENCE.get(_id)
+    )
     CONNECTORS[_id] = replace(_connector, rows=_rows)
 
 
