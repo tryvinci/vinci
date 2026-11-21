@@ -746,7 +746,10 @@ def test_reference_render_routes(client: TestClient, tmp_path: Path) -> None:
     client.post("/olf/scene/use", json=at | {"n": two, "frame": frame, "video": clip("testsrc")})
     words = client.get("/olf/shot", params=at).json()["prompts"]["video"]
     assert "Mira Sol takes one step (0.7 m) away from the camera toward the table, then stops" in words
-    assert "In the first frame, as in @Video1: Mira Sol is about" in words
+    assert "In the first frame, as in @Video1: Mira Sol is " in words
+    # COREPRODUC-742: a mover's measured end size and place too, and "match" in place of "keep".
+    assert "At the end, as in @Video1: Mira Sol is " in words
+    assert "Match these sizes and places at those moments" in words
     assert "moving when their pin moves" in words
     small = staged | {"cast": [mira | {"end": {"at": [mira["at"][0] + 0.2, 0, mira["at"][2]]}}]}
     still = staged | {"cast": [mira | {"end": {"at": [mira["at"][0] + 0.5, 0, mira["at"][2]]}}]}
@@ -765,6 +768,31 @@ def test_reference_render_routes(client: TestClient, tmp_path: Path) -> None:
     other = base64.b64encode(buf.getvalue()).decode()
     client.post("/olf/scene/use", json=at | {"n": two, "frame": other, "video": clip("testsrc")})
     assert "kf2 was not drawn from" in " ".join(plan().get("notes", []))
+
+
+def test_a_walk_into_the_frame_gets_its_end_numbers() -> None:
+    """CodeRabbit on #740: a person who starts outside the frame still gets the end framing."""
+    from vinci_olf.scene import Frame
+    from vinci_olf.scene_lab import _motion_words
+
+    lens = Frame([0, 1.5, 5], [0, 0, -1], [1, 0, 0], [0, 1, 0], 0.5, 0.28)
+    staged = {"cast": [{"slot": "a", "at": [-9, 0, 0], "end": {"at": [0, 0, 0]}}]}
+    framing = _motion_words(staged, ["Mira"], [], lens, lens)["framing"]
+    assert framing.startswith("At the end, as in @Video1: Mira is about")
+    assert "In the first frame" not in framing and "Match these sizes" in framing
+    # One who walks out of the frame has no end numbers, and still "match", never "keep".
+    staged = {"cast": [{"slot": "a", "at": [0, 0, 0], "end": {"at": [-9, 0, 0]}}]}
+    framing = _motion_words(staged, ["Mira"], [], lens, lens)["framing"]
+    assert "At the end" not in framing and "Match these sizes" in framing
+    # The end frame is where a push or a pull ends, as the lab's cameraAt moves it (same numbers
+    # as tests/test_scenelab.py): the end numbers match the pin video (CodeRabbit on #740).
+    from vinci_olf.scene_lab import _pushed
+
+    shot = {"camera": {"at": [0, 1.5, 10], "looks_at": [0, 1.5, 0]}, "cast": []}
+    assert _pushed(shot, {"move": "push_in", "amount": 0.35})["camera"]["at"][2] == pytest.approx(6.5)
+    assert _pushed(shot, {"move": "pull_out", "amount": 0.5})["camera"]["at"][2] == pytest.approx(20)
+    assert _pushed(shot, {"move": "push_in"})["camera"]["at"][2] == pytest.approx(7.5)
+    assert _pushed(shot, {"move": "pan"}) is shot
 
 
 def test_camerawork_has_no_still_words() -> None:

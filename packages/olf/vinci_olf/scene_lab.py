@@ -22,10 +22,10 @@ from vinci_olf.project import OlfError, Project
 from vinci_olf.scene import (
     EYE,
     GAP,
+    HALF_STEP,
     HEIGHT,
     NEAR,
     SENSOR_MM,
-    SMALL_MOVE,
     STEP,
     Frame,
     _aspect,
@@ -34,6 +34,7 @@ from vinci_olf.scene import (
     _lens,
     _scene_dir,
     _unit,
+    aim,
     check_try,
     frame_of,
     measured,
@@ -496,8 +497,23 @@ def layout_words(p: Project, shot: str) -> dict[str, str]:
     out["camera"] = ", ".join(words)
     names = [str(c.get("name") or c.get("id")) for c in cast]
     pieces = room["set"] + (staged.get("props") or [])
-    out |= _motion_words(staged, names, pieces, frame, frame_of(staged, "end", lens, aspect))
+    end = frame_of(_pushed(staged, camera), "end", lens, aspect)
+    out |= _motion_words(staged, names, pieces, frame, end)
     return out
+
+
+def _pushed(staged: dict[str, Any], camera: dict[str, Any]) -> dict[str, Any]:
+    """The try with its camera where a push or a pull ends, as the pin video moves it (the lab's
+    ``cameraAt`` at t = 1: ``amount`` of the way to what it looks at, 0.25 with none, at most
+    0.9). Other moves stay put in the lab. CodeRabbit on #740: the end numbers kept the start."""
+    move, amount = camera.get("move"), camera.get("amount")
+    if move not in ("push_in", "pull_out"):
+        return staged
+    amount = min(max(0.25 if amount is None else float(amount), 0.0), 0.9)
+    k = amount if move == "push_in" else 1 - 1 / (1 - amount)
+    at, to = staged["camera"]["at"], aim(staged, "end")
+    moved_at = [a + (b - a) * k for a, b in zip(at, to, strict=True)]
+    return staged | {"camera": staged["camera"] | {"at": moved_at}}
 
 
 def _motion_words(
@@ -509,42 +525,40 @@ def _motion_words(
 ) -> dict[str, str]:
     """A reference render's words for the try's people (COREPRODUC-741): ``moves``, each move as
     start, direction and arrival, and ``framing``, each person's size and place in the first
-    frame, measured as the pin video shows them.
+    frame, and a mover's at the end, measured as the pin video shows them.
 
     After github.com/sirioberati/ai-filmmaking-camera-control-seedance-2-5 (MIT;
     docs/prompt-anatomy.md, docs/why/why-words-beat-a-specific-video.md): the pin carries no body,
     so a walk that the words do not name does not happen, words that say a person stays still
     make a statue, and measured framing numbers keep the model from re-centring the person or
     pulling the shot wider. Bug: Lamp Oil sh010 v3 (2026-11-20) kept Mira in place while her pin
-    stepped toward the lamp.
+    stepped toward the lamp. The end numbers (COREPRODUC-742): with the first frame's alone, "keep
+    these sizes and places" held a mover in place; Sirio measures the pin at every second.
     """
-    moves, framing = [], []
+    moves, framing, ends, walks = [], [], [], False
     for person in staged["cast"]:
         k = slot_place(person["slot"])
         if k >= len(names):
             continue
         name, height = names[k], float(person.get("height") or HEIGHT)
-        x, low, depth = start.screen(person["at"])
-        top = start.screen([person["at"][0], person["at"][1] + height, person["at"][2]])[1]
-        if depth > 0 and abs(x) <= 1:
-            tall = (top - low) / 2
-            size = f"{tall:.2f} of the frame height" if tall <= 1 else "taller than the frame"
-            framing.append(f"{name} is about {size}, {(x + 1) / 2:.2f} of the way from the left")
+        framing += _place(start, person["at"], height, name)
         far = moved(person)
         if far < 0.05:
             moves.append(f"{name} keeps their place, breathing and shifting their weight naturally")
             continue
         a, b = person["at"], person["end"]["at"]
+        ends += _place(end, b, height, name)
+        walks = True  # "match", even when they end off screen (CodeRabbit on #740)
         step = (
             "a small half step"
-            if far < SMALL_MOVE
+            if far < HALF_STEP
             else "one step"
             if far < 0.9
             else f"about {max(2, round(far / STEP))} steps"
         )
         dx = end.screen(b)[0] - start.screen(a)[0]
         side = " to the right" if dx > 0.05 else " to the left" if dx < -0.05 else ""
-        nearer = math.dist(start.at, a) - math.dist(end.at, b)  # metres toward the lens
+        nearer = math.dist(start.at, a) - math.dist(start.at, b)  # their walk, not a push
         way = " toward the camera" if nearer > 0.25 else ""
         way = way or (" away from the camera" if nearer < -0.25 else "")
         side = " and".join(x for x in (side, way) if x)
@@ -556,13 +570,26 @@ def _motion_words(
             + "; ".join(moves)
             + ". Every step is a natural, planted walking step, never in slow motion"
         )
-    if framing:
+    if framing or ends:  # someone who walks into the frame has only an end (CodeRabbit on #740)
+        verb, when = ("Match", " at those moments") if walks else ("Keep", "")
+        moments = [f"In the first frame, as in @Video1: {'; '.join(framing)}"] if framing else []
+        moments += [f"At the end, as in @Video1: {'; '.join(ends)}"] if ends else []
         out["framing"] = (
-            "In the first frame, as in @Video1: "
-            + "; ".join(framing)
-            + ". Keep these sizes and places: do not re-centre anyone or pull the shot wider"
+            ". ".join(moments)
+            + f". {verb} these sizes and places{when}: "
+            + "do not re-centre anyone or pull the shot wider"
         )
     return out
+
+
+def _place(frame: Frame, at: list[float], height: float, name: str) -> list[str]:
+    """A person's measured size and place in ``frame``, as a framing phrase; none off screen."""
+    x, low, depth = frame.screen(at)
+    if depth <= 0 or abs(x) > 1:
+        return []
+    tall = (frame.screen([at[0], at[1] + height, at[2]])[1] - low) / 2
+    size = f"about {tall:.2f} of the frame height" if tall <= 1 else "taller than the frame"
+    return [f"{name} is {size}, {(x + 1) / 2:.2f} of the way from the left"]
 
 
 NEAR_PIECE = 1.5  # metres: a move goes "toward" a piece only when it ends this near it

@@ -44,9 +44,11 @@ SAFE = 0.9  # the action-safe part of the frame (broadcast): heads and sides sta
 NEAR = 1.5  # metres: in a close framing, a lens nearer a face than this bends it (Ward 2018)
 TURN = 30.0  # degrees: two shots in a row of one person turn this much, or the framing 2 steps
 STEP = 0.6  # metres: one natural walking step
-# A move shorter than this reads as standing in a video: sh010 of Lamp Oil moved Mira 0.2 m in
-# its pin video, and Seedance 2.5 kept her in place (COREPRODUC-741, 2026-11-20).
-SMALL_MOVE = 0.4
+# A move shorter than this may not show in a video: Seedance 2.5 kept Lamp Oil sh010's Mira in
+# place for 0.2 m (COREPRODUC-741) and showed about half of a 0.6 m step in 3 renders, while 2.9 m
+# and 5.4 m walks came through whole (COREPRODUC-742, 2026-11-20).
+SMALL_MOVE = 1.0
+HALF_STEP = 0.4  # metres: a move under this is a half step in the prompt's words
 FRAMINGS = ("extreme_wide", "wide", "medium", "medium_close", "close_up", "extreme_close_up")
 # The checks of a try's camera against the shot's words, after the measured pass of
 # github.com/cbunseng/seedance-blockout-editor-private (Apache-2.0, docs/qa-engine-side.md):
@@ -390,7 +392,7 @@ def _stiff(
 ) -> list[Issue]:
     """Warnings for motion a video model may not show (COREPRODUC-741), after the rules of
     github.com/sirioberati/ai-filmmaking-camera-control-seedance-2-5 (MIT; docs/why/
-    why-no-static-shots.md): a move shorter than ``SMALL_MOVE``, and a reference render whose
+    why-no-static-shots.md): a move shorter than ``SMALL_MOVE`` (1 m), and a reference render whose
     pin video hardly moves (a static camera and no one moving a full step): it comes back stiff."""
     out: list[Issue] = []
     for person in data["cast"]:
@@ -400,8 +402,9 @@ def _stiff(
                 Issue(
                     "warning",
                     where,
-                    f"{names[k]} moves only {far:.1f} m: a video model may not show a move this "
-                    f"small. Make it a full step ({STEP:g} m) or more, or no move",
+                    f"{names[k]} moves only {far:.1f} m: a video model may show a move this small "
+                    "at about half its size, or not at all. Stage two steps (1.2 m) or more for a "
+                    "move the audience must see, or no move",
                 )
             )
     still = camera.get("move") in (None, "", "static") and not isinstance(
