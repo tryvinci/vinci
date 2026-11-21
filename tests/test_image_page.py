@@ -120,6 +120,10 @@ if (modelBlurb({ id: "x", display_name: "X", provider: "fal", capabilities: ["t2
 }
 const badges = modelBadges({ id: "wan-25-preview", display_name: "Wan 2.5 Preview", provider: "higgsfield", capabilities: ["t2i"] });
 if (badges.join() !== "Beta") throw new Error("badges " + badges);
+const hosted = modelBadges({ id: "seedance-2.5", display_name: "Seedance 2.5 Preview", provider: "vinci", capabilities: ["t2v"], brand: "Vinci" });
+if (hosted.join() !== "Vinci,Beta") throw new Error("brand badge " + hosted);
+const named = modelBadges({ id: "kwaivgi/kling-v3.0-std", display_name: "Vinci Video", provider: "vinci", capabilities: ["t2v"], brand: "Vinci" });
+if (named.length) throw new Error("the name says the brand: no badge " + named);
 const chips = capabilityChips({
   id: "soul",
   display_name: "Soul",

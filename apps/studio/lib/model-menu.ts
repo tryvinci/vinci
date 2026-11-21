@@ -17,7 +17,7 @@ export type MenuModel = ImageModel & {
 export type MenuSections = { featured: MenuModel[]; groups: { family: string; models: MenuModel[] }[] };
 
 const FEATURED_MAX = 6;
-// Family from the model name, then from the provider (hosted rows all have provider "vinci").
+// Family: the host's brand, else from the model name, then from the provider.
 const MENU_FAMILIES: [RegExp, string][] = [
   [/kling/, "Kling"],
   [/seedance|seedream|bytedance/, "ByteDance"],
@@ -40,8 +40,9 @@ const MENU_PROVIDERS: Record<string, string> = {
   elevenlabs: "ElevenLabs",
 };
 
-/** The family a model is grouped under: "Kling", "Google", "Higgsfield"… */
+/** The family a model is grouped under: the host's brand ("Vinci", COREPRODUC-749), else "Kling", "Google", "Higgsfield"… */
 export function menuFamily(model: MenuModel): string {
+  if (model.brand) return model.brand;
   if (MENU_PROVIDERS[model.provider] && model.provider.startsWith("mcp_")) return MENU_PROVIDERS[model.provider]!;
   const blob = `${model.id} ${model.display_name}`.toLowerCase();
   for (const [needle, label] of MENU_FAMILIES) if (needle.test(blob)) return label;

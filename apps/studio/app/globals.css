@@ -687,6 +687,17 @@ label { display: block; font-size: 11px; color: var(--mute); margin: 0 0 4px; le
   max-width: calc(3 * 26rem + 28px);
 }
 .connect-sheet .kind { font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--teal); }
+/* Credits on a host (COREPRODUC-747): the balance card of Connect and a usage list. */
+.account-head { margin: 30px 0 12px; font-size: 1.1rem; }
+.account-balance { font-size: 2rem; line-height: 1.1; }
+.account-usage { list-style: none; margin: 0; padding: 0; max-width: 54rem; border-top: 1px solid var(--line); }
+.account-usage li { display: grid; grid-template-columns: 7.5rem 1fr auto; gap: 12px; align-items: baseline; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+.account-when { color: var(--mute); font-size: 12px; }
+.account-what { min-width: 0; overflow-wrap: anywhere; }
+.account-what small { display: block; color: var(--mute); font-size: 11px; }
+.account-delta { font-variant-numeric: tabular-nums; color: var(--dim); white-space: nowrap; }
+.account-delta.plus { color: var(--teal); }
+@media (max-width: 640px) { .account-usage li { grid-template-columns: 1fr auto; } .account-when { grid-column: 1 / -1; } }
 .connect-routing { margin-top: 28px; padding-top: 4px; max-width: 26rem; }
 .lib-tabs { display: flex; gap: 6px; margin: 0 0 16px; }
 .stage-3d {

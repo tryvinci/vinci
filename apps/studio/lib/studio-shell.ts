@@ -31,7 +31,8 @@ export type PageId =
   | "find"
   | "cost"
   | "keys"
-  | "settings";
+  | "settings"
+  | "account";
 
 export type ToolCategory = "image" | "video" | "audio" | "edit" | "canvas" | "library" | "templates" | "utilities";
 
@@ -305,6 +306,7 @@ export function sidebarPins(pinned: readonly string[], tools: readonly Tool[] = 
 const PAGE_IDS: readonly PageId[] = [
   "home", "explore", "image", "adapts", "video", "speak", "upscale", "edit", "canvas", "shows",
   "library", "assets", "agent", "space", "collab", "skills", "find", "cost", "keys", "settings",
+  "account", // Credits, a host page (COREPRODUC-747)
 ];
 
 /**
