@@ -1,7 +1,8 @@
 "use client";
 
-import { type MutableRefObject, type ReactNode, useEffect, useRef, useState } from "react";
-import { type OlfFaces, type OlfGroup, type OlfPiece, type OlfRoom, type OlfShotTry, type ShotMove, type V3, roomChanges, staging, tryChanges } from "../lib/scenelab";
+import { type MutableRefObject, type PointerEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { SENSOR_MM } from "../lib/pillframe";
+import { type OlfFaces, type OlfGroup, type OlfPerson, type OlfPiece, type OlfRoom, type OlfShotTry, type ShotMove, type V3, roomChanges, staging, tryChanges } from "../lib/scenelab";
 import type { SceneOptions, SceneViewer } from "../lib/scenelab-gl";
 import { message, olf, send } from "./shows-api";
 import { type Lab, type Mode, SceneView } from "./shows-scenelab";
@@ -34,6 +35,111 @@ function Num({ label, value, step = 0.1, min, onChange }: { label: string; value
         }}
       />
     </label>
+  );
+}
+
+/** A floor plan value: to 0.05 m. */
+const snap = (n: number) => Math.round(n * 20) / 20;
+type Drag = "cam" | "aim" | `start:${number}` | `end:${number}`;
+
+/**
+ * The try from above (x to the right, z down the page: the camera usually stands at the bottom).
+ * Set pieces and props are grey shapes, the camera a triangle with its horizontal field, a point it
+ * aims at a cross, each named person a pin in their stripe color and their walk a dashed arrow.
+ * Drag a person's start or end, the camera, or the point (to 0.05 m): `onChange` gets the new try,
+ * so the 3D view, the number fields and the checks follow. The bounds hold still during a drag.
+ */
+function FloorPlan({ room, draft, view, onChange }: { room: OlfRoom; draft: OlfShotTry; view: View; onChange: (d: OlfShotTry) => void }) {
+  const svg = useRef<SVGSVGElement>(null);
+  const [drag, setDrag] = useState<{ what: Drag; box: number[] } | null>(null);
+  const { at: cam, looks_at } = draft.camera;
+  const pieces = [...room.set, ...(draft.props || [])];
+  const aim = typeof looks_at === "string" ? draft.cast.find((p) => p.slot === looks_at)?.at : looks_at;
+  const pts = [
+    ...pieces.flatMap((p) => [[p.at[0] - p.size[0] / 2, p.at[2] - p.size[2] / 2], [p.at[0] + p.size[0] / 2, p.at[2] + p.size[2] / 2]]),
+    ...draft.cast.flatMap((p) => [p.at, ...(p.end ? [p.end.at] : [])].map((at) => [at[0], at[2]])),
+    [cam[0], cam[2]],
+    ...(aim ? [[aim[0], aim[2]]] : []),
+  ];
+  const xs = pts.map((q) => q[0]), zs = pts.map((q) => q[1]);
+  const box = drag?.box || [Math.min(...xs) - 1, Math.min(...zs) - 1, Math.max(...xs) - Math.min(...xs) + 2, Math.max(...zs) - Math.min(...zs) + 2];
+  const u = Math.max(box[2], box[3]) / 60; // one plan unit: pins, labels and the camera scale with the plan
+  const half = Math.atan(SENSOR_MM / 2 / (parseFloat(String(view.move.lens ?? "")) || 35)); // half the horizontal field
+  const yaw = aim ? Math.atan2(aim[0] - cam[0], aim[2] - cam[2]) : Math.PI;
+  const ray = (a: number, r: number) => `${cam[0] + Math.sin(a) * r},${cam[2] + Math.cos(a) * r}`;
+
+  /** Move what is dragged to the pointer. */
+  function move(event: PointerEvent<SVGSVGElement>) {
+    const ctm = svg.current?.getScreenCTM();
+    if (!drag || !ctm) return;
+    const { x, y } = new DOMPoint(event.clientX, event.clientY).matrixTransform(ctm.inverse());
+    const [px, pz] = [snap(x), snap(y)];
+    const place = (at: V3): V3 => [px, at[1], pz];
+    const [kind, n] = drag.what.split(":");
+    const cast = (change: (p: OlfPerson) => OlfPerson) => draft.cast.map((p, k) => (k === +n ? change(p) : p));
+    if (kind === "cam") onChange({ ...draft, camera: { ...draft.camera, at: place(cam) } });
+    else if (kind === "aim" && typeof looks_at !== "string") onChange({ ...draft, camera: { ...draft.camera, looks_at: place(looks_at) } });
+    else if (kind === "start") onChange({ ...draft, cast: cast((p) => ({ ...p, at: place(p.at) })) });
+    else if (kind === "end") onChange({ ...draft, cast: cast((p) => (p.end ? { ...p, end: { ...p.end, at: place(p.end.at) } } : p)) });
+  }
+  /** Start a drag of `what` on a handle. */
+  const grab = (what: Drag) => (event: PointerEvent) => {
+    svg.current?.setPointerCapture(event.pointerId);
+    setDrag({ what, box });
+    console.info("[shows] floor plan drag", { what });
+  };
+
+  return (
+    <svg
+      ref={svg}
+      className="scene-lab-plan"
+      viewBox={box.join(" ")}
+      onPointerMove={move}
+      onPointerUp={() => setDrag(null)}
+      onPointerCancel={() => setDrag(null)}
+      role="img"
+      aria-label="Floor plan from above: drag people, the camera and its aim"
+      data-testid="scene-lab-plan"
+    >
+      {pieces.map((p, i) =>
+        p.shape === "box" || p.shape === "plane" ? (
+          <rect key={i} className="scene-lab-plan-piece" x={p.at[0] - p.size[0] / 2} y={p.at[2] - p.size[2] / 2} width={p.size[0]} height={p.size[2]} transform={`rotate(${-(p.turn || 0)} ${p.at[0]} ${p.at[2]})`} />
+        ) : (
+          <ellipse key={i} className="scene-lab-plan-piece" cx={p.at[0]} cy={p.at[2]} rx={p.size[0] / 2} ry={p.size[2] / 2} transform={`rotate(${-(p.turn || 0)} ${p.at[0]} ${p.at[2]})`} />
+        ),
+      )}
+      <polyline className="scene-lab-plan-fov" points={[ray(yaw - half, u * 40), ray(yaw, 0), ray(yaw + half, u * 40)].join(" ")} />
+      <polygon className="scene-lab-plan-cam" points={[ray(yaw, u * 2.4), ray(yaw + 2.5, u * 1.8), ray(yaw - 2.5, u * 1.8)].join(" ")} onPointerDown={grab("cam")} data-testid="scene-lab-plan-cam" />
+      {typeof looks_at === "string" ? null : (
+        <g className="scene-lab-plan-aim" onPointerDown={grab("aim")} data-testid="scene-lab-plan-aim">
+          <circle cx={looks_at[0]} cy={looks_at[2]} r={u * 1.6} />
+          <path d={`M${looks_at[0] - u * 2.2} ${looks_at[2]}h${u * 4.4}M${looks_at[0]} ${looks_at[2] - u * 2.2}v${u * 4.4}`} />
+        </g>
+      )}
+      {draft.cast.map((p, i) => {
+        const color = view.opts.stripes?.[p.slot] || "var(--teal)";
+        // The walk's arrow stops at the end pin's edge: its head is a triangle in plan units.
+        const [dx, dz] = p.end ? [p.end.at[0] - p.at[0], p.end.at[2] - p.at[2]] : [0, 0];
+        const len = Math.hypot(dx, dz) || 1;
+        const [ux, uz] = [dx / len, dz / len];
+        const [hx, hz] = p.end ? [p.end.at[0] - ux * u * 1.6, p.end.at[2] - uz * u * 1.6] : [0, 0];
+        return (
+          <g key={p.slot}>
+            {p.end ? (
+              <>
+                <line className="scene-lab-plan-walk" x1={p.at[0]} y1={p.at[2]} x2={hx} y2={hz} stroke={color} />
+                <polygon points={`${hx},${hz} ${hx - ux * u * 2 - uz * u},${hz - uz * u * 2 + ux * u} ${hx - ux * u * 2 + uz * u},${hz - uz * u * 2 - ux * u}`} fill={color} />
+                <circle className="scene-lab-plan-pin is-end" cx={p.end.at[0]} cy={p.end.at[2]} r={u * 1.4} color={color} onPointerDown={grab(`end:${i}`)} data-testid="scene-lab-plan-end" />
+              </>
+            ) : null}
+            <circle className="scene-lab-plan-pin" cx={p.at[0]} cy={p.at[2]} r={u * 1.6} fill={color} onPointerDown={grab(`start:${i}`)} data-testid="scene-lab-plan-start" />
+            <text className="scene-lab-plan-name" x={p.at[0] + u * 2.2} y={p.at[2] + u} fontSize={u * 3}>
+              {view.names[p.slot] || p.slot}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
   );
 }
 
@@ -165,7 +271,8 @@ export function TryEditor({
               <>
                 <Vec label="End place" value={p.end.at} onChange={(at) => person(i, { end: { ...p.end, at: at as V3 } })} />
                 <span className="olf-label">Faces at the end</span>
-                <Faces value={p.end.faces} slots={slots.filter((s) => s !== p.slot)} names={view.names} onChange={(faces) => person(i, { end: { at: p.end!.at, faces } })} />
+                <Faces value={p.end.faces} slots={slots.filter((s) => s !== p.slot)} names={view.names} onChange={(faces) => person(i, { end: { ...p.end!, faces } })} />
+                <Walk end={p.end} from={p.at} seconds={seconds} onChange={(end) => person(i, { end })} />
                 <button type="button" className="ghost olf-small" onClick={() => person(i, { end: undefined })}>
                   Stays in place
                 </button>
@@ -260,6 +367,7 @@ export function TryEditor({
         <div className="scene-lab-view" style={{ aspectRatio: String(view.aspect) }}>
           <SceneView room={room} staged={draft} move={view.move} aspect={view.aspect} opts={{ ...view.opts, t }} free={view.free} viewer={viewer} label={`Try ${staged.try}, edited`} />
         </div>
+        {tab === "people" || tab === "motion" || tab === "props" ? <FloorPlan room={room} draft={draft} view={view} onChange={setDraft} /> : null}
         <div className="olf-row scene-lab-time">
           <button type="button" className="olf-chip-btn" onClick={() => viewer.current?.play(seconds, setT)} data-testid="scene-lab-play">
             Play
@@ -319,6 +427,27 @@ export function TryEditor({
           <span className="muted olf-small-text">No model runs ($0). Each change edits the scene description only.</span>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** When a walk starts and ends, in seconds of the shot (stored as 0..1 of it), and its speed. */
+function Walk({ end, from, seconds, onChange }: { end: NonNullable<OlfPerson["end"]>; from: V3; seconds: number; onChange: (end: NonNullable<OlfPerson["end"]>) => void }) {
+  const [s, e] = [end.start_t ?? 0, end.end_t ?? 1];
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+  const part = (v: number) => clamp(v / seconds, 0, 1); // seconds to 0..1, clamped
+  const metres = Math.hypot(end.at[0] - from[0], end.at[2] - from[2]);
+  const time = (e - s) * seconds;
+  // Shrink the minimum gap near 0 or 1 so valid boundary edits never step outside 0..1 (CodeRabbit on #741).
+  const maxStart = Math.max(0, e - Math.min(0.01, e / 2));
+  const minEnd = Math.min(1, s + Math.min(0.01, (1 - s) / 2));
+  return (
+    <div className="olf-row scene-lab-walk">
+      <Num label="Start (s)" value={+(s * seconds).toFixed(2)} min={0} onChange={(v) => onChange({ ...end, start_t: clamp(part(v), 0, maxStart) })} />
+      <Num label="End (s)" value={+(e * seconds).toFixed(2)} min={0} onChange={(v) => onChange({ ...end, end_t: clamp(part(v), minEnd, 1) })} />
+      <span className="muted olf-small-text" data-testid="scene-lab-walk-speed">
+        {metres.toFixed(2)} m · {time > 0 ? `${(metres / time).toFixed(2)} m/s` : "a jump"}
+      </span>
     </div>
   );
 }

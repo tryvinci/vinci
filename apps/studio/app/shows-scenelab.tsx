@@ -2,7 +2,7 @@
 
 import { type MutableRefObject, type ReactNode, useEffect, useRef, useState } from "react";
 import { PIN_SHAPES, type PinShape, aspectOf } from "../lib/pillframe";
-import type { OlfRoom, OlfShotTry, ShotMove } from "../lib/scenelab";
+import { ANIMATED_MOVES, type OlfRoom, type OlfShotTry, type ShotMove } from "../lib/scenelab";
 import type { SceneOptions, SceneViewer } from "../lib/scenelab-gl";
 import { COPY_PROMPT, type Drawn, type OlfShow, type OlfTextStep, durationSeconds, framingShort, takesOf, textStepQuestion } from "../lib/shows";
 import { message, olf, send } from "./shows-api";
@@ -19,6 +19,9 @@ export type Lab = {
   tries: OlfShotTry[];
   room_tries?: (OlfRoom & { try: number })[];
   shots?: Record<string, { tries: number; try: number | null; room: number | null }>;
+  /** The camera and length fields changed since Use recorded the pin video. */
+  pin_stale?: string[];
+  used?: { try: number; framing?: string; angle?: string } | null;
 };
 /** The lab's screens: A on the shot page; the others open full screen (prototype boards). */
 export type Mode = "lab" | "compare" | "people" | "motion" | "background" | "props" | "room";
@@ -32,6 +35,15 @@ const TITLES: Record<Mode, string> = {
   props: "Props and camera",
   room: "Scene room",
 };
+
+/** The pin video is older than the shot camera: the stage and the keyframe layout box say so. */
+export function PinStale({ fields }: { fields: string[] }) {
+  return (
+    <p className="olf-warn" data-testid="pin-stale">
+      Pin video is out of date: {fields.join(", ")} changed. Click Use again to re-record it.
+    </p>
+  );
+}
 
 /** A file as a `data:` URL (base64), to send in a JSON body. */
 function dataUrl(blob: Blob): Promise<string> {
@@ -85,7 +97,8 @@ export function SceneView({
     return () => {
       live = false;
     };
-  }, [room, staged, opts.standin, opts.pin, aspect]);
+    // A camera field edited in the stage's side panel redraws the view at once.
+  }, [room, staged, opts.standin, opts.pin, aspect, move.lens, move.move, move.direction, move.amount, move.ease]);
   useEffect(() => viewer.current?.freeView(free), [free]);
   useEffect(
     () => () => {
@@ -146,11 +159,12 @@ export function SceneLab({
   const [free, setFree] = useState(false);
   const [pin, setPin] = useState<PinShape>("pin"); // the pin shape comparison (COREPRODUC-718)
   const [using, setUsing] = useState<"ask" | "drawing" | null>(null);
+  const [fromCurrent, setFromCurrent] = useState(true); // a new try on screen A starts from the picked try
   const viewer = useRef<SceneViewer | null>(null);
   const staged = lab?.tries.find((row) => row.try === pick) || null;
   const room = staged ? lab?.rooms[String(staged.room)] : undefined;
   const cam = shot.camera || {};
-  const move = { lens: cam.lens, move: cam.move, amount: cam.amount, ease: cam.ease };
+  const move = { lens: cam.lens, move: cam.move, direction: cam.direction, amount: cam.amount, ease: cam.ease };
   const aspect = aspectOf(shot.pills?.aspect);
   const pills = shot.pills?.start || [];
   // Each slot's pin stripes: the shot's pills keep each character's show color (vinci_olf.layout).
@@ -161,17 +175,39 @@ export function SceneLab({
   const target = mode === "room" ? scene : id;
   const next = (lab?.tries.reduce((n, t) => Math.max(n, t.try || 0), 0) || 0) + 1;
 
-  /** Read the lab again and show try `select` (else the newest). */
+  /** Read the lab again and show try `select` (else the newest); ignore superseded reloads (CodeRabbit on #741). */
+  const loadGen = useRef(0);
+  // Keep an in-flight explicit try selection separate from rendered `pick` so a camera/length
+  // re-render cannot overwrite it before the superseding reload effect runs.
+  const pendingPick = useRef<number | null>(null);
   async function load(select?: number) {
-    const body = await olf<Lab>(`/scene?path=${encodeURIComponent(show.path)}&target=${encodeURIComponent(id)}`);
-    setLab(body);
-    setPick(select ?? body.tries[body.tries.length - 1]?.try ?? null);
+    if (select !== undefined) pendingPick.current = select;
+    const gen = ++loadGen.current;
+    try {
+      const body = await olf<Lab>(`/scene?path=${encodeURIComponent(show.path)}&target=${encodeURIComponent(id)}`);
+      if (gen !== loadGen.current) return;
+      const chosen = select ?? pendingPick.current ?? body.tries[body.tries.length - 1]?.try ?? null;
+      pendingPick.current = null;
+      setLab(body);
+      setPick(chosen);
+    } catch (err) {
+      if (gen === loadGen.current) throw err;
+    }
   }
   const loadRoom = async () => setRoomLab(await olf<Lab>(`/scene?path=${encodeURIComponent(show.path)}&target=${encodeURIComponent(scene)}`));
 
+  // A camera or length edit (the side panel, the Video step) reads the lab again, so the try's
+  // checks and `pin_stale` follow at once; it keeps the picked try, and a new shot shows its newest.
+  const loaded = useRef("");
   useEffect(() => {
-    load().catch((err) => setError(message(err)));
-  }, [show.path, id]);
+    const keep = loaded.current === id;
+    loaded.current = id;
+    if (!keep) pendingPick.current = null;
+    load(keep ? (pendingPick.current ?? pick ?? undefined) : undefined).catch((err) => setError(message(err)));
+    return () => {
+      loadGen.current += 1;
+    };
+  }, [show.path, id, cam.lens, cam.move, cam.direction, cam.amount, cam.ease, cam.render, shot.duration]);
   useEffect(() => {
     if (mode === "room") loadRoom().catch((err) => setError(message(err)));
     setError("");
@@ -304,11 +340,17 @@ export function SceneLab({
           onNo={() => setAsk(null)}
         />
       ) : null}
+      {mode === "lab" && staged ? (
+        <label className="olf-check olf-small-text">
+          <input type="checkbox" checked={fromCurrent} onChange={(e) => setFromCurrent(e.target.checked)} data-testid="scene-lab-from-current" />
+          Start from try {staged.try}
+        </label>
+      ) : null}
       <div className="olf-row">
         <button type="button" className="run olf-grow" disabled={locked || !!busy} onClick={() => void build(undefined, extra)} data-testid="scene-lab-build">
           {busy && mode !== "lab" ? busy : textModel === COPY_PROMPT ? "Copy prompt" : first ? "Build the scene" : mode === "room" ? "Build a room try" : "New try"}
         </button>
-        {"base" in extra ? null : (
+        {mode === "compare" ? null : (
           <button type="button" className="ghost" disabled={locked} onClick={() => setPaste(paste === null ? "" : null)} data-testid="scene-lab-paste">
             Paste an answer
           </button>
@@ -446,7 +488,7 @@ export function SceneLab({
             {staged ? (
               <>
                 {toggles}
-                {move.move === "push_in" || move.move === "pull_out" || staged.cast.some((person) => person.end) ? (
+                {(ANIMATED_MOVES as readonly string[]).includes(move.move || "") || typeof staged.camera.looks_at === "string" || staged.cast.some((person) => person.end) ? (
                   <button type="button" className="olf-chip-btn scene-lab-play" onClick={() => viewer.current?.play(seconds)}>
                     Play
                   </button>
@@ -529,13 +571,14 @@ export function SceneLab({
               <b>Look</b> · colors come from the bible&apos;s references, not this frame
             </span>
           </div>
-          {runBox({}, !lab?.tries.length)}
+          {runBox(staged && fromCurrent ? { base: staged.try, room: staged.room } : {}, !lab?.tries.length)}
           {staged ? (
             <div className="scene-lab-use" data-testid="scene-lab-use">
               <span className="olf-small-text">
                 <b>Try {staged.try}</b>
                 {staged.request ? ` · ${staged.request}` : ""} · room v{staged.room}
               </span>
+              {lab?.pin_stale?.length ? <PinStale fields={lab.pin_stale} /> : null}
               {using === "ask" ? (
                 <Confirm text={`Use try ${staged.try} as the keyframe layout? ${warning}`} onYes={() => void use()} onNo={() => setUsing(null)} />
               ) : (

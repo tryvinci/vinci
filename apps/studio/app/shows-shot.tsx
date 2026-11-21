@@ -37,7 +37,7 @@ import {
 } from "../lib/shows";
 import { olf, useOlfRoute } from "./shows-api";
 import { Confirm, Field, Panel, PillFrame, Pick, PlayBar, RefThumb, StalePill, usePick } from "./shows-parts";
-import { SceneLab } from "./shows-scenelab";
+import { PinStale, SceneLab } from "./shows-scenelab";
 
 const DRAWS = [1, 2, 3, 4]; // keyframe variations per draw (the engine's MAX_VARIATIONS)
 
@@ -45,6 +45,8 @@ const DRAWS = [1, 2, 3, 4]; // keyframe variations per draw (the engine's MAX_VA
 type Step = "stage" | "keyframe" | "video";
 /** The scene lab try the shot's keyframe layout came from, and the framing and angle it measured. */
 type Used = { try: number; framing?: string; angle?: string };
+/** The ways a move can go (`camera.direction`); a move not listed has no direction. */
+const DIRECTIONS: Record<string, string[]> = { pan: ["left", "right"], truck: ["left", "right"], orbit: ["left", "right"], tilt: ["up", "down"], crane: ["up", "down"], dolly: ["in", "out"] };
 const say = (word: string | undefined) => (word || "—").replace(/_/g, " ");
 
 /** Takes in render order for the strip: keyframes, then videos, then dialogue, oldest first. */
@@ -108,12 +110,19 @@ export function ShotView({
   useEffect(() => setStep(null), [id]);
   // The used try: framing and angle are measured from it, and the blocking words give way to it.
   const [used, setUsed] = useState<Used | null>(null);
+  // The pin video's camera and length fields that changed since Use recorded it.
+  const [pinStale, setPinStale] = useState<string[]>([]);
   useEffect(() => {
     let live = true;
     setUsed(null);
+    setPinStale([]);
     if (labRoute) {
-      olf<{ used?: Used | null }>(`/scene?path=${encodeURIComponent(show.path)}&target=${encodeURIComponent(id)}`)
-        .then((body) => live && setUsed(body.used || null))
+      olf<{ used?: Used | null; pin_stale?: string[] }>(`/scene?path=${encodeURIComponent(show.path)}&target=${encodeURIComponent(id)}`)
+        .then((body) => {
+          if (!live) return;
+          setUsed(body.used || null);
+          setPinStale(body.pin_stale || []);
+        })
         .catch((err) => console.warn("[shows] used try", err));
     }
     return () => {
@@ -219,7 +228,8 @@ export function ShotView({
   const go = (kind: RenderKind, yes: boolean) =>
     onRender(kind, yes, kind === "keyframe" ? draws : 1, kind === "video" && choice ? choice.id : undefined, total(kind));
 
-  /** The shot camera's lens and move: in the stage's side column (the lab plays and records them),
+  const directions = DIRECTIONS[cam.move || ""];
+  /** The shot camera's lens, move and render: in the stage's side column (the lab plays and records them),
    * or in the right column on a host with no scene lab. Camerawork templates are presets of the move. */
   const cameraFields = (
     <div className="olf-camera" data-testid="shot-camera">
@@ -253,6 +263,18 @@ export function ShotView({
         <Field label={`Ease${from("ease")}`}>
           <Pick value={cam.ease} options={EASES} blank disabled={locked} onPick={(v) => onEdit({ ease: v })} testId="shot-ease" />
         </Field>
+        {directions ? (
+          <Field label={`Direction${from("direction")}`}>
+            <Pick value={cam.direction} options={directions} blank disabled={locked} onPick={(v) => onEdit({ direction: v })} testId="shot-direction" />
+          </Field>
+        ) : null}
+        {/* Also in the Video step: a reference render needs the stage's pin video (no Step 1 ↔ 3 trap).
+            With no scene lab these fields sit beside the Video step's own Render. */}
+        {labRoute ? (
+          <Field label={`Render${from("render")}`}>
+            <Pick value={cam.render} options={RENDERS} blank disabled={locked} onPick={(v) => onEdit({ render: v })} testId="shot-render" />
+          </Field>
+        ) : null}
       </div>
           <Field label="Move preset">
             <select className="olf-input" disabled={locked} aria-label="Move preset" data-testid="shot-camerawork" {...camerawork}>
@@ -551,6 +573,7 @@ export function ShotView({
                       />
                     ) : null}
                     {shot.reference_video ? <span className="muted olf-small-text">Pin video · a reference render follows its camera and timing</span> : null}
+                  {pinStale.length ? <PinStale fields={pinStale} /> : null}
                   {labRoute ? (
                     <button type="button" className="ghost olf-small" onClick={() => setStep("stage")} data-testid="open-stage">
                       {shot.storyboard ? "Open in the stage" : "Stage the shot in 3D"}
@@ -667,6 +690,11 @@ export function ShotView({
                 </b>
               </div>
               {planError ? <p className="olf-error">{planError}</p> : null}
+              {step === "video" && stageNext ? (
+                <button type="button" className="ghost olf-small" onClick={() => setStep("stage")} data-testid="open-stage-pin">
+                  Open Stage to record pin video
+                </button>
+              ) : null}
               {(step === "video" ? plans?.video.notes || [] : []).map((note) => (
                 <p key={note} className="olf-warn" data-testid="render-note">
                   {note.slice(0, 1).toUpperCase() + note.slice(1)}.

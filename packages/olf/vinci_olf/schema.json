@@ -165,7 +165,12 @@
         "end": {
           "type": "object", "required": ["at"], "additionalProperties": false,
           "description": "Where the person is when the shot ends, when they move.",
-          "properties": { "at": { "$ref": "#/$defs/vec3" }, "faces": { "$ref": "#/$defs/faces" } }
+          "properties": {
+            "at": { "$ref": "#/$defs/vec3" },
+            "faces": { "$ref": "#/$defs/faces" },
+            "start_t": { "type": "number", "minimum": 0, "maximum": 1, "description": "When the walk starts, as a part of the shot (0 when left out)." },
+            "end_t": { "type": "number", "minimum": 0, "maximum": 1, "description": "When the walk ends, as a part of the shot (1 when left out); after start_t." }
+          }
         }
       }
     },

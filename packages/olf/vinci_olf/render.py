@@ -323,6 +323,11 @@ def _reference_words(
         "The stripe colors only say who is who: no clothing, skin, prop or surface takes those "
         "colors or stripes, and no striped pin appears at any moment"
     )
+    talk = [  # the pin has no mouth: each line's speaker moves theirs, as in ``_video_words``
+        f"{names.get(line['speaker'], line['speaker'])}'s mouth moves to speak a short line; "
+        "there is no sound and no text"
+        for line in view.get("dialogue") or []
+    ]
     blocks: list[tuple[str, list[Any]]] = [
         (
             "Goal",
@@ -346,7 +351,7 @@ def _reference_words(
             "Camera",
             [_shot_words(cam, "video"), _template_words(view, "prompt"), staging.get("framing")],
         ),
-        ("Action", [staging.get("moves")]),
+        ("Action", [staging.get("moves"), *talk]),
         (
             "Look",
             [
@@ -809,7 +814,7 @@ def plan_render(
         elif reference:  # the pin video, and the keyframe then the cast's sheets as the look
             # Only when the chosen keyframe is the look: a stated first_frame file is not it.
             look = kf_used if from_keyframe(view) and not new_kf else None
-            notes = _layout_note(p, control, look)
+            notes = _layout_note(p, control, look) + _drift_note(p, shot_id)
             board = _leaves(control.get("storyboard"))
             looks = [source, *(r for r in references(view) if r not in board)]
             params = base | {
@@ -1147,6 +1152,21 @@ def _layout_note(p: Project, control: dict[str, Any], take: str | None) -> list[
     return [
         f"{name} was not drawn from this shot's keyframe layout, so the clip copies {name}'s "
         "framing, not the pin video's. Draw a new keyframe: it starts from the pin frame"
+    ]
+
+
+def _drift_note(p: Project, shot: str) -> list[str]:
+    """Say when the shot's camera words or length changed after its pin video was recorded
+    (``scene_lab.pin_video_drift``): the clip plays the old camera and timing until Use records
+    it again. It joins ``_layout_note``, so the hosted Studio gets it with its stop too."""
+    from vinci_olf.scene_lab import pin_video_drift
+
+    drift = pin_video_drift(p, shot)
+    if not drift:
+        return []
+    return [
+        f"the pin video was recorded before {', '.join(drift)} changed; open Stage and click "
+        "Use again to re-record it"
     ]
 
 

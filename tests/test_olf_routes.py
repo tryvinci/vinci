@@ -281,9 +281,7 @@ def test_model_choices_and_share(client: TestClient) -> None:
     assert [c["id"] for c in video["choices"]] == ["mock:mp4:v1"]  # demo mode: mock only
     assert detail["plans"]["audio"]["choices"][0]["id"] == "mock:wav:v1"
     shared = client.get("/olf/share", params={"path": path})
-    assert (
-        shared.status_code == 200 and "tidewatch.volf" in shared.headers["content-disposition"]
-    )
+    assert shared.status_code == 200 and "tidewatch.volf" in shared.headers["content-disposition"]
     names = zipfile.ZipFile(io.BytesIO(shared.content)).namelist()
     assert (
         "tidewatch/project.yaml" in names and "tidewatch/bible/characters/mira/sheet.png" in names
@@ -349,7 +347,9 @@ def test_import_a_volf_package(client: TestClient) -> None:
     assert not [p for p in shows.iterdir() if p.name.startswith(".import-")]  # no staging left
     # A show whose manifest is project.json lists too (SPEC.md: the JSON form is valid).
     (shows / "jsonshow").mkdir()
-    (shows / "jsonshow" / "project.json").write_text('{"spec": "olf/0.1", "show": "j", "title": "J"}')
+    (shows / "jsonshow" / "project.json").write_text(
+        '{"spec": "olf/0.1", "show": "j", "title": "J"}'
+    )
     titles = {r["title"] for r in client.get("/olf/shows").json()["shows"]}
     assert "J" in titles
     # A very long show ID is cut to a folder name the disk accepts.
@@ -644,9 +644,22 @@ def test_scene_lab_routes(client: TestClient) -> None:
     # COREPRODUC-739: the shot takes the framing the try's camera shows; the dutch angle stays.
     lab = client.get("/olf/scene", params={"path": path, "target": shot}).json()
     assert lab["used"]["try"] == 1 and set(lab["used"]) == {"try", "framing"}
-    camera = client.get("/olf/shot", params={"path": path, "shot": shot}).json()["resolved"]["camera"]
+    camera = client.get("/olf/shot", params={"path": path, "shot": shot}).json()["resolved"][
+        "camera"
+    ]
     assert (camera["framing"], camera["angle"]) == (lab["used"]["framing"], "dutch")
     assert client.get("/olf/project", params={"path": path}).json()["issues"] == []
+    # The next shot's prompt says how sh014 ended, in the same room version only.
+    after = {"path": path, "target": "e02/s03/sh015", "request": "Mira turns", "copy": True}
+    same_room = client.post("/olf/scene/build", json=after | {"room": 1}).json()["prompt"]
+    assert "Previous shot (sh014) ended with:\n  the camera at [" in same_room
+    assert f", {camera['framing'].replace('_', ' ')} framing" in same_room
+    assert re.search(r"\n  Mira Sol at \[[-0-9., ]+\], facing camera\n", same_room)
+    assert "Turn the camera at least 30° around anyone in both shots" in same_room
+    newest = client.post("/olf/scene/build", json=after).json()["prompt"]  # room v2: not sh014's
+    assert "Previous shot" not in newest
+    first = client.post("/olf/scene/build", json=after | {"target": shot, "room": 1}).json()
+    assert "Previous shot" not in first["prompt"]  # sh014 is the scene's first shot
 
 
 def test_reference_render_routes(client: TestClient, tmp_path: Path) -> None:
@@ -686,7 +699,9 @@ def test_reference_render_routes(client: TestClient, tmp_path: Path) -> None:
     client.post("/olf/render", json=at | {"kind": "keyframe"})
     client.patch("/olf/select", json=at | {"choices": {"keyframe": "kf1"}})
     assert "needs a reference video" in plan()["error"]
-    used = client.post("/olf/scene/use", json=at | {"n": 1, "frame": frame, "video": clip("testsrc")})
+    used = client.post(
+        "/olf/scene/use", json=at | {"n": 1, "frame": frame, "video": clip("testsrc")}
+    )
     assert used.status_code == 200 and used.json()["reference_video"].startswith("asset/")
     # COREPRODUC-742: kf1 was drawn before the layout, so the clip would copy its framing.
     assert "kf1 was not drawn from this shot's keyframe layout" in " ".join(plan().get("notes", []))
@@ -719,6 +734,35 @@ def test_reference_render_routes(client: TestClient, tmp_path: Path) -> None:
     assert "@Video1 is a coarse 3D blockout of this exact shot" in words
     assert "The red-and-black striped pin in @Video1 is Mira Sol" in words
     assert "never grey clay or a 3D blockout" in words
+    # The pin has no mouth: sh014's line gets its mouth cue, as in an image-to-video prompt.
+    assert "Mira Sol's mouth moves to speak a short line; there is no sound and no text" in words
+    # A lens or a length changed after Use: the pin video still plays the old ones, so the plan
+    # and the lab say so (the note is with the hosted stop too, as the layout note).
+    recorded = json.loads((Path(path) / "scenes/e02/s03/sh014/used.json").read_text())["recorded"]
+    assert recorded == {
+        "lens": "50mm",
+        "move": "push_in",
+        "direction": "",
+        "amount": None,
+        "ease": "in_out",
+        "duration": 4.0,
+        "aspect": "16:9",
+    }
+    lab = client.get("/olf/scene", params={"path": path, "target": SHOT}).json()
+    assert lab["pin_stale"] == [] and "pin video was recorded" not in " ".join(plan()["notes"])
+    client.patch("/olf/shot", json=at | {"fields": {"lens": "24mm", "duration": "6s"}})
+    lab = client.get("/olf/scene", params={"path": path, "target": SHOT}).json()
+    assert lab["pin_stale"] == ["lens (50mm -> 24mm)", "length (4s -> 6s)"]
+    stale = (
+        "the pin video was recorded before lens (50mm -> 24mm), length (4s -> 6s) changed; open "
+        "Stage and click Use again to re-record it"
+    )
+    assert stale in plan()["notes"]
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(vinci_core.cost, "plan_workflow", no_r2v)
+        assert stale in plan()["notes"]
+    client.patch("/olf/shot", json=at | {"fields": {"lens": "50mm", "duration": "4s"}})
+    assert client.get("/olf/scene", params={"path": path, "target": SHOT}).json()["pin_stale"] == []
     shows = client.get("/olf/project", params={"path": path}).json()["shots"][SHOT]
     assert shows["reference_video"] == "storyboards/e02/s03/sh014.mp4"
     made = client.post("/olf/render", json=at | {"kind": "video"}).json()
@@ -745,7 +789,9 @@ def test_reference_render_routes(client: TestClient, tmp_path: Path) -> None:
     two = pasted.json()["try"]
     client.post("/olf/scene/use", json=at | {"n": two, "frame": frame, "video": clip("testsrc")})
     words = client.get("/olf/shot", params=at).json()["prompts"]["video"]
-    assert "Mira Sol takes one step (0.7 m) away from the camera toward the table, then stops" in words
+    assert (
+        "Mira Sol takes one step (0.7 m) away from the camera toward the table, then stops" in words
+    )
     assert "In the first frame, as in @Video1: Mira Sol is " in words
     # COREPRODUC-742: a mover's measured end size and place too, and "match" in place of "keep".
     assert "At the end, as in @Video1: Mira Sol is " in words
@@ -789,10 +835,247 @@ def test_a_walk_into_the_frame_gets_its_end_numbers() -> None:
     from vinci_olf.scene_lab import _pushed
 
     shot = {"camera": {"at": [0, 1.5, 10], "looks_at": [0, 1.5, 0]}, "cast": []}
-    assert _pushed(shot, {"move": "push_in", "amount": 0.35})["camera"]["at"][2] == pytest.approx(6.5)
-    assert _pushed(shot, {"move": "pull_out", "amount": 0.5})["camera"]["at"][2] == pytest.approx(20)
+    assert _pushed(shot, {"move": "push_in", "amount": 0.35})["camera"]["at"][2] == pytest.approx(
+        6.5
+    )
+    assert _pushed(shot, {"move": "pull_out", "amount": 0.5})["camera"]["at"][2] == pytest.approx(
+        20
+    )
     assert _pushed(shot, {"move": "push_in"})["camera"]["at"][2] == pytest.approx(7.5)
-    assert _pushed(shot, {"move": "pan"}) is shot
+    assert _pushed(shot, {"move": "handheld"}) is shot  # a move the pin video does not play
+
+
+def test_every_animated_move_ends_where_the_lab_plays_it() -> None:
+    """`_pushed` ends each animated move where the Studio's `cameraPose` does at t = 1 (the same
+    cases as tests/test_scenelab.py): the camera looks down -z, so its right is +x."""
+    import math
+
+    from vinci_olf.scene import ANIMATED_MOVES
+    from vinci_olf.scene_lab import _pushed
+
+    shot = {"camera": {"at": [0, 1.5, 10], "looks_at": [0, 1.5, 0]}, "cast": []}
+    half = 24.89 / 2 / 35  # tan of half the 35mm horizontal field on Super 35
+    hfov, vfov = 2 * math.atan(half), 2 * math.atan(half / (16 / 9))
+
+    def pose(**move: Any) -> tuple[list[float], list[float]]:
+        camera = _pushed(shot, move)["camera"]
+        return camera["at"], camera["looks_at"]
+
+    assert len(ANIMATED_MOVES) == 8 and "orbit" in ANIMATED_MOVES
+    assert pose(move="dolly")[0] == pytest.approx([0, 1.5, 7.5])  # in by default
+    assert pose(move="dolly", direction="out")[0] == pytest.approx([0, 1.5, 10 + 10 / 3])
+    assert pose(move="dolly", direction="back")[1] == [0, 1.5, 0]  # a dolly keeps its aim
+    a = 0.3 * hfov
+    assert pose(move="pan")[0] == pytest.approx([0, 1.5, 10])  # a pan turns in place
+    turned = [10 * math.sin(a), 1.5, 10 - 10 * math.cos(a)]
+    assert pose(move="pan", direction="right")[1] == pytest.approx(turned)
+    assert pose(move="pan", direction="left")[1] == pytest.approx([-turned[0], *turned[1:]])
+    b = 0.3 * vfov
+    up = [0, 1.5 + 10 * math.sin(b), 10 - 10 * math.cos(b)]
+    assert pose(move="tilt", direction="up") == (pytest.approx([0, 1.5, 10]), pytest.approx(up))
+    assert pose(move="tilt", direction="down")[1] == pytest.approx([0, 3 - up[1], up[2]])
+    shift = 0.3 * 2 * 10 * half
+    assert pose(move="truck", direction="right") == (
+        pytest.approx([shift, 1.5, 10]),
+        pytest.approx([shift, 1.5, 0]),  # the aim slides with it
+    )
+    assert pose(move="truck", direction="left")[0] == pytest.approx([-shift, 1.5, 10])
+    dy = 0.3 * 2 * 10 * (half / (16 / 9))
+    assert pose(move="crane", direction="up") == (
+        pytest.approx([0, 1.5 + dy, 10]),
+        pytest.approx([0, 1.5 + dy / 2, 0]),  # the aim rises half as far
+    )
+    assert pose(move="crane", direction="down", amount=1)[0] == pytest.approx([0, 0.1, 10])
+    o = 0.3 * math.pi / 2
+    assert pose(move="orbit", direction="right") == (
+        pytest.approx([10 * math.sin(o), 1.5, 10 * math.cos(o)]),
+        pytest.approx([0, 1.5, 0]),  # an orbit keeps its aim
+    )
+    assert pose(move="orbit", direction="left")[0] == pytest.approx(
+        [-10 * math.sin(o), 1.5, 10 * math.cos(o)]
+    )
+    for still in ("static", "handheld", "shake", None):
+        assert _pushed(shot, {"move": still}) is shot
+    # A long lens pans less; the lens and the frame come from the shot (`layout_words`).
+    long = _pushed(shot, {"move": "pan"}, lens=85.0)["camera"]["looks_at"][0]
+    assert long == pytest.approx(10 * math.sin(0.3 * 2 * math.atan(24.89 / 2 / 85)))
+    tall = _pushed(shot, {"move": "tilt"}, aspect=9 / 16)["camera"]["looks_at"][1]
+    assert tall > up[1]  # a 9:16 frame is taller, so a tilt goes further
+
+
+def test_motion_words_keep_the_walk_side_its_seconds_and_its_exit() -> None:
+    """A move's side is the walk's own, also when the camera follows the mover (the screen keeps
+    them in the middle); a timed walk names its seconds; one who walks out never "then stops"."""
+    from vinci_olf.scene import frame_of
+    from vinci_olf.scene_lab import _motion_words
+
+    camera = {"at": [0, 1.5, 20], "looks_at": "a"}  # far: a side walk is not "away" too
+    staged = {"camera": camera, "cast": [{"slot": "a", "at": [0, 0, 0], "end": {"at": [2, 0, 0]}}]}
+    lens, tracked = (frame_of(staged, m, 50.0, 16 / 9) for m in ("start", "end"))
+    assert abs(tracked.screen([2, 1.58, 0])[0]) < 1e-6  # the end frame keeps Mira in the middle
+    moves = _motion_words(staged, ["Mira"], [], lens, tracked)["moves"]
+    assert "Mira takes about 3 steps (2.0 m) to the right, then stops" in moves
+
+    def words(end: dict[str, Any], seconds: float = 0.0) -> str:
+        one = {"cast": [{"slot": "a", "at": [0, 0, 0], "end": end}]}
+        return _motion_words(one, ["Mira"], [], lens, lens, seconds)["moves"]
+
+    assert "(2.0 m) to the left, then stops" in words({"at": [-2, 0, 0]})
+    timed = {"at": [2, 0, 0], "start_t": 0.25}
+    assert "(2.0 m) to the right between 1.0 s and 4.0 s, then stops" in words(timed, 4.0)
+    assert "between" not in words({"at": [2, 0, 0]}, 4.0)  # the whole shot: no seconds
+    assert "between" not in words(timed)  # no length: no seconds
+    gone = words({"at": [-15, 0, 0]})  # out of the frame on the left
+    assert "(15.0 m) to the left and away from the camera. Every step" in gone
+    assert "then stops" not in gone
+
+
+def test_try_checks_the_walk_window_its_speed_and_the_move(client: TestClient) -> None:
+    """A walk window ends after it starts; a long walk over the whole shot plays in slow motion;
+    a reference render's handheld or shake camera does not move in the pin video."""
+    from vinci_olf.scene_lab import SHOT_SYSTEM
+
+    assert "at least two steps (1.2 m)" in SHOT_SYSTEM and "0.6 m" not in SHOT_SYSTEM
+    assert '"start_t": 0 to 1, "end_t": 0 to 1' in SHOT_SYSTEM and "slow motion" in SHOT_SYSTEM
+    path = client.post("/olf/sample").json()["path"]
+    client.post("/olf/scene/build", json={"path": path, "target": SHOT, "request": "Mira"})
+    first = client.get("/olf/scene", params={"path": path, "target": SHOT}).json()["tries"][0]
+    staged = {k: v for k, v in first.items() if k in ("room", "camera", "cast", "groups", "props")}
+    mira = staged["cast"][0]
+
+    def issues(end: dict[str, Any]) -> list[tuple[str, str]]:
+        data = staged | {"cast": [mira | {"end": end}]}
+        body = {"path": path, "shot": SHOT, "data": data}
+        found = client.post("/olf/scene/check", json=body).json()["issues"]
+        return [(i["level"], i["message"]) for i in found]
+
+    walk = [mira["at"][0] + 1.5, 0, mira["at"][2]]  # 1.5 m in sh014's 4 s
+    at = {"path": path, "shot": SHOT}
+    slow = "Mira Sol's move takes 4.0 s (0.38 m/s), which plays in slow motion in the pin video"
+    assert not any("slow motion" in m for _, m in issues({"at": walk}))  # no pin video plays
+    client.patch("/olf/shot", json=at | {"fields": {"render": "reference"}})
+    backwards = issues({"at": walk, "start_t": 0.6, "end_t": 0.4})
+    assert ("error", "slot a: end_t (0.4) must be after start_t (0.6)") in backwards
+    assert any(
+        "end_t (0.5) must be after" in m
+        for _, m in issues({"at": walk, "start_t": 0.5, "end_t": 0.5})
+    )
+    assert any(level == "error" for level, _ in issues({"at": walk, "end_t": 1.5}))  # the schema
+    assert any(m.startswith(slow) and "~1 m/s" in m for _, m in issues({"at": walk}))
+    paced = issues({"at": walk, "start_t": 0.25, "end_t": 0.75})  # 1.5 m in 2 s
+    assert not any("slow motion" in m for _, m in paced)
+    assert not any(level == "error" for level, _ in paced)
+    shake = "the pin video does not animate handheld: the camera stays static in @Video1"
+    client.patch("/olf/shot", json=at | {"fields": {"move": "handheld"}})
+    assert ("warning", shake) in issues({"at": walk})
+    client.patch("/olf/shot", json=at | {"fields": {"render": "model"}})
+    assert ("warning", shake) not in issues({"at": walk})  # not a reference render
+    client.patch("/olf/shot", json=at | {"fields": {"render": "reference"}})
+    for move in ("orbit", "static"):
+        client.patch("/olf/shot", json=at | {"fields": {"move": move}})
+        assert not any("does not animate" in m for _, m in issues({"at": walk}))
+
+
+def test_reference_words_give_each_line_a_mouth_cue() -> None:
+    """The pin has no mouth: each dialogue line's speaker moves theirs, with no sound or text."""
+    from vinci_olf.render import _reference_words
+
+    view = {
+        "duration": 4,
+        "characters": [{"id": "char/mira", "name": "Mira Sol"}],
+        "dialogue": [{"speaker": "char/mira", "line": "You kept the key?"}, {"speaker": "x"}],
+    }
+    words = _reference_words(view, None, {"moves": "As the pins move in @Video1: Mira turns"})
+    action = next(b for b in words.split("\n\n") if b.startswith("Action: "))
+    assert action.startswith("Action: As the pins move in @Video1: Mira turns.")
+    assert "Mira Sol's mouth moves to speak a short line; there is no sound and no text." in action
+    assert "X's mouth moves" in action  # an unknown speaker keeps their ID
+    assert "mouth" not in _reference_words(view | {"dialogue": []}, None, {})
+
+
+def test_coderabbit_741_edge_cases(client: TestClient) -> None:
+    """CodeRabbit on #741: overhead camera axes, animated end-frame check for stationary cast,
+    previous-shot ending camera pose in prompt_for, and keeping recorded snapshot on video-less Use."""
+    import base64
+    import io
+    import json
+    import math
+    import subprocess
+
+    from PIL import Image
+    from vinci_olf.project import load
+    from vinci_olf.scene import check_try, end_pose
+    from vinci_olf.scene_lab import pin_video_drift, prompt_for, use
+
+    # 1. Overhead camera fallback axis: pan, tilt, and truck remain non-zero.
+    over = {"camera": {"at": [0, 10, 0], "looks_at": [0, 0, 0]}, "cast": []}
+    assert end_pose(over, {"move": "pan", "direction": "right"})["camera"]["looks_at"][0] > 0.5
+    assert end_pose(over, {"move": "tilt", "direction": "up"})["camera"]["looks_at"][2] < -0.5
+    assert end_pose(over, {"move": "truck", "direction": "right"})["camera"]["at"][0] > 0.5
+    # Oblique near-vertical orbit rotates horizontally around world Y, keeping its radius.
+    oblique = {"camera": {"at": [0.2, 10, 0.2], "looks_at": [0, 0, 0]}, "cast": []}
+    orb = end_pose(oblique, {"move": "orbit", "amount": 0.5})["camera"]["at"]
+    assert math.hypot(orb[0], orb[2]) == pytest.approx(math.hypot(0.2, 0.2))
+
+    # 2. Stationary cast checked at animated end frame + previous-shot ending camera pose + kept recorded.
+    path = client.post("/olf/sample").json()["path"]
+    shutil.rmtree(path)
+    shutil.copytree(SAMPLE, path)
+    at = {"path": path, "shot": SHOT}
+    client.patch(
+        "/olf/shot",
+        json=at | {"fields": {"render": "reference", "move": "pan", "direction": "right", "amount": "2"}},
+    )
+    room = {"set": [{"name": "table", "shape": "box", "size": [1, 0.7, 1], "at": [0, 0, -2]}]}
+    staged = {
+        "camera": {"at": [0, 1.5, 5], "looks_at": [0, 1.4, 0]},
+        "cast": [{"slot": "a", "at": [0, 0, 0]}],
+    }
+    client.post("/olf/scene/paste", json={"path": path, "target": SHOT, "text": json.dumps(room | staged)})
+    issues = [i.message for i in check_try(load(path), SHOT, staged | {"room": 1})]
+    assert any("outside the" in m and "at the end" in m for m in issues)
+
+    # Previous shot with push_in reports its ending camera z (not start z) in prompt_for.
+    client.patch("/olf/shot", json=at | {"fields": {"move": "push_in", "amount": "0.5"}})
+    buf = io.BytesIO()
+    Image.new("RGB", (64, 36), "grey").save(buf, "PNG")
+    frame = base64.b64encode(buf.getvalue()).decode()
+    use(load(path), SHOT, 1, frame)
+    order = sorted(s for s in load(path).of_kind("shot") if s.startswith("e02/s03/"))
+    if order.index(SHOT) + 1 == len(order):
+        client.post(
+            "/olf/shot",
+            json={"path": path, "scene": "e02/s03", "description": "Next shot", "framing": "wide"},
+        )
+        order = sorted(s for s in load(path).of_kind("shot") if s.startswith("e02/s03/"))
+    next_shot = order[order.index(SHOT) + 1]
+    _, prompt = prompt_for(load(path), next_shot, "Wide reverse")
+    assert "[0.0, 1.45, 2.5]" in prompt  # push_in 0.5 from z=5 toward z=0 -> z=2.5
+
+    # Video-less Use preserves recorded snapshot so pin_video_drift still detects later changes.
+    if shutil.which("ffmpeg"):
+        clip = subprocess.check_output(
+            [
+                "ffmpeg",
+                "-v",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=gray:s=64x36:r=24:d=2",
+                "-c:v",
+                "libx264",
+                "-f",
+                "mp4",
+                "-movflags",
+                "frag_keyframe+empty_moov",
+                "pipe:1",
+            ]
+        )
+        use(load(path), SHOT, 1, frame, video=base64.b64encode(clip).decode())
+        use(load(path), SHOT, 1, frame)  # second Use with no video
+        client.patch("/olf/shot", json=at | {"fields": {"duration": "8s"}})
+        assert any("length" in d for d in pin_video_drift(load(path), SHOT))
 
 
 def test_camerawork_has_no_still_words() -> None:

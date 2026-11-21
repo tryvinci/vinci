@@ -7,7 +7,7 @@ from ts_module import run_ts
 
 LIB = "apps/studio/lib/scenelab.ts"
 NAMES = ["ease", "verticalFov", "yawFor", "placeAt", "cameraAt", "extrasOf", "pieceTransform"]
-NAMES += ["HEIGHT", "staging", "tryChanges", "roomChanges", "aimAt"]
+NAMES += ["HEIGHT", "staging", "tryChanges", "roomChanges", "aimAt", "cameraPose", "ANIMATED_MOVES"]
 HEAD = r"""
 const assert = (ok, what) => { if (!ok) throw new Error(what); };
 const near = (a, b, what, tol = 1e-9) => assert(Math.abs(a - b) < tol, `${what}: ${a} != ${b}`);
@@ -58,7 +58,7 @@ const cam = { at: [0, 1.5, 10], looks_at: [0, 1.5, 0] };
 near(cameraAt(cam, { move: "push_in", amount: 0.35 }, 1)[2], 6.5, "push: 35% of the distance");
 near(cameraAt(cam, { move: "push_in", amount: 0.35 }, 0)[2], 10, "push: the start is the try's place");
 near(cameraAt(cam, { move: "pull_out", amount: 0.5 }, 1)[2], 20, "pull: the end frame is twice as wide");
-near(cameraAt(cam, { move: "pan" }, 1)[2], 10, "other moves stay put in the lab for now");
+near(cameraAt(cam, { move: "pan" }, 1)[2], 10, "a pan turns in place: the camera stays");
 near(cameraAt(cam, { move: "push_in" }, 1)[2], 7.5, "a push with no amount goes a quarter");
 const group = { name: "villagers", count: 12, area: [-4, -6, 3, -3], faces: "camera" };
 const places = extrasOf(group, [0, 1.5, 5]);
@@ -113,6 +113,89 @@ const tall = { ...staged, cast: [{ ...walk, height: 0.45 }] };
 near(aimAt(tall, 0)[1], 0.93 * 0.45, "a fox's eyes are low");
 const point = { ...staged, camera: { at: [0, 1.5, 3], looks_at: [0, 1, 0] } };
 assert(aimAt(point, 0.7).join() === "0,1,0", "a point stays a point");
+"""
+    result = run_ts(LIB, NAMES, body)
+    assert result.returncode == 0, result.stderr
+
+
+def test_a_walk_keeps_its_time_window() -> None:
+    """`end.start_t` / `end.end_t` time a walk inside the shot: the person holds the start place
+    before it, eases inside it and holds the end place after it; a hand edit reports them."""
+    body = HEAD + r"""
+const camera = [0, 1.5, 5];
+const mira = { slot: "a", at: [0, 0, 0], faces: "camera", end: { at: [2, 0, 0], faces: 90, start_t: 0.2, end_t: 0.6 } };
+const cast = [mira];
+const before = placeAt(mira, cast, camera, 0.1), at = placeAt(mira, cast, camera, 0.2);
+assert(before.at[0] === 0 && at.at[0] === 0, "holds the start place before the window");
+near(before.yaw, 0, "still faces the camera");
+near(placeAt(mira, cast, camera, 0.4).at[0], 1, "half way through the window, eased");
+near(placeAt(mira, cast, camera, 0.3).at[0], 2 * ease(0.25), "eased inside the window");
+const after = placeAt(mira, cast, camera, 0.8);
+near(after.at[0], 2, "holds the end place after the window"); near(after.yaw, Math.PI / 2, "and the end facing");
+const jump = { ...mira, end: { at: [2, 0, 0], start_t: 0.5, end_t: 0.5 } };
+assert(placeAt(jump, cast, camera, 0.4).at[0] === 0 && placeAt(jump, cast, camera, 0.5).at[0] === 2, "no length: a jump at start_t");
+const whole = { ...mira, end: { at: [2, 0, 0] } };
+near(placeAt(whole, cast, camera, 0.5).at[0], 1, "no window: the whole shot, as before");
+const shot = { shot: "s", room: 1, camera: { at: [0, 1.5, 5], looks_at: [0, 1, 0] }, cast: [whole] };
+const said = tryChanges(shot, { ...shot, cast: [mira] }, { a: "Mira Sol" });
+assert(said.includes("Mira Sol: walk starts none → 0.2"), said.join(" | "));
+assert(said.includes("Mira Sol: walk ends none → 0.6"), said.join(" | "));
+"""
+    result = run_ts(LIB, NAMES, body)
+    assert result.returncode == 0, result.stderr
+
+
+def test_all_camera_moves_in_3d() -> None:
+    """`cameraPose` plays every animated move in the camera's own axes, as
+    `vinci_olf.scene_lab._pushed` does: the camera looks down -z, so its right is +x."""
+    body = HEAD + r"""
+const cam = { at: [0, 1.5, 10], looks_at: [0, 1.5, 0] };
+const half = 24.89 / 2 / 35; // tan of half the 35mm horizontal field on Super 35
+const [hfov, vfov] = [2 * Math.atan(half), 2 * Math.atan(half / (16 / 9))];
+const pose = (move) => cameraPose(cam, move, 1);
+const same = (a, b, what) => a.forEach((v, i) => near(v, b[i], `${what} [${i}]`));
+assert(ANIMATED_MOVES.length === 8 && ANIMATED_MOVES.includes("orbit"), "eight moves");
+same(pose({ move: "push_in", amount: 0.35 }).at, [0, 1.5, 6.5], "push in");
+same(pose({ move: "pull_out", amount: 0.5 }).at, [0, 1.5, 20], "pull out");
+same(pose({ move: "dolly" }).at, [0, 1.5, 7.5], "dolly: in by default");
+same(pose({ move: "dolly", direction: "out" }).at, [0, 1.5, 10 + 10 / 3], "dolly out: a pull");
+same(pose({ move: "dolly", direction: "back" }).looks_at, cam.looks_at, "a dolly keeps its aim");
+const a = 0.3 * hfov;
+same(pose({ move: "pan" }).at, cam.at, "a pan stays in place");
+same(pose({ move: "pan", direction: "right" }).looks_at, [10 * Math.sin(a), 1.5, 10 - 10 * Math.cos(a)], "pan right turns +x");
+same(pose({ move: "pan", direction: "left" }).looks_at, [-10 * Math.sin(a), 1.5, 10 - 10 * Math.cos(a)], "pan left turns -x");
+const b = 0.3 * vfov;
+same(pose({ move: "tilt", direction: "up" }).looks_at, [0, 1.5 + 10 * Math.sin(b), 10 - 10 * Math.cos(b)], "tilt up");
+same(pose({ move: "tilt", direction: "down" }).looks_at, [0, 1.5 - 10 * Math.sin(b), 10 - 10 * Math.cos(b)], "tilt down");
+same(pose({ move: "tilt", direction: "up" }).at, cam.at, "a tilt stays in place");
+const shift = 0.3 * 2 * 10 * half;
+const right = pose({ move: "truck", direction: "right" }), left = pose({ move: "truck", direction: "left" });
+same(right.at, [shift, 1.5, 10], "truck right"); same(right.looks_at, [shift, 1.5, 0], "the aim slides with it");
+same(left.at, [-shift, 1.5, 10], "truck left");
+const dy = 0.3 * 2 * 10 * (half / (16 / 9));
+same(pose({ move: "crane", direction: "up" }).at, [0, 1.5 + dy, 10], "crane up");
+same(pose({ move: "crane", direction: "up" }).looks_at, [0, 1.5 + dy / 2, 0], "the aim rises half as far");
+same(pose({ move: "crane", direction: "down", amount: 1 }).at, [0, 0.1, 10], "never under the floor");
+const o = 0.3 * Math.PI / 2;
+same(pose({ move: "orbit", direction: "right" }).at, [10 * Math.sin(o), 1.5, 10 * Math.cos(o)], "orbit right");
+same(pose({ move: "orbit", direction: "left" }).at, [-10 * Math.sin(o), 1.5, 10 * Math.cos(o)], "orbit left");
+same(pose({ move: "orbit" }).looks_at, cam.looks_at, "an orbit keeps its aim");
+for (const move of ["static", "handheld", "shake", undefined]) {
+  const still = pose({ move });
+  same(still.at, cam.at, `${move} stays`); same(still.looks_at, cam.looks_at, `${move} keeps its aim`);
+}
+same(cameraPose(cam, { move: "truck" }, 0).at, cam.at, "the start is the try's place");
+near(cameraPose(cam, { move: "pan", lens: "85mm" }, 1).looks_at[0], 10 * Math.sin(0.3 * 2 * Math.atan(24.89 / 2 / 85)), "a long lens pans less");
+near(cameraAt(cam, { move: "truck" }, 1)[0], shift, "cameraAt is cameraPose's place");
+// Overhead camera (vertical forward): fallback axis keeps pan, tilt, and truck active (CodeRabbit on #741).
+const over = { at: [0, 10, 0], looks_at: [0, 0, 0] };
+assert(cameraPose(over, { move: "pan", direction: "right" }, 1).looks_at[0] > 0.5, "overhead pan right moves +x");
+assert(cameraPose(over, { move: "tilt", direction: "up" }, 1).looks_at[2] < -0.5, "overhead tilt up moves -z");
+assert(cameraPose(over, { move: "truck", direction: "right" }, 1).at[0] > 0.5, "overhead truck right moves +x");
+// Oblique near-vertical orbit stays circular around world Y (CodeRabbit on #741).
+const oblique = { at: [0.2, 10, 0.2], looks_at: [0, 0, 0] };
+const orb = cameraPose(oblique, { move: "orbit", amount: 0.5 }, 1).at;
+near(Math.hypot(orb[0], orb[2]), Math.hypot(0.2, 0.2), "oblique orbit keeps its radius");
 """
     result = run_ts(LIB, NAMES, body)
     assert result.returncode == 0, result.stderr
