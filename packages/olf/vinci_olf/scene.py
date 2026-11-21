@@ -49,6 +49,9 @@ STEP = 0.6  # metres: one natural walking step
 # and 5.4 m walks came through whole (COREPRODUC-742, 2026-11-20).
 SMALL_MOVE = 1.0
 HALF_STEP = 0.4  # metres: a move under this is a half step in the prompt's words
+WALK_SPEED = 0.4  # m/s: a walk slower than this plays in slow motion in the pin video (~1 m/s)
+# The camera moves the pin video plays (``scene_lab._pushed``, the Studio's ``cameraPose``).
+ANIMATED_MOVES = ("push_in", "pull_out", "dolly", "pan", "tilt", "truck", "crane", "orbit")
 FRAMINGS = ("extreme_wide", "wide", "medium", "medium_close", "close_up", "extreme_close_up")
 # The checks of a try's camera against the shot's words, after the measured pass of
 # github.com/cbunseng/seedance-blockout-editor-private (Apache-2.0, docs/qa-engine-side.md):
@@ -100,13 +103,67 @@ def aim(data: dict[str, Any], moment: str = "start") -> list[float]:
     return [place["at"][0], place["at"][1] + EYE * height, place["at"][2]]
 
 
+def _camera_axes(forward: list[float]) -> tuple[list[float], list[float]]:
+    """Orthonormal right and up axes for a unit forward vector, with a fallback for vertical
+    cameras so overhead shots keep valid pan/tilt/truck axes (CodeRabbit on #741)."""
+    ref = [0.0, 0.0, -1.0] if abs(forward[1]) > 0.999 else [0.0, 1.0, 0.0]
+    right = _unit(_cross(forward, ref))
+    return right, _cross(right, forward)
+
+
 def frame_of(data: dict[str, Any], moment: str, lens: float, aspect: float) -> Frame:
     """A try's camera at the start or the end, as a ``Frame``."""
     at = [float(v) for v in data["camera"]["at"]]
     forward = _unit([b - a for a, b in zip(at, aim(data, moment), strict=True)])
-    right = _unit(_cross(forward, [0.0, 1.0, 0.0]))
+    right, up = _camera_axes(forward)
     half_w = SENSOR_MM / 2 / lens
-    return Frame(at, forward, right, _cross(right, forward), half_w, half_w / aspect)
+    return Frame(at, forward, right, up, half_w, half_w / aspect)
+
+
+def end_pose(
+    staged: dict[str, Any], camera: dict[str, Any], lens: float = 35.0, aspect: float = 16 / 9
+) -> dict[str, Any]:
+    """The try with its camera where the shot's move ends, as the pin video moves it (the lab's
+    ``cameraPose`` at t = 1, in the camera's own axes). Any non-animated move returns ``staged``."""
+    move, way, amount = camera.get("move"), camera.get("direction"), camera.get("amount")
+    if move not in ANIMATED_MOVES:
+        return staged
+    at, to = [float(v) for v in staged["camera"]["at"]], aim(staged, "end")
+    if move == "dolly":
+        move = "pull_out" if way in ("out", "back") else "push_in"
+    if move in ("push_in", "pull_out"):
+        push = min(max(0.25 if amount is None else float(amount), 0.0), 0.9)
+        k = push if move == "push_in" else 1 - 1 / (1 - push)
+        moved_at = [a + (b - a) * k for a, b in zip(at, to, strict=True)]
+        return staged | {"camera": staged["camera"] | {"at": moved_at}}
+    d = [b - a for a, b in zip(at, to, strict=True)]
+    dist = math.sqrt(_dot(d, d)) or 1.0
+    fwd = _unit(d)
+    right, up = _camera_axes(fwd)
+    hfov = 2 * math.atan(SENSOR_MM / 2 / lens)
+    vfov = 2 * math.atan(SENSOR_MM / 2 / lens / aspect)
+    size = 0.3 if amount is None else float(amount)
+    sign = -1 if way == ("down" if move in ("tilt", "crane") else "left") else 1
+    if move in ("pan", "tilt"):
+        axis, angle = (right, sign * size * hfov) if move == "pan" else (up, sign * size * vfov)
+        look = [
+            at[k] + dist * (fwd[k] * math.cos(angle) + axis[k] * math.sin(angle)) for k in range(3)
+        ]
+    elif move == "truck":
+        shift = sign * size * 2 * dist * math.tan(hfov / 2)
+        at, look = (
+            [a + r * shift for a, r in zip(at, right, strict=True)],
+            [b + r * shift for b, r in zip(to, right, strict=True)],
+        )
+    elif move == "crane":
+        dy = sign * size * 2 * dist * math.tan(vfov / 2)
+        at, look = [at[0], max(0.1, at[1] + dy), at[2]], [to[0], to[1] + dy * 0.5, to[2]]
+    else:  # orbit: rotate horizontally around world Y so near-vertical orbits stay circular
+        angle = sign * size * (math.pi / 2)
+        rx, rz = at[0] - to[0], at[2] - to[2]
+        cos_a, sin_a = math.cos(angle), math.sin(angle)
+        at, look = [to[0] + rx * cos_a + rz * sin_a, at[1], to[2] - rx * sin_a + rz * cos_a], to
+    return staged | {"camera": staged["camera"] | {"at": at, "looks_at": look}}
 
 
 def used(p: Project, shot: str) -> dict[str, Any] | None:
@@ -313,6 +370,17 @@ def check_try(p: Project, shot: str, data: Any) -> list[Issue]:
     slots = [person["slot"] for person in data["cast"]]
     for slot in sorted({s for s in slots if slots.count(s) > 1}):
         issues.append(Issue("error", where, f"slot {slot} is staged twice"))
+    for person in data["cast"]:  # a walk window ends after it starts (0 to 1 when left out)
+        end = person.get("end") or {}
+        s, e = float(end.get("start_t", 0.0)), float(end.get("end_t", 1.0))
+        if ("start_t" in end or "end_t" in end) and e <= s:
+            issues.append(
+                Issue(
+                    "error",
+                    where,
+                    f"slot {person['slot']}: end_t ({e:g}) must be after start_t ({s:g})",
+                )
+            )
     pieces = room["set"] + (data.get("props") or [])
     issues += [
         Issue("error", where, f"{_label(piece)} is below the floor (y {piece['at'][1]:g})")
@@ -322,8 +390,16 @@ def check_try(p: Project, shot: str, data: Any) -> list[Issue]:
     camera = view.get("camera") or {}
     lens = _lens(camera.get("lens"))
     aspect = _aspect(camera.get("canvas") or (view.get("defaults") or {}).get("aspect"))
+    # Reference renders play the pin video, so check cast against the moved end camera pose too
+    # (CodeRabbit on #741); non-reference shots only use the start keyframe layout.
+    animated = camera.get("render") == "reference" and camera.get("move") in ANIMATED_MOVES
     try:
-        frames = {m: frame_of(data, m, lens, aspect) for m in ("start", "end")}
+        frames = {
+            "start": frame_of(data, "start", lens, aspect),
+            "end": frame_of(
+                end_pose(data, camera, lens, aspect) if animated else data, "end", lens, aspect
+            ),
+        }
     except OlfError as exc:
         return [*issues, Issue("error", where, str(exc))]
     heads: list[float] = []  # the head size of each person in the frame at the start
@@ -340,8 +416,11 @@ def check_try(p: Project, shot: str, data: Any) -> list[Issue]:
             )
             continue
         who, height = names[place], float(person.get("height") or HEIGHT)
+        # Check unchanged cast at the end too when the camera moves (CodeRabbit on #741).
         moments = [("start", person["at"])] + (
-            [("end", person["end"]["at"])] if person.get("end") else []
+            [("end", person["end"]["at"])]
+            if person.get("end")
+            else ([("end", person["at"])] if animated else [])
         )
         for moment, at in moments:
             frame = frames[moment]
@@ -356,26 +435,27 @@ def check_try(p: Project, shot: str, data: Any) -> list[Issue]:
                 issues += _seen(frame, who, moment, at, height, pieces, reach, camera, where)
                 if moment == "start":
                     heads.append(_head(frame, at, height))
-            for piece in pieces:
-                if _inside(piece, at, height):
+            if moment == "start" or person.get("end"):
+                for piece in pieces:
+                    if _inside(piece, at, height):
+                        issues.append(
+                            Issue(
+                                "warning",
+                                where,
+                                f"{who} stands inside the {_label(piece)} at the {moment}",
+                            )
+                        )
+                if at[1] > GAP and not any(_holds(piece, at) for piece in pieces):
                     issues.append(
                         Issue(
                             "warning",
                             where,
-                            f"{who} stands inside the {_label(piece)} at the {moment}",
+                            f"{who} floats {at[1]:g} m above the floor at the {moment}",
                         )
                     )
-            if at[1] > GAP and not any(_holds(piece, at) for piece in pieces):
-                issues.append(
-                    Issue(
-                        "warning",
-                        where,
-                        f"{who} floats {at[1]:g} m above the floor at the {moment}",
-                    )
-                )
     issues += _words(camera, frames["start"], heads, where)
     issues += _jump(p, shot, data, camera, names, where)
-    issues += _stiff(data, camera, names, where)
+    issues += _stiff(data, camera, names, where, float(view.get("duration") or 0))
     return issues
 
 
@@ -388,15 +468,48 @@ def moved(person: dict[str, Any]) -> float:
 
 
 def _stiff(
-    data: dict[str, Any], camera: dict[str, Any], names: list[str], where: str
+    data: dict[str, Any],
+    camera: dict[str, Any],
+    names: list[str],
+    where: str,
+    duration: float = 0.0,
 ) -> list[Issue]:
     """Warnings for motion a video model may not show (COREPRODUC-741), after the rules of
     github.com/sirioberati/ai-filmmaking-camera-control-seedance-2-5 (MIT; docs/why/
-    why-no-static-shots.md): a move shorter than ``SMALL_MOVE`` (1 m), and a reference render whose
-    pin video hardly moves (a static camera and no one moving a full step): it comes back stiff."""
+    why-no-static-shots.md).
+
+    Args:
+        data: The shot try.
+        camera: The shot's resolved camera words.
+        names: The shot's character names, by slot.
+        where: The issue's place.
+        duration: The shot's length in seconds (0: unknown, no speed check).
+
+    Returns:
+        Warnings: a move shorter than ``SMALL_MOVE`` (1 m); and for a reference render, a walk
+        slower than ``WALK_SPEED`` over its ``start_t``..``end_t`` window (it plays in slow
+        motion in the pin video), a camera move the pin video does not play, and a pin video
+        that hardly moves (a static camera and no one moving a full step): it comes
+        back stiff.
+    """
     out: list[Issue] = []
+    reference = camera.get("render") == "reference"  # only a reference render plays the pins
     for person in data["cast"]:
         far, k = moved(person), slot_place(person["slot"])
+        if reference and far >= SMALL_MOVE and duration > 0 and k < len(names):
+            end = person["end"]
+            window = max(float(end.get("end_t", 1.0)) - float(end.get("start_t", 0.0)), 1e-6)
+            walk_s = duration * window
+            if far / walk_s < WALK_SPEED:
+                out.append(
+                    Issue(
+                        "warning",
+                        where,
+                        f"{names[k]}'s move takes {walk_s:.1f} s ({far / walk_s:.2f} m/s), which "
+                        "plays in slow motion in the pin video; tighten start_t/end_t for a "
+                        "natural walking pace (~1 m/s)",
+                    )
+                )
         if 0 < far < SMALL_MOVE and k < len(names):
             out.append(
                 Issue(
@@ -407,10 +520,17 @@ def _stiff(
                     "move the audience must see, or no move",
                 )
             )
-    still = camera.get("move") in (None, "", "static") and not isinstance(
-        data["camera"]["looks_at"], str
-    )
-    if camera.get("render") == "reference" and still:
+    move = camera.get("move")
+    if reference and move and move not in ("static", *ANIMATED_MOVES):
+        out.append(
+            Issue(
+                "warning",
+                where,
+                f"the pin video does not animate {move}: the camera stays static in @Video1",
+            )
+        )
+    still = move in (None, "", "static") and not isinstance(data["camera"]["looks_at"], str)
+    if reference and still:
         if all(moved(x) < STEP for x in data["cast"]):  # "no one moves a full step"
             out.append(
                 Issue(

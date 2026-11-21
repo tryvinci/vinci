@@ -27,6 +27,7 @@ from vinci_olf.scene import (
     NEAR,
     SENSOR_MM,
     STEP,
+    TURN,
     Frame,
     _aspect,
     _dot,
@@ -34,7 +35,6 @@ from vinci_olf.scene import (
     _lens,
     _scene_dir,
     _unit,
-    aim,
     check_try,
     frame_of,
     measured,
@@ -48,6 +48,7 @@ from vinci_olf.scene import (
     tries,
     used,
 )
+from vinci_olf.scene import end_pose as _pushed
 
 log = logging.getLogger(__name__)
 STAGING = ("camera", "cast", "groups", "props")  # what a shot try holds beside its room
@@ -78,11 +79,14 @@ SHOT_SYSTEM = (
     "You stage one shot of an animated show in 3D: where the camera is and where each named "
     'person stands. Answer as { "camera": { "at": [x, y, z], "looks_at": [x, y, z] | "a" }, '
     '"cast": [{ "slot": "a", "at": [x, y, z], "faces": "camera" | "away" | degrees | "b", '
-    '"end": { "at": [x, y, z], "faces": ... } }], '
+    '"end": { "at": [x, y, z], "faces": ..., "start_t": 0 to 1, "end_t": 0 to 1 } }], '
     '"groups": [{ "name": "villagers", "count": 8, "area": [x0, z0, x1, z1], "faces": "camera" }], '
     f'"props": [{PIECE}] }}. A person\'s `at` is where the feet are; `end` only when they '
-    "move during the shot, and then at least one full step (0.6 m) away: a smaller move does not "
-    "show in the video. `looks_at` as a slot makes the camera follow that person's eyes. "
+    "move during the shot, and then at least two steps (1.2 m) away: a smaller move does not "
+    "show in the video. `start_t` and `end_t` in `end` (0 to 1, parts of the shot; optional) are "
+    "when the walk starts and ends: time it at a natural walking speed (about 1 m/s), as a walk "
+    "stretched over the whole shot plays in slow motion. "
+    "`looks_at` as a slot makes the camera follow that person's eyes. "
     "Keep every named person inside the camera's frame at the start and "
     "the end. `groups` are background people, never named. `props` are pieces for this shot "
     "only. " + RULES
@@ -121,6 +125,8 @@ def prompt_for(
         words.append(
             f"The room (version {found['version']}), set pieces:\n" + json.dumps(found["set"])
         )
+        if before := _previous_words(p, target, found["version"]):
+            words.append(before)
     if base:
         start = {k: v for k, v in _try_of(p, target, base).items() if k in STAGING}
         words.append(
@@ -128,6 +134,66 @@ def prompt_for(
         )
     words.append(f"The person wants:\n{request}")
     return SHOT_SYSTEM + ("" if has_room else " " + BOTH), "\n\n".join(words)
+
+
+def _previous_words(p: Project, shot: str, room: int) -> str:
+    """How the shot before ended, for a staging that cuts from it without a jump cut.
+
+    The shot before is the one before in the same scene, in ``scene._jump``'s order. Its words
+    come only when its keyframe layout came from a try in the same room version, so the numbers
+    are in the room the model stages in.
+
+    Args:
+        p: The loaded project.
+        shot: The shot being staged.
+        room: The room version it is staged in.
+
+    Returns:
+        The block: the camera's place, the framing, and each person's end place and facing,
+        with the 30° rule; "" when there is no such shot before.
+    """
+    from vinci_olf.resolve import resolve
+
+    scene = shot.rsplit("/", 1)[0]
+    order = sorted(s for s in p.of_kind("shot") if s.rsplit("/", 1)[0] == scene)
+    k = order.index(shot) if shot in order else 0
+    found = used(p, order[k - 1]) if k else None
+    if found is None or found.get("room") != room:
+        return ""
+    before = order[k - 1]
+    view = resolve(p, before)
+    prev_cam = view.get("camera") or {}
+    framing = str(prev_cam.get("framing") or "").replace("_", " ")
+    cast = [c for c in view.get("characters") or [] if isinstance(c, dict)]
+    by_slot = {slot_name(n): str(c.get("name") or c.get("id")) for n, c in enumerate(cast)}
+    staged = found["staged"]
+    # Report where the previous camera ended, accounting for its move (CodeRabbit on #741).
+    prev_aspect = _aspect(prev_cam.get("canvas") or (view.get("defaults") or {}).get("aspect"))
+    ended = _pushed(staged, prev_cam, _lens(prev_cam.get("lens")), prev_aspect)
+    lines = [f"Previous shot ({before.rsplit('/', 1)[1]}) ended with:"]
+    camera = f"  the camera at {_xyz(ended['camera']['at'])}"
+    lines.append(camera + (f", {framing} framing" if framing else ""))
+    for person in staged.get("cast") or []:
+        if person["slot"] not in by_slot:
+            continue
+        end = person.get("end") or {}
+        faces = end.get("faces", person.get("faces"))
+        if isinstance(faces, str) and faces not in ("camera", "away"):  # another person's slot
+            faces = by_slot.get(faces)
+        facing = f", facing {faces:g}°" if isinstance(faces, (int, float)) else ""
+        facing = facing or (f", facing {faces}" if faces else "")
+        at = _xyz(end.get("at") or person["at"])
+        lines.append(f"  {by_slot[person['slot']]} at {at}{facing}")
+    lines.append(
+        f"Turn the camera at least {TURN:g}° around anyone in both shots, or change the framing "
+        "two steps, so the cut is not a jump cut."
+    )
+    log.info("scene lab: %s staged after %s (room v%s)", shot, before, room)
+    return "\n".join(lines)
+
+
+def _xyz(at: list[float]) -> str:
+    return json.dumps([round(float(v), 2) for v in at])
 
 
 def build(
@@ -304,6 +370,7 @@ def overview(p: Project, target: str) -> dict[str, Any]:
         # The try the shot's keyframe layout came from, and the framing and angle it measured.
         mark = used(p, target) or {}
         out["used"] = {k: mark[k] for k in ("try", "framing", "angle") if k in mark} or None
+        out["pin_stale"] = pin_video_drift(p, target)  # what changed since the pin video
         rooms = {t["room"] for t in out["tries"]} & set(versions)
         out["rooms"] = {str(v): read_room(p, scene, v) for v in sorted(rooms)}
         return out
@@ -368,6 +435,8 @@ def use(
     staged = _try_of(p, shot, n)
     if errors := [i.message for i in check_try(p, shot, staged) if i.level == "error"]:
         raise OlfError(f"{shot} try {n}: " + "; ".join(errors))
+    # Read the prior record before add_storyboard replaces control.storyboard (CodeRabbit on #741).
+    kept = used(p, shot) or {}
     layout = pills_of(p, shot, staged)
     notes = {"olf-scene-room": str(staged["room"]), "olf-scene-try": str(n)}
     asset = add_storyboard(p, shot, frame, notes)
@@ -377,7 +446,8 @@ def use(
     # go in the keyframe prompt, and words that contradict the layout made results worse
     # (COREPRODUC-728). An insert or a dutch angle is a choice the 3D camera cannot measure.
     # The resolved camera: a template's insert or dutch counts too (CodeRabbit on #727).
-    camera = resolve(p, shot).get("camera") or {}
+    view = resolve(p, shot)
+    camera = view.get("camera") or {}
     words = {
         k: v
         for k, v in measured(p, shot, staged).items()
@@ -388,11 +458,77 @@ def use(
     # Which try the frame came from: the keyframe prompt names its grey shapes (`layout_words`).
     scene, name = shot.rsplit("/", 1)
     mark = {"try": n, "room": staged["room"], "storyboard": asset, "pin": pin} | words
-    mark |= {"reference_video": clip} if clip else {}
+    # The camera words and length baked into the pin video, for ``pin_video_drift``.
+    if clip:
+        mark |= {"reference_video": clip, "recorded": _pin_snapshot(view)}
+    elif "recorded" in kept:  # keep the drift record for the still-installed reference video
+        mark["recorded"] = kept["recorded"]
+        if "reference_video" in kept:
+            mark["reference_video"] = kept["reference_video"]
     (_scene_dir(p, scene) / name / "used.json").write_text(json.dumps(mark), encoding="utf-8")
     log.info("scene lab: %s uses try %d (room v%s): %s", shot, n, staged["room"], asset)
     out = {"storyboard": asset, "layout": layout, "room": staged["room"], "try": n}
     return out | ({"reference_video": clip} if clip else {})
+
+
+PIN_WORDS = {"duration": "length", "aspect": "frame"}  # a snapshot key in people's words
+
+
+def _pin_snapshot(view: dict[str, Any]) -> dict[str, Any]:
+    """The shot's words that a pin video bakes in: the lens, the camera move, its direction,
+    amount and ease, the length and the frame shape (``use`` records them in ``used.json``).
+
+    Args:
+        view: The resolved shot.
+
+    Returns:
+        The words, with the defaults the lab plays filled in.
+    """
+    camera = view.get("camera") or {}
+    return {
+        "lens": str(camera.get("lens") or "35mm"),
+        "move": str(camera.get("move") or "static"),
+        "direction": str(camera.get("direction") or ""),
+        "amount": camera.get("amount"),
+        "ease": str(camera.get("ease") or "in_out"),
+        "duration": float(view.get("duration") or 0),
+        "aspect": str(camera.get("canvas") or (view.get("defaults") or {}).get("aspect") or "16:9"),
+    }
+
+
+def pin_video_drift(p: Project, shot: str) -> list[str]:
+    """What changed in the shot since its pin video was recorded (``control.reference_video``):
+    the clip still plays the old camera or length until Use records it again.
+
+    Args:
+        p: The loaded project.
+        shot: The shot.
+
+    Returns:
+        One phrase per change (``lens (24mm -> 50mm)``, ``length (4s -> 6s)``); empty with no
+        pin video, no record of it (a Use before the record), or no change.
+    """
+    from vinci_olf.resolve import resolve
+
+    view = resolve(p, shot)
+    then = (used(p, shot) or {}).get("recorded")
+    if not (view.get("control") or {}).get("reference_video") or not isinstance(then, dict):
+        return []
+
+    def said(key: str, value: Any) -> str:
+        if value in (None, ""):
+            return "none"
+        return f"{float(value):g}s" if key == "duration" else str(value)
+
+    now = _pin_snapshot(view)
+    out = [
+        f"{PIN_WORDS.get(k, k)} ({said(k, then.get(k))} -> {said(k, v)})"
+        for k, v in now.items()
+        if then.get(k) != v
+    ]
+    if out:
+        log.info("scene lab: %s pin video is stale: %s", shot, ", ".join(out))
+    return out
 
 
 def pills_of(p: Project, shot: str, staged: dict[str, Any]) -> dict[str, Any]:
@@ -497,23 +633,9 @@ def layout_words(p: Project, shot: str) -> dict[str, str]:
     out["camera"] = ", ".join(words)
     names = [str(c.get("name") or c.get("id")) for c in cast]
     pieces = room["set"] + (staged.get("props") or [])
-    end = frame_of(_pushed(staged, camera), "end", lens, aspect)
-    out |= _motion_words(staged, names, pieces, frame, end)
+    end = frame_of(_pushed(staged, camera, lens, aspect), "end", lens, aspect)
+    out |= _motion_words(staged, names, pieces, frame, end, float(view.get("duration") or 0))
     return out
-
-
-def _pushed(staged: dict[str, Any], camera: dict[str, Any]) -> dict[str, Any]:
-    """The try with its camera where a push or a pull ends, as the pin video moves it (the lab's
-    ``cameraAt`` at t = 1: ``amount`` of the way to what it looks at, 0.25 with none, at most
-    0.9). Other moves stay put in the lab. CodeRabbit on #740: the end numbers kept the start."""
-    move, amount = camera.get("move"), camera.get("amount")
-    if move not in ("push_in", "pull_out"):
-        return staged
-    amount = min(max(0.25 if amount is None else float(amount), 0.0), 0.9)
-    k = amount if move == "push_in" else 1 - 1 / (1 - amount)
-    at, to = staged["camera"]["at"], aim(staged, "end")
-    moved_at = [a + (b - a) * k for a, b in zip(at, to, strict=True)]
-    return staged | {"camera": staged["camera"] | {"at": moved_at}}
 
 
 def _motion_words(
@@ -522,10 +644,17 @@ def _motion_words(
     pieces: list[dict[str, Any]],
     start: Frame,
     end: Frame,
+    duration: float = 0.0,
 ) -> dict[str, str]:
     """A reference render's words for the try's people (COREPRODUC-741): ``moves``, each move as
     start, direction and arrival, and ``framing``, each person's size and place in the first
     frame, and a mover's at the end, measured as the pin video shows them.
+
+    A move's side is the walk's own, along the first frame's right axis. A move with a
+    ``start_t``/``end_t`` window names its seconds (``duration`` > 0), and only a mover who ends
+    in the frame "then stops". Bugs (first report, 2026-11-21 scene lab review): the side came
+    from the screen, so a camera that follows the mover (it keeps them in the middle) said no
+    side; and a mover who walks out of the frame "then stops".
 
     After github.com/sirioberati/ai-filmmaking-camera-control-seedance-2-5 (MIT;
     docs/prompt-anatomy.md, docs/why/why-words-beat-a-specific-video.md): the pin carries no body,
@@ -547,7 +676,8 @@ def _motion_words(
             moves.append(f"{name} keeps their place, breathing and shifting their weight naturally")
             continue
         a, b = person["at"], person["end"]["at"]
-        ends += _place(end, b, height, name)
+        end_place = _place(end, b, height, name)
+        ends += end_place
         walks = True  # "match", even when they end off screen (CodeRabbit on #740)
         step = (
             "a small half step"
@@ -556,13 +686,20 @@ def _motion_words(
             if far < 0.9
             else f"about {max(2, round(far / STEP))} steps"
         )
-        dx = end.screen(b)[0] - start.screen(a)[0]
-        side = " to the right" if dx > 0.05 else " to the left" if dx < -0.05 else ""
+        lateral = _dot([b[0] - a[0], 0.0, b[2] - a[2]], start.right)  # the walk, not the screen
+        side = " to the right" if lateral > 0.15 else " to the left" if lateral < -0.15 else ""
         nearer = math.dist(start.at, a) - math.dist(start.at, b)  # their walk, not a push
         way = " toward the camera" if nearer > 0.25 else ""
         way = way or (" away from the camera" if nearer < -0.25 else "")
         side = " and".join(x for x in (side, way) if x)
-        moves.append(f"{name} takes {step} ({far:.1f} m){side}{_toward(a, b, pieces)}, then stops")
+        s, e = float(person["end"].get("start_t", 0.0)), float(person["end"].get("end_t", 1.0))
+        when = (
+            f" between {s * duration:.1f} s and {e * duration:.1f} s"
+            if duration > 0 and (s > 0 or e < 1)
+            else ""
+        )
+        stops = ", then stops" if end_place else ""  # one who walks out of the frame never stops
+        moves.append(f"{name} takes {step} ({far:.1f} m){side}{_toward(a, b, pieces)}{when}{stops}")
     out: dict[str, str] = {}
     if moves:
         out["moves"] = (

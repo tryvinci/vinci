@@ -1979,6 +1979,11 @@ def test_scene_lab_prompts_answers_and_use(show: Path) -> None:
         "the shot says a close up, but the nearest person reads as a wide"
         " (a head 0.17 of the frame height)"
     )
+    SHORT = (
+        "Mira Sol moves only 0.6 m: a video model may show a move this small at about half its"
+        " size, or not at all. Stage two steps (1.2 m) or more for a move the audience must see,"
+        " or no move"
+    )
     assert save_answer(load(show), shot, answer, request="r", model="m") == {"room": 1, "try": 1}
     assert (
         room_versions(load(show), scene) == [1] and read_room(load(show), scene)["from"] == "sh014"
@@ -1986,7 +1991,7 @@ def test_scene_lab_prompts_answers_and_use(show: Path) -> None:
     seen = overview(load(show), shot)
     assert seen["versions"] == [1] and [
         (t["try"], t["issues"], t["model"]) for t in seen["tries"]
-    ] == [(1, [FAR], "m")]
+    ] == [(1, [FAR, SHORT], "m")]
     # A room try (a pasted answer for the scene), kept as room v2.
     assert save_answer(load(show), scene, json.dumps({"set": [lamp]})) == {"room_try": 1}
     assert keep_room(load(show), scene, room_try=1) == 2

@@ -19,7 +19,14 @@ export type OlfPiece = {
 };
 /** Where a person looks: degrees, `camera`, `away`, or another person's slot. */
 export type OlfFaces = number | string;
-export type OlfPerson = { slot: string; at: V3; faces?: OlfFaces; height?: number; end?: { at: V3; faces?: OlfFaces } };
+/** `end`: where a person walks to; `start_t`/`end_t` (0..1 of the shot) time the walk, 0 to 1 when left out. */
+export type OlfPerson = {
+  slot: string;
+  at: V3;
+  faces?: OlfFaces;
+  height?: number;
+  end?: { at: V3; faces?: OlfFaces; start_t?: number; end_t?: number };
+};
 /** Background people: a count in an area of the floor (x0, z0, x1, z1); never named. */
 export type OlfGroup = { name?: string; count: number; area: [number, number, number, number]; faces?: OlfFaces };
 export type OlfRoom = { scene: string; version?: number; from?: string; set: OlfPiece[]; request?: string; model?: string };
@@ -36,8 +43,11 @@ export type OlfShotTry = {
   try?: number;
   issues?: string[];
 };
-/** The shot's own camera words that the lab plays: its move and how far it goes. */
-export type ShotMove = { move?: string; amount?: number; ease?: string };
+/** The shot's own camera words that the lab plays: its move, its way (`left`, `up`, `out`, ...)
+ * and how far it goes. */
+export type ShotMove = { move?: string; direction?: string; amount?: number; ease?: string };
+/** The camera moves the lab plays in 3D (`cameraPose`); any other move stays put. */
+export const ANIMATED_MOVES = ["push_in", "pull_out", "dolly", "pan", "tilt", "truck", "crane", "orbit"] as const;
 
 export const HEIGHT = 1.7; // a person's height when the try states none
 export const EYE = 0.93; // the eye line as a part of a person's height (vinci_olf.scene.EYE)
@@ -71,11 +81,23 @@ export function yawFor(faces: OlfFaces | undefined, at: V3, cast: OlfPerson[], c
 }
 
 /** Where a person stands and looks at time `t` (0: the start, 1: the end). A person with an end
- * place walks there over the shot; one with none stays. */
+ * place walks there between `end.start_t` and `end.end_t` (the whole shot when left out): they
+ * hold the start place before it and the end place after it. One with no end place stays.
+ *
+ * @param person The person, with an optional end place and walk window.
+ * @param cast The shot's cast (a person may face another).
+ * @param camera The camera's place (a person may face it).
+ * @param t Time in the shot, 0..1.
+ * @returns Their place and yaw at `t`.
+ */
 export function placeAt(person: OlfPerson, cast: OlfPerson[], camera: V3, t: number): { at: V3; yaw: number } {
   const start = yawFor(person.faces, person.at, cast, camera);
-  if (!person.end || t <= 0) return { at: person.at, yaw: start };
-  const e = ease(t);
+  if (!person.end) return { at: person.at, yaw: start };
+  const [s, eT] = [person.end.start_t ?? 0, person.end.end_t ?? 1];
+  // Progress inside the walk window; a window of no length jumps at `start_t`.
+  const u = eT > s ? Math.min(Math.max((t - s) / (eT - s), 0), 1) : t >= s ? 1 : 0;
+  if (u <= 0) return { at: person.at, yaw: start };
+  const e = ease(u);
   const at = person.at.map((v, k) => v + (person.end!.at[k] - v) * e) as V3;
   const end = yawFor(person.end.faces ?? person.faces, person.end.at, cast, camera);
   const turn = Math.atan2(Math.sin(end - start), Math.cos(end - start)); // the short way round
@@ -93,17 +115,82 @@ export function aimAt(staged: OlfShotTry, t: number): V3 {
   return [at[0], at[1] + EYE * (person.height ?? HEIGHT), at[2]];
 }
 
-/** The camera's place at time `t`: a push moves it toward what it looks at by `amount` of the
- * distance (the end frame is 1 - amount of the start frame, SPEC.md `camera.amount`), a pull
- * moves it away by the same rule backwards; any other move stays put in the lab for now. */
-export function cameraAt(camera: { at: V3; looks_at: V3 }, move: ShotMove, t: number): V3 {
-  const amount = Math.min(Math.max(move.amount ?? PUSH, 0), 0.9);
+const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const scale = (a: V3, k: number): V3 => [a[0] * k, a[1] * k, a[2] * k];
+const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const unit = (a: V3): V3 => scale(a, 1 / (Math.hypot(...a) || 1));
+
+/** The camera's place and aim at time `t` for the shot's move, as `vinci_olf.scene_lab._pushed`
+ * plays it (in the camera's own axes, so it works from any place):
+ * - `push_in` / `pull_out` (and `dolly` in or `out`/`back`): move along the aim by `amount` of the
+ *   distance (a push's end frame is 1 - amount of the start frame, SPEC.md `camera.amount`; a pull
+ *   is the same rule backwards). Default amount 0.25, at most 0.9.
+ * - `pan` / `tilt`: turn the aim in place by `amount` of the lens's horizontal / vertical field.
+ * - `truck` / `crane`: slide sideways / up by `amount` of the view's width / height at the aim
+ *   (a crane tilts half as far and never goes under 0.1 m).
+ * - `orbit`: circle the aim on the floor plane by `amount` of a quarter turn.
+ * `direction` `left` or `down` turns the move the other way (default 0.3 for these). Any other
+ * move (`static`, `handheld`, `shake`, none) stays put.
+ *
+ * @param camera The try's camera place and the point it aims at.
+ * @param move The shot's camera words and lens.
+ * @param t Time in the shot, 0..1 (eased by `move.ease`).
+ * @param aspect The frame shape as width over height.
+ * @returns The camera's place and aim at `t`.
+ */
+/** Reference up axis for a camera pose: world up unless aiming vertically, shared by 3D rendering
+ * and pill projection (CodeRabbit on #741). */
+export function cameraUp(at: V3, looks_at: V3): V3 {
+  const fwd = unit([looks_at[0] - at[0], looks_at[1] - at[1], looks_at[2] - at[2]]);
+  return Math.abs(fwd[1]) > 0.999 ? [0, 0, -1] : [0, 1, 0];
+}
+
+export function cameraPose(camera: { at: V3; looks_at: V3 }, move: ShotMove & { lens?: string }, t: number, aspect = 16 / 9): { at: V3; looks_at: V3 } {
   const e = ease(t, move.ease);
-  const from = camera.at, to = camera.looks_at;
-  let k = 0;
-  if (move.move === "push_in") k = amount * e;
-  else if (move.move === "pull_out") k = (1 - 1 / (1 - amount)) * e; // negative: backwards
-  return from.map((v, i) => v + (to[i] - v) * k) as V3;
+  const { at, looks_at: to } = camera;
+  const d: V3 = [to[0] - at[0], to[1] - at[1], to[2] - at[2]];
+  const dist = Math.hypot(...d) || 1;
+  const fwd = unit(d);
+  const right = unit(cross(fwd, cameraUp(at, to))), up = cross(right, fwd);
+  const mm = parseFloat(String(move.lens ?? "")) || 35;
+  const hfov = 2 * Math.atan(SENSOR_MM / 2 / mm), vfov = 2 * Math.atan(SENSOR_MM / 2 / mm / aspect);
+  const push = Math.min(Math.max(move.amount ?? PUSH, 0), 0.9);
+  const amount = move.amount ?? 0.3; // pan, tilt, truck, crane, orbit
+  const side = move.direction === "left" ? -1 : 1, rise = move.direction === "down" ? -1 : 1; // the other way
+  const along = (k: number) => ({ at: add(at, scale(d, k)), looks_at: to });
+  const turn = (axis: V3, angle: number) => ({ at, looks_at: add(at, scale(add(scale(fwd, Math.cos(angle)), scale(axis, Math.sin(angle))), dist)) });
+  const back = move.move === "pull_out" || (move.move === "dolly" && (move.direction === "out" || move.direction === "back"));
+  switch (move.move) {
+    case "push_in":
+    case "pull_out":
+    case "dolly":
+      return along(back ? (1 - 1 / (1 - push)) * e : push * e); // a pull's k is negative: backwards
+    case "pan":
+      return turn(right, side * amount * hfov * e);
+    case "tilt":
+      return turn(up, rise * amount * vfov * e);
+    case "truck": {
+      const shift = scale(right, side * amount * 2 * dist * Math.tan(hfov / 2) * e);
+      return { at: add(at, shift), looks_at: add(to, shift) };
+    }
+    case "crane": {
+      const dy = rise * amount * 2 * dist * Math.tan(vfov / 2) * e;
+      return { at: [at[0], Math.max(0.1, at[1] + dy), at[2]], looks_at: [to[0], to[1] + dy * 0.5, to[2]] };
+    }
+    case "orbit": {
+      const angle = side * amount * (Math.PI / 2) * e;
+      const [rx, rz] = [at[0] - to[0], at[2] - to[2]];
+      const [cos, sin] = [Math.cos(angle), Math.sin(angle)];
+      return { at: [to[0] + rx * cos + rz * sin, at[1], to[2] - rx * sin + rz * cos], looks_at: to };
+    }
+    default:
+      return { at, looks_at: to };
+  }
+}
+
+/** The camera's place at time `t` (`cameraPose` without the aim; kept for older callers). */
+export function cameraAt(camera: { at: V3; looks_at: V3 }, move: ShotMove & { lens?: string }, t: number, aspect = 16 / 9): V3 {
+  return cameraPose(camera, move, t, aspect).at;
 }
 
 /** The places of a background group: `count` people spread inside its area, the same each time
@@ -156,6 +243,7 @@ export function tryChanges(before: OlfShotTry, after: OlfShotTry, names: Record<
       const who = names[p.slot] || `Slot ${p.slot}`;
       Object.assign(out, { [`${who}: place`]: p.at, [`${who}: faces`]: p.faces, [`${who}: height`]: p.height });
       Object.assign(out, { [`${who}: end place`]: p.end?.at, [`${who}: end faces`]: p.end?.faces });
+      Object.assign(out, { [`${who}: walk starts`]: p.end?.start_t, [`${who}: walk ends`]: p.end?.end_t });
     }
     (t.groups || []).forEach((g, i) => {
       const who = `${g.name || "Background"} (group ${i + 1})`;

@@ -754,6 +754,9 @@ test.describe("Shows (OLF movie engine)", () => {
     await expect(shot.getByTestId("shot-move")).toHaveValue("push_in");
     await expect(shot.getByTestId("shot-amount")).toHaveValue("0.35");
     await expect(shot.locator(".olf-field", { hasText: "Amount · template" })).toHaveCount(1); // the template fills it
+    // Render is in the stage's camera too (no Step 1 ↔ 3 trap); a push has no direction to pick.
+    await expect(shot.getByTestId("shot-camera").getByTestId("shot-render")).toHaveValue("engine");
+    await expect(shot.getByTestId("shot-direction")).toHaveCount(0);
     await shot.getByTestId("shot-step-video").click();
     await expect(shot.getByTestId("shot-length")).toHaveValue("3+00");
     await expect(shot.getByTestId("shot-render")).toHaveValue("engine");
@@ -824,6 +827,85 @@ test.describe("Shows (OLF movie engine)", () => {
     await shot.getByTestId("shot-camerawork").selectOption("");
     await expect(shot.getByTestId("shot-camerawork")).toHaveValue("");
     await expect(shot.getByTestId("camerawork-intent")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
+  test("stage: camera in the side panel, start from the picked try, the floor plan drag", async ({ page }) => {
+    test.setTimeout(180_000);
+    const errors: string[] = [];
+    page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));
+    page.on("console", (msg) => {
+      if (msg.type() === "error") errors.push(msg.text());
+    });
+    page.on("response", (res) => {
+      if (res.status() >= 400 && res.url().includes("/vinci-api/")) errors.push(`${res.status()} ${res.url()}`);
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("vinci-onboard-v1", "done");
+      localStorage.removeItem("vinci-shows-recent-v1");
+    });
+    await page.goto("/");
+    const sample = String((await (await page.request.post("/vinci-api/olf/sample")).json()).path);
+    rmSync(sample, { recursive: true, force: true });
+    cpSync(SAMPLE, sample, { recursive: true });
+    const project = await (await page.request.get(`/vinci-api/olf/project?path=${encodeURIComponent(sample)}`)).json();
+    const slot = String(project.shots["e02/s03/sh014"].pills.start[0].slot);
+    await page.locator('nav button[aria-label="Shows"]').click();
+    await page.getByTestId("shows-open-sample").click();
+    await page.locator('[data-testid="shot-card"][data-shot="e02/s03/sh014"]').click();
+    const shot = page.getByTestId("shot-page");
+    await shot.getByTestId("shot-step-stage").click();
+
+    // A try pasted from the person's own agent ($0): one person walks 1 m to the right.
+    const answer = {
+      set: [{ name: "table", shape: "box", size: [1.2, 0.75, 0.8], at: [1.5, 0, -1], turn: 30 }],
+      camera: { at: [0, 1.6, 6], looks_at: [0, 1.2, 0] },
+      cast: [{ slot, at: [0, 0, 0], end: { at: [1, 0, 0] } }],
+    };
+    await shot.getByTestId("scene-lab-paste").click();
+    await shot.getByTestId("scene-lab-answer").fill(JSON.stringify(answer));
+    await shot.getByRole("button", { name: "Save as a try" }).click();
+    await expect(shot.getByTestId("scene-lab-try")).toHaveCount(1);
+    // A new try starts from the picked try by default; Paste stays on screen A.
+    await expect(shot.getByTestId("scene-lab-from-current")).toBeChecked();
+    await expect(shot.locator("label.olf-check")).toHaveText("Start from try 1");
+    await expect(shot.getByTestId("scene-lab-paste")).toBeVisible();
+    await expect(shot.getByRole("button", { name: "Play" })).toBeVisible(); // a walk plays
+
+    // The camera fields in the stage's side panel: a pan has a direction; Render is here too.
+    await shot.getByTestId("shot-move").selectOption("pan");
+    await expect(shot.getByTestId("shot-direction")).toBeVisible();
+    await shot.getByTestId("shot-direction").selectOption("left");
+    await expect(shot.getByTestId("shot-direction")).toHaveValue("left");
+    await shot.getByTestId("shot-camera").getByTestId("shot-render").selectOption("reference");
+    await expect(shot.getByTestId("shot-camera").getByTestId("shot-render")).toHaveValue("reference");
+    await page.screenshot({ path: path.join(shots, "shows_stage_camera_panel.png") });
+
+    // Video step with a reference render and no pin video: one click back to the stage.
+    await shot.getByTestId("shot-step-video").click();
+    await shot.getByTestId("open-stage-pin").click();
+    await expect(shot.getByTestId("scene-lab")).toBeVisible();
+
+    // Motion: the walk's timing and speed, and the floor plan from above.
+    await shot.getByTestId("scene-lab-open-motion").click();
+    const lab = page.getByTestId("scene-lab-motion");
+    const plan = lab.getByTestId("scene-lab-plan");
+    await expect(plan).toBeVisible();
+    await expect(lab.getByTestId("scene-lab-walk-speed")).toHaveText("1.00 m · 0.25 m/s"); // 1 m in 4 s
+    await lab.getByLabel("Start (s)").fill("2");
+    await expect(lab.getByTestId("scene-lab-walk-speed")).toHaveText("1.00 m · 0.50 m/s");
+    await expect(lab.getByTestId("scene-lab-changes")).toBeVisible();
+    // Drag the start pin on the plan: the changes list and the place follow.
+    const pin = await lab.getByTestId("scene-lab-plan-start").boundingBox();
+    if (!pin) throw new Error("no start pin on the floor plan");
+    await page.mouse.move(pin.x + pin.width / 2, pin.y + pin.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(pin.x + pin.width / 2 - 40, pin.y + pin.height / 2 + 30, { steps: 5 });
+    await page.mouse.up();
+    await expect(lab.getByTestId("scene-lab-walk-speed")).not.toHaveText("1.00 m · 0.50 m/s"); // a longer walk now
+    await page.screenshot({ path: path.join(shots, "shows_stage_floor_plan.png") });
+    await lab.getByTestId("scene-lab-save").click();
+    await expect(lab.locator("h3")).toContainText("try 2"); // the edit is a new try; try 1 stays
     expect(errors).toEqual([]);
   });
 

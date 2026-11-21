@@ -18,7 +18,8 @@ import {
   type ShotMove,
   type V3,
   aimAt,
-  cameraAt,
+  cameraPose,
+  cameraUp,
   extrasOf,
   pieceTransform,
   placeAt,
@@ -84,11 +85,15 @@ function person(stripe: string, standin: "pin" | "figure", height: number, opaci
 export type Built = { scene: THREE.Scene; update: (t: number, camera?: THREE.Camera) => void };
 
 /** Build the scene of a room and a staged shot once; `update` plays the move without building
- * anything again (the lab plays a shot at the screen's frame rate). */
-export function buildScene(room: OlfRoom, staged: OlfShotTry, move: ShotMove, opts: SceneOptions): Built {
+ * anything again (the lab plays a shot at the screen's frame rate).
+ *
+ * @param move The shot's camera words: move, direction, amount, ease and lens (`cameraPose`).
+ * @param aspect The frame shape as width over height (a pan or a tilt turns by the lens's field).
+ */
+export function buildScene(room: OlfRoom, staged: OlfShotTry, move: ShotMove & { lens?: string }, opts: SceneOptions, aspect = 16 / 9): Built {
   const scene = clayWorld();
   const standin = opts.standin ?? "pin";
-  const start = cameraAt({ at: staged.camera.at, looks_at: aimAt(staged, 0) }, move, 0);
+  const start = cameraPose({ at: staged.camera.at, looks_at: aimAt(staged, 0) }, move, 0, aspect).at;
   for (const one of [...room.set, ...(staged.props ?? [])]) scene.add(piece(one));
   const people = staged.cast.map((one) => {
     const height = one.height ?? HEIGHT;
@@ -115,15 +120,16 @@ export function buildScene(room: OlfRoom, staged: OlfShotTry, move: ShotMove, op
   }
   const update = (t: number, camera?: THREE.Camera) => {
     const target = aimAt(staged, t); // a camera that follows someone turns with them
-    const lens = cameraAt({ at: staged.camera.at, looks_at: target }, move, t);
+    const pose = cameraPose({ at: staged.camera.at, looks_at: target }, move, t, aspect); // a pan turns the aim too
     for (const { one, pin } of people) {
-      const place = placeAt(one, staged.cast, lens, t);
+      const place = placeAt(one, staged.cast, pose.at, t);
       pin.position.set(...place.at);
       pin.rotation.y = place.yaw;
     }
     if (camera) {
-      camera.position.set(...lens);
-      camera.lookAt(...target);
+      camera.up.set(...cameraUp(pose.at, pose.looks_at));
+      camera.position.set(...pose.at);
+      camera.lookAt(...pose.looks_at);
     }
   };
   update(opts.t ?? 0);
@@ -165,9 +171,10 @@ function area([x0, z0, x1, z1]: [number, number, number, number]): THREE.LineLoo
 /** The shot's camera at time `t`: the try's place and aim, the shot's lens and shape, its move. */
 export function shotCamera(staged: OlfShotTry, move: ShotMove, lens: string | undefined, aspect: number, t = 0): THREE.PerspectiveCamera {
   const camera = new THREE.PerspectiveCamera(verticalFov(lens, aspect), aspect, 0.05, 300);
-  const target = aimAt(staged, t);
-  camera.position.set(...cameraAt({ at: staged.camera.at, looks_at: target }, move, t));
-  camera.lookAt(...target);
+  const pose = cameraPose({ at: staged.camera.at, looks_at: aimAt(staged, t) }, { ...move, lens }, t, aspect);
+  camera.up.set(...cameraUp(pose.at, pose.looks_at));
+  camera.position.set(...pose.at);
+  camera.lookAt(...pose.looks_at);
   return camera;
 }
 
@@ -190,7 +197,7 @@ export function renderSceneFrame(
   height = 1080,
 ): string {
   const t = opts.t ?? 0;
-  const { scene } = buildScene(room, staged, camera, { ...opts, lab: false });
+  const { scene } = buildScene(room, staged, camera, { ...opts, lab: false }, aspect);
   const lens = shotCamera(staged, camera, camera.lens, aspect, t);
   console.info("[shows] scene frame", { shot: staged.shot, room: staged.room, t, people: staged.cast.length, pieces: room.set.length });
   return shoot(scene, lens, Math.round(height * aspect), height);
@@ -228,7 +235,7 @@ export async function recordMove(
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  const built = buildScene(room, staged, camera, { ...opts, lab: false });
+  const built = buildScene(room, staged, camera, { ...opts, lab: false }, aspect);
   const lens = shotCamera(staged, camera, camera.lens, aspect, 0);
   const draw = (t: number) => {
     built.update(t, lens);
@@ -323,7 +330,7 @@ export class SceneViewer {
   show(room: OlfRoom, staged: OlfShotTry, camera: ShotMove & { lens?: string }, aspect: number, opts: SceneOptions): void {
     if (this.built) free(this.built.scene);
     this.args = [room, staged, camera, aspect, opts];
-    this.built = buildScene(room, staged, camera, { ...opts, lab: true });
+    this.built = buildScene(room, staged, camera, { ...opts, lab: true }, aspect);
     this.shot = shotCamera(staged, camera, camera.lens, aspect, opts.t ?? 0);
     if (this.free && staged.shot) this.built.scene.add(new THREE.CameraHelper(this.shot)); // a room alone has no shot camera
     console.info("[shows] scene lab view", { shot: staged.shot, try: staged.try, room: staged.room, free: !!this.free });
