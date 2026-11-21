@@ -4,6 +4,8 @@ tags: [image, t2i, generate]
 inputs:
   prompt: { type: string, required: true }
   aspect_ratio: { type: string, required: false }
+  resolution: { type: string, required: false } # a value the model lists (the Studio chip)
+  quality: { type: string, required: false } # a value the model lists (the Studio chip)
   camera: { type: string, required: false }
   lens: { type: string, required: false }
   look: { type: string, required: false }

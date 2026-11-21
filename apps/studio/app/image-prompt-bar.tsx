@@ -12,8 +12,8 @@ import {
   type MentionRow,
 } from "../lib/image-page";
 import { ImageModelPicker } from "./image-model-picker";
+import { optionDefault } from "../lib/model-capabilities";
 import { PromptMention, startMention } from "./prompt-mention";
-import { AdvancedDisclosure } from "./ui/advanced";
 import { DockIcon, DOCK_ICON } from "./ui/icons";
 import { ProblemNote } from "./ui/problem-note";
 import type { RunAction, RunProblem } from "./ui/plain-text";
@@ -130,8 +130,8 @@ export function ImagePromptBar({
       const res = row.constraints?.resolutions || [];
       const quals = qualityOptions(row);
       onAspect(next.aspect ? (ratios.includes(aspect) ? aspect : ratios[0] || "") : "");
-      onQuality(next.quality ? (quals.includes(quality) ? quality : quals[0] || "") : "");
-      onResolution(next.resolution ? (res.includes(resolution) ? resolution : res[0] || "") : "");
+      onQuality(next.quality ? (quals.includes(quality) ? quality : optionDefault(row, "quality", quals)) : "");
+      onResolution(next.resolution ? (res.includes(resolution) ? resolution : optionDefault(row, "resolution", res)) : "");
     }
     onModelId(id);
   }
@@ -234,22 +234,21 @@ export function ImagePromptBar({
             }}
           />
         ) : null}
+        {/* In the bar, not under Advanced (2026-11-21): a user found no quality option on Higgsfield. */}
         {controls.quality ? (
-          <AdvancedDisclosure testId="image-advanced">
-            <ChipMenu
-              testId="image-quality"
-              label={quality || "Quality"}
-              ariaLabel={`Quality: ${quality || "not set"}`}
-              open={menu === "quality"}
-              onToggle={() => setMenu(menu === "quality" ? null : "quality")}
-              values={qualities}
-              current={quality}
-              onPick={(v) => {
-                onQuality(v);
-                setMenu(null);
-              }}
-            />
-          </AdvancedDisclosure>
+          <ChipMenu
+            testId="image-quality"
+            label={quality || "Quality"}
+            ariaLabel={`Quality: ${quality || "not set"}`}
+            open={menu === "quality"}
+            onToggle={() => setMenu(menu === "quality" ? null : "quality")}
+            values={qualities}
+            current={quality}
+            onPick={(v) => {
+              onQuality(v);
+              setMenu(null);
+            }}
+          />
         ) : null}
         {controls.resolution ? (
           <ChipMenu

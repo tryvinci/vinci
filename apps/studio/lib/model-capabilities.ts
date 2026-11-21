@@ -269,6 +269,20 @@ export function isUnpriced(model: { provider?: string; pricing?: { amount?: numb
 }
 
 /**
+ * The value an option chip shows first: the provider's default when the row lists one (a sign-in row,
+ * 2026-11-21), else the first value. Before, the Studio always took the first, the lowest size.
+ *
+ * Args:
+ *   model: Catalog row.
+ *   name: The option ("resolution", "quality").
+ *   values: The values the chip offers.
+ */
+export function optionDefault(model: { constraints?: { defaults?: Record<string, string> } } | undefined, name: string, values: string[]): string {
+  const preferred = model?.constraints?.defaults?.[name];
+  return preferred && values.includes(preferred) ? preferred : values[0] || "";
+}
+
+/**
  * A model's price for lists and cards: "$0.040", "from $0.210" (a clip with a price per length), or
  * "price varies". Bug fixed (first occurrence, 2026-11-13 production crawl, COREPRODUC-642): only the
  * Generate button showed a price, so a model was picked blind.

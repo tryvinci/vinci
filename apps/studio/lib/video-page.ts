@@ -3,14 +3,15 @@
  *
  * Membership is `modelsFor("video")` (text-to-video, then image-to-video).
  * Preset cards are those catalog rows (no invented effect names).
- * Quality tiles are catalog resolutions. Duration tiles are the Studio list
+ * Resolution tiles are catalog resolutions (the provider's default first picked); Quality tiles are
+ * `constraints.qualities` of a sign-in row. Duration tiles are the Studio list
  * already used on the inspector, clipped by `max_duration`.
  * Extend copies the clip's last frame plus the run's own settings.
  */
 
 import { takesEndFrame, takesReferences } from "./model-inputs";
 import { fitToModel } from "./canvas-node";
-import { modelsFor, tieBreakAvailability, withoutMockWhenConnected } from "./model-capabilities";
+import { modelsFor, optionDefault, tieBreakAvailability, withoutMockWhenConnected } from "./model-capabilities";
 import { filterMentions, insertMention, mentionOpen, type MentionRow } from "./library";
 
 export type { MentionRow };
@@ -22,10 +23,12 @@ export type VideoModel = {
   provider: string;
   capabilities: string[];
   available?: boolean;
-  pricing?: { amount?: number; unit?: string; currency?: string };
+  pricing?: { amount?: number; unit?: string; currency?: string; option_prices?: Record<string, number> };
   constraints?: {
     aspect_ratios?: string[];
     resolutions?: string[];
+    qualities?: string[]; // quality levels a sign-in row lists (Veo 3.1 basic/high/ultra)
+    defaults?: Record<string, string>; // the provider's default resolution and quality
     max_input_images?: number | null;
     max_duration?: number;
     durations?: number[];
@@ -419,7 +422,7 @@ export function applyPreset(model: VideoModel | undefined): VideoPresetDefaults 
     modelId: model.id,
     duration: durs.includes(5) ? "5" : String(durs[0] || ""),
     aspect: ratios[0] || "",
-    resolution: res[0] || "",
+    resolution: optionDefault(model, "resolution", res),
   };
 }
 

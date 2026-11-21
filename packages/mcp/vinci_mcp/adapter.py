@@ -281,7 +281,15 @@ class McpProvider(Provider):
             spec.id,
             redact_mapping(req.inputs, extra_values=extra),
         )
-        return estimate_from_spec(spec)
+        estimate = estimate_from_spec(spec)
+        if self._connector is not None:
+            # A sign-in row: the price of the picked length and options, the same one
+            # `_submit_connector` checks, so the estimate and the receipt match it (COREPRODUC-743).
+            row = self._connector.row(spec.id)
+            price = row.price(row.length(req.inputs.get("duration")), req.inputs)
+            if price is not None:
+                estimate = estimate.model_copy(update={"amount": price})
+        return estimate
 
     def submit(self, req: JobRequest) -> ProviderJobRef:
         models = self.catalog()
@@ -365,11 +373,12 @@ class McpProvider(Provider):
         args = connector.arguments(row, inputs, start, end, refs, videos)
         preview_tool, preview = connector.cost_call(tool, args)
         live = parse_cost(self._call(preview_tool, preview))
-        expected = row.price(row.length(inputs.get("duration")))
+        expected = row.price(row.length(inputs.get("duration")), inputs)  # of the picked options
         log.info(
-            "mcp price provider=%s model=%s live=%s row=%s refs=%s videos=%s end=%s",
+            "mcp price provider=%s model=%s picks=%s live=%s row=%s refs=%s videos=%s end=%s",
             connector.id,
             row.key,
+            row.picks(inputs),
             live,
             expected,
             len(refs),

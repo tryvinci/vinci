@@ -144,6 +144,8 @@ export function VideoPage({
   onAspect,
   resolution,
   onResolution,
+  quality,
+  onQuality,
   duration,
   onDuration,
   seed,
@@ -207,6 +209,9 @@ export function VideoPage({
   onAspect: (value: string) => void;
   resolution: string;
   onResolution: (value: string) => void;
+  /** The picked quality, for a row that lists `constraints.qualities` (Veo 3.1 on Higgsfield). */
+  quality: string;
+  onQuality: (value: string) => void;
   duration: string;
   onDuration: (value: string) => void;
   seed: string;
@@ -528,7 +533,7 @@ export function VideoPage({
     [onAspect, onDuration, onExtendMode, onLog, onPickModel, onPrompt, onResolution, onSeed, onSteps, videoRows],
   );
 
-  const cost = money(generateCost(clipPrice(selected, duration)), selected?.pricing?.currency);
+  const cost = money(generateCost(clipPrice(selected, duration, undefined, undefined, { resolution, quality })), selected?.pricing?.currency);
   const hint = uploading ? "Wait for the upload to finish." : videoBlock(selected, { prompt, startId, clipId, extendMode });
 
   return (
@@ -542,6 +547,8 @@ export function VideoPage({
         onAspect={onAspect}
         resolution={resolution}
         onResolution={onResolution}
+        quality={quality}
+        onQuality={onQuality}
         duration={duration}
         onDuration={onDuration}
         seed={seed}

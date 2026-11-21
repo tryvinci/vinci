@@ -33,7 +33,7 @@ import { LibraryPage } from "./library-page";
 import { setShowsCredits } from "../lib/shows";
 import { HOST_REQUEST_BYTES, type UploadLimits, setUploadLimits, uploadFile } from "../lib/upload";
 import { VideoPage } from "./video-page";
-import { imageBlock } from "../lib/image-page";
+import { imageBlock, qualityOptions } from "../lib/image-page";
 import { nodeDurations, videoBlock, type VideoRefMode } from "../lib/video-page";
 import { type ComboModel } from "./model-combo";
 import { VinciLogo } from "./ui/logo";
@@ -47,6 +47,7 @@ import {
   modelsFor,
   modelsForNodeTypes,
   money,
+  optionDefault,
   PRICE_VARIES,
   setPriceUnit,
   unitOf,
@@ -351,7 +352,15 @@ type Model = {
   capabilities: string[];
   available?: boolean;
   pricing?: { amount?: number; unit?: string; currency?: string };
-  constraints?: { aspect_ratios?: string[]; max_duration?: number; durations?: number[]; resolutions?: string[]; max_input_images?: number | null };
+  constraints?: {
+    aspect_ratios?: string[];
+    max_duration?: number;
+    durations?: number[];
+    resolutions?: string[];
+    qualities?: string[];
+    defaults?: Record<string, string>;
+    max_input_images?: number | null;
+  };
   quality_tier?: string;
 };
 type Skill = { id: string; tags?: string[]; workflow?: { nodes?: GraphNode[]; edges?: GraphEdge[] } };
@@ -1595,7 +1604,13 @@ export function StudioClient() {
 
   function shownResolution(): string {
     const valid = selected?.constraints?.resolutions ?? [];
-    return valid.includes(resolution) ? resolution : valid[0] || "";
+    return valid.includes(resolution) ? resolution : optionDefault(selected, "resolution", valid);
+  }
+
+  /** The quality the chips show: the pick when the model lists it, else the provider's default (or none). */
+  function shownQuality(): string {
+    const valid = qualityOptions(selected);
+    return valid.includes(quality) ? quality : selected?.constraints?.defaults?.quality || "";
   }
 
   function modelListsResolution(modelId: string | undefined, value: unknown): boolean {
@@ -1614,7 +1629,9 @@ export function StudioClient() {
     // Send the resolution the pills show. A value from another model is not on this list.
     const shown = shownResolution();
     if (shown) inputs.resolution = shown;
-    if (page === "image" && quality) inputs.quality = quality;
+    // Send the quality the chips show (2026-11-21: Higgsfield got none and made "low" images).
+    const level = shownQuality();
+    if ((page === "image" || page === "video") && level) inputs.quality = level;
     if (scale && mode.showScale) inputs.scale = scale;
     if (mode.showOptical) {
       if (camera) inputs.camera = camera;
@@ -2126,6 +2143,7 @@ export function StudioClient() {
                 aspect_ratio: "{{inputs.aspect_ratio}}",
                 duration: "{{inputs.duration}}",
                 resolution: "{{inputs.resolution}}",
+                quality: "{{inputs.quality}}", // a sign-in row's quality pick (COREPRODUC-743)
                 camera: "{{inputs.camera}}",
                 lens: "{{inputs.lens}}",
                 look: "{{inputs.look}}",
@@ -2394,7 +2412,9 @@ export function StudioClient() {
     const row = models.find((m) => m.id === id);
     // A `{{inputs.x}}` param takes what this page sends with the run; speech is priced by its text.
     const text = n.params?.prompt ?? n.params?.text;
-    const one = row && !isUnpriced(row) ? clipPrice(row, n.params?.duration, runInputs(selected), text) : null;
+    // The node's resolution and quality pick the price of a sign-in row (COREPRODUC-743).
+    const picks = { resolution: n.params?.resolution, quality: n.params?.quality };
+    const one = row && !isUnpriced(row) ? clipPrice(row, n.params?.duration, runInputs(selected), text, picks) : null;
     // A node with count N runs N jobs (expandCounts), so it costs N times one (COREPRODUC-642).
     return one == null ? null : one * countValue(n.params);
   }
@@ -3301,7 +3321,7 @@ export function StudioClient() {
         }}
         resolution={shownResolution()}
         onResolution={setResolution}
-        quality={quality}
+        quality={shownQuality()}
         onQuality={setQuality}
         batch={batchCount}
         onBatch={setBatchCount}
@@ -3364,6 +3384,8 @@ export function StudioClient() {
         }}
         resolution={shownResolution()}
         onResolution={setResolution}
+        quality={shownQuality()}
+        onQuality={setQuality}
         duration={duration || (durs.includes(5) ? "5" : String(durs[0] || ""))}
         onDuration={(v) => {
           setDuration(v);

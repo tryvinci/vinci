@@ -42,6 +42,8 @@ export function VideoPanel({
   onAspect,
   resolution,
   onResolution,
+  quality,
+  onQuality,
   duration,
   onDuration,
   seed,
@@ -87,6 +89,8 @@ export function VideoPanel({
   onAspect: (value: string) => void;
   resolution: string;
   onResolution: (value: string) => void;
+  quality: string;
+  onQuality: (value: string) => void;
   duration: string;
   onDuration: (value: string) => void;
   seed: string;
@@ -143,6 +147,7 @@ export function VideoPanel({
   const controls = visibleVideoControls(selected);
   const aspects = selected?.constraints?.aspect_ratios || [];
   const resolutions = selected?.constraints?.resolutions || [];
+  const qualities = selected?.constraints?.qualities || []; // a provider's quality levels (Veo 3.1)
   const durs = durationOptions(Number(selected?.constraints?.max_duration || 0), selected?.constraints?.durations);
   const items: LibraryItem[] = mentionableItems(cast.map(asLibraryItem));
 
@@ -384,11 +389,14 @@ export function VideoPanel({
             {controls.quality ? (
               <TileGroup
                 testId="video-quality"
-                label="Quality"
+                label="Resolution"
                 values={resolutions}
                 current={resolution}
                 onPick={onResolution}
               />
+            ) : null}
+            {qualities.length ? (
+              <TileGroup testId="video-quality-level" label="Quality" values={qualities} current={quality} onPick={onQuality} />
             ) : null}
           </div>
         </>

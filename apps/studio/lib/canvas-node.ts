@@ -126,7 +126,7 @@ export function pickListed(current: unknown, listed: string[], fallback = ""): s
   return listed[0] || fallback;
 }
 
-type FitConstraints = { aspect_ratios?: string[]; resolutions?: string[]; durations?: number[]; max_duration?: number };
+type FitConstraints = { aspect_ratios?: string[]; resolutions?: string[]; durations?: number[]; max_duration?: number; defaults?: Record<string, string> };
 
 /**
  * The params a run sends for a node, fitted to its model as the node's pills show them. A value the
@@ -167,24 +167,39 @@ export function fitToModel(params: Record<string, unknown>, limits?: FitConstrai
  * `{{inputs.name}}` takes the value the run sends, and "10.0" reads as 10. With no length it is
  * `amount`, the price of the default clip (COREPRODUC-555). A row whose unit names a measure
  * (`1k_chars`, `minute`, `generation_30s`) bills the job's characters or seconds; with no text or
- * length it is `amount` (COREPRODUC-603).
+ * length it is `amount` (COREPRODUC-603). A row with `option_prices` (a sign-in row, 2026-11-21)
+ * bills the picked resolution and quality first; an option not picked is the row's default.
  *
  * Args:
  *   model: The catalog row.
  *   duration: The asked length: a number, a string, a template, or nothing.
  *   inputs: The run inputs, for a template.
  *   text: The job's text (its prompt), for a row billed by characters.
+ *   picks: The picked `resolution` and `quality`, for a row with `option_prices`; an
+ *     `{{inputs.name}}` takes the value the run sends (a Canvas node's param).
  */
 export function clipPrice(
-  model: { pricing?: { amount?: number; unit?: string; clip_prices?: Record<string, number> }; constraints?: FitConstraints } | undefined,
+  model:
+    | { pricing?: { amount?: number; unit?: string; clip_prices?: Record<string, number>; option_prices?: Record<string, number> }; constraints?: FitConstraints }
+    | undefined,
   duration?: unknown,
   inputs?: Record<string, unknown>,
   text?: unknown,
+  picks?: { resolution?: unknown; quality?: unknown },
 ): number | undefined {
   const pricing = model?.pricing;
   const ref = typeof duration === "string" ? /^\{\{\s*inputs\.(\w+)\s*\}\}$/.exec(duration) : null;
   const fitted = Number(fitToModel({ duration: ref ? inputs?.[ref[1]] : duration }, model?.constraints).duration);
   const seconds = Number.isFinite(fitted) && fitted > 0 ? fitted : undefined;
+  // The key is the connector's `Row.option_key`: "<seconds>|<resolution>|<quality>", 0 with no length.
+  const pick = (name: "resolution" | "quality") => {
+    const asked = picks?.[name];
+    const named = typeof asked === "string" ? /^\{\{\s*inputs\.(\w+)\s*\}\}$/.exec(asked) : null;
+    const value = named ? inputs?.[named[1]] : asked;
+    return (typeof value === "string" && value) || model?.constraints?.defaults?.[name] || "";
+  };
+  const option = pricing?.option_prices?.[`${seconds ?? 0}|${pick("resolution")}|${pick("quality")}`];
+  if (option !== undefined) return option;
   // A `/models` row has `clip_prices: {}` when it lists no table; `{}` is truthy here, not in Python.
   const table = pricing?.clip_prices ?? {};
   if (Object.keys(table).length) return (seconds === undefined ? undefined : table[String(seconds)]) ?? pricing?.amount;

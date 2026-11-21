@@ -312,6 +312,87 @@ def test_an_image_edit_uploads_its_references_and_checks_the_price_of_its_length
     )
 
 
+def test_resolution_and_quality_options_are_listed_priced_and_sent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bug fixed 2026-11-21 (COREPRODUC-743, first report, 1 user): a Higgsfield run sent no resolution or quality,
+    so GPT Image 2 made 1k "low" images and the Studio had no chip to pick 2k or 4k."""
+    gpt = {
+        "id": "gpt_image_2",
+        "name": "GPT Image 2",
+        "output_type": "image",
+        "medias": [],
+        "aspect_ratios": ["1:1"],
+        "parameters": [
+            {"name": "resolution", "options": ["1k", "2k", "4k"], "default": "1k"},
+            {"name": "quality", "options": ["low", "high"], "default": "low"},
+        ],
+    }
+    (row,) = higgsfield_rows([gpt], [])
+    assert row.options == (("resolution", ("1k", "2k", "4k")), ("quality", ("low", "high")))
+    assert dict(row.settings) == {"resolution": "1k", "quality": "low"}  # the provider's default
+    hf = connector_for("mcp_higgsfield")
+    assert hf is not None
+    sizes = {"1k": 1, "2k": 2, "4k": 4}
+    quotes: list[dict] = []
+
+    def call(tool: str, args: dict) -> dict:
+        params = args["params"]
+        quotes.append(params)
+        level = 3 if params["quality"] == "high" else 1
+        return {"structuredContent": {"cost": {"credits": sizes[params["resolution"]] * level}}}
+
+    (priced,) = price_rows(hf, [row], call)
+    assert (quotes[0]["resolution"], quotes[0]["quality"]) == ("1k", "low")  # the default first
+    assert priced.credits == 1 and len(quotes) == 6
+    assert dict(priced.option_credits)["0|4k|high"] == 12
+    (spec,) = models_for(replace(hf, rows=(priced,)), None)
+    assert spec.constraints.resolutions == ["1k", "2k", "4k"]
+    assert spec.constraints.qualities == ["low", "high"]
+    assert spec.constraints.defaults == {"resolution": "1k", "quality": "low"}
+    assert spec.pricing.option_prices["0|2k|low"] == 2
+    # A run is checked against its pick's price; a value the row does not list gets the default.
+    assert priced.price(None, {"resolution": "4k", "quality": "high"}) == 12
+    assert priced.price(None, {"resolution": "9k"}) == 1
+    sent: list[dict] = []
+
+    class Transport:
+        url = "http://127.0.0.1:9/mcp"
+
+        def bearer(self) -> str:
+            return "loopback-bearer"
+
+        def call(self, method: str, params: dict) -> dict:
+            name, args = str(params["name"]), params.get("arguments") or {}
+            if name == "estimate_image_cost":
+                return call(name, args)
+            sent.append(args["params"])
+            return {"structuredContent": {"results": [{"id": "h1", "status": "queued"}]}}
+
+    monkeypatch.setitem(CONNECTORS, "mcp_higgsfield", replace(hf, rows=(priced,)))
+    provider = McpProvider(
+        Transport(), cas=ContentAddressedStore(tmp_path / "cas"), provider_id="mcp_higgsfield"
+    )  # type: ignore[arg-type]
+    job = JobRequest(
+        capability=Capability.T2I,
+        model_id="mcp_higgsfield:gpt_image_2",
+        inputs={"prompt": "a lamp", "resolution": "4k", "quality": "high"},
+    )
+    assert provider.estimate(job).amount == 12  # the receipt's price is the pick's (CodeRabbit #748)
+    provider.submit(job)  # 12 credits: the 4k high price, so it runs
+    assert (sent[-1]["resolution"], sent[-1]["quality"]) == ("4k", "high")
+    # Every default preview refused: the option sets that were priced stay; the default stays unpriced.
+
+    def refuse_default(tool: str, args: dict) -> dict:
+        if args["params"]["resolution"] == "1k":
+            raise RuntimeError("refused")
+        return call(tool, args)
+
+    (partial,) = price_rows(hf, [row], refuse_default)
+    assert partial.credits is None and dict(partial.option_credits)["0|4k|high"] == 12
+    assert "0|1k|low" not in dict(partial.option_credits)
+
+
 def test_the_snapshots_list_every_model_after_the_hand_tuned_rows() -> None:
     for provider_id, first in (
         ("mcp_higgsfield", "seedream_v4_5"),
