@@ -82,6 +82,16 @@ export function StalePill() {
   return <span className="olf-pill is-stale">stale</span>;
 }
 
+/** The pin video is older than the shot camera: the stage and the keyframe layout box say so. Kept here, not in
+ * shows-scenelab.tsx, so the shot page shows it without loading the lazy scene lab. */
+export function PinStale({ fields }: { fields: string[] }) {
+  return (
+    <p className="olf-warn" data-testid="pin-stale">
+      Pin video is out of date: {fields.join(", ")} changed. Click Use again to re-record it.
+    </p>
+  );
+}
+
 export function Panel({
   title,
   aside,
