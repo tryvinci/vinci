@@ -202,7 +202,8 @@ def test_studio_follows_a_host() -> None:
     body = CLIENT.read_text(encoding="utf-8")
     assert "setPriceUnit(host.currency)" in body
     # Nothing counts as served before /doctor answers, so no local page flashes in a host's rail.
-    assert "const served = (id: PageId) => booted && (!hostPages?.length || hostPages.includes(id));" in body
+    # Credits ("account") is a host page only (COREPRODUC-747): the local Studio never serves it.
+    assert 'const served = (id: PageId) => booted && (hostPages?.length ? hostPages.includes(id) : id !== "account");' in body
     for needle in (
         "group.items.filter((item) => served(item.id))",
         "FLYOUT_FEATURES[kind].filter((row) => served(row.id))",
@@ -253,6 +254,7 @@ eq(pageFromUrl("", "#shows/lamp-oil-b1b8cc8b/cut/e01"), "shows", "a place in the
 eq(pageFromUrl("", "#video/motion-control"), "video", "a tab");
 eq(pageFromUrl("", ""), "", "none");
 eq(pageFromUrl("?page=video", "#%"), "video", "a malformed hash names no page");
+eq(pageFromUrl("", "#account"), "account", "the host Credits link (COREPRODUC-747)");
 """)
     client = CLIENT.read_text(encoding="utf-8")
     assert 'w.history.pushState(w.history.state, "", "#" + page)' in client

@@ -31,6 +31,8 @@ export type ImageModel = {
   };
   quality_tier?: string;
   status?: string;
+  /** The host's own label for the rows it offers itself ("Vinci" on app.tryvinci.com); none on rows of a person's own account. */
+  brand?: string;
 };
 
 export type ImageFeedItem = {
@@ -177,17 +179,24 @@ export function modelBlurb(model: ImageModel | undefined): string {
 }
 
 /**
- * New / Beta badges from the catalog id or display name.
+ * The host's brand when the name does not already say it (COREPRODUC-749: "Vinci Video" gets no
+ * "Vinci" badge), then New / Beta badges from the catalog id or display name.
  *
  * Args:
  *   model: Catalog row.
  */
 export function modelBadges(model: ImageModel | undefined): string[] {
   const blob = `${model?.id || ""} ${model?.display_name || ""}`.toLowerCase();
-  const badges: string[] = [];
+  const brand = model?.brand;
+  const badges: string[] = brand && !namesBrand(model?.display_name, brand) ? [brand] : [];
   if (/\bnew\b/.test(blob)) badges.push("New");
   if (blob.includes("beta") || blob.includes("preview")) badges.push("Beta");
   return badges;
+}
+
+/** True when a model name already says the brand or provider ("Vinci Video", "Higgsfield Soul"). */
+export function namesBrand(name: string | undefined, brand: string): boolean {
+  return (name || "").toLowerCase().includes(brand.toLowerCase());
 }
 
 /**

@@ -27,6 +27,7 @@ def test_rows_are_one_line_with_chips_grouped_by_family() -> None:
 eq(menuChips(seedance), ["Refs", "Start/End", "1080p", "4–30s", "Audio"], "seedance chips: top resolution, the length range");
 eq(menuChips(kling26), ["Start", "5–10s"], "kling 2.6: a start frame only");
 eq([menuFamily(kling26), menuFamily(seedance), menuFamily(veo), menuFamily(hf)], ["Kling", "ByteDance", "Google", "Higgsfield"], "families");
+eq(menuFamily({ ...veo, display_name: "Vinci Video Ultra", brand: "Vinci" }), "Vinci", "a host's brand is the family");
 const rows = [kling26, seedance, veo, hf, t2vOnly];
 const all = menuSections(rows, "");
 eq(all.featured.map((m) => m.id), ["bytedance/seedance-2.5", "google/veo3.1"], "featured: the quality tier");

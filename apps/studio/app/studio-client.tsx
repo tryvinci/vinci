@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { HostKeys, providerName, type HostNote } from "./host-keys";
+import { HostAccount } from "./host-account";
 import { AdaptFlowCanvas } from "./adapt-flow-canvas";
 import { AdaptsPanel, EMPTY_PRESET_DRAFT, type PresetDraft } from "./adapts-panel";
 import { EffectShell } from "./effect-shell";
@@ -33,7 +34,7 @@ import { LibraryPage } from "./library-page";
 import { setShowsCredits } from "../lib/shows";
 import { HOST_REQUEST_BYTES, type UploadLimits, setUploadLimits, uploadFile } from "../lib/upload";
 import { VideoPage } from "./video-page";
-import { imageBlock, qualityOptions } from "../lib/image-page";
+import { imageBlock, namesBrand, qualityOptions } from "../lib/image-page";
 import { nodeDurations, videoBlock, type VideoRefMode } from "../lib/video-page";
 import { type ComboModel } from "./model-combo";
 import { VinciLogo } from "./ui/logo";
@@ -362,6 +363,7 @@ type Model = {
     max_input_images?: number | null;
   };
   quality_tier?: string;
+  own_key?: string;
 };
 type Skill = { id: string; tags?: string[]; workflow?: { nodes?: GraphNode[]; edges?: GraphEdge[] } };
 type Run = {
@@ -404,7 +406,7 @@ type ProviderRow = {
 };
 /**
  * A host that serves this Studio with its own backend (Vinci Platform). It bills in `currency`,
- * serves only `pages`, and adds `links` (credits, account) to the account menu.
+ * serves only `pages`, and adds `links` (credits, sign-out) to the account menu.
  */
 type StudioHost = {
   name: string;
@@ -416,6 +418,8 @@ type StudioHost = {
   keys?: string[];
   /** The signed-in user of the host (COREPRODUC-629): the account menu shows them, not the host name. */
   user?: { name?: string; email?: string; image?: string };
+  /** Where the Credits page sends a person who needs more credits (a `mailto:` or a page), COREPRODUC-747. */
+  credits_contact?: string;
 };
 type Doctor = {
   live_spend?: boolean;
@@ -514,7 +518,10 @@ async function waitRun(first: Run): Promise<Run> {
 function comboModels(rows: Model[], suffix: (row: Model) => string, name: (provider: string) => string): ComboModel[] {
   return rows.map((row) => {
     const price = ` · ${isUnpriced(row) ? PRICE_VARIES : money(row.pricing?.amount, row.pricing?.currency)}`;
-    const label = `${row.display_name} · ${name(row.provider)}${price}${suffix(row)}`;
+    // A host row on the person's own key names that provider ("Wavespeed"), not the host; a name that
+    // already says its source ("Vinci Video", "Higgsfield Soul") gets no second one (COREPRODUC-749).
+    const source = name(row.own_key || row.provider);
+    const label = `${row.display_name}${namesBrand(row.display_name, source) ? "" : ` · ${source}`}${price}${suffix(row)}`;
     return { id: row.id, display_name: row.display_name, provider: row.provider, label };
   });
 }
@@ -1053,6 +1060,12 @@ export function StudioClient() {
   /** Each feed shows only the red cards of runs it started. */
   const failedOn = (on: PageId) => failedRuns.filter((row) => row.page === on).map((row) => row.problem);
   const creditsHref = doctor.host?.links?.find((link) => link.title === "Credits")?.href;
+  /** A host link: "#account" opens that Studio page (COREPRODUC-747); any other href opens in the host window. */
+  const openHostLink = (href: string) => {
+    const named = pageFromUrl("", href.startsWith("#") ? href : "");
+    if (named) openPage(named);
+    else (window.top || window).location.assign(href);
+  };
   /** A refused or failed run; Add credits and Upgrade need the host's Credits page. */
   const problemOf = (err: unknown): RunProblem => {
     const found = runProblem(err);
@@ -1062,7 +1075,7 @@ export function StudioClient() {
   const onProblemAction = (action: RunAction) => {
     console.info("[studio] run problem action", { action });
     if (action === "connect") openPage("keys");
-    else if (creditsHref) (window.top || window).location.assign(creditsHref);
+    else if (creditsHref) openHostLink(creditsHref);
   };
   /** A running canvas node's clock, from its own model's average. */
   const nodeClock = (n: GraphNode): RunClock | null => {
@@ -3074,6 +3087,7 @@ export function StudioClient() {
     skills: "Skills",
     find: "Find",
     cost: "Cost report",
+    account: "Credits",
   };
 
   const live = Object.entries(doctor.providers || {}).filter(([id, row]) => id !== "mock" && row && row.available);
@@ -3081,7 +3095,8 @@ export function StudioClient() {
   // Bug fixed (first occurrence 2026-11-19, user report, hosted Studio, COREPRODUC-726): before /doctor answered, every
   // page counted as served, so Explore, Library, Skills, Find and Cost report flashed in the rail.
   const hostPages = doctor.host?.pages;
-  const served = (id: PageId) => booted && (!hostPages?.length || hostPages.includes(id));
+  // Credits ("account") is a host page only: the local daemon has no ledger (COREPRODUC-747).
+  const served = (id: PageId) => booted && (hostPages?.length ? hostPages.includes(id) : id !== "account");
   // Empty before /doctor: "Local" flashed on a host too.
   const accountName = !booted ? "" : doctor.host?.user?.name || doctor.host?.name || (live.length ? live.map(([id, row]) => row.display_name || id).join(" · ") : "Local");
   const spent = projectRuns.reduce((sum, r) => sum + Number(r.estimate?.total || 0), 0);
@@ -4416,6 +4431,8 @@ export function StudioClient() {
         {log ? <p className="log">{log}</p> : null}
       </div>
     );
+  } else if (page === "account" && doctor.host) {
+    main = <HostAccount hostName={doctor.host.name} contact={doctor.host.credits_contact} />;
   } else if (page === "keys" && doctor.host) {
     // A host takes own keys only for the providers it lists; the local Connect page is not served there.
     const hostKeys = doctor.host.keys || [];
@@ -5256,7 +5273,7 @@ export function StudioClient() {
         <div className="rail-avatar">
           <button
             type="button"
-            className={avatarOpen || page === "keys" || page === "cost" ? "on" : ""}
+            className={avatarOpen || page === "keys" || page === "cost" || page === "account" ? "on" : ""}
             aria-label="Account menu"
             aria-expanded={avatarOpen}
             onClick={() => {
@@ -5283,12 +5300,19 @@ export function StudioClient() {
                   {item.title}
                 </button>
               ))}
-              {(doctor.host?.links || []).map((link) => (
-                // Host pages (credits, account) open in the host window, outside this Studio frame.
-                <a key={link.href} role="menuitem" href={link.href} target="_top">
-                  {link.title}
-                </a>
-              ))}
+              {(doctor.host?.links || []).map((link) =>
+                link.href.startsWith("#") ? (
+                  // A "#page" link is a Studio page the host serves (Credits, COREPRODUC-747).
+                  <button key={link.href} type="button" role="menuitem" onClick={() => openHostLink(link.href)}>
+                    {link.title}
+                  </button>
+                ) : (
+                  // Other host pages (sign-out) open in the host window, outside this Studio frame.
+                  <a key={link.href} role="menuitem" href={link.href} target="_top">
+                    {link.title}
+                  </a>
+                ),
+              )}
             </div>
           ) : null}
         </div>

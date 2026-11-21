@@ -143,6 +143,10 @@ eq([costText(2, [hf]), costText(0, [hf, { amount: 1, currency: "Higgsfield credi
 eq(spendText(0, [], "this video", [hf]), "Spend 4 Higgsfield credits on your account on this video?", "own spend");
 eq(choiceLabel({ id: "vinci:mcp_higgsfield:minimax_hailuo", name: "Hailuo 2.3 Fast", provider: "mcp_higgsfield", amount: 4, currency: "Higgsfield credits", unpriced: false }),
    "Hailuo 2.3 Fast · 4 Higgsfield credits", "own row in the menu");
+eq(choiceLabel({ id: "vinci:bytedance/seedance-2.5", name: "Seedance 2.5", provider: "vinci", amount: 29, currency: "credits", unpriced: false, brand: "Vinci" }),
+   "Seedance 2.5 · Vinci · 29 credits", "host brand in the menu");
+eq(choiceLabel({ id: "vinci:bytedance/seedance-2.5", name: "Vinci Video Pro", provider: "vinci", amount: 29, currency: "credits", unpriced: false, brand: "Vinci" }),
+   "Vinci Video Pro · 29 credits", "a name that says the brand");
 eq([isOwnChoice({ currency: "USD" }), isOwnChoice({ currency: "credits" }), isOwnChoice({ currency: "PLAN" })], [true, false, false], "own choice");
 eq(keyframeEstimate({ shots: 3, keyframe: { model: "vinci:seedream", amount: 0.04, currency: "USD", unpriced: false } }),
    { text: "2 keyframe options per shot · est. $0.240 on your key", total: 0, unpriced: false, own: [{ amount: 0.24, currency: "USD" }] }, "keyframes on a key");

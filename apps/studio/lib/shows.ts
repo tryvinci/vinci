@@ -157,7 +157,8 @@ export type OlfShowRow = { path: string; title: string; updated_at?: string };
  * CLI (Claude Code, Codex...): it bills the person's own sign-in, so Vinci shows no price for it.
  * `tools`: the CLI keeps some of its own tools (file reads, for example), so the question warns.
  */
-export type OlfChoice = { id: string; name: string; provider: string; amount: number; currency?: string; unpriced: boolean; tools?: boolean };
+/** `brand`: the host's label for a model it offers itself ("Vinci" on app.tryvinci.com); none on own-account rows. */
+export type OlfChoice = { id: string; name: string; provider: string; amount: number; currency?: string; unpriced: boolean; tools?: boolean; brand?: string };
 /** `GET /olf/models`: the choices, and the model routing picks with no choice (null: none). */
 export type OlfModels = { choices: OlfChoice[]; auto: { model: string; amount: number; currency?: string; unpriced: boolean } | null };
 /**
@@ -543,10 +544,11 @@ export function costText(total: number | undefined, own?: readonly OlfOwnStep[])
   return [...(total || !parts.length ? [price(total)] : []), ...parts].join(" + ");
 }
 
-/** A model menu row: the name and the price ("your plan" for an agent CLI, its own unit for an own account). */
+/** A model menu row: the name, the host brand unless the name says it, and the price ("your plan" for an agent CLI, its own unit for an own account). */
 export function choiceLabel(row: OlfChoice): string {
   const cost = row.currency === "PLAN" ? "your plan" : row.unpriced ? "price varies" : ownUnit(row.currency) ? unitPrice(row.amount, row.currency) : price(row.amount);
-  return `${row.name} · ${cost}`;
+  const brand = row.brand && !row.name.toLowerCase().includes(row.brand.toLowerCase()) ? ` · ${row.brand}` : "";
+  return `${row.name}${brand} · ${cost}`;
 }
 
 /** True when a choice runs on the person's own account (its price is not in the page's unit). */
