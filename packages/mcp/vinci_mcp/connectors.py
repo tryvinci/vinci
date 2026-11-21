@@ -11,6 +11,12 @@ Every other model of each provider comes from ``catalogs/<provider>.json``: a sn
 provider's free model list, priced with its free preview (COREPRODUC-669, made by
 ``vinci_mcp.catalog_live``). Before, each provider listed only the 3 rows below, and none took a
 reference image.
+
+Resolution and quality options (COREPRODUC-743; bug fixed 2026-11-21, first report, 1 user):
+the snapshot kept only lengths, so a Higgsfield run sent no ``resolution`` or ``quality`` and got
+the model's default (often 1k or "low"), and a Magnific row had one fixed size. Each row now lists
+the provider's options (``Row.options``) with its default in ``settings``, a run sends the picked
+value, and each option is priced with the free preview (``Row.option_credits``).
 """
 
 from __future__ import annotations
@@ -30,8 +36,8 @@ from vinci_protocol.models import JobStatus, ModelConstraints, ModelSpec, Pricin
 # reuses a result only under the row's current snapshot, so a new time at each catalog call made
 # each cached result stale and paid again. Change it when a connector's tools or request mapping
 # change (COREPRODUC-596; changed 2026-11-12 for the live tool mapping, 2026-11-16 for every model
-# with references, end frames and lengths, COREPRODUC-669).
-SNAPSHOT = datetime(2026, 11, 16, tzinfo=UTC)
+# with references, end frames and lengths, COREPRODUC-669; 2026-11-21 for resolution and quality).
+SNAPSHOT = datetime(2026, 11, 21, tzinfo=UTC)
 
 
 @dataclass(frozen=True)
@@ -45,7 +51,8 @@ class Row:
         credits: The provider's price of one run with ``settings``, in its own credits; None when
             its free preview gave none (the Studio shows "price varies").
         ratios: The shapes the model takes. Another shape is not sent.
-        settings: Fixed model settings sent with every run (length, resolution, variant).
+        settings: Model settings sent with every run (length, resolution, variant). For a name in
+            ``options`` it is the provider's default, and a run sends the picked value instead.
         caps: Every capability (``t2i``, ``i2i``, ``t2v``, ``i2v``); empty: only ``capability``.
         durations: The lengths a video row offers, each priced in ``clip_credits``.
         clip_credits: The price of each length, ``((5, 40.0), (10, 80.0))``.
@@ -56,6 +63,9 @@ class Row:
             video and takes pictures as the look, with no start frame. Its own Studio id
             (``<model>:reference``) and its own price: the reference seconds are billed too.
         video_refs: The reference videos it takes.
+        options: The values a run may pick, by name (``resolution``, ``quality``), in the
+            provider's order: ``(("resolution", ("1k", "2k", "4k")),)``.
+        option_credits: The price of each picked option set, by ``option_key``.
     """
 
     model: str
@@ -72,6 +82,8 @@ class Row:
     ref_role: str = ""
     reference: bool = False
     video_refs: int = 0
+    options: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    option_credits: tuple[tuple[str, float], ...] = ()
 
     @property
     def capabilities(self) -> tuple[str, ...]:
@@ -97,8 +109,29 @@ class Row:
             want = 5.0
         return min(self.durations, key=lambda n: (abs(n - want), n))
 
-    def price(self, length: int | None) -> float | None:
-        """What a run of ``length`` costs: its clip price, else the row's price."""
+    def picks(self, inputs: dict[str, Any]) -> dict[str, str]:
+        """A run's option values: the asked one when the row offers it, else the default."""
+        settings = dict(self.settings)
+        out = {}
+        for name, values in self.options:
+            asked = str(inputs.get(name) or "")
+            value = asked if asked in values else settings.get(name)
+            if value:
+                out[name] = str(value)
+        return out
+
+    @staticmethod
+    def option_key(length: int | None, picks: dict[str, str]) -> str:
+        """A run's ``option_credits`` key: ``"6|1080p|"``, ``"0|2k|high"`` (no length: 0)."""
+        return f"{length or 0}|{picks.get('resolution', '')}|{picks.get('quality', '')}"
+
+    def price(self, length: int | None, inputs: dict[str, Any] | None = None) -> float | None:
+        """What a run costs: its picked options' price, else its clip price, else the row's."""
+        if self.option_credits:
+            key = self.option_key(length, self.picks(inputs or {}))
+            option = dict(self.option_credits).get(key)
+            if option is not None:
+                return option
         return dict(self.clip_credits).get(length or -1, self.credits)
 
 
@@ -145,7 +178,8 @@ class Connector:
 
         Args:
             row: The model row.
-            inputs: The run inputs (``prompt``, ``aspect_ratio``, ``duration``).
+            inputs: The run inputs (``prompt``, ``aspect_ratio``, ``duration``, ``resolution``,
+                ``quality``).
             start: The start frame as the provider's own id (Higgsfield media id, Magnific
                 creation identifier), for a video row.
             end: The end frame, the same way, for a row that takes one.
@@ -158,7 +192,7 @@ class Connector:
         prompt = str(inputs.get("prompt") or inputs.get("text") or "")
         ratio = inputs.get("aspect_ratio")
         ratio = ratio if isinstance(ratio, str) and ratio in row.ratios else None
-        settings = dict(row.settings)
+        settings = dict(row.settings) | row.picks(inputs)  # the picked resolution and quality
         length = row.length(inputs.get("duration")) if row.durations else None
         if self.id == "mcp_higgsfield":
             # use_unlim false: without it, a free-trial allowance makes the tool ask instead of run.
@@ -331,6 +365,8 @@ def snapshot_rows(provider_id: str, skip: set[str] = frozenset()) -> tuple[Row, 
                 end_frame=bool(item.get("end_frame")),
                 refs=int(item.get("refs") or 0),
                 ref_role=str(item.get("ref_role") or ""),
+                options=tuple((k, tuple(v)) for k, v in (item.get("options") or {}).items()),
+                option_credits=tuple((item.get("option_credits") or {}).items()),
             )
         )
     return tuple(rows)
@@ -380,6 +416,8 @@ def reference_row(row: Row, per_second: float, pin_rate: float) -> Row:
         settings=tuple({**dict(row.settings), "resolution": "480p"}.items()),
         durations=LENGTHS,
         clip_credits=clips,
+        options=(),  # a reference render stays a 480p draft
+        option_credits=(),
         end_frame=False,
         refs=9,
         reference=True,
@@ -387,9 +425,28 @@ def reference_row(row: Row, per_second: float, pin_rate: float) -> Row:
     )
 
 
+def with_options(row: Row, listed: Row | None) -> Row:
+    """A hand-tuned image row with the options and option prices of its snapshot row.
+
+    Its own settings win over the snapshot defaults. A video row keeps its fixed settings: its
+    variant (Hailuo 2.3 Fast) is not the one the snapshot priced.
+    """
+    if listed is None or row.video or not listed.options:
+        return row
+    settings = dict(listed.settings) | dict(row.settings)
+    return replace(
+        row,
+        settings=tuple(settings.items()),
+        options=listed.options,
+        option_credits=listed.option_credits,
+    )
+
+
 # The 3 hand-tuned rows of each provider stay first; its snapshot adds every other model.
 for _id, _connector in list(CONNECTORS.items()):
-    _rows = _connector.rows + snapshot_rows(_id, {r.model for r in _connector.rows})
+    _listed = {r.model: r for r in snapshot_rows(_id)}
+    _tuned = tuple(with_options(r, _listed.get(r.model)) for r in _connector.rows)
+    _rows = _tuned + tuple(r for m, r in _listed.items() if m not in {t.model for t in _tuned})
     _rows += tuple(
         reference_row(r, DRAFT[_id], PIN_RATE[_id]) for r in _rows if r.model == REFERENCE.get(_id)
     )
@@ -408,6 +465,7 @@ def models_for(connector: Connector, tool_names: set[str] | None) -> list[ModelS
         if tool_names is not None and tool not in tool_names:
             continue
         settings = dict(row.settings)
+        options = dict(row.options)
         resolution = settings.get("resolution")
         lengths = [float(n) for n in row.durations] or (
             [float(settings["duration"])] if "duration" in settings else []
@@ -422,7 +480,11 @@ def models_for(connector: Connector, tool_names: set[str] | None) -> list[ModelS
                     aspect_ratios=list(row.ratios),
                     durations=lengths,
                     max_duration=max(lengths) if lengths else None,
-                    resolutions=[str(resolution)] if resolution else [],
+                    resolutions=list(
+                        options.get("resolution") or ([str(resolution)] if resolution else [])
+                    ),
+                    qualities=list(options.get("quality") or ()),
+                    defaults={name: str(settings[name]) for name in options if name in settings},
                     max_input_images=row.refs or None,
                     end_frame=row.end_frame,
                     max_references=row.refs if row.video else 0,
@@ -433,6 +495,7 @@ def models_for(connector: Connector, tool_names: set[str] | None) -> list[ModelS
                     currency=connector.currency,
                     snapshot_at=SNAPSHOT,
                     clip_prices={str(n): c for n, c in row.clip_credits},
+                    option_prices=dict(row.option_credits),
                 ),
                 quality_tier="fast",
                 secret_names=[],

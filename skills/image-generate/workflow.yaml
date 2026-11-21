@@ -8,6 +8,8 @@ nodes:
     params:
       prompt: "{{inputs.prompt}}"
       aspect_ratio: "{{inputs.aspect_ratio}}"
+      resolution: "{{inputs.resolution}}"
+      quality: "{{inputs.quality}}"
       camera: "{{inputs.camera}}"
       lens: "{{inputs.lens}}"
       look: "{{inputs.look}}"

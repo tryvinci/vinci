@@ -1,6 +1,6 @@
 {
  "provider": "mcp_higgsfield",
- "listed_at": "2026-11-16T18:19:46+00:00",
+ "listed_at": "2026-11-21T08:39:05+00:00",
  "rows": [
   {
    "model": "soul_2",
@@ -20,8 +20,21 @@
     "3:2",
     "2:3"
    ],
+   "settings": {
+    "quality": "2k"
+   },
    "refs": 4,
-   "ref_role": "image"
+   "ref_role": "image",
+   "options": {
+    "quality": [
+     "1.5k",
+     "2k"
+    ]
+   },
+   "option_credits": {
+    "0||2k": 1.0,
+    "0||1.5k": 1.0
+   }
   },
   {
    "model": "soul_cinematic",
@@ -42,8 +55,21 @@
     "2:3",
     "21:9"
    ],
+   "settings": {
+    "quality": "2k"
+   },
    "refs": 4,
-   "ref_role": "image"
+   "ref_role": "image",
+   "options": {
+    "quality": [
+     "1.5k",
+     "2k"
+    ]
+   },
+   "option_credits": {
+    "0||2k": 1.0,
+    "0||1.5k": 1.0
+   }
   },
   {
    "model": "gpt_image_2",
@@ -64,8 +90,35 @@
     "3:2",
     "2:3"
    ],
+   "settings": {
+    "resolution": "1k",
+    "quality": "low"
+   },
    "refs": 4,
-   "ref_role": "image"
+   "ref_role": "image",
+   "options": {
+    "resolution": [
+     "1k",
+     "2k",
+     "4k"
+    ],
+    "quality": [
+     "low",
+     "medium",
+     "high"
+    ]
+   },
+   "option_credits": {
+    "0|1k|low": 1.0,
+    "0|1k|medium": 1.0,
+    "0|1k|high": 3.0,
+    "0|2k|low": 1.0,
+    "0|2k|medium": 2.0,
+    "0|2k|high": 7.0,
+    "0|4k|low": 1.0,
+    "0|4k|medium": 3.0,
+    "0|4k|high": 12.0
+   }
   },
   {
    "model": "cinematic_studio_2_5",
@@ -88,8 +141,23 @@
     "9:16",
     "21:9"
    ],
+   "settings": {
+    "resolution": "1k"
+   },
    "refs": 4,
-   "ref_role": "image"
+   "ref_role": "image",
+   "options": {
+    "resolution": [
+     "1k",
+     "2k",
+     "4k"
+    ]
+   },
+   "option_credits": {
+    "0|1k|": 2.0,
+    "0|2k|": 2.0,
+    "0|4k|": 4.0
+   }
   },
   {
    "model": "image_auto",
@@ -171,8 +239,23 @@
     "16:9",
     "21:9"
    ],
+   "settings": {
+    "resolution": "2k"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "1k",
+     "2k",
+     "4k"
+    ]
+   },
+   "option_credits": {
+    "0|2k|": 2.0,
+    "0|1k|": 2.0,
+    "0|4k|": 4.0
+   }
   },
   {
    "model": "nano_banana_2",
@@ -195,8 +278,23 @@
     "16:9",
     "21:9"
    ],
+   "settings": {
+    "resolution": "1k"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "1k",
+     "2k",
+     "4k"
+    ]
+   },
+   "option_credits": {
+    "0|1k|": 1.5,
+    "0|2k|": 2.0,
+    "0|4k|": 3.0
+   }
   },
   {
    "model": "nano_banana_2_1",
@@ -223,8 +321,23 @@
     "8:1",
     "1:8"
    ],
+   "settings": {
+    "resolution": "1k"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "1k",
+     "2k",
+     "4k"
+    ]
+   },
+   "option_credits": {
+    "0|1k|": 1.5,
+    "0|2k|": 2.0,
+    "0|4k|": 3.0
+   }
   },
   {
    "model": "nano_banana_2_lite",
@@ -247,8 +360,19 @@
     "16:9",
     "21:9"
    ],
+   "settings": {
+    "resolution": "1k"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "1k"
+    ]
+   },
+   "option_credits": {
+    "0|1k|": 1.0
+   }
   },
   {
    "model": "seedream_v4_5",
@@ -269,8 +393,21 @@
     "9:16",
     "2:3"
    ],
+   "settings": {
+    "quality": "basic"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "quality": [
+     "basic",
+     "high"
+    ]
+   },
+   "option_credits": {
+    "0||basic": 1.0,
+    "0||high": 1.0
+   }
   },
   {
    "model": "flux_2",
@@ -288,8 +425,21 @@
     "16:9",
     "9:16"
    ],
+   "settings": {
+    "resolution": "1k"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "1k",
+     "2k"
+    ]
+   },
+   "option_credits": {
+    "0|1k|": 1.0,
+    "0|2k|": 1.5
+   }
   },
   {
    "model": "flux_3_image",
@@ -316,8 +466,27 @@
     "9:16",
     "1:2"
    ],
+   "settings": {
+    "resolution": "1k"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "768sq",
+     "1k",
+     "1.5k",
+     "2k",
+     "4k"
+    ]
+   },
+   "option_credits": {
+    "0|1k|": 2.0,
+    "0|768sq|": 1.0,
+    "0|1.5k|": 2.0,
+    "0|2k|": 3.0,
+    "0|4k|": 19.0
+   }
   },
   {
    "model": "flux_kontext",
@@ -357,8 +526,58 @@
     "2:3",
     "21:9"
    ],
+   "settings": {
+    "resolution": "1k"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "1k",
+     "2k"
+    ]
+   },
+   "option_credits": {
+    "0|1k|": 0.5,
+    "0|2k|": 0.5
+   }
+  },
+  {
+   "model": "kling_image_4_0",
+   "label": "Kling Image 4.0",
+   "capability": "t2i",
+   "credits": 2.0,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "16:9",
+    "9:16",
+    "1:1",
+    "4:3",
+    "3:4",
+    "3:2",
+    "2:3",
+    "21:9"
+   ],
+   "settings": {
+    "resolution": "2k"
+   },
+   "refs": 4,
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "2k",
+     "4k",
+     "8k"
+    ]
+   },
+   "option_credits": {
+    "0|2k|": 2.0,
+    "0|4k|": 3.0,
+    "0|8k|": 5.0
+   }
   },
   {
    "model": "openai_hazel",
@@ -374,8 +593,23 @@
     "3:2",
     "2:3"
    ],
+   "settings": {
+    "quality": "medium"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "quality": [
+     "low",
+     "medium",
+     "high"
+    ]
+   },
+   "option_credits": {
+    "0||medium": 4.0,
+    "0||low": 2.0,
+    "0||high": 6.0
+   }
   },
   {
    "model": "gpt_image_2_5",
@@ -402,14 +636,49 @@
     "4:5",
     "5:4"
    ],
+   "settings": {
+    "resolution": "1k",
+    "quality": "low"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "1k",
+     "2k",
+     "4k"
+    ],
+    "quality": [
+     "low",
+     "medium",
+     "high",
+     "xhigh",
+     "max"
+    ]
+   },
+   "option_credits": {
+    "0|1k|low": 0.25,
+    "0|1k|medium": 0.5,
+    "0|1k|high": 1.25,
+    "0|1k|xhigh": 2.0,
+    "0|1k|max": 4.5,
+    "0|2k|low": 0.5,
+    "0|2k|medium": 0.75,
+    "0|2k|high": 2.25,
+    "0|2k|xhigh": 3.5,
+    "0|2k|max": 7.0,
+    "0|4k|low": 0.75,
+    "0|4k|medium": 1.25,
+    "0|4k|high": 3.25,
+    "0|4k|xhigh": 5.75,
+    "0|4k|max": 12.0
+   }
   },
   {
    "model": "gpt_image_2_6",
    "label": "GPT Image 2.6",
    "capability": "t2i",
-   "credits": 0.25,
+   "credits": 0.75,
    "caps": [
     "t2i",
     "i2i"
@@ -430,14 +699,53 @@
     "4:5",
     "5:4"
    ],
+   "settings": {
+    "resolution": "1k",
+    "quality": "low"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "1k",
+     "2k",
+     "4k"
+    ],
+    "quality": [
+     "auto",
+     "low",
+     "medium",
+     "high",
+     "xhigh",
+     "max"
+    ]
+   },
+   "option_credits": {
+    "0|1k|low": 0.75,
+    "0|1k|auto": 1.25,
+    "0|1k|medium": 1.0,
+    "0|1k|high": 1.25,
+    "0|1k|xhigh": 2.0,
+    "0|1k|max": 4.5,
+    "0|2k|auto": 2.0,
+    "0|2k|low": 1.25,
+    "0|2k|medium": 1.75,
+    "0|2k|high": 2.0,
+    "0|2k|xhigh": 3.5,
+    "0|2k|max": 7.0,
+    "0|4k|auto": 3.25,
+    "0|4k|low": 1.75,
+    "0|4k|medium": 2.75,
+    "0|4k|high": 3.25,
+    "0|4k|xhigh": 5.5,
+    "0|4k|max": 12.0
+   }
   },
   {
    "model": "gpt_image_2_6_flare",
    "label": "GPT Image 2.6 Flare",
    "capability": "t2i",
-   "credits": 0.25,
+   "credits": 0.75,
    "caps": [
     "t2i",
     "i2i"
@@ -458,8 +766,47 @@
     "4:5",
     "5:4"
    ],
+   "settings": {
+    "resolution": "1k",
+    "quality": "low"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "1k",
+     "2k",
+     "4k"
+    ],
+    "quality": [
+     "auto",
+     "low",
+     "medium",
+     "high",
+     "xhigh",
+     "max"
+    ]
+   },
+   "option_credits": {
+    "0|1k|low": 0.75,
+    "0|1k|auto": 1.25,
+    "0|1k|medium": 1.0,
+    "0|1k|high": 1.25,
+    "0|1k|xhigh": 2.25,
+    "0|1k|max": 6.5,
+    "0|2k|auto": 2.25,
+    "0|2k|low": 1.25,
+    "0|2k|medium": 1.75,
+    "0|2k|high": 2.25,
+    "0|2k|xhigh": 3.25,
+    "0|2k|max": 6.75,
+    "0|4k|auto": 3.5,
+    "0|4k|low": 2.0,
+    "0|4k|medium": 2.75,
+    "0|4k|high": 3.5,
+    "0|4k|xhigh": 5.5,
+    "0|4k|max": 12.0
+   }
   },
   {
    "model": "soul_cinema_studio",
@@ -480,8 +827,21 @@
     "2:3",
     "21:9"
    ],
+   "settings": {
+    "quality": "2k"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "quality": [
+     "1.5k",
+     "2k"
+    ]
+   },
+   "option_credits": {
+    "0||2k": 0.12,
+    "0||1.5k": 0.12
+   }
   },
   {
    "model": "seedream_v5_lite",
@@ -500,8 +860,21 @@
     "9:16",
     "21:9"
    ],
+   "settings": {
+    "quality": "basic"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "quality": [
+     "basic",
+     "high"
+    ]
+   },
+   "option_credits": {
+    "0||basic": 1.0,
+    "0||high": 1.0
+   }
   },
   {
    "model": "seedream_5_0_flash",
@@ -522,8 +895,23 @@
     "2:3",
     "21:9"
    ],
+   "settings": {
+    "resolution": "2k"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "1k",
+     "1.5k",
+     "2k"
+    ]
+   },
+   "option_credits": {
+    "0|2k|": 0.5,
+    "0|1k|": 0.5,
+    "0|1.5k|": 0.5
+   }
   },
   {
    "model": "seedream_v5_pro",
@@ -544,8 +932,23 @@
     "2:3",
     "21:9"
    ],
+   "settings": {
+    "resolution": "2k"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "1k",
+     "1.5k",
+     "2k"
+    ]
+   },
+   "option_credits": {
+    "0|2k|": 2.5,
+    "0|1k|": 1.25,
+    "0|1.5k|": 1.25
+   }
   },
   {
    "model": "grok_image",
@@ -567,8 +970,21 @@
     "16:9",
     "9:16"
    ],
+   "settings": {
+    "resolution": "1k"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "1k",
+     "2k"
+    ]
+   },
+   "option_credits": {
+    "0|1k|": 1.0,
+    "0|2k|": 1.0
+   }
   },
   {
    "model": "grok_image_2_0",
@@ -590,8 +1006,28 @@
     "16:9",
     "9:16"
    ],
+   "settings": {
+    "resolution": "1k",
+    "quality": "medium"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "1k",
+     "2k"
+    ],
+    "quality": [
+     "low",
+     "medium"
+    ]
+   },
+   "option_credits": {
+    "0|1k|medium": 2.0,
+    "0|1k|low": 1.25,
+    "0|2k|low": 2.0,
+    "0|2k|medium": 2.5
+   }
   },
   {
    "model": "ideogram_4_5",
@@ -627,8 +1063,96 @@
     "1:3",
     "3:1"
    ],
+   "settings": {
+    "resolution": "2k",
+    "quality": "high"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "1k",
+     "2k"
+    ],
+    "quality": [
+     "very_low",
+     "low",
+     "medium",
+     "high"
+    ]
+   },
+   "option_credits": {
+    "0|2k|high": 6.25,
+    "0|1k|very_low": 0.25,
+    "0|1k|low": 1.0,
+    "0|1k|medium": 2.0,
+    "0|1k|high": 6.25,
+    "0|2k|very_low": 0.25,
+    "0|2k|low": 1.0,
+    "0|2k|medium": 2.0
+   }
+  },
+  {
+   "model": "ideogram_4_6",
+   "label": "Ideogram 4.6",
+   "capability": "t2i",
+   "credits": 2.0,
+   "caps": [
+    "t2i",
+    "i2i"
+   ],
+   "ratios": [
+    "1:1",
+    "1:2",
+    "2:1",
+    "2:3",
+    "3:2",
+    "4:5",
+    "5:4",
+    "9:16",
+    "16:9",
+    "5:8",
+    "8:5",
+    "3:4",
+    "4:3",
+    "9:21",
+    "21:9",
+    "9:22",
+    "22:9",
+    "9:23",
+    "23:9",
+    "3:8",
+    "8:3",
+    "5:12",
+    "12:5",
+    "1:3",
+    "3:1"
+   ],
+   "settings": {
+    "resolution": "2k",
+    "quality": "medium"
+   },
+   "refs": 4,
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "2k",
+     "4k"
+    ],
+    "quality": [
+     "low",
+     "medium",
+     "high"
+    ]
+   },
+   "option_credits": {
+    "0|2k|medium": 2.0,
+    "0|2k|low": 1.0,
+    "0|2k|high": 3.25,
+    "0|4k|low": 2.0,
+    "0|4k|medium": 3.75,
+    "0|4k|high": 6.25
+   }
   },
   {
    "model": "ideogram_vector",
@@ -658,8 +1182,18 @@
     "3:1",
     "4:1"
    ],
+   "settings": {
+    "quality": "low"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "quality": [
+     "low",
+     "medium",
+     "high"
+    ]
+   }
   },
   {
    "model": "recraft_v4_1",
@@ -679,7 +1213,20 @@
     "2:3",
     "16:9",
     "9:16"
-   ]
+   ],
+   "settings": {
+    "resolution": "1k"
+   },
+   "options": {
+    "resolution": [
+     "1k",
+     "2k"
+    ]
+   },
+   "option_credits": {
+    "0|1k|": 1.25,
+    "0|2k|": 8.0
+   }
   },
   {
    "model": "recraft_v4_styles",
@@ -704,7 +1251,20 @@
     "10:14",
     "16:9",
     "9:16"
-   ]
+   ],
+   "settings": {
+    "resolution": "1k"
+   },
+   "options": {
+    "resolution": [
+     "1k",
+     "2k"
+    ]
+   },
+   "option_credits": {
+    "0|1k|": 1.0,
+    "0|2k|": 3.0
+   }
   },
   {
    "model": "minimax_h3_image",
@@ -715,8 +1275,23 @@
     "t2i",
     "i2i"
    ],
+   "settings": {
+    "resolution": "4k"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "1k",
+     "2k",
+     "4k"
+    ]
+   },
+   "option_credits": {
+    "0|4k|": 4.0,
+    "0|1k|": 3.0,
+    "0|2k|": 3.0
+   }
   },
   {
    "model": "cinematic_studio_image",
@@ -737,8 +1312,23 @@
     "2:3",
     "21:9"
    ],
+   "settings": {
+    "resolution": "2k"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "1k",
+     "2k",
+     "4k"
+    ]
+   },
+   "option_credits": {
+    "0|2k|": 2.0,
+    "0|1k|": 2.0,
+    "0|4k|": 4.0
+   }
   },
   {
    "model": "cinematic_studio_3_0",
@@ -757,6 +1347,9 @@
     "3:4",
     "9:16"
    ],
+   "settings": {
+    "resolution": "720p"
+   },
    "durations": [
     4,
     5,
@@ -776,7 +1369,45 @@
     "15": 75.0
    },
    "end_frame": true,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "480p",
+     "720p",
+     "1080p",
+     "4k"
+    ]
+   },
+   "option_credits": {
+    "4|720p|": 20.0,
+    "4|480p|": 14.0,
+    "4|1080p|": 52.0,
+    "4|4k|": 96.0,
+    "5|720p|": 25.0,
+    "5|480p|": 17.0,
+    "5|1080p|": 65.0,
+    "5|4k|": 120.0,
+    "6|720p|": 30.0,
+    "6|480p|": 21.0,
+    "6|1080p|": 78.0,
+    "6|4k|": 144.0,
+    "8|720p|": 40.0,
+    "8|480p|": 28.0,
+    "8|1080p|": 104.0,
+    "8|4k|": 192.0,
+    "10|720p|": 50.0,
+    "10|480p|": 35.0,
+    "10|1080p|": 130.0,
+    "10|4k|": 240.0,
+    "12|720p|": 60.0,
+    "12|480p|": 42.0,
+    "12|1080p|": 156.0,
+    "12|4k|": 288.0,
+    "15|720p|": 75.0,
+    "15|480p|": 52.0,
+    "15|1080p|": 195.0,
+    "15|4k|": 360.0
+   }
   },
   {
    "model": "cinematic_studio_video",
@@ -815,9 +1446,26 @@
     "3:4",
     "9:16"
    ],
+   "settings": {
+    "resolution": "720p"
+   },
    "end_frame": true,
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "720p",
+     "1080p",
+     "2k",
+     "4k"
+    ]
+   },
+   "option_credits": {
+    "0|720p|": 30.0,
+    "0|1080p|": 40.0,
+    "0|2k|": 50.0,
+    "0|4k|": 65.0
+   }
   },
   {
    "model": "grok_video_v15",
@@ -828,8 +1476,23 @@
     "t2v",
     "i2v"
    ],
+   "settings": {
+    "resolution": "720p"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "480p",
+     "720p",
+     "1080p"
+    ]
+   },
+   "option_credits": {
+    "0|720p|": 22.5,
+    "0|480p|": 12.5,
+    "0|1080p|": 40.0
+   }
   },
   {
    "model": "grok_video_v15_lite",
@@ -849,7 +1512,22 @@
     "3:2",
     "2:3"
    ],
-   "ref_role": "image_references"
+   "settings": {
+    "resolution": "720p"
+   },
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "480p",
+     "720p",
+     "1080p"
+    ]
+   },
+   "option_credits": {
+    "0|720p|": 5.0,
+    "0|480p|": 5.0,
+    "0|1080p|": 20.0
+   }
   },
   {
    "model": "minimax_hailuo",
@@ -860,6 +1538,9 @@
     "t2v",
     "i2v"
    ],
+   "settings": {
+    "resolution": "768"
+   },
    "durations": [
     6,
     10
@@ -869,7 +1550,19 @@
     "10": 11.0
    },
    "end_frame": true,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "512",
+     "768",
+     "1080"
+    ]
+   },
+   "option_credits": {
+    "6|768|": 6.0,
+    "6|1080|": 10.0,
+    "10|768|": 11.0
+   }
   },
   {
    "model": "minimax_h3",
@@ -888,9 +1581,20 @@
     "3:4",
     "9:16"
    ],
+   "settings": {
+    "resolution": "2K"
+   },
    "end_frame": true,
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "2K"
+    ]
+   },
+   "option_credits": {
+    "0|2K|": 10.0
+   }
   },
   {
    "model": "minimax_h3_max",
@@ -909,9 +1613,22 @@
     "3:4",
     "9:16"
    ],
+   "settings": {
+    "resolution": "768p"
+   },
    "end_frame": true,
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "480p",
+     "768p"
+    ]
+   },
+   "option_credits": {
+    "0|768p|": 12.5,
+    "0|480p|": 7.5
+   }
   },
   {
    "model": "wan2_6",
@@ -926,6 +1643,9 @@
     "9:16",
     "1:1"
    ],
+   "settings": {
+    "quality": "720p"
+   },
    "durations": [
     5,
     10,
@@ -937,7 +1657,21 @@
     "15": 22.5
    },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "quality": [
+     "720p",
+     "1080p"
+    ]
+   },
+   "option_credits": {
+    "5||720p": 7.5,
+    "5||1080p": 10.0,
+    "10||720p": 15.0,
+    "10||1080p": 20.0,
+    "15||720p": 22.5,
+    "15||1080p": 30.0
+   }
   },
   {
    "model": "seedance_2_0",
@@ -956,9 +1690,26 @@
     "1:1",
     "21:9"
    ],
+   "settings": {
+    "resolution": "720p"
+   },
    "end_frame": true,
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "480p",
+     "720p",
+     "1080p",
+     "4k"
+    ]
+   },
+   "option_credits": {
+    "0|720p|": 22.5,
+    "0|480p|": 15.0,
+    "0|1080p|": 60.0,
+    "0|4k|": 110.0
+   }
   },
   {
    "model": "seedance_2_5",
@@ -977,9 +1728,26 @@
     "3:4",
     "9:16"
    ],
+   "settings": {
+    "resolution": "720p"
+   },
    "end_frame": true,
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "480p",
+     "720p",
+     "1080p",
+     "4k"
+    ]
+   },
+   "option_credits": {
+    "0|720p|": 35.0,
+    "0|480p|": 15.0,
+    "0|1080p|": 80.0,
+    "0|4k|": 140.0
+   }
   },
   {
    "model": "cinematic_studio_video_4_0",
@@ -998,9 +1766,24 @@
     "3:4",
     "9:16"
    ],
+   "settings": {
+    "resolution": "720p"
+   },
    "end_frame": true,
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "480p",
+     "720p",
+     "1080p"
+    ]
+   },
+   "option_credits": {
+    "0|720p|": 35.0,
+    "0|480p|": 15.0,
+    "0|1080p|": 80.0
+   }
   },
   {
    "model": "kling2_6",
@@ -1057,13 +1840,26 @@
     "9:16",
     "1:1"
    ],
-   "ref_role": "image_references"
+   "settings": {
+    "resolution": "720p"
+   },
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "720p",
+     "1080p"
+    ]
+   },
+   "option_credits": {
+    "0|720p|": 7.5,
+    "0|1080p|": 10.0
+   }
   },
   {
    "model": "kling4_0",
    "label": "Kling 4.0",
    "capability": "i2v",
-   "credits": 32.5,
+   "credits": 37.5,
    "caps": [
     "t2v",
     "i2v"
@@ -1074,15 +1870,30 @@
     "9:16",
     "1:1"
    ],
+   "settings": {
+    "resolution": "1080p"
+   },
    "end_frame": true,
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "720p",
+     "1080p",
+     "4k"
+    ]
+   },
+   "option_credits": {
+    "0|1080p|": 37.5,
+    "0|720p|": 25.0,
+    "0|4k|": 90.0
+   }
   },
   {
    "model": "kling_4_0_flash",
    "label": "Kling 4.0 Flash",
    "capability": "i2v",
-   "credits": 30.0,
+   "credits": 15.0,
    "caps": [
     "t2v",
     "i2v"
@@ -1093,8 +1904,19 @@
     "9:16",
     "1:1"
    ],
+   "settings": {
+    "resolution": "720p"
+   },
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "720p"
+    ]
+   },
+   "option_credits": {
+    "0|720p|": 15.0
+   }
   },
   {
    "model": "kling_o3_image_reference",
@@ -1145,7 +1967,20 @@
     "4:3",
     "3:4"
    ],
-   "ref_role": "image_references"
+   "settings": {
+    "resolution": "720p"
+   },
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "720p",
+     "1080p"
+    ]
+   },
+   "option_credits": {
+    "0|720p|": 12.5,
+    "0|1080p|": 22.5
+   }
   },
   {
    "model": "grok_video",
@@ -1176,9 +2011,26 @@
     "16:9",
     "9:16"
    ],
+   "settings": {
+    "resolution": "720p"
+   },
    "end_frame": true,
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "360p",
+     "720p",
+     "1080p",
+     "4k"
+    ]
+   },
+   "option_credits": {
+    "0|720p|": 24.0,
+    "0|360p|": 8.0,
+    "0|1080p|": 36.0,
+    "0|4k|": 72.0
+   }
   },
   {
    "model": "gemini_omni_flash_1_2",
@@ -1193,9 +2045,26 @@
     "16:9",
     "9:16"
    ],
+   "settings": {
+    "resolution": "720p"
+   },
    "end_frame": true,
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "360p",
+     "720p",
+     "1080p",
+     "4k"
+    ]
+   },
+   "option_credits": {
+    "0|720p|": 18.0,
+    "0|360p|": 6.0,
+    "0|1080p|": 26.0,
+    "0|4k|": 54.0
+   }
   },
   {
    "model": "wan2_7",
@@ -1213,14 +2082,27 @@
     "4:3",
     "3:4"
    ],
+   "settings": {
+    "resolution": "720p"
+   },
    "end_frame": true,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "720p",
+     "1080p"
+    ]
+   },
+   "option_credits": {
+    "0|720p|": 7.5,
+    "0|1080p|": 12.5
+   }
   },
   {
    "model": "wan3_0",
    "label": "Wan 3.0",
    "capability": "i2v",
-   "credits": 8.75,
+   "credits": 7.5,
    "caps": [
     "t2v",
     "i2v"
@@ -1232,15 +2114,30 @@
     "4:3",
     "3:4"
    ],
+   "settings": {
+    "resolution": "720p"
+   },
    "end_frame": true,
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "480p",
+     "720p",
+     "1080p"
+    ]
+   },
+   "option_credits": {
+    "0|720p|": 7.5,
+    "0|480p|": 3.75,
+    "0|1080p|": 15.0
+   }
   },
   {
    "model": "wan3_0_prime",
    "label": "Wan 3.0 Prime",
    "capability": "i2v",
-   "credits": 15.0,
+   "credits": 13.75,
    "caps": [
     "t2v",
     "i2v"
@@ -1252,9 +2149,24 @@
     "4:3",
     "3:4"
    ],
+   "settings": {
+    "resolution": "720p"
+   },
    "end_frame": true,
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "480p",
+     "720p",
+     "1080p"
+    ]
+   },
+   "option_credits": {
+    "0|720p|": 13.75,
+    "0|480p|": 6.25,
+    "0|1080p|": 27.5
+   }
   },
   {
    "model": "veo3_1",
@@ -1269,6 +2181,9 @@
     "16:9",
     "9:16"
    ],
+   "settings": {
+    "quality": "basic"
+   },
    "durations": [
     4,
     6,
@@ -1279,7 +2194,25 @@
     "6": 24.0,
     "8": 32.0
    },
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "quality": [
+     "basic",
+     "high",
+     "ultra"
+    ]
+   },
+   "option_credits": {
+    "4||basic": 16.0,
+    "4||high": 16.0,
+    "4||ultra": 36.0,
+    "6||basic": 24.0,
+    "6||high": 24.0,
+    "6||ultra": 54.0,
+    "8||basic": 32.0,
+    "8||high": 32.0,
+    "8||ultra": 72.0
+   }
   },
   {
    "model": "veo3_1_lite",
@@ -1324,9 +2257,24 @@
     "3:4",
     "9:16"
    ],
+   "settings": {
+    "resolution": "720p"
+   },
    "end_frame": true,
    "refs": 4,
-   "ref_role": "image_references"
+   "ref_role": "image_references",
+   "options": {
+    "resolution": [
+     "480p",
+     "720p",
+     "1080p"
+    ]
+   },
+   "option_credits": {
+    "0|720p|": 75.0,
+    "0|480p|": 52.5,
+    "0|1080p|": 195.0
+   }
   }
  ]
 }

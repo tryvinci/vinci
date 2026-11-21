@@ -298,7 +298,8 @@ def test_connector_submit_via_provider(tmp_path: Path) -> None:
     preview, generate, poll = calls
     # The free estimate tool with the same params, never generate_image (COREPRODUC-736).
     assert preview == ("estimate_image_cost", generate[1])
-    assert generate[1] == {"params": {"model": "seedream_v4_5", "prompt": "cube", "count": 1, "use_unlim": False, "aspect_ratio": "16:9"}}
+    # The provider's default quality is sent too (2026-11-21): before, none was sent.
+    assert generate[1] == {"params": {"model": "seedream_v4_5", "prompt": "cube", "count": 1, "use_unlim": False, "quality": "basic", "aspect_ratio": "16:9"}}
     assert poll == ("job_status", {"jobId": "h1"})
 
 

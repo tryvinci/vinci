@@ -73,6 +73,8 @@ export interface Pricing {
   snapshot_at: string;
   /** Price of a clip by its length in seconds, for a model that bills by length (COREPRODUC-555). */
   clip_prices?: Record<string, number>;
+  /** Price of a run by its picked options, keyed "<seconds>|<resolution>|<quality>" (0: no length). */
+  option_prices?: Record<string, number>;
 }
 
 export interface ModelSpec {
@@ -86,6 +88,9 @@ export interface ModelSpec {
     /** The exact clip lengths (seconds) a video model takes; empty: any length up to max_duration. */
     durations?: number[];
     resolutions?: string[];
+    /** Quality values the model takes, and the provider's default of each option. */
+    qualities?: string[];
+    defaults?: Record<string, string>;
     max_input_images?: number | null;
     end_frame?: boolean;
     max_references?: number;

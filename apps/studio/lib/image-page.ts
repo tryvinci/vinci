@@ -3,7 +3,7 @@
  *
  * Membership is `modelsFor` (text-to-image, then image edit). Featured is
  * catalog `quality_tier === "quality"`, not an invented shortlist.
- * Quality chips exist only for providers that already read `quality` (OpenAI).
+ * Quality chips exist for rows that list `constraints.qualities` (Higgsfield sign-in) and for OpenAI.
  * Feed rows come from GET /library?tool=image when that index exists, else /runs.
  */
 
@@ -19,10 +19,12 @@ export type ImageModel = {
   provider: string;
   capabilities: string[];
   available?: boolean;
-  pricing?: { amount?: number; unit?: string; currency?: string };
+  pricing?: { amount?: number; unit?: string; currency?: string; option_prices?: Record<string, number> };
   constraints?: {
     aspect_ratios?: string[];
     resolutions?: string[];
+    qualities?: string[];
+    defaults?: Record<string, string>;
     max_input_images?: number | null;
     max_duration?: number;
     durations?: number[];
@@ -216,6 +218,7 @@ export function capabilityChips(model: ImageModel | undefined): string[] {
  */
 export function qualityOptions(model: ImageModel | undefined): string[] {
   if (!model) return [];
+  if (model.constraints?.qualities?.length) return [...model.constraints.qualities];
   if (model.provider === "openai" && (model.capabilities || []).includes("t2i")) {
     return [...OPENAI_QUALITY];
   }

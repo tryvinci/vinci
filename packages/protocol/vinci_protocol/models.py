@@ -59,6 +59,9 @@ class Pricing(StrictModel):
     # page, for a model that bills by length. `amount` is the price of its default clip; a row with
     # no table is one price per job (COREPRODUC-555).
     clip_prices: dict[str, float] = Field(default_factory=dict)
+    # The price of a run by its picked options, keyed "<seconds>|<resolution>|<quality>" (0 with
+    # no length): {"0|4k|high": 8.0}. A sign-in row prices each option it offers (2026-11-21).
+    option_prices: dict[str, float] = Field(default_factory=dict)
 
 
 class ModelConstraints(StrictModel):
@@ -68,6 +71,10 @@ class ModelConstraints(StrictModel):
     # length up to max_duration. The OLF engine fits a shot's length to these.
     durations: list[float] = Field(default_factory=list)
     resolutions: list[str] = Field(default_factory=list)
+    # The quality values a model takes ("low", "high"), and the provider's default of each option
+    # ({"resolution": "1k", "quality": "low"}): the Studio picks the default first.
+    qualities: list[str] = Field(default_factory=list)
+    defaults: dict[str, str] = Field(default_factory=dict)
     max_input_images: int | None = None
     # A video model takes an end frame, and how many open reference images (the Studio's Video
     # input modes gray out the others, COREPRODUC-667 and 669).

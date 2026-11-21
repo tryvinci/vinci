@@ -24,6 +24,7 @@ import {
 import { daemonHasPath } from "../lib/daemon-routes";
 import { withProject } from "../lib/projects";
 import { isUnpriced, money, PRICE_VARIES } from "../lib/model-capabilities";
+import { clipPrice } from "../lib/canvas-node";
 import { ImageFeed, useFeedTrash } from "./image-feed";
 import { ImagePromptBar } from "./image-prompt-bar";
 import { plainError } from "./ui/plain-text";
@@ -264,7 +265,7 @@ export function ImagePage({
     [imageRows, onAspect, onLog, onPickModel, onPrompt, onQuality, onResolution],
   );
 
-  const cost = selected && isUnpriced(selected) ? PRICE_VARIES : money(generateCost(selected?.pricing?.amount, batch), selected?.pricing?.currency);
+  const cost = selected && isUnpriced(selected) ? PRICE_VARIES : money(generateCost(clipPrice(selected, undefined, undefined, undefined, { resolution, quality }), batch), selected?.pricing?.currency);
   const hint = imageBlock(selected, prompt, refs.length, imageRows);
 
   return (

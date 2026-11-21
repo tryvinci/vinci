@@ -9,15 +9,18 @@ The lists (read 2026-11-16):
 
 - Higgsfield ``models_explore {action: "list", type: "image"|"video"}``: ``items[]`` with ``id``,
   ``name``, ``medias[].roles`` (``image_references``, ``start_image``, ``end_image``…),
-  ``aspect_ratios``, ``parameters[]`` (``duration`` options), ``duration_range`` and ``tags``.
+  ``aspect_ratios``, ``parameters[]`` (``duration``, ``resolution`` and ``quality`` options, each
+  with a ``default``), ``duration_range`` and ``tags``.
 - Magnific ``images_models_list`` and ``video_models_list``, in TOON: ``models[]`` with ``slug``,
   ``name``, ``referenceTypes`` (``image`` means image to image), ``aspectRatios``, ``durations``,
   ``resolutions``, ``supportsStartFrame``, ``supportsEndFrame``, ``supportsReferences`` and
-  ``requiredInputs``.
+  ``requiredInputs``. It gives no default resolution: an image row takes the first one listed,
+  a video row the first of 720p, 768p and 1080p.
 """
 
 from __future__ import annotations
 
+import itertools
 import json
 import logging
 import re
@@ -53,6 +56,7 @@ def higgsfield_rows(images: list[dict[str, Any]], videos: list[dict[str, Any]]) 
             continue
         roles = {role for media in item.get("medias") or [] for role in media.get("roles") or []}
         ratios = tuple(r for r in item.get("aspect_ratios") or [] if r != "auto")
+        options, defaults = _options(item)
         if item.get("output_type") == "video":
             tags = set(item.get("tags") or [])
             only_image = "image-to-video" in tags and "text-to-video" not in tags
@@ -66,11 +70,13 @@ def higgsfield_rows(images: list[dict[str, Any]], videos: list[dict[str, Any]]) 
                     "i2v" if "i2v" in caps else "t2v",
                     None,
                     ratios,
+                    settings=defaults,
                     caps=caps,
                     durations=_lengths(item),
                     end_frame="end_image" in roles,
                     refs=REFS if "image_references" in roles else 0,
                     ref_role="image_references",
+                    options=options,
                 )
             )
         else:
@@ -91,9 +97,11 @@ def higgsfield_rows(images: list[dict[str, Any]], videos: list[dict[str, Any]]) 
                     "t2i",
                     None,
                     ratios,
+                    settings=defaults,
                     caps=caps,
                     refs=REFS if ref_role else 0,
                     ref_role=ref_role,
+                    options=options,
                 )
             )
     return _unique(rows)
@@ -110,7 +118,20 @@ def magnific_rows(images: list[dict[str, Any]], videos: list[dict[str, Any]]) ->
         refs = REFS if "image" in (item.get("referenceTypes") or []) else 0
         caps = ("t2i", "i2i") if refs else ("t2i",)
         ratios = tuple(r for r in item.get("aspectRatios") or [] if r != "auto")
-        rows.append(Row(model, name, "t2i", None, ratios, caps=caps, refs=refs))
+        listed = tuple(str(r) for r in item.get("resolutions") or [])
+        rows.append(
+            Row(
+                model,
+                name,
+                "t2i",
+                None,
+                ratios,
+                settings=(("resolution", listed[0]),) if listed else (),
+                caps=caps,
+                refs=refs,
+                options=(("resolution", listed),) if listed else (),
+            )
+        )
     for item in videos:
         model, name = str(item.get("slug") or ""), str(item.get("name") or "")
         lengths = [int(n) for n in item.get("durations") or [] if isinstance(n, int | float)]
@@ -137,6 +158,7 @@ def magnific_rows(images: list[dict[str, Any]], videos: list[dict[str, Any]]) ->
                 durations=picks,
                 end_frame=bool(item.get("supportsEndFrame")),
                 refs=REFS if item.get("supportsReferences") else 0,
+                options=(("resolution", tuple(sizes)),) if sizes else (),
             )
         )
     return _unique(rows)
@@ -145,33 +167,44 @@ def magnific_rows(images: list[dict[str, Any]], videos: list[dict[str, Any]]) ->
 def price_rows(
     connector: Connector, rows: list[Row], call: Callable[[str, dict[str, Any]], Any]
 ) -> list[Row]:
-    """Each row with its price from the provider's free preview: one per offered length.
+    """Each row with its price from the provider's free preview: one per offered length and option.
 
-    A row whose preview fails (it needs a start frame, or the provider refuses the settings) keeps
-    no
-    price; the Studio shows "price varies" and a run checks nothing against it.
+    The default options give the row's price and clip prices; every option set gives an
+    ``option_credits`` entry. A row whose preview fails (it needs a start frame, or the provider
+    refuses the settings) keeps no price; the Studio shows "price varies" and a run checks nothing
+    against it. An option set whose preview fails has no entry: a run of it is checked against the
+    default price, and stops before any spend when it costs more.
     """
     priced = []
     for row in rows:
         clips: list[tuple[int, float]] = []
+        options: dict[str, float] = {}
+        defaults = row.picks({})
         for length in row.durations or (None,):
-            args = connector.arguments(row, {"prompt": PROMPT, "duration": length})
-            tool, preview = connector.cost_call(connector.tools[row.capability], args)
-            try:
-                cost = parse_cost(call(tool, preview))
-            except Exception as exc:  # noqa: BLE001 — an unpriced row is still listed
-                log.info(
-                    "catalog price failed provider=%s model=%s length=%s error=%s",
-                    connector.id,
-                    row.model,
-                    length,
-                    str(exc)[:160],
-                )
-                cost = None
-            if cost is not None:
-                clips.append((length or 0, cost))
-        if not clips:
-            priced.append(row)
+            for picks in _option_sets(row):
+                inputs = {"prompt": PROMPT, "duration": length, **picks}
+                args = connector.arguments(row, inputs)
+                tool, preview = connector.cost_call(connector.tools[row.capability], args)
+                try:
+                    cost = parse_cost(call(tool, preview))
+                except Exception as exc:  # noqa: BLE001 — an unpriced row is still listed
+                    log.info(
+                        "catalog price failed provider=%s model=%s length=%s picks=%s error=%s",
+                        connector.id,
+                        row.model,
+                        length,
+                        picks,
+                        str(exc)[:160],
+                    )
+                    cost = None
+                if cost is None:
+                    continue
+                if row.options:
+                    options[row.option_key(length, row.picks(picks))] = cost
+                if row.picks(picks) == defaults:
+                    clips.append((length or 0, cost))
+        if not clips:  # the default stays unpriced; the option sets that were priced stay
+            priced.append(replace(row, option_credits=tuple(options.items())))
             continue
         credits = clips[0][1]
         table = tuple(c for c in clips if c[0]) if row.durations else ()
@@ -182,14 +215,16 @@ def price_rows(
                 credits=credits,
                 clip_credits=table,
                 durations=tuple(n for n, _ in table) or row.durations,
+                option_credits=tuple(options.items()),
             )
         )
         log.info(
-            "catalog priced provider=%s model=%s credits=%s clips=%s",
+            "catalog priced provider=%s model=%s credits=%s clips=%s options=%s",
             connector.id,
             row.model,
             credits,
             len(table),
+            len(options),
         )
     return priced
 
@@ -251,6 +286,37 @@ def _lengths(item: dict[str, Any]) -> tuple[int, ...]:
     return ()
 
 
+def _options(
+    item: dict[str, Any],
+) -> tuple[tuple[tuple[str, tuple[str, ...]], ...], tuple[tuple[str, str], ...]]:
+    """A Higgsfield model's ``resolution`` and ``quality`` options, and their defaults.
+
+    Returns:
+        ``(options, settings)``: ``((name, values), ...)`` in the provider's order, and
+        ``((name, default), ...)``: the listed default, else the first value.
+    """
+    options: list[tuple[str, tuple[str, ...]]] = []
+    settings: list[tuple[str, str]] = []
+    params = {p.get("name"): p for p in item.get("parameters") or [] if isinstance(p, dict)}
+    for name in ("resolution", "quality"):
+        values = tuple(str(v) for v in (params.get(name) or {}).get("options") or [])
+        if not values:
+            continue
+        default = str(params[name].get("default") or "")
+        options.append((name, values))
+        settings.append((name, default if default in values else values[0]))
+    return tuple(options), tuple(settings)
+
+
+def _option_sets(row: Row) -> list[dict[str, str]]:
+    """Every set of option values a row offers, the default set first (none: one empty set)."""
+    names = [name for name, _ in row.options]
+    every = itertools.product(*(values for _, values in row.options))
+    sets = [dict(zip(names, values, strict=True)) for values in every]
+    defaults = row.picks({})
+    return sorted(sets, key=lambda picks: picks != defaults)
+
+
 def label(name: str) -> str:
     """A list name as people read it: a raw id such as ``soul_cinema_studio`` becomes
     "Soul Cinema Studio" (Higgsfield lists a few that way)."""
@@ -295,4 +361,6 @@ def _row_json(row: Row) -> dict[str, Any]:
     out |= {"end_frame": True} if row.end_frame else {}
     out |= {"refs": row.refs} if row.refs else {}
     out |= {"ref_role": row.ref_role} if row.ref_role else {}
+    out |= {"options": {k: list(v) for k, v in row.options}} if row.options else {}
+    out |= {"option_credits": dict(row.option_credits)} if row.option_credits else {}
     return out
