@@ -6,7 +6,7 @@ import { ANIMATED_MOVES, type OlfRoom, type OlfShotTry, type ShotMove } from "..
 import type { SceneOptions, SceneViewer } from "../lib/scenelab-gl";
 import { COPY_PROMPT, type Drawn, type OlfShow, type OlfTextStep, durationSeconds, framingShort, takesOf, textStepQuestion } from "../lib/shows";
 import { message, olf, send } from "./shows-api";
-import { Confirm, TextModelPick, useTextModel } from "./shows-parts";
+import { Confirm, PinStale, TextModelPick, useTextModel } from "./shows-parts";
 import { CompareTries, SceneRoom, TryEditor } from "./shows-scenelab-screens";
 
 /** `GET /olf/scene` (`vinci_olf.scene_lab.overview`). For a shot: its tries and the rooms they
@@ -35,15 +35,6 @@ const TITLES: Record<Mode, string> = {
   props: "Props and camera",
   room: "Scene room",
 };
-
-/** The pin video is older than the shot camera: the stage and the keyframe layout box say so. */
-export function PinStale({ fields }: { fields: string[] }) {
-  return (
-    <p className="olf-warn" data-testid="pin-stale">
-      Pin video is out of date: {fields.join(", ")} changed. Click Use again to re-record it.
-    </p>
-  );
-}
 
 /** A file as a `data:` URL (base64), to send in a JSON body. */
 function dataUrl(blob: Blob): Promise<string> {

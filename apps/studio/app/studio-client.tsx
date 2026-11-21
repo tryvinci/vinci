@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import { HostKeys, providerName, type HostNote } from "./host-keys";
 import { AdaptFlowCanvas } from "./adapt-flow-canvas";
 import { AdaptsPanel, EMPTY_PRESET_DRAFT, type PresetDraft } from "./adapts-panel";
@@ -8,7 +9,7 @@ import { EffectShell } from "./effect-shell";
 import { OutputSettingsPanel } from "./output-settings-panel";
 import { defaultAppIdForPage, getApp } from "../lib/apps-catalog";
 import { AssetsPage, type LibraryItem as AssetItem } from "./assets-page";
-import { daemonHasPath } from "../lib/daemon-routes";
+import { daemonPaths, daemonPathsStrict } from "../lib/daemon-routes";
 import {
   LAST_PROJECT_KEY,
   pickProject,
@@ -29,7 +30,6 @@ import { CanvasNodeCard } from "./canvas-node-card";
 import { averageSeconds, modelKind, type RunClock } from "../lib/progress";
 import { ImagePage } from "./image-page";
 import { LibraryPage } from "./library-page";
-import { ShowsPage } from "./shows-page";
 import { setShowsCredits } from "../lib/shows";
 import { HOST_REQUEST_BYTES, type UploadLimits, setUploadLimits, uploadFile } from "../lib/upload";
 import { VideoPage } from "./video-page";
@@ -200,6 +200,9 @@ import {
   type LibraryTab,
 } from "../lib/library";
 import { topWindow, useUrlPart } from "./url-part";
+
+// Shows (and its scene lab) loads only when the Shows page opens.
+const ShowsPage = dynamic(() => import("./shows-page").then((m) => m.ShowsPage), { ssr: false });
 
 const API = "/vinci-api";
 
@@ -1212,6 +1215,8 @@ export function StudioClient() {
       // demo=null lets the daemon go live when live spend is on and a live model is ready.
       // Forcing demo here re-enabled mock, so "cheapest" templates rendered mock output with live keys.
       // "Use local models" pins demo for this session.
+      // The route list (/openapi.json, no sign-in) loads while /init runs, so openProject() need not wait for it.
+      void daemonPaths(API);
       await api("/init", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1239,35 +1244,54 @@ export function StudioClient() {
         setBooted(true);
         return doc;
       });
-      const [doc, modelBody, skillBody, tplBody, presetBody, settingsBody] = await Promise.all([
-        doctorAsk,
-        api<{ models: Model[] }>("/models"),
-        api<{ skills: Skill[] }>("/skills"),
-        api<{ templates: Template[] }>("/templates"),
-        api<{ presets: AdaptPresetRow[] }>("/presets"),
-        api<{
-          output_destination: {
-            kind: string;
-            local_dir?: string;
-            photos_album?: string;
-            r2_prefix?: string;
-            r2_configured?: boolean;
-          };
-        }>("/settings"),
-      ]);
-      setPref(doc.preference || "cheapest");
-      setMonthlyCap(doc.budget?.monthly_cap_usd != null ? String(doc.budget.monthly_cap_usd) : "");
-      const od = settingsBody.output_destination || { kind: "none" };
-      setOutputDestKind(od.kind || "none");
-      setOutputLocalDir(od.local_dir || "");
-      setOutputPhotosAlbum(od.photos_album || "Vinci");
-      setOutputR2Prefix(od.r2_prefix || "vinci/outputs/");
-      setOutputR2Configured(Boolean(od.r2_configured));
-      setModels(modelBody.models || []);
-      setSkills(skillBody.skills || []);
-      setTemplates(tplBody.templates || []);
-      setAdaptPresets(presetBody.presets || []);
-      await openProject();
+      let authEnded = false;
+      const watch401 = <T,>(req: Promise<T>): Promise<T> =>
+        req.catch((err) => {
+          // Surface 401 from any boot request immediately without waiting for openProject() or other calls.
+          if ((err as { status?: number }).status === 401) {
+            authEnded = true;
+            console.warn("[studio] start refused: the session ended", { detail: plainError(err) });
+            setSessionEnded(plainError(err));
+          }
+          throw err;
+        });
+      const settled = Promise.all([
+        watch401(doctorAsk),
+        watch401(api<{ models: Model[] }>("/models")),
+        watch401(api<{ skills: Skill[] }>("/skills")),
+        watch401(api<{ templates: Template[] }>("/templates")),
+        watch401(api<{ presets: AdaptPresetRow[] }>("/presets")),
+        watch401(
+          api<{
+            output_destination: {
+              kind: string;
+              local_dir?: string;
+              photos_album?: string;
+              r2_prefix?: string;
+              r2_configured?: boolean;
+            };
+          }>("/settings"),
+        ),
+      ]).then(([doc, modelBody, skillBody, tplBody, presetBody, settingsBody]) => {
+        setPref(doc.preference || "cheapest");
+        setMonthlyCap(doc.budget?.monthly_cap_usd != null ? String(doc.budget.monthly_cap_usd) : "");
+        const od = settingsBody.output_destination || { kind: "none" };
+        setOutputDestKind(od.kind || "none");
+        setOutputLocalDir(od.local_dir || "");
+        setOutputPhotosAlbum(od.photos_album || "Vinci");
+        setOutputR2Prefix(od.r2_prefix || "vinci/outputs/");
+        setOutputR2Configured(Boolean(od.r2_configured));
+        setModels(modelBody.models || []);
+        setSkills(skillBody.skills || []);
+        setTemplates(tplBody.templates || []);
+        setAdaptPresets(presetBody.presets || []);
+      });
+      // The project and its board load beside the five requests above, not after /models (~1-3 s).
+      // Both settle before the catch below, so its fallback board never races the project's board.
+      const done = await Promise.allSettled([settled, openProject()]);
+      if (authEnded) return; // a 401 on any catalog request already showed the sign-in prompt
+      for (const row of done) if (row.status === "rejected") throw row.reason;
+      // The feeds stay last: an answered GET /runs means models and board are in (e2e specs wait on it).
       await loadMedia();
     } catch (err) {
       setActiveProject((now) => (now === undefined ? null : now)); // the board still loads (from this browser)
@@ -1295,7 +1319,9 @@ export function StudioClient() {
    */
   async function openProject() {
     if (projectOpened.current) return;
-    if (!(await daemonHasPath(API, "/projects"))) {
+    // Retry once if the early pre-/init probe failed; a second failure throws so projects are not disabled.
+    const paths = await daemonPathsStrict(API).catch(() => daemonPathsStrict(API));
+    if (!paths.has("/projects") && !paths.has("/projects/")) {
       console.info("[projects] off: the backend has no /projects");
       setActiveProject(null);
       return;

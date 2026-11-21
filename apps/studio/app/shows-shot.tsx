@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import {
   ANGLES,
   CANVASES,
@@ -36,8 +37,10 @@ import {
   takesOf,
 } from "../lib/shows";
 import { olf, useOlfRoute } from "./shows-api";
-import { Confirm, Field, Panel, PillFrame, Pick, PlayBar, RefThumb, StalePill, usePick } from "./shows-parts";
-import { PinStale, SceneLab } from "./shows-scenelab";
+import { Confirm, Field, Panel, PillFrame, Pick, PinStale, PlayBar, RefThumb, StalePill, usePick } from "./shows-parts";
+
+// The scene lab (and its screens) loads only when a shot page shows its Stage step.
+const SceneLab = dynamic(() => import("./shows-scenelab").then((m) => m.SceneLab), { ssr: false });
 
 const DRAWS = [1, 2, 3, 4]; // keyframe variations per draw (the engine's MAX_VARIATIONS)
 
