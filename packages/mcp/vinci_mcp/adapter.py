@@ -60,6 +60,10 @@ class SessionEnded(RuntimeError):
     Bug fixed 2026-11-18 (COREPRODUC-677, recurring: 2 episodes on one account, 48 h and 67 h
     after a sign-in): Higgsfield answered "FNF API GET /mcp/workspaces failed (403)" while its
     tokens still refreshed, so Connect said "connected" and every run failed.
+
+    2026-11-23 (COREPRODUC-769, fifth episode, the shared team account): a fresh sign-in got the
+    same 403 three minutes later, so "sign in again" alone looped. The message now sends the user
+    to the provider's website first, and the log keeps the provider's text.
     """
 
 _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
@@ -438,13 +442,15 @@ class McpProvider(Provider):
             message = next((t for t in texts if isinstance(t, str) and t), f"{name} failed")
             ended = self._connector.session_ended if self._connector is not None else ""
             if ended and re.search(ended, message):
-                log.warning("mcp session ended provider=%s tool=%s", self._provider_id, name)
+                # The raw text names the provider's refusing path (COREPRODUC-769: it was not logged).
+                log.warning("mcp session ended provider=%s tool=%s detail=%s", self._provider_id, name, message[:200])
                 if self._on_session_ended is not None:
                     self._on_session_ended()
                 label = self._connector.label if self._connector is not None else self._provider_id
                 raise SessionEnded(
-                    f"{label} ended this sign-in on their side. "
-                    f"Open Connect and sign in to {label} again."
+                    f"{label} refused this account on their side. Sign out and in again on {label}'s "
+                    f"website, then sign in to {label} again in Connect. If that does not help, "
+                    f"{label} support must fix the account."
                 )
             raise RuntimeError(f"{self._provider_id} {name}: {message[:300]}")
         return result
