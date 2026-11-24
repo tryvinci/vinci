@@ -268,8 +268,12 @@ CONNECTORS: dict[str, Connector] = {
         status_tool="job_status",
         status_arg="jobId",
         balance_tool="balance",
-        # Seen 48 h and 67 h after a sign-in: "FNF API GET /mcp/workspaces failed (403)".
-        session_ended=r"FNF API \S+ \S+ failed \(403\)",
+        # Seen 48 h and 67 h after a sign-in: "FNF API GET /mcp/workspaces failed (403)". The
+        # balance tool answers "Error fetching balance: Something went wrong" in the same episodes
+        # (11 of 11 in prod logs, 2026-11-14..23, COREPRODUC-769), so it ends the sign-in too.
+        session_ended=(
+            r"FNF API \S+ \S+ failed \(403\)|Error fetching balance: Something went wrong"
+        ),
         rows=(
             Row(
                 "seedream_v4_5",
