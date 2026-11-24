@@ -768,7 +768,15 @@ def test_author_edits_change_only_their_lines(show: Path) -> None:
     import base64
     import difflib
 
-    from vinci_olf.author import add_episode, add_form, add_scene, add_shot, replace_sheet, set_shot
+    from vinci_olf.author import (
+        add_episode,
+        add_form,
+        add_scene,
+        add_shot,
+        replace_sheet,
+        set_scene_cast,
+        set_shot,
+    )
 
     before = (show / SCENE).read_text(encoding="utf-8")
     shot = "e02/s03/sh014"
@@ -802,6 +810,17 @@ def test_author_edits_change_only_their_lines(show: Path) -> None:
     p = load(show)
     assert (scene, first, p.docs["e03"].data["scenes"]) == ("e03/s01", "e03/s01/sh010", ["e03/s01"])
     assert [str(i) for i in validate(p) if i.level == "error"] == []
+    # A new scene has no cast (COREPRODUC-770): set one, and its shots take it as their pills.
+    assert resolve(p, first).get("characters") in (None, [])
+    assert set_scene_cast(load(show), scene, ["char/mira", "char/mira"]) == ["char/mira"]
+    p = load(show)
+    assert p.docs[scene].data["characters"] == ["char/mira"]
+    assert [c["id"] for c in resolve(p, first)["characters"]] == ["char/mira"]
+    assert [str(i) for i in validate(p) if i.level == "error"] == []
+    with pytest.raises(OlfError, match="no such character"):
+        set_scene_cast(load(show), scene, ["char/nobody"])
+    assert set_scene_cast(load(show), scene, []) == []  # clears the cast
+    assert load(show).docs[scene].data["characters"] == []
     # A new sheet keeps its file name, so the character file does not change. A form gets its
     # front view in forms/<name>/.
     before = (show / MIRA).read_text()

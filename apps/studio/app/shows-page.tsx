@@ -21,6 +21,7 @@ import {
   type OlfTake,
   type RenderKind,
   andList,
+  entryName,
   episodeGroups,
   findEntry,
   folderName,
@@ -892,6 +893,9 @@ export function ShowsPage({ topSlot, hosted = false, switcher }: { topSlot?: HTM
             }
             onAddScene={(heading) =>
               void author<{ scene: string }>("POST", "/scene", { episode: episode.id, heading }, (o) => `Added scene ${o.scene}`)
+            }
+            onCast={(scene, characters) =>
+              author<{ characters: string[] }>("PATCH", "/scene", { scene, characters }, (o) => `${scene} cast: ${o.characters.length ? andList(o.characters.map((id) => entryName(findEntry(show, id), id))) : "no one"}`)
             }
             previs={previs.key === `${show.path}\n${episode.id}` ? previs : { result: null, busy: "" }}
             onPrevis={(kind) => void makePrevis(kind)}

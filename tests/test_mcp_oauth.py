@@ -529,7 +529,7 @@ def test_connector_balance_reads_each_provider_shape() -> None:
         provider("mcp_magnific", {"account_balance": "Forbidden (403)"}).balance()
 
 
-def test_a_session_the_provider_ended_asks_for_a_new_sign_in() -> None:
+def test_a_session_the_provider_ended_asks_for_a_new_sign_in(caplog: pytest.LogCaptureFixture) -> None:
     """Higgsfield ends the account session behind valid tokens after 2-3 days (COREPRODUC-677).
 
     Its error marks the sign-in "needs_reconnect" and says what to do. The call is not retried.
@@ -565,8 +565,9 @@ def test_a_session_the_provider_ended_asks_for_a_new_sign_in() -> None:
         provider_id="mcp_higgsfield",
         on_session_ended=lambda: mark_reconnect(resolver, "mcp_higgsfield"),  # type: ignore[arg-type]
     )
-    with pytest.raises(SessionEnded, match="Open Connect and sign in to Higgsfield again"):
+    with caplog.at_level("WARNING"), pytest.raises(SessionEnded, match="Sign out and in again on Higgsfield's website"):
         ended._call("generate_image", {"params": {"model": "soul_2"}})
+    assert "detail=FNF API GET /mcp/workspaces failed (403)" in caplog.text  # the provider's text is kept (COREPRODUC-769)
     assert calls == ["generate_image"]  # a paid call: never sent twice
     assert auth_state(resolver, "mcp_higgsfield") == "needs_reconnect"  # type: ignore[arg-type]
     assert access_token(resolver, "mcp_higgsfield") is None  # type: ignore[arg-type]

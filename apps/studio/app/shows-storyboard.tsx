@@ -65,6 +65,7 @@ export function StoryboardView({
   onOpenShot,
   onAddShot,
   onAddScene,
+  onCast,
   onImportScript,
   previs,
   onPrevis,
@@ -78,6 +79,8 @@ export function StoryboardView({
   onOpenShot: (id: string) => void;
   onAddShot: (scene: string, fields: ShotFields) => void;
   onAddScene: (heading: string) => void;
+  /** Set who is in a scene (bible character IDs, slot order): its shots take this cast. */
+  onCast: (scene: string, characters: string[]) => Promise<unknown>;
   /** Add a script's scenes and shots to the episode; true when they were written. */
   onImportScript: (script: string) => Promise<boolean>;
   /** The last previs files of this episode, and "sheet" or "animatic" while one is made. */
@@ -251,6 +254,7 @@ export function StoryboardView({
             <h2>{scene.heading || scene.id}</h2>
             <code>{scene.id}</code>
             <span className="muted">{sceneLine(show, scene)}</span>
+            <SceneCast show={show} cast={scene.characters || []} locked={locked} onCast={(ids) => onCast(scene.id, ids)} />
           </header>
           <div className="olf-board">
             {scene.shots.map((id) => (
@@ -262,6 +266,42 @@ export function StoryboardView({
       ))}
       <AddScene locked={locked} first={!episode.scenes.length} onAdd={onAddScene} />
     </section>
+  );
+}
+
+/**
+ * Who is in a scene: one toggle per bible character. The scene's shots take this cast, so their
+ * pills and scene lab pins come from it. Bug fixed (first report 2026-11-24, one user,
+ * COREPRODUC-770): a scene made with Add scene had no cast and no way to set one.
+ */
+function SceneCast({ show, cast, locked, onCast }: { show: OlfShow; cast: string[]; locked: boolean; onCast: (ids: string[]) => Promise<unknown> }) {
+  const people = show.bible.character || [];
+  // One save at a time: a second click before the reload would send a cast built from the old one.
+  const [saving, setSaving] = useState(false);
+  if (!people.length) return null;
+  return (
+    <span className="olf-chips olf-scene-cast" role="group" aria-label="Cast of this scene" data-testid="scene-cast">
+      {people.map((entry) => {
+        const on = cast.includes(entry.id);
+        return (
+          <button
+            key={entry.id}
+            type="button"
+            className="olf-chip-btn"
+            aria-pressed={on}
+            disabled={locked || saving}
+            title={locked ? LOCKED : on ? "Remove from this scene" : "Add to this scene: its shots get a pin for this character"}
+            onClick={() => {
+              setSaving(true);
+              void onCast(on ? cast.filter((id) => id !== entry.id) : [...cast, entry.id]).finally(() => setSaving(false));
+            }}
+            data-testid="scene-cast-toggle"
+          >
+            {entryName(entry, entry.id)}
+          </button>
+        );
+      })}
+    </span>
   );
 }
 

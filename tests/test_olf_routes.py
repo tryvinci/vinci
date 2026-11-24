@@ -247,6 +247,10 @@ def test_authoring_routes(client: TestClient) -> None:
     )
     scene = client.post("/olf/scene", json={"path": path, "episode": "e03", "heading": "INT. HALL"})
     assert (episode.json(), scene.json()) == ({"episode": "e03"}, {"scene": "e03/s01"})
+    cast = {"path": path, "scene": "e03/s01", "characters": ["char/mira"]}
+    assert client.patch("/olf/scene", json=cast).json() == {"characters": ["char/mira"]}
+    nobody = client.patch("/olf/scene", json=cast | {"characters": ["char/nobody"]})
+    assert nobody.status_code == 400 and "no such character" in nobody.json()["detail"]
     sheet = client.post("/olf/sheet", json={"path": path, "entry": "char/mira", "data": image})
     assert sheet.json() == {"file": "bible/characters/mira/sheet.png"}
     form = {
