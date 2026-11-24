@@ -572,6 +572,11 @@ def test_a_session_the_provider_ended_asks_for_a_new_sign_in(caplog: pytest.LogC
     assert auth_state(resolver, "mcp_higgsfield") == "needs_reconnect"  # type: ignore[arg-type]
     assert access_token(resolver, "mcp_higgsfield") is None  # type: ignore[arg-type]
     assert ended.normalize_error(SessionEnded("x")).code.value == "auth"
+    # The balance tool's text in the same episodes ends the sign-in too, with its Request ID (COREPRODUC-769).
+    balance_text = "Error fetching balance: Something went wrong. Please try again.\nRequest ID: 28922172-effc"
+    Transport.call = lambda self, method, params: {"isError": True, "content": [{"type": "text", "text": balance_text}]}  # type: ignore[method-assign]
+    with pytest.raises(SessionEnded, match="Request ID: 28922172-effc$"):
+        ended._call("balance", {})
     # Magnific has no such error: the same text stays a plain refusal, and the sign-in stays.
     seen: list[str] = []
     other = McpProvider(Transport(), provider_id="mcp_magnific", on_session_ended=lambda: seen.append("x"))  # type: ignore[arg-type]

@@ -2906,7 +2906,9 @@ export function StudioClient() {
           return;
         }
       }
-      if (live()) note(id, "Sign-in timed out. Click Sign in again.", true);
+      // No confirmed sign-in in five minutes: usually the provider's page never sent the browser back (seen 2026-11-23,
+      // a new user's 4 Magnific tries; it needs an account there, Magnific MCP needs a paid plan).
+      if (live()) note(id, "Sign-in timed out: Studio could not confirm the sign-in. Check the provider's tab: you need an account on that site (Magnific: a paid plan). Then click Sign in again.", true);
     } catch (err) {
       console.warn("[connect] sign-in failed", { id, err });
       if (live()) note(id, plainError(err), true);

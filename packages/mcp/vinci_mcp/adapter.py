@@ -452,10 +452,12 @@ class McpProvider(Provider):
                 if self._on_session_ended is not None:
                     self._on_session_ended()
                 label = self._connector.label if self._connector is not None else self._provider_id
+                rid = re.search(r"Request ID: ([\w-]+)", message)  # Higgsfield support asks for it
                 raise SessionEnded(
                     f"{label} refused this account on their side. Sign out and in again on "
                     f"{label}'s website, then sign in to {label} again in Connect. If that does "
                     f"not help, {label} support must fix the account."
+                    + (f" Request ID: {rid.group(1)}" if rid else "")
                 )
             raise RuntimeError(f"{self._provider_id} {name}: {message[:300]}")
         return result
