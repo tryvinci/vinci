@@ -5,7 +5,7 @@ import { money } from "../lib/model-capabilities";
 
 /**
  * Connect on a host such as Vinci Platform: the user's own provider accounts (`doctor.host.keys`).
- * Wavespeed takes a pasted API key (COREPRODUC-613); Higgsfield and Magnific sign in with the
+ * Wavespeed and ElevenLabs take a pasted API key (COREPRODUC-613, COREPRODUC-787); Higgsfield and Magnific sign in with the
  * user's account (MCP OAuth, COREPRODUC-614). A run on the user's account costs no host credits,
  * because the provider bills the user. The host stores keys and sign-ins encrypted and shows only
  * the last 4 characters of a key.
@@ -22,6 +22,7 @@ type KeyRow = {
 const NAMES: Record<string, string> = {
   vinci: "Vinci",
   wavespeed: "Wavespeed",
+  elevenlabs: "ElevenLabs",
   mcp_higgsfield: "Higgsfield",
   mcp_magnific: "Magnific",
 };
@@ -32,6 +33,7 @@ export function providerName(id = ""): string {
 }
 const NOTES: Record<string, string> = {
   wavespeed: "The Studio's models run on your key and show its dollar price.",
+  elevenlabs: "Shows speaks dialogue and lists and clones voices on your key, at its dollar price.",
   mcp_higgsfield:
     "Adds Higgsfield models. They run on your Higgsfield credits.",
   mcp_magnific: "Adds Magnific models. They run on your Magnific credits.",
@@ -40,6 +42,7 @@ const NOTES: Record<string, string> = {
 /** Where to get a key or read the provider's docs (COREPRODUC-650 shell-15: Connect had no link). */
 const LINKS: Record<string, [string, string]> = {
   wavespeed: ["Get a Wavespeed key", "https://wavespeed.ai/accesskey"],
+  elevenlabs: ["Get an ElevenLabs key", "https://elevenlabs.io/app/settings/api-keys"],
   mcp_higgsfield: ["Higgsfield docs", "https://docs.higgsfield.ai"],
   mcp_magnific: ["Magnific docs", "https://docs.magnific.com/introduction"],
 };
@@ -64,7 +67,7 @@ type BalanceReply = { amount?: number | null; currency?: string; error?: string 
  * whether the account was out of credits. It loads again when the sign-in or the key changes.
  *
  * Args (props):
- *   id: The provider id (`wavespeed`, `mcp_higgsfield`, `mcp_magnific`).
+ *   id: The provider id (`wavespeed`, `elevenlabs`, `mcp_higgsfield`, `mcp_magnific`).
  *   version: Changes when the sign-in state or the key changes, so the balance loads again.
  */
 function Balance({ id, version }: { id: string; version: string }) {
@@ -156,8 +159,8 @@ export function HostKeys(props: {
       <p className="eyebrow">{props.hostName}</p>
       <h2>Your accounts</h2>
       <p className="muted lede">
-        Run models on your own provider account: paste a Wavespeed key, or sign
-        in to Higgsfield or Magnific. Runs on your account cost no credits: the
+        Run models on your own provider account: paste a Wavespeed or ElevenLabs
+        key, or sign in to Higgsfield or Magnific. Runs on your account cost no credits: the
         provider bills you. Keys and sign-ins are stored encrypted, and this
         page shows only the last 4 characters of a key.
       </p>

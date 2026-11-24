@@ -766,7 +766,8 @@ function TakeDetails({ take, onApprove, onReject }: { take: OlfTake; onApprove: 
     ["Seed", prov.seed],
     ["From keyframe", from],
     ["Audio source", take.audio_source],
-    ["Cost", prov.cost ? `${Number(prov.cost.amount).toFixed(2)} ${prov.cost.currency}` : null],
+    // Up to 4 decimals: a dialogue line on an ElevenLabs key costs a fraction of a cent (COREPRODUC-787).
+    ["Cost", prov.cost ? `${+Number(prov.cost.amount).toFixed(4)} ${prov.cost.currency}` : null],
     ["Created", prov.created?.replace("T", " ")],
     ["Length", take.duration],
     // The palette check (vinci_olf.qa): does the render keep the forms' colors?
