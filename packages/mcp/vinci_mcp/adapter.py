@@ -442,15 +442,20 @@ class McpProvider(Provider):
             message = next((t for t in texts if isinstance(t, str) and t), f"{name} failed")
             ended = self._connector.session_ended if self._connector is not None else ""
             if ended and re.search(ended, message):
-                # The raw text names the provider's refusing path (COREPRODUC-769: it was not logged).
-                log.warning("mcp session ended provider=%s tool=%s detail=%s", self._provider_id, name, message[:200])
+                # The raw text names the provider's refusing path (COREPRODUC-769).
+                log.warning(
+                    "mcp session ended provider=%s tool=%s detail=%s",
+                    self._provider_id,
+                    name,
+                    message[:200],
+                )
                 if self._on_session_ended is not None:
                     self._on_session_ended()
                 label = self._connector.label if self._connector is not None else self._provider_id
                 raise SessionEnded(
-                    f"{label} refused this account on their side. Sign out and in again on {label}'s "
-                    f"website, then sign in to {label} again in Connect. If that does not help, "
-                    f"{label} support must fix the account."
+                    f"{label} refused this account on their side. Sign out and in again on "
+                    f"{label}'s website, then sign in to {label} again in Connect. If that does "
+                    f"not help, {label} support must fix the account."
                 )
             raise RuntimeError(f"{self._provider_id} {name}: {message[:300]}")
         return result

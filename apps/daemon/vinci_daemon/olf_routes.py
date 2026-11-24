@@ -38,6 +38,7 @@ from vinci_olf.author import (
     replace_sheet,
     set_entry,
     set_reference,
+    set_scene_cast,
     set_shot,
     set_variant,
     set_voice,
@@ -166,6 +167,12 @@ class NewScene(BaseModel):
     episode: str
     heading: str
     location: str | None = None
+
+
+class SceneCast(BaseModel):
+    path: str
+    scene: str
+    characters: list[str]
 
 
 class NewEpisode(BaseModel):
@@ -779,6 +786,14 @@ def new_scene(body: NewScene) -> dict[str, str]:
     scene = _olf(lambda: add_scene(p, body.episode, body.heading, location=body.location))
     log.info("olf: added scene %s in %s", scene, p.root)
     return {"scene": scene}
+
+
+@router.patch("/scene")
+def edit_scene(body: SceneCast) -> dict[str, list[str]]:
+    """Set who is in a scene: its shots take this cast (COREPRODUC-770)."""
+    p = _project(body.path)
+    log.info("olf: scene %s cast %s in %s", body.scene, body.characters, p.root)
+    return {"characters": _olf(lambda: set_scene_cast(p, body.scene, body.characters))}
 
 
 @router.post("/episode")

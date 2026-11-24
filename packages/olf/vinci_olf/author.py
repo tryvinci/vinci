@@ -592,6 +592,38 @@ def add_scene(p: Project, episode_id: str, heading: str, *, location: str | None
     return scene_id
 
 
+def set_scene_cast(p: Project, scene_id: str, characters: list[str]) -> list[str]:
+    """Set who is in a scene (its ``characters`` line). Its shots take this cast unless a
+    shot states its own, so the pills and the scene lab pins come from it.
+
+    Bug fixed (first report 2026-11-24, one user, COREPRODUC-770): a scene made with Add scene
+    had no cast and the Studio could not set one, so the scene lab said "Cast · no one" even
+    with a character sheet in the bible.
+
+    Args:
+        p: The show.
+        scene_id: The scene, for example ``e01/s02``.
+        characters: Bible character IDs in slot order (``a`` first); empty clears the cast.
+
+    Returns:
+        The cast as written.
+
+    Raises:
+        OlfError: The scene is missing, or an ID is not a character of the bible.
+    """
+    scene = p.docs.get(scene_id)
+    if scene is None or p.kind(scene_id) != "scene":
+        raise OlfError(f"{scene_id}: no such scene")
+    cast = list(dict.fromkeys(str(c) for c in characters))  # one slot per person
+    if unknown := [c for c in cast if p.kind(c) != "character" or c not in p.docs]:
+        raise OlfError(f"{unknown[0]}: no such character in the bible")
+    lines = _lines(scene.path)
+    _list_value(lines, "characters", cast)
+    _save(scene.path, lines, lambda data: (data.get("characters") or []) == cast)
+    log.info("scene %s: cast %s (%s)", scene_id, cast or "none", scene.path)
+    return cast
+
+
 def add_episode(p: Project, title: str, *, season: str | None = None) -> str:
     """Add an episode folder with ``episode.yaml``, listed in ``season`` when one is given.
 
