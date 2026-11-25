@@ -73,20 +73,21 @@ test.describe("Rail menus", () => {
   });
 
   // Live UI check fixes (2026-11-12, app.tryvinci.com): the labels pushed the rail items down as it
-  // widened, so a click hit the item below; a clicked item's flyout stayed open over the new page.
-  test("rail items stay put when the rail widens", async ({ page }) => {
+  // widened, so a click hit the item below. Since the flat-glass theme (2026-11-15) the rail does not
+  // widen at all: labels sit under the icons, so hover moves neither the items nor the page.
+  test("rail and page stay put on hover", async ({ page }) => {
     await openImage(page);
     const rail = page.locator("nav#studio-rail");
     const tops = () =>
       rail.evaluate((nav) => [...nav.querySelectorAll(".rail-entry > button, :scope > button")].map((b) => Math.round(b.getBoundingClientRect().top)).join());
     const width = () => rail.evaluate((nav) => nav.getBoundingClientRect().width);
+    const pageLeft = () => page.locator(".main").evaluate((el) => Math.round(el.getBoundingClientRect().left));
     await page.mouse.move(900, 450);
     await expect.poll(width).toBeLessThan(100);
-    const narrow = await width();
-    const before = await tops();
+    const [w, before, left] = [await width(), await tops(), await pageLeft()];
     await rail.hover({ position: { x: 20, y: 300 } });
-    await expect.poll(width).toBeGreaterThan(narrow + 40);
-    expect(await tops()).toBe(before);
+    await expect(rail.locator(".rail-label").first()).toBeVisible();
+    expect([await width(), await tops(), await pageLeft()]).toEqual([w, before, left]);
   });
 
   test("a rail click shuts its flyout until the pointer leaves", async ({ page }) => {

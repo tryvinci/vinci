@@ -28,6 +28,7 @@ import { providerMentionInputs, type LibraryItem } from "../lib/library";
 import { runBody } from "../lib/projects";
 import { uploadFile } from "../lib/upload";
 import { EffectsGalleryOverlay } from "./effects-gallery-overlay";
+import { EffectArt } from "./ui/effect-art";
 import { PromptMention } from "./prompt-mention";
 import "./effects-shell.css";
 import { AdvancedDisclosure } from "./ui/advanced";
@@ -89,7 +90,7 @@ function PresetCard({ app, onChange }: { app: StudioApp; onChange: () => void })
   return (
     <div className="effects-preset-card" data-testid="effects-preset-card">
       <div className="apps-thumb effects-preset-thumb" aria-hidden="true">
-        <div className={`apps-thumb-art thumb-${app.id}`} />
+        <EffectArt id={app.id} />
         <p className="apps-thumb-cat">{app.category}</p>
       </div>
       <div className="effects-preset-copy">

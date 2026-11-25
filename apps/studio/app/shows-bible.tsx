@@ -336,10 +336,11 @@ export function BibleView({
                 <div className="olf-field">
                   <span className="olf-label">Voice</span>
                   {/* key: a new clone is a new voice ID, so the menu loads the account's list again */}
-                  <VoicePick key={voiceId} value={voiceId} onPick={onSetVoice} testId="voice-pick" />
-                  <OlfOnly path="/olf/voice/clone">
-                    <CloneVoice who={entryName(entry)} onClone={onCloneVoice} />
-                  </OlfOnly>
+                  <VoicePick key={voiceId} value={voiceId} onPick={onSetVoice} testId="voice-pick">
+                    <OlfOnly path="/olf/voice/clone">
+                      <CloneVoice who={entryName(entry)} onClone={onCloneVoice} />
+                    </OlfOnly>
+                  </VoicePick>
                 </div>
               </OlfOnly>
             ) : null}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import dynamic from "next/dynamic";
-import { HostKeys, providerName, type HostNote } from "./host-keys";
+import { HostKeys, providerName as knownName, type HostNote } from "./host-keys";
 import { HostAccount } from "./host-account";
 import { AdaptFlowCanvas } from "./adapt-flow-canvas";
 import { AdaptsPanel, EMPTY_PRESET_DRAFT, type PresetDraft } from "./adapts-panel";
@@ -202,6 +202,8 @@ import {
   type LibraryTab,
 } from "../lib/library";
 import { topWindow, useUrlPart } from "./url-part";
+import { ThemeToggle } from "./ui/theme-toggle";
+import { templateTile } from "../lib/tiles";
 
 // Shows (and its scene lab) loads only when the Shows page opens.
 const ShowsPage = dynamic(() => import("./shows-page").then((m) => m.ShowsPage), { ssr: false });
@@ -2795,7 +2797,7 @@ export function StudioClient() {
       note(
         id,
         body.available
-          ? `${id} is on.` + (doctor.live_spend ? "" : " Paid runs are off.")
+          ? `${providerName(id)} is on.` + (doctor.live_spend ? "" : " Paid runs are off.") // not the raw id (COREPRODUC-789)
           : `${id} is saved. Add a key in Connect if it is still off.`,
       );
       setPage("keys");
@@ -3169,7 +3171,8 @@ export function StudioClient() {
    * crawl): the add menu and node pickers showed raw ids such as "MCP_HIGGSFIELD" and "mcp_magnific".
    */
   function providerName(id: string): string {
-    return id === "mock" ? "Local" : doctor.providers?.[id]?.display_name || id;
+    // A provider not in `doctor` yet (a key saved this moment) gets its known name (COREPRODUC-789).
+    return id === "mock" ? "Local" : doctor.providers?.[id]?.display_name || knownName(id);
   }
   /** On a host, a node is offered only when a model can run it (Media, Text, List and Note need none). */
   const canAdd = doctor.host
@@ -3307,7 +3310,7 @@ export function StudioClient() {
         <div className="grid">
           {items.map((t) => (
             <button key={t.id} className="card" type="button" onClick={() => openTemplate(t)}>
-              <img alt="" src={`${API}/templates/${t.id}/preview.svg`} />
+              <img alt="" loading="lazy" src={templateTile(t.id, `${API}/templates/${t.id}/preview.svg`)} />
               <div>
                 <strong>{t.title}</strong>
                 <div className="muted">{t.blurb}</div>
@@ -5272,6 +5275,7 @@ export function StudioClient() {
             <span className="rail-label">{item.title}</span>
           </button>
         ))}
+        <ThemeToggle />
         <div className="rail-avatar">
           <button
             type="button"

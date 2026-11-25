@@ -333,7 +333,8 @@ export function money(n: number | undefined, currency?: string): string {
   const unit = unitOf(currency);
   if (unit.endsWith("credits")) {
     const brand = unit === "credits" ? "" : `${(currency || "").replace(/\s*credits$/i, "")} `;
-    return `${Number(v.toFixed(2))} ${brand}${v === 1 ? "credit" : "credits"}`;
+    // "9,500 ElevenLabs credits": a thousands separator (COREPRODUC-789).
+    return `${v.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${brand}${v === 1 ? "credit" : "credits"}`;
   }
   if (v === 0) return "$0";
   if (v < 0.01) return "$" + v.toFixed(5).replace(/0+$/, "").replace(/\.$/, "");
