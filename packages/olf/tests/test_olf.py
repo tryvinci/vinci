@@ -2437,6 +2437,23 @@ def test_the_lamp_oil_sample_is_valid_with_its_media_links(tmp_path: Path) -> No
     shots = summary(p)["shots"]
     assert len(shots) == 3
     assert all({"keyframe", "video"} <= set(s["select"] or {}) for s in shots.values())
+    # COREPRODUC-795: ElevenLabs premade voices (Lily, George) and sh010's real dialogue take a2,
+    # played as the separate audio of the cut, so a new user hears it with no key. No take is stale.
+    from vinci_olf.cut import cut_view
+    from vinci_olf.resolve import stale
+
+    voices = {
+        c: p.docs[f"voice/{c}"].data["extensions"]["elevenlabs"]["voice_id"]
+        for c in ("mira", "tomas")
+    }
+    assert voices == {"mira": "pFZP5JQG7iQjIQuC4Bku", "tomas": "JBFqnCBsd6RMkjVDRZzb"}
+    assert shots["e01/s03/sh010"]["select"]["audio"] == "a2"
+    clip = cut_view(p, "e01")["clips"][0]
+    assert (
+        clip["audio"] == "separate"
+        and clip["dialogue_take"]["file"] == "takes/e01/s03/sh010/a2.mp3"
+    )
+    assert not [k for k in p.docs if p.kind(k) == "take" and stale(p, k)]
 
 
 def test_bible_edits_for_every_entry_kind(show: Path, tmp_path: Path, monkeypatch: Any) -> None:

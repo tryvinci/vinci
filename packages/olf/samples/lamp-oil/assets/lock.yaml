@@ -113,3 +113,11 @@ asset/3c6ae829c068cc57acfebf2def9fb602f2d014f86ea16f87acc9a7e9ffb2ff9b:
   license:
     owner: Vinci
     terms: CC-BY-4.0
+asset/e1d52ba1f42f8ba7e390e7a507686bcac9dae2ea1bb719f28d766c7ece0a9c49:
+  uri: takes/e01/s03/sh010/a2.mp3
+  hash: sha256:e1d52ba1f42f8ba7e390e7a507686bcac9dae2ea1bb719f28d766c7ece0a9c49
+  type: audio/mpeg
+  source: generated
+  license:
+    owner: Vinci
+    terms: CC-BY-4.0

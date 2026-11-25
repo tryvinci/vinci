@@ -35,6 +35,12 @@
   "size": 83508,
   "url": "https://storage.googleapis.com/vinci-dev-engram-backend-workloads/samples/lamp-oil/1a139770d74498220df14cd88f3897e5f7ef5d0e148ae20eb0fe68a03827467b.png"
  },
+ "takes/e01/s03/sh010/a2.mp3": {
+  "mime": "audio/mpeg",
+  "sha256": "e1d52ba1f42f8ba7e390e7a507686bcac9dae2ea1bb719f28d766c7ece0a9c49",
+  "size": 39020,
+  "url": "https://storage.googleapis.com/vinci-dev-engram-backend-workloads/samples/lamp-oil/e1d52ba1f42f8ba7e390e7a507686bcac9dae2ea1bb719f28d766c7ece0a9c49.mp3"
+ },
  "takes/e01/s03/sh010/kf2.jpg": {
   "mime": "image/jpeg",
   "sha256": "bda882c669f7b0da66a02648cdc12f86c4187b1f442e78d7bf272f3df16845d8",

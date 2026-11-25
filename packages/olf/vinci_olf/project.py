@@ -64,6 +64,7 @@ class OlfError(ValueError):
     """A project problem that the user must fix (bad reference, missing file, bad input)."""
 
     notes: tuple[str, ...] = ()  # what a plan that stopped still says (the shot page shows them)
+    pick: bool = False  # the plan waits for a model pick in the step's menu: a hint, not a failure
 
 
 def seconds(value: Any, default: float = 0.0) -> float:
