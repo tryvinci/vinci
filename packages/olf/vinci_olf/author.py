@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from vinci_olf.edit import _put, _save, shot_block
+from vinci_olf.explain import upgrade_video_hashes
 from vinci_olf.project import (
     FRAMES,
     LIBRARY,
@@ -209,6 +210,7 @@ def set_voice(
     current = doc.data.get("voice")
     if problems := schema_errors("voice", json.loads(json.dumps(data))):
         raise OlfError(f"{entry}: {problems[0]}")
+    upgrade_video_hashes(p)  # old clips hashed the voice: keep them fresh (COREPRODUC-796)
     path.parent.mkdir(parents=True, exist_ok=True)
     write(data, path, compact=entry not in p.docs)
     if current != entry:
@@ -860,6 +862,8 @@ def set_entry(
     }
     if not fields or not all(fields.values()):
         raise OlfError("send a name or a description, and do not leave it empty")
+    if p.kind(entry_id) == "voice":  # old clips hashed the voice (COREPRODUC-796)
+        upgrade_video_hashes(p)
     lines = _lines(doc.path)
     for key, text in fields.items():
         _put(lines, 0, len(lines), "", key, json.dumps(text, ensure_ascii=False))
@@ -1068,6 +1072,8 @@ def write_source(p: Project, entry_id: str, text: str) -> str:
         return {f"{i.where}: {i.message}" for i in validate(q) if i.level == "error"}
 
     before = errors(p)
+    if p.kind(entry_id) in ("voice", "character"):  # old clips hashed voices (COREPRODUC-796)
+        upgrade_video_hashes(p)
     doc.path.write_text(text, encoding="utf-8")
     try:
         new = sorted(errors(load(p.root, hashes=p.known)) - before)

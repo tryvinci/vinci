@@ -10,10 +10,13 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import logging
 import math
 from typing import Any
 
 from vinci_olf.project import Doc, OlfError, Project, seconds
+
+log = logging.getLogger(__name__)
 
 EPISODE_OVERRIDES = ("defaults", "forms", "outfits", "style", "extensions")  # also a season's
 NOT_RENDERED = ("credits", "license", "likeness")  # an edit here never makes a take stale
@@ -182,7 +185,7 @@ def _seconds(value: Any, key: str | None = None) -> Any:
 
 
 def hash_view(
-    view: dict[str, Any], kind: str, frames: dict[str, str] | None = None
+    view: dict[str, Any], kind: str, frames: dict[str, str] | None = None, *, legacy: bool = False
 ) -> dict[str, Any]:
     """Keep only what a take of ``kind`` uses (SPEC.md, Hash input, steps 2 and 3).
 
@@ -191,6 +194,8 @@ def hash_view(
         kind: ``keyframe``, ``video`` or ``audio``.
         frames: For video takes: the output asset of the keyframe take each ``keyframe``
             control used (``first_frame`` / ``last_frame``).
+        legacy: For video takes: the view of engines before 2026-11-25, which kept the cast's
+            voices (COREPRODUC-796). ``stale`` accepts that hash too, so old takes stay fresh.
     """
     v = copy.deepcopy(view)
     v.pop("select", None)
@@ -202,6 +207,9 @@ def hash_view(
         if cast := [c for c in cast if c.get("id") in speakers]:
             out["characters"] = cast
         return out
+    if not (legacy and kind == "video"):  # only dialogue uses a voice: no still or clip sends one
+        for char in v.get("characters") or []:
+            char.pop("voice", None)
     if kind == "keyframe":
         for key in ("duration", "dialogue", "audio"):
             v.pop(key, None)
@@ -209,8 +217,6 @@ def hash_view(
             _drop(v["camera"], "template", "id", "prompt", "avoid")
         _drop(v, "camera", *MOTION)
         _drop(v, "control", "first_frame", "last_frame", "reference_video")
-        for char in v.get("characters") or []:
-            char.pop("voice", None)
     else:
         if (v.get("camera") or {}).get("render") in FROM_KEYFRAME:
             # An engine move animates the chosen keyframe, and a reference render takes it as
@@ -247,9 +253,11 @@ def _drop(view: dict[str, Any], field: str, *keys: str) -> None:
             view.pop(field)
 
 
-def inputs_hash(view: dict[str, Any], kind: str, frames: dict[str, str] | None = None) -> str:
+def inputs_hash(
+    view: dict[str, Any], kind: str, frames: dict[str, str] | None = None, *, legacy: bool = False
+) -> str:
     """Return ``sha256:<64 hex>`` of the canonical JSON of the take's hash view."""
-    text = canonical(hash_view(view, kind, frames))
+    text = canonical(hash_view(view, kind, frames, legacy=legacy))
     return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
@@ -302,8 +310,14 @@ def stale(p: Project, take_id: str, cache: dict[str, dict[str, Any]] | None = No
     cache = {} if cache is None else cache
     if shot_id not in cache:
         cache[shot_id] = resolve(p, shot_id)
-    current = inputs_hash(cache[shot_id], str(take.get("kind")), take_frames(p, take))
-    return current != take.get("inputs_hash")
+    kind, frames, stored = str(take.get("kind")), take_frames(p, take), take.get("inputs_hash")
+    if inputs_hash(cache[shot_id], kind, frames) == stored:
+        return False
+    # A video take of an engine before COREPRODUC-796 hashed the cast's voices: still fresh.
+    fresh_old = kind == "video" and inputs_hash(cache[shot_id], kind, frames, legacy=True) == stored
+    if fresh_old:
+        log.debug("take %s is fresh under the old video hash (with voices)", take_id)
+    return not fresh_old
 
 
 def canonical(value: Any) -> str:

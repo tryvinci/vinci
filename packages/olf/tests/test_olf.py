@@ -183,7 +183,7 @@ def test_demo_render_writes_takes_and_tracks_staleness(
     mira = bible["character"][0]
     # The render locked the sheet, so its license comes from the lock file now.
     assert mira["impact"] == 2 and mira["license"]["owner"] == "@creator"
-    assert bible["voice"][0]["impact"] == 1  # a voice is in video and audio hashes only
+    assert bible["voice"][0]["impact"] == 0  # a voice is in audio hashes only (COREPRODUC-796)
     edit(show / SCENE, "move: push_in }", "move: static }")
     p = load(show)
     assert not stale(p, "e02/s03/sh014/kf1") and stale(p, "e02/s03/sh014/v1")
@@ -916,6 +916,48 @@ def test_stale_cause_and_keep(show: Path, tmp_path: Path, monkeypatch: Any) -> N
     (show / "takes/e02/s03/sh014/kf1.inputs.json").unlink()
     edit(show / MIRA, "red scarf.", "blue scarf.")
     assert explain(load(show), take)["known"] is False and keep_take(load(show), take)["kept"]
+
+
+def test_a_voice_pick_leaves_silent_takes_fresh(
+    show: Path, tmp_path: Path, monkeypatch: Any
+) -> None:
+    """COREPRODUC-796 (first seen 2026-11-25, Lamp Oil sh010/v4 and sh090/v4): a voice pick made
+    the character's video takes stale, though no voice reaches a video model. Only dialogue takes
+    hash the voices now; a video take recorded under the old hash (with voices) stays fresh."""
+    if not shutil.which("ffmpeg"):
+        pytest.skip("the mock video model runs ffmpeg")
+    from vinci_olf.author import set_voice
+    from vinci_olf.explain import explain, save_inputs
+    from vinci_olf.render import render
+    from vinci_olf.resolve import hash_view, take_frames
+
+    shot = "e02/s03/sh014"
+    engine = _demo_engine(tmp_path, monkeypatch)
+    render(load(show), shot, engine=engine)
+    render(load(show), shot, kind="audio", engine=engine)
+    kf, video, audio = (f"{shot}/{t}" for t in ("kf1", "v1", "a1"))
+    set_voice(load(show), "char/mira", "otherVoice42")
+    p = load(show)
+    assert [bool(stale(p, t)) for t in (kf, video, audio)] == [False, False, True]
+    # A take of the old engine hashed each character's voice entry: it must not turn stale.
+    take_file = show / f"takes/{video}.yaml"
+    view = resolve(p, shot)
+    old_view = hash_view(view, "video", take_frames(p, p.docs[video].data))
+    for char, full in zip(old_view["characters"], view["characters"], strict=True):
+        char["voice"] = full["voice"]
+    old = "sha256:" + hashlib.sha256(canonical(old_view).encode()).hexdigest()
+    edit(take_file, str(p.docs[video].data["inputs_hash"]), old)
+    save_inputs(p, video, old_view)  # the view the old engine kept for "See change"
+    p = load(show)
+    assert p.docs[video].data["inputs_hash"] == old and not stale(p, video)
+    # The next voice pick first moves it to the new hash, so it stays fresh (PR-Agent on #805).
+    set_voice(p, "char/mira", "thirdVoice7")
+    p = load(show)
+    assert p.docs[video].data["inputs_hash"] not in (old, None) and not stale(p, video)
+    assert stale(p, audio) and "voice" not in (show / f"takes/{video}.inputs.json").read_text()
+    edit(show / SCENE, "move: push_in }", "move: static }")  # a real change still counts
+    why = explain(load(show), video)
+    assert stale(load(show), video) and why["summary"] == "the shot's camera.move changed"
 
 
 def test_palette_qa(show: Path, tmp_path: Path, monkeypatch: Any) -> None:
@@ -2454,6 +2496,15 @@ def test_the_lamp_oil_sample_is_valid_with_its_media_links(tmp_path: Path) -> No
         and clip["dialogue_take"]["file"] == "takes/e01/s03/sh010/a2.mp3"
     )
     assert not [k for k in p.docs if p.kind(k) == "take" and stale(p, k)]
+    # COREPRODUC-796: no clip or keyframe hashes a voice, so new voices (as COREPRODUC-797 picks)
+    # make only the dialogue take stale.
+    from vinci_olf.author import set_voice
+
+    hashes = {rel: item["sha256"] for rel, item in media.items()}
+    for cid in ("char/mira", "char/tomas"):
+        set_voice(load(root, hashes=hashes), cid, "aNewVoice796")
+    p = load(root, hashes=hashes)
+    assert [k for k in p.docs if p.kind(k) == "take" and stale(p, k)] == ["e01/s03/sh010/a2"]
 
 
 def test_bible_edits_for_every_entry_kind(show: Path, tmp_path: Path, monkeypatch: Any) -> None:

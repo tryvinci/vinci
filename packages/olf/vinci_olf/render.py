@@ -649,17 +649,24 @@ def render(
         }
         nodes.append(node | {"params": params})
     shape = {"id": f"olf:{shot_id}", "version": "0.1.0", "edges": job["edges"]}
-    run = engine.start_run(
-        None,
-        {},
-        workflow=WorkflowSpec.model_validate(
-            shape | {"preference": job["preference"], "nodes": nodes}
-        ),
-        preference=job["preference"],
-        max_cost=job["max_cost"],
-    )
+    try:
+        run = engine.start_run(
+            None,
+            {},
+            workflow=WorkflowSpec.model_validate(
+                shape | {"preference": job["preference"], "nodes": nodes}
+            ),
+            preference=job["preference"],
+            max_cost=job["max_cost"],
+        )
+    except Exception as exc:  # a removed ElevenLabs voice: name the character (COREPRODUC-797)
+        if why := voice_refused(job, str(exc)):
+            raise OlfError(why) from exc
+        raise
     if run.get("state") != "completed":
         reason = run.get("awaiting_reason") or run.get("error") or "unknown"
+        if why := voice_refused(job, str(reason)):  # a failed run that did not raise
+            raise OlfError(why)
         raise OlfError(f"run {run.get('id')} is {run.get('state')}: {reason}")
     log.info("render %s: run %s completed", shot_id, run.get("id"))
     outputs: dict[str, bytes] = {}
@@ -694,6 +701,38 @@ def take_license(p: Project) -> dict[str, Any]:
             "project.yaml needs license.owner and license.terms: every generated take gets them"
         )
     return dict(license_)
+
+
+# The ElevenLabs plugin's VOICE_REFUSED codes; olf does not depend on the plugin (a test keeps
+# the two lists equal).
+VOICE_CODES = ("voice_not_found", "voice_access_denied", "invalid_voice_id")
+
+
+def voice_refused(job: dict[str, Any], error: str) -> str:
+    """The user message when ElevenLabs refused a voice of a dialogue ``job``, else "".
+
+    The ElevenLabs plugin names the refused voice ID and code (``voice_not_found``,
+    ``voice_access_denied``, ``invalid_voice_id``); this names every character who speaks in it.
+    Bug (COREPRODUC-797, found before the first report): the Default voices of ElevenLabs
+    expire on 2026-12-31, and a render in a removed voice showed a raw provider error.
+    """
+    code = next((c for c in VOICE_CODES if c in error), "")
+    names, label, found = [], "", ""
+    for char in (job.get("view") or {}).get("characters") or []:
+        voice = char.get("voice") if isinstance(char, dict) else None
+        voice = voice if isinstance(voice, dict) else {}
+        vid = str(_extensions("elevenlabs", voice).get("voice_id") or "")
+        if code and vid and vid in error:  # every speaker of a shared voice (PR-Agent on #807)
+            names.append(str(char.get("name") or char.get("id")))
+            label, found = str(voice.get("description") or ""), vid
+    if not names:
+        return ""
+    who = " and ".join(names)
+    label = f'"{label[:40]}" ' if label else ""  # short: the Studio cuts a notice at 320
+    return (
+        f"{who}'s voice {label}({found}) is gone from ElevenLabs or not on this account "
+        f"({code}). Pick another voice for {who}"
+    )
 
 
 def plan_render(
