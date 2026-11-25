@@ -2270,17 +2270,20 @@ export function StudioClient() {
       // the feed when that run ends. Bug fixed (first occurrence, 2026-11-18 prod logs, 1 user report):
       // a hosted POST takes 15-22 s (it submits to the provider), so the 4th run started about 50 s
       // after the click, but all 4 cards shared one clock and the results came back only together.
-      // A host POST that answers at once is COREPRODUC-687.
+      // The 4 POSTs go out together. Bug fixed (2026-11-26, 1 user report): sent one after another, a
+      // Higgsfield batch started its 4th picture about 45 s after the click (each POST 11-18 s in prod
+      // logs, 3 cards "Waiting to start…"). A host still admits them one at a time (its admission lease,
+      // COREPRODUC-646), so they cannot pass on credits that cover fewer runs. A host POST that answers
+      // at once is COREPRODUC-687.
       const seconds = averageSeconds(runs, model?.id || "", modelKind(model?.capabilities || []));
-      const posted: Run[] = [];
-      const followed: Promise<Run>[] = [];
-      let refused: unknown = null;
-      for (let i = 0; i < times; i += 1) {
-        try {
-          const startedAt = Date.now(); // when this POST is sent, not when React runs the updater
-          if (feedRun) setCardClocks((s) => s && { ...s, [first + i]: { page: runPage, clock: { startedAt, seconds } } });
-          const run = await postRun(times > 1 ? { ...payload, inputs: { ...inputs, seed: base + i } } : payload);
-          posted.push(run);
+      const startedAt = Date.now(); // when the POSTs are sent, not when React runs the updater
+      if (feedRun) setCardClocks((s) => s && { ...s, ...Object.fromEntries(Array.from({ length: times }, (_, i) => [first + i, { page: runPage, clock: { startedAt, seconds } }])) });
+      const answers = await Promise.allSettled(
+        Array.from({ length: times }, async (_, i) => {
+          const run = await postRun(times > 1 ? { ...payload, inputs: { ...inputs, seed: base + i } } : payload).catch((err) => {
+            if (feedRun) dropCard(i); // never started
+            throw err;
+          });
           console.info("[studio] batch: run posted", { card: i, run: run.id, state: run.state });
           // When its run ends, the feed reloads (a host has no /library: its feed comes from /runs and
           // /assets), then its card leaves. This runs beside the batch, so a stalled reload cannot hold
@@ -2300,13 +2303,13 @@ export function StudioClient() {
               .finally(() => dropCard(i));
           };
           follow.then(leave, () => leave());
-          followed.push(follow);
-        } catch (err) {
-          refused = err;
-          break;
-        }
-      }
-      if (feedRun) for (let i = posted.length; i < times; i += 1) dropCard(i); // never started
+          return { run, follow };
+        }),
+      );
+      const ok = answers.flatMap((a) => (a.status === "fulfilled" ? [a.value] : []));
+      const posted = ok.map((a) => a.run);
+      const followed = ok.map((a) => a.follow);
+      let refused: unknown = answers.find((a): a is PromiseRejectedResult => a.status === "rejected")?.reason ?? null;
       if (posted.length) setRunIds((ids) => [...ids, ...posted.map((run) => run.id)]);
       if (!posted.length) throw refused ?? new Error("Generate did not start a run.");
       if (refused) console.warn("[studio] batch: some runs did not start", { started: posted.length, of: times, err: String(refused) });
