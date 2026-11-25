@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "vinci": {
+      "type": "http",
+      "url": "https://app.tryvinci.com/mcp"
+    }
+  }
+}

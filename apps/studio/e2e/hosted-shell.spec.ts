@@ -124,4 +124,21 @@ test.describe("Hosted shell", () => {
     await expect(drawer.locator(".flyout-row:visible")).toHaveCount(0);
     await expect(drawer.locator(".rail-flyout").first()).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   });
+
+  // COREPRODUC-777: Connect shows a "Connect an agent" card with the page origin's /mcp, no key step.
+  test("Connect shows the agent setup with this origin's /mcp", async ({ page, context, baseURL }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await openHosted(page, { ...HOST, keys: ["wavespeed"] });
+    await page.locator(".rail-avatar button").focus();
+    await page.keyboard.press("Enter");
+    await page.locator(".avatar-menu").getByRole("menuitem", { name: "Connect" }).click();
+    const card = page.getByTestId("agent-connect");
+    const url = `${new URL(baseURL || "").origin}/mcp`;
+    await expect(card.locator('[data-agent="Claude Code"] pre')).toHaveText(`claude mcp add --transport http vinci ${url}`);
+    await expect(card.locator('[data-agent="claude.ai"] pre')).toHaveText(url);
+    await expect(card).toContainText("no key");
+    await card.locator('[data-agent="Cursor"]').getByRole("button", { name: "Copy" }).click();
+    await expect(card.getByRole("status")).toHaveText("Copied the Cursor setup.");
+    expect(JSON.parse(await page.evaluate(() => navigator.clipboard.readText()))).toEqual({ mcpServers: { vinci: { url } } });
+  });
 });

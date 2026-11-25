@@ -84,7 +84,7 @@ Run it from the Studio, or from a script:
 ./scripts/vinci run @tryvinci/product-reveal-5s --input '{"prompt":"matte black headphones on wet stone"}'
 ```
 
-**Your AI assistant can drive it.** Vinci ships an MCP server, so Claude, Cursor, or any MCP client can plan shots, run skills, and fetch results. `./scripts/vinci mcp print-config` prints the config to paste in.
+**Your AI assistant can drive it.** Vinci ships an MCP server, so Claude, Cursor, or any MCP client can plan shots, run skills, and fetch results. `./scripts/vinci mcp print-config` prints the config to paste in. For Claude Code there is a plugin with the hosted Studio tools and a skill on how to use them: `/plugin install vinci --marketplace tryvinci/vinci` ([plugins/vinci](plugins/vinci/README.md)).
 
 ## Models and providers
 

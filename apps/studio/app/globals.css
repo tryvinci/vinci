@@ -671,6 +671,14 @@ label { display: block; font-size: 11px; color: var(--mute); margin: 0 0 4px; le
   max-width: calc(3 * 26rem + 28px);
 }
 .connect-sheet .kind { font-size: 12px; letter-spacing: 0; color: var(--teal); }
+/* Connect an agent (COREPRODUC-777): each setup is a copyable block; a long address wraps, no side scroll. */
+.connect > .agent-connect { margin: 18px 0; }
+.agent-row { display: grid; gap: 6px; }
+.agent-snippet {
+  margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md);
+  background: var(--bg); font: 12px/1.45 var(--font-mono); color: var(--ink);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
 /* Credits on a host (COREPRODUC-747): the balance card of Connect and a usage list. */
 .account-head { margin: 30px 0 12px; font-size: 1.1rem; }
 .account-balance { font-size: 2rem; line-height: 1.1; }

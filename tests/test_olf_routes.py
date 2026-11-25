@@ -164,8 +164,9 @@ def test_mcp_olf_tools(client: TestClient) -> None:
     def call(name: str, **arguments: Any) -> dict[str, Any]:
         params = {"name": name, "arguments": arguments}
         rpc = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": params}
-        reply = client.post("/mcp", json=rpc).json()
-        return reply.get("error") or json.loads(reply["result"]["content"][0]["text"])
+        result = client.post("/mcp", json=rpc).json()["result"]
+        text = result["content"][0]["text"]
+        return {"message": text} if result.get("isError") else json.loads(text)
 
     listed = client.post("/mcp", json={"jsonrpc": "2.0", "id": 0, "method": "tools/list"}).json()
     names = {tool["name"] for tool in listed["result"]["tools"]}

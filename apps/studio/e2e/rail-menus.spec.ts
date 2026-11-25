@@ -41,6 +41,10 @@ test.describe("Rail menus", () => {
     await page.locator(".avatar-menu").getByRole("menuitem", { name: "Connect" }).click();
     await expect(page.locator(".top h1")).toHaveText("Connect");
     await expect(page.locator(".avatar-menu")).toHaveCount(0);
+    // COREPRODUC-777: the local Connect page points an agent at the daemon's /mcp; claude.ai cannot reach it.
+    const card = page.getByTestId("agent-connect");
+    await expect(card.locator('[data-agent="Claude Code"] pre')).toHaveText("claude mcp add --transport http vinci http://127.0.0.1:4310/mcp");
+    await expect(card.locator('[data-agent="claude.ai"]')).toHaveCount(0);
   });
 
   test("a model picked in the Image flyout stays on the Image page", async ({ page }) => {

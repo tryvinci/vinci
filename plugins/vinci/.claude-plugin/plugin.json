@@ -1,0 +1,12 @@
+{
+  "name": "vinci",
+  "displayName": "Vinci",
+  "version": "0.1.0",
+  "description": "Vinci Studio tools (images and videos on your Vinci credits) and a skill on how to use them well",
+  "author": { "name": "Vinci", "url": "https://tryvinci.com" },
+  "homepage": "https://docs.tryvinci.com",
+  "repository": "https://github.com/tryvinci/vinci",
+  "privacyPolicyUrl": "https://tryvinci.com/privacy",
+  "license": "MIT",
+  "keywords": ["vinci", "image", "video", "mcp", "seedance"]
+}

@@ -39,11 +39,15 @@ SCHEMAS: dict[str, dict[str, Any]] = {
     "vinci.olf_render": {
         "path": _PATH,
         "shot": _SHOT,
-        "kind": {"type": "string", "enum": ["keyframe", "video", "audio"]},
-        "model_id": {"type": "string"},
-        "count": {"type": "integer", "minimum": 1, "maximum": 4},
+        "kind": {
+            "type": "string",
+            "enum": ["keyframe", "video", "audio"],
+            "description": "What to render; audio is the shot's dialogue",
+        },
+        "model_id": {"type": "string", "description": "A model id; empty: the shot's model"},
+        "count": {"type": "integer", "minimum": 1, "maximum": 4, "description": "Keyframe takes"},
         "max_cost": {"type": "number", "description": "USD this call may spend"},
-        "dry_run": {"type": "boolean"},
+        "dry_run": {"type": "boolean", "description": "Return the plan and price only"},
     },
 }
 REQUIRED = {"vinci.olf_validate": ["path"], "vinci.olf_status": ["path"]}

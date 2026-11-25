@@ -246,13 +246,13 @@ def _dispatch_mcp_rpc(
     payload: dict[str, Any],
     response: dict[str, Any],
 ) -> bool:
-    from vinci_mcp.server import _DEFERRED_EXEC_TOOLS
+    from vinci_mcp.server import _DEFERRED_EXEC_TOOLS, tool_failed
 
     tool = str(payload.get("tool") or "")
     if tool not in _DEFERRED_EXEC_TOOLS:
         journal.mark_outbox_dispatched(op_id)
         return True
-    if response.get("error"):
+    if tool_failed(response):  # an error or an isError result: nothing to dispatch
         journal.mark_outbox_dispatched(op_id)
         return True
     result = response.get("result") or {}

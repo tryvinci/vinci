@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { money } from "../lib/model-capabilities";
+import { AgentConnect } from "./agent-connect";
 
 /**
  * Connect on a host such as Vinci Platform: the user's own provider accounts (`doctor.host.keys`).
@@ -260,6 +261,7 @@ export function HostKeys(props: {
             </div>
           );
         })}
+        <AgentConnect hosted />
       </div>
     </div>
   );
