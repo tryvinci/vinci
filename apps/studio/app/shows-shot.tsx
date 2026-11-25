@@ -207,6 +207,8 @@ export function ShotView({
   const voiceRouted = plans?.audio?.plan?.[0]?.model;
   // A reference video with no routed model (hosted): picking a model in the menu clears it.
   const planError = plans?.keyframe.error || (choice ? "" : plans?.video.error);
+  // Only a pick to make (COREPRODUC-793): a hint, and no "0 credits" line, not a red error.
+  const waiting = !plans?.keyframe.error && !choice && Boolean(plans?.video.pick);
   // A keyframe render draws `draws` variations, each at the keyframe price; a picked video model
   // replaces the routed one's price.
   // A step on the person's own account (COREPRODUC-615) costs 0 credits: `own` lists what the
@@ -720,14 +722,14 @@ export function ShotView({
                   )}
                 </>
               ) : null}
-              <div className="olf-cost">
+              {step === "video" && waiting ? null : <div className="olf-cost">
                 <span>Estimated cost{step === "video" ? "" : draws > 1 ? ` (${draws} keyframes)` : " (keyframe)"}</span>
                 <b>
                   {costText(total(next), own(next))}
                   {unpriced(next)?.length ? " + no flat price" : ""}
                 </b>
-              </div>
-              {planError ? <p className="olf-error">{planError}</p> : null}
+              </div>}
+              {planError ? <p className={waiting ? "muted olf-small-text" : "olf-error"} data-testid="plan-error">{planError}</p> : null}
               {step === "video" && stageNext ? (
                 <button type="button" className="ghost olf-small" onClick={() => setStep("stage")} data-testid="open-stage-pin">
                   Open Stage to record pin video

@@ -1,0 +1,39 @@
+{
+  "characters": [
+    {
+      "id": "char/mira",
+      "voice": {
+        "description": "Lily - Velvety Actress",
+        "extensions": {
+          "elevenlabs": {
+            "voice_id": "pFZP5JQG7iQjIQuC4Bku"
+          }
+        },
+        "id": "voice/mira"
+      }
+    },
+    {
+      "id": "char/tomas",
+      "voice": {
+        "description": "George - Warm, Captivating Storyteller",
+        "extensions": {
+          "elevenlabs": {
+            "voice_id": "JBFqnCBsd6RMkjVDRZzb"
+          }
+        },
+        "id": "voice/tomas"
+      }
+    }
+  ],
+  "dialogue": [
+    {
+      "line": "What if it goes out?",
+      "speaker": "char/mira"
+    },
+    {
+      "line": "Then you light it again. That is the whole job.",
+      "speaker": "char/tomas"
+    }
+  ],
+  "id": "e01/s03/sh010"
+}

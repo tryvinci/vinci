@@ -27,7 +27,7 @@ shots:
       - { speaker: char/mira, line: "What if it goes out?" }
       - { speaker: char/tomas, line: "Then you light it again. That is the whole job." }
     control: { first_frame: keyframe, storyboard: asset/a2af9664a0a4e2ecca4c1897318ff21dd947f56af4a56f2101f14fbbd31c4c3e, reference_video: asset/dfd3d394693c23047d0559c5955c40abc96085c5319bea5e3297d9932e5a44dc }
-    select: { keyframe: kf2, video: v4 }
+    select: { keyframe: kf2, video: v4, audio: a2 }
     layout: { start: [{ slot: a, x: 0.21, y: 0.289, size: 0.119, facing: right }, { slot: b, x: 0.736, y: 0.291, size: 0.116, facing: left }], end: [{ slot: a, x: 0.296, y: 0.278, size: 0.14, facing: right }, { slot: b, x: 0.736, y: 0.291, size: 0.116, facing: left }] }
   - id: e01/s03/sh050
     duration: 8+00

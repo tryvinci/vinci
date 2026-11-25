@@ -6,3 +6,4 @@ description: >
   brown lace-up boots.
 sheet: sheet.png              # the whole sheet is the character reference
 likeness: { real_person: false }
+voice: voice/mira

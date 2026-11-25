@@ -25,13 +25,31 @@
       "description": "Young lighthouse keeper, about 17. Short dark-brown hair, amber eyes, a long red scarf, a navy duffle coat over a cream cable sweater, a brown plaid skirt, dark grey socks, brown lace-up boots.\n",
       "id": "char/mira",
       "name": "Mira",
-      "sheet": "asset/15af924ab240eae3ddbc1319c59018b3f77a27fb9daf8418b96214a6b30b96da"
+      "sheet": "asset/15af924ab240eae3ddbc1319c59018b3f77a27fb9daf8418b96214a6b30b96da",
+      "voice": {
+        "description": "Lily - Velvety Actress",
+        "extensions": {
+          "elevenlabs": {
+            "voice_id": "pFZP5JQG7iQjIQuC4Bku"
+          }
+        },
+        "id": "voice/mira"
+      }
     },
     {
       "description": "The old lighthouse keeper, about 70. White beard, grey hair under a dark-green knitted cap, small round glasses, a brown scarf, a yellow-brown oilskin coat with dark-blue shoulder and elbow patches over a brown waistcoat with a watch chain, dark-blue trousers, black rubber boots, a brass lantern.\n",
       "id": "char/tomas",
       "name": "Tomas",
-      "sheet": "asset/d1585a12ff4c30dfa1ff3e6a3dc332c9fc6029b8e93e33cb6ccb114a85b26124"
+      "sheet": "asset/d1585a12ff4c30dfa1ff3e6a3dc332c9fc6029b8e93e33cb6ccb114a85b26124",
+      "voice": {
+        "description": "George - Warm, Captivating Storyteller",
+        "extensions": {
+          "elevenlabs": {
+            "voice_id": "JBFqnCBsd6RMkjVDRZzb"
+          }
+        },
+        "id": "voice/tomas"
+      }
     }
   ],
   "control": {

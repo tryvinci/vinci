@@ -643,9 +643,21 @@ def shot(path: str, shot: str, request: Request) -> dict[str, Any]:
             plans[kind]["choices"] = _choices(eng, cap, seconds, chars or None)
         except OlfError as exc:
             plans[kind] = {"error": str(exc)} | ({"notes": list(exc.notes)} if exc.notes else {})
+            if exc.pick:  # a model pick, not a failure: the shot page shows a hint (COREPRODUC-793)
+                plans[kind]["pick"] = True
             if kind == "video" and _by_reference(detail):  # the person picks a reference model
                 plans[kind]["choices"] = _choices(eng, "r2v", length)
+                # An empty menu: say what to connect, as the host does.
+                if exc.pick and not plans[kind]["choices"]:
+                    plans[kind]["error"] = REFERENCE_CONNECT
     return detail | {"plans": plans}
+
+
+# A reference shot whose menu is empty (PR-Agent on #800): a hint to pick from nothing helps no one.
+REFERENCE_CONNECT = (
+    "A reference render needs a reference-to-video model: paste a Wavespeed key on Connect, "
+    "then pick Seedance 2.5 reference in the video model menu."
+)
 
 
 def _by_reference(detail: dict[str, Any]) -> bool:

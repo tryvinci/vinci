@@ -176,6 +176,9 @@ export type OlfPlan = {
   own?: OlfOwnStep[];
   takes?: string[];
   error?: string;
+  /** The plan waits for a model pick in the step's menu (a reference shot with no routed model):
+   * `error` says what to pick or connect, and the shot page shows it as a hint (COREPRODUC-793). */
+  pick?: boolean;
   /** Things to know before the render, such as an engine move that enlarges its keyframe. */
   notes?: string[];
 };

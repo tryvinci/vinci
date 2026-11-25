@@ -703,7 +703,8 @@ def test_reference_render_routes(client: TestClient, tmp_path: Path) -> None:
     assert "approve a keyframe first" in plan()["error"]
     client.post("/olf/render", json=at | {"kind": "keyframe"})
     client.patch("/olf/select", json=at | {"choices": {"keyframe": "kf1"}})
-    assert "needs a reference video" in plan()["error"]
+    missing = plan()
+    assert "needs a reference video" in missing["error"] and "pick" not in missing  # a real stop
     used = client.post(
         "/olf/scene/use", json=at | {"n": 1, "frame": frame, "video": clip("testsrc")}
     )
@@ -722,6 +723,16 @@ def test_reference_render_routes(client: TestClient, tmp_path: Path) -> None:
         stopped = plan()
     assert "pick one in the video model menu" in stopped["error"]
     assert "kf1 was not drawn from" in " ".join(stopped.get("notes", []))
+    # A pick, not a failure: the shot page shows it as a hint (COREPRODUC-793); a real stop is not.
+    assert stopped["pick"] is True
+    # An empty menu: the text says what to connect, not "pick one" (PR-Agent on #800).
+    import vinci_daemon.olf_routes as routes
+
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(vinci_core.cost, "plan_workflow", no_r2v)
+        m.setattr(routes, "_choices", lambda *a, **k: [])
+        empty = plan()
+    assert empty["pick"] is True and empty["choices"] == [] and "paste a Wavespeed key" in empty["error"]
     # A stated first frame is the look then, not kf1: no note about kf1 (CodeRabbit on #736).
     scene = Path(path) / "episodes/e02/scenes/s03.yaml"
     text = scene.read_text()

@@ -7,3 +7,4 @@ description: >
   boots, a brass lantern.
 sheet: sheet.png
 likeness: { real_person: false }
+voice: voice/tomas

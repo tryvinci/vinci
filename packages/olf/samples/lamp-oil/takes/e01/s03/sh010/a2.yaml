@@ -1,0 +1,15 @@
+id: e01/s03/sh010/a2
+kind: audio
+status: approved
+output: asset/e1d52ba1f42f8ba7e390e7a507686bcac9dae2ea1bb719f28d766c7ece0a9c49
+duration: 4.8s
+inputs_hash: sha256:1cca64ac6f62493dfa1c0ae0153d192d795a1c0cce0f17993374afe7b3d69d24
+provenance:
+  provider: elevenlabs
+  model: elevenlabs:multilingual-v2:2026-08
+  prompt: "What if it goes out?\nThen you light it again. That is the whole job."
+  parameters: {}
+  created: '2026-11-25T13:11:18Z'
+  cost:
+    amount: 0.00536
+    currency: USD

@@ -878,6 +878,9 @@ def plan_render(
             # (first occurrence 2026-11-20, the #736 production check): the layout note never
             # showed on app.tryvinci.com.
             stop.notes = tuple(notes)
+            # A pick, not a failure: the shot page shows it as a hint. Bug (COREPRODUC-793, first
+            # occurrence 2026-11-25): the Lamp Oil sample's sh010 opened with a red error.
+            stop.pick = True
             raise stop from exc
         detail = exc.args[0] if exc.args else exc
         raise OlfError(
