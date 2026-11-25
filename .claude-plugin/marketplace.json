@@ -1,0 +1,12 @@
+{
+  "name": "tryvinci",
+  "description": "Vinci plugins for Claude Code",
+  "owner": { "name": "Vinci", "url": "https://tryvinci.com" },
+  "plugins": [
+    {
+      "name": "vinci",
+      "source": "./plugins/vinci",
+      "description": "Vinci Studio tools (images and videos on your Vinci credits) and a skill on how to use them well"
+    }
+  ]
+}

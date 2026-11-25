@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from vinci_mcp.server import _DEFERRED_EXEC_TOOLS, MUTATING_TOOLS
+from vinci_mcp.server import _DEFERRED_EXEC_TOOLS, MUTATING_TOOLS, tool_failed
 from vinci_storage.durable_journal import CommitResult, DurableJournal, JournalError
 
 from vinci_daemon.ledger_child_commit import commit_child_operation
@@ -30,7 +30,7 @@ def attach_mcp_portable(
     tool = str(ledger_payload.get("tool") or "")
     if tool not in MUTATING_TOOLS or tool in _DEFERRED_EXEC_TOOLS:
         return out
-    if envelope.get("error"):
+    if tool_failed(envelope):  # an error or an isError result has no run data
         return out
     result = envelope.get("result") or {}
     content = result.get("content") or []
@@ -110,7 +110,7 @@ def commit_mcp_terminal_bundle(
     tool = str(ledger_payload.get("tool") or "")
     if tool not in _DEFERRED_EXEC_TOOLS:
         return envelope
-    if envelope.get("error"):
+    if tool_failed(envelope):  # an error or an isError result has no run data
         return envelope
     result = envelope.get("result") or {}
     content = result.get("content") or []
@@ -146,7 +146,9 @@ def enrich_mcp_adapt_batch_intent(
     out = dict(envelope)
     result = out.get("result") or {}
     content = result.get("content") or []
-    if not content or not isinstance(content[0], dict) or not content[0].get("text"):
+    if tool_failed(envelope) or not content or not isinstance(content[0], dict):
+        return out
+    if not content[0].get("text"):
         return out
     data = json.loads(content[0]["text"])
     batch_id = str(data.get("batch_id") or "")
@@ -235,7 +237,7 @@ def replay_mcp_envelope(
     tool = str(ledger_payload.get("tool") or "")
     if tool not in MUTATING_TOOLS:
         return
-    if envelope.get("error"):
+    if tool_failed(envelope):  # an error or an isError result has no run data
         return
     replay = envelope.get("ledger_replay")
     if not isinstance(replay, dict) and journal is not None and parent_op_id:

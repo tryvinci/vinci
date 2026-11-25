@@ -1171,9 +1171,12 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
     def list_jobs() -> dict[str, Any]:
         return {"jobs": [j.model_dump(mode="json") for j in eng.store.list_jobs()]}
 
-    @app.post("/mcp")
-    async def mcp(request: Request) -> dict[str, Any]:
+    @app.post("/mcp", response_model=None)
+    async def mcp(request: Request) -> dict[str, Any] | Response:
         message = await request.json()
+        method = str(message.get("method") or "") if isinstance(message, dict) else ""
+        if method.startswith("notifications/"):
+            return Response(status_code=202)  # MCP: a notification gets 202 and no body
         from vinci_storage.journal_payload import mcp_ledger_payload, mcp_operation_id_suffix
 
         ledger_payload = mcp_ledger_payload(message)

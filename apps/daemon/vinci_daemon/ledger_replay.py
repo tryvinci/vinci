@@ -220,6 +220,8 @@ def apply_committed_operation(engine: Any, op: dict[str, Any]) -> None:
         return
 
     if kind == "mcp_rpc":
+        from vinci_mcp.server import tool_failed
+
         from vinci_daemon.ledger_mcp import (
             mcp_tool_deferred,
             replay_bundle_for_op,
@@ -234,7 +236,7 @@ def apply_committed_operation(engine: Any, op: dict[str, Any]) -> None:
                 engine, merged, payload, journal=journal, parent_op_id=op_id
             )
             return
-        if mcp_tool_deferred(payload):
+        if mcp_tool_deferred(payload) and not tool_failed(response):
             result = response.get("result") or {}
             content = result.get("content") or []
             if content and isinstance(content[0], dict) and content[0].get("text"):

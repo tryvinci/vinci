@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { HostKeys, providerName as knownName, type HostNote } from "./host-keys";
+import { AgentConnect } from "./agent-connect";
 import { HostAccount } from "./host-account";
 import { AdaptFlowCanvas } from "./adapt-flow-canvas";
 import { AdaptsPanel, EMPTY_PRESET_DRAFT, type PresetDraft } from "./adapts-panel";
@@ -4728,6 +4729,7 @@ export function StudioClient() {
             <p className="muted">Pick a mark, or choose from the list. Providers take a key. A custom server takes an address.</p>
           </div>
         )}
+        <AgentConnect hosted={false} />
         <div className="connect-routing">
           <p className="eyebrow">Model choice</p>
           <label>Prefer</label>
