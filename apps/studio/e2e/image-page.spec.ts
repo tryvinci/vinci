@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import path from "node:path";
+import { fakeRuns } from "./fake-runs";
 
 const shots = process.env.PLAYWRIGHT_ARTIFACTS || "/opt/cursor/artifacts/playwright";
 
@@ -67,6 +68,41 @@ test.describe("Image page", () => {
     await expect(page.getByTestId("video-page")).toBeVisible();
     await expect(page.getByTestId("video-ref-start")).toBeVisible();
     await page.screenshot({ path: path.join(shots, "image_animate_video.png"), fullPage: true });
+  });
+
+  test("Generate stays on while an image run goes; one top-bar line (COREPRODUC-791, 792)", async ({ page }) => {
+    // Fake runs that go on until the test ends them, so the first run is still going when Generate is clicked again.
+    const runs = await fakeRuns(page);
+    await openImage(page);
+    await page.getByTestId("image-model-chip").click();
+    const mock = page.getByRole("option", { name: /Mock PNG/ });
+    test.skip((await mock.count()) === 0, "a connected provider hides mock");
+    await mock.click();
+
+    const generate = page.getByTestId("image-generate");
+    await page.getByTestId("image-prompt").fill("north-light oak cube");
+    await generate.click();
+    await expect(page.getByTestId("image-feed-pending")).toHaveCount(1);
+    await expect(generate).toBeEnabled();
+    await expect(generate).toContainText("Generate");
+    await page.screenshot({ path: path.join(shots, "image_parallel_first_running.png") });
+
+    await page.getByTestId("image-prompt").fill("south-light walnut sphere");
+    await generate.click();
+    await expect(page.getByTestId("image-feed-pending")).toHaveCount(2);
+    await expect.poll(() => runs.posts).toBe(2);
+    await expect(generate).toBeEnabled();
+    await page.screenshot({ path: path.join(shots, "image_parallel_two_running.png") });
+
+    // The first job ends: the top bar still says "Generating…" while the second goes (COREPRODUC-792).
+    const log = page.locator(".top-log[role=status]");
+    runs.end(1);
+    await expect(page.getByTestId("image-feed-pending")).toHaveCount(1);
+    await expect(log).toHaveText("Generating…");
+    await page.screenshot({ path: path.join(shots, "image_parallel_first_ended.png") });
+    runs.end(2);
+    await expect(page.getByTestId("image-feed-pending")).toHaveCount(0);
+    await expect(log).toHaveText("Your still is in the feed.");
   });
 
   test("narrow viewport keeps the bar", async ({ page }) => {
