@@ -72,6 +72,7 @@ export function ImagePage({
   onRemoveRef,
   cast,
   busy,
+  locked,
   clock,
   clocks,
   problem,
@@ -114,7 +115,10 @@ export function ImagePage({
   onAddRef: (file: File) => void;
   onRemoveRef: (id: string) => void;
   cast: MentionRow[];
+  /** Any run in flight: the pending cards show. */
   busy: boolean;
+  /** A run that is not an image Generate (canvas, Re-run) holds Generate; image runs do not (COREPRODUC-791). */
+  locked: boolean;
   /** The run in flight, for the pending card's progress bar. */
   clock?: RunClock | null;
   /** One clock per pending card of a batch; null: its run is not posted yet. */
@@ -303,8 +307,8 @@ export function ImagePage({
         onRemoveRef={onRemoveRef}
         cast={cast}
         cost={cost}
-        busy={busy}
-        disabled={busy || !selected || Boolean(hint)}
+        busy={locked}
+        disabled={locked || !selected || Boolean(hint)}
         hint={hint}
         problem={problem}
         onProblemAction={onProblemAction}

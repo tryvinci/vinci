@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import path from "node:path";
+import { fakeRuns } from "./fake-runs";
 
 const shots = process.env.PLAYWRIGHT_ARTIFACTS || "/opt/cursor/artifacts/playwright";
 
@@ -83,6 +84,40 @@ test.describe("Video page", () => {
     await expect(page.getByTestId("video-prompt")).toHaveValue("north-light oak cube, slow push-in");
     await expect(page.getByTestId("video-ref-start")).toBeVisible({ timeout: 15_000 });
     await page.screenshot({ path: path.join(shots, "video_extend_filled.png") });
+  });
+
+  test("Video Generates run side by side; one top-bar line (COREPRODUC-792)", async ({ page }) => {
+    // Fake runs that go on until the test ends them: the first clip still runs at the second click.
+    const runs = await fakeRuns(page);
+    await openVideo(page);
+    test.skip(!/Mock/.test((await page.getByTestId("video-model-chip").textContent()) || ""), "a connected provider hides mock");
+    const generate = page.getByTestId("video-generate");
+    const pending = page.getByTestId("video-feed-pending");
+    await page.getByTestId("video-prompt").fill("north-light oak cube, slow push-in");
+    await generate.click();
+    await expect(pending).toHaveCount(1);
+    await expect(generate).toBeEnabled();
+    await page.getByTestId("video-prompt").fill("south-light walnut sphere, slow orbit");
+    await generate.click();
+    await expect(pending).toHaveCount(2);
+    await expect.poll(() => runs.posts).toBe(2);
+    await expect(generate).toBeEnabled();
+    await page.screenshot({ path: path.join(shots, "video_parallel_two_running.png") });
+
+    const log = page.locator(".top-log[role=status]");
+    runs.end(1);
+    await expect(pending).toHaveCount(1);
+    await expect(log).toHaveText("Generating…");
+    await page.screenshot({ path: path.join(shots, "video_parallel_first_ended.png") });
+    // Video jobs show no pending cards on the Image page (PR #796 review: fallback cards leaked across pages).
+    await page.locator('nav button[aria-label="Image"]').click();
+    await expect(page.getByTestId("image-feed-pending")).toHaveCount(0);
+    await page.locator('nav button[aria-label="Video"]').click();
+    await expect(pending).toHaveCount(1);
+    runs.end(2);
+    await expect(pending).toHaveCount(0);
+    await expect(log).toHaveText("Your clip is in History.");
+    await page.screenshot({ path: path.join(shots, "video_parallel_both_ended.png") });
   });
 
   test("animate from Image fills the start frame", async ({ page }) => {

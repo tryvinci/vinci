@@ -867,7 +867,15 @@ export function StudioClient() {
   const [boardConflict, setBoardConflict] = useState(false);
   /** Set when a host answered 401 at start: the page shows this and a way to sign in again. */
   const [sessionEnded, setSessionEnded] = useState("");
-  const [busy, setBusy] = useState(false);
+  /** A run that holds the whole Studio (canvas, Re-run, plan, 3D): one at a time. */
+  const [runBusy, setBusy] = useState(false);
+  /** Image and Video page Generates in flight: they run side by side (COREPRODUC-791, COREPRODUC-792). */
+  const [pageJobs, setPageJobs] = useState(0);
+  /** Page jobs in flight (the source of `pageJobs`), and the top-bar line held for when the last one ends. */
+  const pageLog = useRef({ jobs: 0, text: "", error: false });
+  /** Next free pending-card key: each page job's cards get their own keys in `cardClocks`. */
+  const cardSeq = useRef(0);
+  const busy = runBusy || pageJobs > 0;
   const [findQ, setFindQ] = useState("pricing");
   const [findHits, setFindHits] = useState<{ uri?: string; transcript?: string }[]>([]);
   const [costBody, setCostBody] = useState("");
@@ -1045,9 +1053,11 @@ export function StudioClient() {
     () => (busySince && selected ? { startedAt: busySince, seconds: averageSeconds(runs, selected.id, modelKind(selected.capabilities)) } : null),
     [busySince, runs, selected],
   );
-  // The cards of an Image run still going, by card number: the clock from when its run was posted,
-  // or null (not posted yet). The estimate is the one of the model the run was sent with.
-  const [cardClocks, setCardClocks] = useState<Record<number, RunClock | null> | null>(null);
+  // The cards of the Image and Video runs still going, by card number: the page that sent the run and the
+  // clock from when it was posted, or null (not posted yet). The estimate is the one of the model the run was sent with.
+  const [cardClocks, setCardClocks] = useState<Record<number, { page: PageId; clock: RunClock | null }> | null>(null);
+  /** The clocks of one page's pending cards, so Image and Video each show only their own jobs. */
+  const cardsOn = (p: PageId) => Object.values(cardClocks || {}).filter((c) => c.page === p).map((c) => c.clock);
   // Why the last Image or Video Generate was refused (red, above Generate), and the runs that failed
   // after they started (red cards). Bug fixed (first occurrence 2026-11-18, user report, COREPRODUC-692):
   // both showed only as dim text in the top bar, so the run seemed to stop with no warning.
@@ -2057,7 +2067,7 @@ export function StudioClient() {
   }
 
   async function generate(opts?: { nodeIds?: string[]; graph?: boolean; solo?: boolean }) {
-    if (busy) return;
+    if (runBusy) return;
     const epoch = graphEpochRef.current;
     const model = selected;
     // Generate graph and node runs always send the canvas; animating a still is a page run.
@@ -2087,6 +2097,18 @@ export function StudioClient() {
     // graph; the button showed 2 credits and the run asked for up to 17.
     const graphRun = !!opts?.graph || (page === "canvas" && graphEdited);
     const canvasRun = !animating && (!!opts?.nodeIds?.length || (graphRun && generateNodes.length > 0));
+    // Image and Video page runs do not wait for each other; any other run waits for all of them (it shares
+    // trackedRef). Bug fixed (first occurrence 2026-11-25, 1 customer report, COREPRODUC-791; Video:
+    // COREPRODUC-792): one busy flag kept Generate off until the earlier run ended, a wait of 1-2 min.
+    // Image and Video show a refusal above Generate and a failed run as a red card (COREPRODUC-692);
+    // the canvas shows it on the node.
+    const feedRun = !canvasRun && (page === "image" || page === "video");
+    if (!feedRun && pageLog.current.jobs > 0) {
+      // The ref, not the state: a click right after a start sees it. Say why, so the click does not look lost.
+      console.info("[studio] run held: page jobs in flight", { jobs: pageLog.current.jobs, page });
+      setLog("Wait for the Image and Video jobs to end, then run this.");
+      return;
+    }
     // Canvas nodes run on their pinned model or one the runtime picks: only page runs, targets that fall
     // back to the page model, and nodes pinned to it need it to be usable.
     const targets = new Set(opts?.nodeIds || []);
@@ -2124,14 +2146,13 @@ export function StudioClient() {
       setLog("Generate or drop a still first, then upscale.");
       return;
     }
-    setBusy(true);
+    const held = pageLog.current;
+    if (feedRun) setPageJobs(++held.jobs);
+    else setBusy(true);
     setModelsOpen(false);
     setLog("Generating…");
     setProblem(null);
     setFailedRuns([]);
-    // Image and Video show a refusal above Generate and a failed run as a red card (COREPRODUC-692);
-    // the canvas shows it on the node.
-    const feedRun = !canvasRun && (page === "image" || page === "video");
     const runPage = page;
     const rev = formRev.current;
     /** The refusal, unless the prompt, model or page changed while the run was sent. */
@@ -2139,6 +2160,17 @@ export function StudioClient() {
       if (formRev.current === rev) setProblem(found);
       else console.info("[studio] refusal not shown: the form changed", { text: found.text });
     };
+    const times = feedRun && page === "image" && batchCount === 4 ? 4 : 1;
+    // This job's cards are keyed first..first+times-1, so a job that ends leaves the other jobs' cards.
+    const first = cardSeq.current;
+    cardSeq.current += times;
+    const dropCard = (i: number) =>
+      setCardClocks((s) => {
+        const left = s && Object.fromEntries(Object.entries(s).filter(([k]) => Number(k) !== first + i));
+        return left && Object.keys(left).length ? left : null;
+      });
+    // Register the cards now, with their page: before this, the other page showed fallback cards (PR #796 review).
+    if (feedRun) setCardClocks((s) => ({ ...s, ...Object.fromEntries(Array.from({ length: times }, (_, i) => [first + i, { page: runPage, clock: null }])) }));
     try {
       const payload: Record<string, unknown> = { inputs, preference: pref };
       if (animating) {
@@ -2228,7 +2260,6 @@ export function StudioClient() {
       }
       trackedRef.current = tracked;
       if (tracked.length) setNodeRuns((prev) => ({ ...prev, ...Object.fromEntries(tracked.map((id) => [id, { state: "running" as const, startedAt: Date.now() }])) }));
-      const times = !canvasRun && page === "image" ? (batchCount === 4 ? 4 : 1) : 1;
       // Each picture of a batch has its own seed. Same inputs hit the cache: 4 runs gave 1 picture (COREPRODUC-575).
       const base = times > 1 ? Number(inputs.seed) || Math.floor(Math.random() * 2 ** 31) : 0;
       // The pictures of a batch run together. Bug fixed (first occurrence, 2026-11-13 production crawl,
@@ -2240,17 +2271,14 @@ export function StudioClient() {
       // a hosted POST takes 15-22 s (it submits to the provider), so the 4th run started about 50 s
       // after the click, but all 4 cards shared one clock and the results came back only together.
       // A host POST that answers at once is COREPRODUC-687.
-      const imageCards = !canvasRun && page === "image";
       const seconds = averageSeconds(runs, model?.id || "", modelKind(model?.capabilities || []));
-      const dropCard = (i: number) => setCardClocks((s) => s && Object.fromEntries(Object.entries(s).filter(([k]) => Number(k) !== i)));
-      if (imageCards) setCardClocks(Object.fromEntries(Array.from({ length: times }, (_, i) => [i, null])));
       const posted: Run[] = [];
       const followed: Promise<Run>[] = [];
       let refused: unknown = null;
       for (let i = 0; i < times; i += 1) {
         try {
           const startedAt = Date.now(); // when this POST is sent, not when React runs the updater
-          if (imageCards) setCardClocks((s) => s && { ...s, [i]: { startedAt, seconds } });
+          if (feedRun) setCardClocks((s) => s && { ...s, [first + i]: { page: runPage, clock: { startedAt, seconds } } });
           const run = await postRun(times > 1 ? { ...payload, inputs: { ...inputs, seed: base + i } } : payload);
           posted.push(run);
           console.info("[studio] batch: run posted", { card: i, run: run.id, state: run.state });
@@ -2263,10 +2291,10 @@ export function StudioClient() {
               // This run's card turns red with its reason; the other cards go on (COREPRODUC-692).
               console.warn("[studio] run failed", { card: i, run: ended.id, error: ended.error });
               setFailedRuns((rows) => [...rows, { page: runPage, problem: problemOf(typeof ended.error === "string" ? ended.error : "") }]);
-              if (imageCards) dropCard(i);
+              dropCard(i);
               return;
             }
-            if (!imageCards || times < 2) return;
+            if (!feedRun || times < 2) return;
             void loadMedia()
               .catch((err) => console.warn("[studio] batch: feed reload failed", { card: i, err: String(err) }))
               .finally(() => dropCard(i));
@@ -2278,7 +2306,7 @@ export function StudioClient() {
           break;
         }
       }
-      if (imageCards) for (let i = posted.length; i < times; i += 1) dropCard(i); // never started
+      if (feedRun) for (let i = posted.length; i < times; i += 1) dropCard(i); // never started
       if (posted.length) setRunIds((ids) => [...ids, ...posted.map((run) => run.id)]);
       if (!posted.length) throw refused ?? new Error("Generate did not start a run.");
       if (refused) console.warn("[studio] batch: some runs did not start", { started: posted.length, of: times, err: String(refused) });
@@ -2305,7 +2333,7 @@ export function StudioClient() {
       if (body.exported_outputs?.length) {
         autoImportPhotosExports(body.exported_outputs);
       }
-      setLog(
+      const line =
         body.state === "completed"
           ? page === "image"
             ? "Your still is in the feed."
@@ -2314,20 +2342,35 @@ export function StudioClient() {
               : "Done. It is on the board."
           : feedRun && body.state === "failed"
             ? "" // its red card says why
-            : plainError(typeof body.error === "string" ? body.error : ""),
-      );
+            : plainError(typeof body.error === "string" ? body.error : "");
+      // Page jobs share the top bar: it keeps "Generating…" until the last one ends (see finally). An error
+      // line is held over a later success. Bug fixed (first occurrence 2026-11-25, COREPRODUC-792): the
+      // first of two jobs to end said "Your still is in the feed." while the other still ran.
+      if (!feedRun) setLog(line);
+      else if (!held.error) {
+        // An Image job and a Video job that overlap: keep both success lines, not only the last one.
+        const text = line && held.text && !held.text.includes(line) ? `${held.text} ${line}` : line || held.text;
+        Object.assign(held, { text, error: Boolean(line) && body.state !== "completed" });
+      }
       if (refused && !feedRun) setLog(refusedText); // a feed keeps its success line; the red line says the rest
     } catch (err) {
       const message = plainError(err);
       console.warn("[studio] run refused", { page, status: (err as { status?: number }).status, message });
       if (feedRun) refuse(problemOf(err));
-      setLog(feedRun ? "" : message);
+      else setLog(message); // a page job's refusal is red above Generate; its top-bar line is set in finally
       const failed = trackedRef.current;
       if (failed.length && epoch === graphEpochRef.current) setNodeRuns((prev) => ({ ...prev, ...Object.fromEntries(failed.map((id) => [id, { state: "error" as const, error: message }])) }));
     } finally {
       trackedRef.current = [];
-      setCardClocks(null);
-      setBusy(false);
+      if (feedRun) {
+        for (let i = 0; i < times; i += 1) dropCard(i);
+        setPageJobs(--held.jobs);
+        if (!held.jobs) {
+          console.info("[studio] last page job ended", { line: held.text, error: held.error });
+          setLog(held.text);
+          Object.assign(held, { text: "", error: false });
+        }
+      } else setBusy(false);
     }
   }
 
@@ -2362,7 +2405,7 @@ export function StudioClient() {
   /** Re-run an Assets item with the sidecar params, then open the matching compose page. */
   async function rerunFromLibrary(item: AssetItem) {
     if (busy) {
-      // As in generate: a Re-run must not end an Image batch's busy state and card clocks.
+      // As in generate: a Re-run must not end the Image and Video jobs' busy state and card clocks.
       setLog("Wait for the run in progress to end, then Re-run.");
       return;
     }
@@ -3358,12 +3401,13 @@ export function StudioClient() {
         onRemoveRef={() => (setUploadId(null), setLog("Reference removed."))}
         cast={mentionItems.map(asCastRow)}
         busy={busy}
+        locked={runBusy}
         clock={runClock}
-        clocks={cardClocks ? Object.values(cardClocks) : undefined}
+        clocks={cardClocks ? cardsOn("image") : undefined}
         problem={problem}
         problems={failedOn("image")}
         onProblemAction={onProblemAction}
-        pendingCount={cardClocks ? Object.keys(cardClocks).length : batchCount === 4 ? 4 : 1}
+        pendingCount={cardClocks ? cardsOn("image").length : runBusy ? (batchCount === 4 ? 4 : 1) : 0}
         runs={runs}
         assets={assets}
         ready={(row) => usable({ ...row, capabilities: row.capabilities || [] })}
@@ -3446,7 +3490,10 @@ export function StudioClient() {
         motions={MOTIONS}
         cast={mentionItems.map(asCastRow)}
         busy={busy}
+        locked={runBusy}
         clock={runClock}
+        clocks={cardClocks ? cardsOn("video") : undefined}
+        pendingCount={cardClocks ? cardsOn("video").length : runBusy ? 1 : 0}
         problem={problem}
         problems={failedOn("video")}
         onProblemAction={onProblemAction}

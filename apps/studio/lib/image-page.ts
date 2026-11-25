@@ -372,10 +372,10 @@ export function feedFromRuns(runs: readonly ImageRun[], assets: readonly ImageAs
  *
  * Args:
  *   items: Completed feed.
- *   pending: How many Generate slots are running (1 or 4).
+ *   pending: How many Generate slots are running: 1 or 4 per job, and jobs can overlap (COREPRODUC-791).
  */
 export function withPendingCards(items: readonly ImageFeedItem[], pending: number): ImageFeedItem[] {
-  const count = Math.max(0, Math.min(4, Math.floor(pending)));
+  const count = Math.max(0, Math.floor(pending));
   if (!count) return items.slice();
   const cards: ImageFeedItem[] = [];
   for (let i = 0; i < count; i += 1) {

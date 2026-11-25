@@ -154,6 +154,8 @@ if (!pending[0].pending || pending[0].id !== "pending-0") throw new Error("pendi
 if (pending[1].assetId !== "a2") throw new Error("completed after pending");
 const four = withPendingCards(feed, 4);
 if (four.filter((row) => row.pending).length !== 4) throw new Error("batch pending");
+// Two batches of 4 run side by side: all 8 cards show (COREPRODUC-791).
+if (withPendingCards(feed, 8).filter((row) => row.pending).length !== 8) throw new Error("overlapping jobs");
 """
     result = _run(script)
     assert result.returncode == 0, result.stderr or result.stdout

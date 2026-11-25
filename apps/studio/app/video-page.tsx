@@ -178,7 +178,10 @@ export function VideoPage({
   motions,
   cast,
   busy,
+  locked,
   clock,
+  clocks,
+  pendingCount,
   problem,
   problems,
   onProblemAction,
@@ -244,9 +247,16 @@ export function VideoPage({
   onMotion: (value: string) => void;
   motions: string[];
   cast: MentionRow[];
+  /** Any run in flight: the pending cards show. */
   busy: boolean;
+  /** A run that is not an Image or Video Generate (canvas, Re-run) holds Generate; page runs do not (COREPRODUC-792). */
+  locked: boolean;
   /** The run in flight, for the pending card's progress bar. */
   clock?: RunClock | null;
+  /** One clock per pending card, one card per Video job; null: its run is not posted yet. */
+  clocks?: (RunClock | null)[];
+  /** Pending cards while busy: one per Video job in flight. */
+  pendingCount: number;
   /** Why the last Generate was refused (above Generate), and the runs that failed (red cards). */
   problem?: RunProblem | null;
   problems?: RunProblem[];
@@ -364,7 +374,7 @@ export function VideoPage({
     return applyFavorites(rows, favs);
   }, [assets, favs, libraryItems, runs]);
 
-  const items = useMemo(() => withPendingCards(completed, busy ? 1 : 0), [busy, completed]);
+  const items = useMemo(() => withPendingCards(completed, busy ? pendingCount : 0), [busy, completed, pendingCount]);
 
   const favorite = useCallback(
     async (item: VideoFeedItem) => {
@@ -578,8 +588,8 @@ export function VideoPage({
         motions={motions}
         cast={cast}
         cost={cost}
-        busy={busy}
-        disabled={busy || !selected || Boolean(hint)}
+        busy={locked}
+        disabled={locked || !selected || Boolean(hint)}
         hint={hint}
         problem={problem}
         onProblemAction={onProblemAction}
@@ -589,6 +599,7 @@ export function VideoPage({
       <div className="video-main">
         <ImageFeed
           clock={clock}
+          clocks={clocks}
           problems={problems}
           onProblemAction={onProblemAction}
           items={items}
