@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 BIBLE = ("character", "location", "prop", "voice", "camerawork")
 # Take kinds whose hash includes an entry of this kind (SPEC.md, Hash input, step 3).
 IMPACT_KINDS = {
-    "voice": ("video", "audio"),
+    "voice": ("audio",),  # a video never sends a voice (COREPRODUC-796)
     "style": ("keyframe", "video"),
     "camerawork": ("video",),
 }

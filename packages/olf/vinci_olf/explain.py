@@ -106,6 +106,9 @@ def explain(p: Project, take_id: str) -> dict[str, Any]:
     if not path.is_file():
         return {"take": take_id, "stale": stale, "known": False, "changes": [], "summary": ""}
     then = json.loads(path.read_text(encoding="utf-8"))
+    if kind != "audio":  # an older engine kept the voices in a video view (COREPRODUC-796)
+        for char in then.get("characters") or []:
+            char.pop("voice", None)
     old, new = _flat(then), _flat(now)
     camera = origins(p, shot_id)["camera_fields"]
     changes = [
@@ -122,6 +125,45 @@ def explain(p: Project, take_id: str) -> dict[str, Any]:
     more = f" and {len(changes) - 1} more" if len(changes) > 1 else ""
     summary = f"{first}{more} changed" if changes else ""
     return {"take": take_id, "stale": stale, "known": True, "changes": changes, "summary": summary}
+
+
+def upgrade_video_hashes(p: Project) -> list[str]:
+    """Move video takes from the old hash (the cast's voices kept) to the current one.
+
+    Call it before a voice edit (COREPRODUC-796): the edit changes the old hash, so a take still
+    stored under it would turn stale once, though no frame changed. Only takes that are fresh
+    under the old hash move; a stale take stays stale.
+
+    Returns:
+        The take IDs whose ``inputs_hash`` (and ``.inputs.json``) were rewritten.
+    """
+    views: dict[str, dict[str, Any] | None] = {}
+    moved: list[str] = []
+    for take_id, doc in list(p.docs.items()):
+        shot_id = take_id.rsplit("/", 1)[0]
+        if p.kind(take_id) != "take" or doc.data.get("kind") != "video":
+            continue
+        if shot_id not in views:
+            try:
+                views[shot_id] = resolve(p, shot_id) if p.kind(shot_id) == "shot" else None
+            except OlfError:  # a broken shot: its takes are not fresh under either hash
+                views[shot_id] = None
+        if (view := views[shot_id]) is None:
+            continue
+        frames, stored = take_frames(p, doc.data), doc.data.get("inputs_hash")
+        new = inputs_hash(view, "video", frames)
+        if stored == new or stored != inputs_hash(view, "video", frames, legacy=True):
+            continue
+        lines = doc.path.read_text(encoding="utf-8").splitlines(keepends=True)
+        _put(lines, 0, len(lines), "", "inputs_hash", new)
+        _save(doc.path, lines, lambda data: data.get("inputs_hash") == new)  # noqa: B023 - runs now
+        if inputs_path(p, take_id).is_file():  # See change compares with this view
+            save_inputs(p, take_id, hash_view(view, "video", frames))
+        doc.data = read(doc.path)
+        moved.append(take_id)
+    if moved:
+        log.info("video takes moved to the voice-free hash: %s", ", ".join(moved))
+    return moved
 
 
 def keep_take(p: Project, take_id: str) -> dict[str, Any]:

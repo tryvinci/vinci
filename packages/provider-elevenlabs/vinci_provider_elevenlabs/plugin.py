@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import base64
+import io
+import json
 import logging
 import mimetypes
 import os
 import re
+import urllib.error
 import urllib.request
 import uuid
 
@@ -63,6 +66,30 @@ def _reference_audio(inputs: dict[str, object]) -> tuple[str, bytes]:
 
 
 MUSIC_URL = "https://api.elevenlabs.io/v1/music"  # prompt, music_length_ms 3000 to 600000
+# ElevenLabs error codes for a voice that is gone or not on the account (2026-11-25,
+# https://elevenlabs.io/docs/developers/resources/errors): voice_not_found (404, also seen
+# as 400), voice_access_denied (403), invalid_voice_id (400). Body: {"detail": {"code", ...}}.
+VOICE_REFUSED = ("voice_not_found", "voice_access_denied", "invalid_voice_id")
+
+
+def _voice_refusal(exc: urllib.error.HTTPError, voice: str) -> Exception:
+    """A clear error when ElevenLabs refused ``voice``, else ``exc`` again with its body kept.
+
+    Bug (COREPRODUC-797, found before the first report): ElevenLabs Default voices expire on
+    2026-12-31, and a removed voice showed as "HTTP Error 404: Not Found". The message keeps
+    the voice ID and the code, so the engine can name the character (``voice_refused``).
+    """
+    raw = (exc.read() if exc.fp else b"") or b""
+    try:
+        detail = json.loads(raw).get("detail")
+    except (ValueError, AttributeError):
+        detail = None
+    code = str(detail.get("code") or detail.get("status") or "") if isinstance(detail, dict) else ""
+    if voice and code in VOICE_REFUSED:
+        log.warning("elevenlabs: voice %s refused (HTTP %s, %s)", voice, exc.code, code)
+        return ValueError(f"ElevenLabs cannot speak in voice {voice} ({code}): pick another voice")
+    # The body was read: give the caller a copy that can be read again (engine 403 detail).
+    return urllib.error.HTTPError(exc.url, exc.code, exc.msg, exc.headers, io.BytesIO(raw))
 
 
 class ElevenLabsProvider(CatalogBackedProvider):
@@ -146,7 +173,7 @@ class ElevenLabsProvider(CatalogBackedProvider):
         text = str(req.inputs.get("prompt") or req.inputs.get("text") or "")
         seconds = float(req.inputs.get("duration") or 0)  # a cue's length; 0: the model picks
         payload: dict[str, object]
-        clone = ""  # a voice_clone job's own clone, deleted after it speaks
+        clone = voice = ""  # a voice_clone job's own clone, deleted after it speaks
         if req.capability == Capability.SFX:
             url, payload = SFX_URL, {"text": text, "model_id": model}
             payload |= {"duration_seconds": min(max(seconds, 0.5), 30.0)} if seconds else {}
@@ -176,6 +203,8 @@ class ElevenLabsProvider(CatalogBackedProvider):
         }
         try:
             raw = self._post_bytes(url, headers, payload)
+        except urllib.error.HTTPError as exc:  # a removed voice: say which (COREPRODUC-797)
+            raise _voice_refusal(exc, voice) from exc
         finally:
             if clone:
                 try:

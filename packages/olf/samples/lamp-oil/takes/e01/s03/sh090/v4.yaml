@@ -3,7 +3,7 @@ kind: video
 status: approved
 output: asset/52a15e0f62005dfffb48f15eda870a23b959ac4b6a716847bd3fcbb2d3c3b75d
 duration: 8.000s
-inputs_hash: sha256:8567fd74edd85c7ca93f739c37184e6eceac8c4e95c8325e1698a8132fa203d4
+inputs_hash: sha256:465a516af20879090b5c3dfe51fac7a5719f4936763318137c4bc4626cf8b17c
 inputs:
   first_frame: e01/s03/sh090/kf3
 provenance:

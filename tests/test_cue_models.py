@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import wave
+from pathlib import Path
 from typing import Any
 from unittest import mock
 
@@ -123,6 +124,66 @@ def test_elevenlabs_voices_and_no_default_voice(monkeypatch: pytest.MonkeyPatch)
         provider.estimate(req)
         with pytest.raises(ValueError, match="no ElevenLabs voice"):
             provider.submit(req)
+
+
+def test_a_removed_voice_names_the_character_and_asks_for_another_voice(tmp_path: Path) -> None:
+    """COREPRODUC-797 (found before the first report): ElevenLabs Default voices expire on
+    2026-12-31. A fake ElevenLabs answers the documented 404 ``voice_not_found``: the plugin says
+    which voice, and the engine names the Lamp Oil character who speaks in it. Other errors keep
+    their body, so the runtime can still show a 403 reason."""
+    import shutil
+    import urllib.error
+
+    from vinci_olf.api import lamp_oil_path
+    from vinci_olf.project import load
+    from vinci_olf.render import VOICE_CODES, voice_refused
+    from vinci_olf.resolve import resolve
+    from vinci_provider_elevenlabs.plugin import VOICE_REFUSED, ElevenLabsProvider
+
+    def refusal(code: int, body: dict[str, Any]) -> urllib.error.HTTPError:
+        data = io.BytesIO(json.dumps(body).encode())
+        return urllib.error.HTTPError("https://api.elevenlabs.io", code, "x", {}, data)  # type: ignore[arg-type]
+
+    gone = {"detail": {"type": "not_found", "code": "voice_not_found", "status": "voice_not_found"}}
+    req = JobRequest(
+        capability=Capability.TTS,
+        model_id="elevenlabs:flash-v2.5:2026-08",
+        inputs={"prompt": "Tell me.", "voice_id": "pFZP5JQG7iQjIQuC4Bku"},
+    )
+    provider = ElevenLabsProvider(api_key="eleven-test-key")
+    with mock.patch("vinci_provider_sdk.catalog_provider.allow_live_spend", return_value=True):
+        provider.estimate(req)
+        with mock.patch.object(provider, "_post_bytes", side_effect=refusal(404, gone)):
+            with pytest.raises(ValueError) as refused:
+                provider.submit(req)
+        with mock.patch.object(provider, "_post_bytes", side_effect=refusal(500, {"detail": "x"})):
+            with pytest.raises(urllib.error.HTTPError) as down:
+                provider.submit(req)
+    assert str(refused.value) == (
+        "ElevenLabs cannot speak in voice pFZP5JQG7iQjIQuC4Bku (voice_not_found): pick another voice"
+    )
+    assert down.value.code == 500 and json.loads(down.value.read()) == {"detail": "x"}
+    sample = lamp_oil_path()
+    assert sample is not None
+    media = json.loads((sample / "media.json").read_text())  # the media are shared links
+    root = Path(shutil.copytree(sample, tmp_path / "show"))
+    for rel in media:  # a stand-in, as on the host
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_bytes(b"")
+    show = load(root, hashes={rel: item["sha256"] for rel, item in media.items()})
+    job = {"view": resolve(show, "e01/s03/sh010")}
+    assert voice_refused(job, str(refused.value)) == (
+        'Mira\'s voice "Lily - Velvety Actress" (pFZP5JQG7iQjIQuC4Bku) is gone from ElevenLabs '
+        "or not on this account (voice_not_found). Pick another voice for Mira"
+    )
+    assert (
+        voice_refused(job, "HTTP Error 500") == voice_refused(job, "voice_not_found: v_other") == ""
+    )
+    # One voice for two speakers names both (PR-Agent on #807); olf keeps the plugin's codes.
+    lily = job["view"]["characters"][0]["voice"]
+    job["view"]["characters"] = [{"name": "Mira", "voice": lily}, {"name": "Tomas", "voice": lily}]
+    assert voice_refused(job, str(refused.value)).startswith("Mira and Tomas's voice")
+    assert VOICE_CODES == VOICE_REFUSED
 
 
 class _Answer:
