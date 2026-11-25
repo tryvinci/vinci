@@ -8,6 +8,7 @@ import {
   type StudioApp,
 } from "../lib/apps-catalog";
 import { tabLabel } from "../lib/studio-shell";
+import { EffectArt } from "./ui/effect-art";
 import "./effects-shell.css";
 
 type Props = {
@@ -69,7 +70,7 @@ export function EffectsGalleryOverlay({ open, onClose, onPick }: Props) {
             {visible.map((app) => (
               <button key={app.id} type="button" className="apps-card" onClick={() => pick(app)}>
                 <div className="apps-thumb" aria-hidden="true">
-                  <div className={`apps-thumb-art thumb-${app.id}`} />
+                  <EffectArt id={app.id} />
                   <p className="apps-thumb-cat">{app.category}</p>
                 </div>
                 <div className="apps-card-copy">

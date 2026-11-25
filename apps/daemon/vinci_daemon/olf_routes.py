@@ -622,6 +622,8 @@ def shot(path: str, shot: str, request: Request) -> dict[str, Any]:
 
     A shot without dialogue gets an ``audio`` plan with an ``error`` (nothing to speak).
     """
+    from vinci_core.cost import asked_chars
+
     p = _project(path)
     detail = _olf(lambda: shot_detail(p, shot))
     eng = request.app.state.engine
@@ -632,7 +634,13 @@ def shot(path: str, shot: str, request: Request) -> dict[str, Any]:
         try:
             plans[kind] = render(p, shot, kind=kind, dry_run=True, engine=eng)
             seconds = length if kind == "video" else None
-            plans[kind]["choices"] = _choices(eng, plans[kind]["plan"][-1]["capability"], seconds)
+            lines = (detail.get("resolved") or {}).get("dialogue") or [] if kind == "audio" else []
+            # A speech row costs these lines, as the plan does, not 1,000 chars (COREPRODUC-789).
+            # Counted as the planner counts a line (asked_chars), so the row matches the plan.
+            said = [str(x["line"]) for x in lines if isinstance(x, dict) and x.get("line")]
+            chars = [asked_chars({"prompt": line}) for line in said]
+            cap = plans[kind]["plan"][-1]["capability"]
+            plans[kind]["choices"] = _choices(eng, cap, seconds, chars or None)
         except OlfError as exc:
             plans[kind] = {"error": str(exc)} | ({"notes": list(exc.notes)} if exc.notes else {})
             if kind == "video" and _by_reference(detail):  # the person picks a reference model
@@ -646,7 +654,10 @@ def _by_reference(detail: dict[str, Any]) -> bool:
 
 
 def _choices(
-    engine: Any, capability: str | None, seconds: float | None = None
+    engine: Any,
+    capability: str | None,
+    seconds: float | None = None,
+    chars: list[int | None] | None = None,
 ) -> list[dict[str, Any]]:
     """Models a person may pick for the last step (design: the video model menu): active, from a
     connected provider, cheapest first. ``unpriced`` marks a model with no flat price. An agent
@@ -656,6 +667,7 @@ def _choices(
     Bug fixed (first occurrence, 2026-11-20, a live run): a picked video model showed its 5 s
     price ($1.10 for a 6 s shot that bills $1.32), so the confirm was below the plan and
     ``max_total`` would stop the run (seen at the confirm, before the click).
+    ``chars``: the characters of each dialogue line, so a speech row costs the shot's lines.
     """
     from vinci_core.catalog import price_key
     from vinci_core.cost import clip_price
@@ -674,7 +686,9 @@ def _choices(
             "id": m.id,
             "name": m.display_name,
             "provider": m.provider,
-            "amount": float(clip_price(m, seconds)),
+            "amount": float(
+                sum(clip_price(m, seconds, n) for n in chars) if chars else clip_price(m, seconds)
+            ),
             "currency": m.pricing.currency,
             "unpriced": price_key(m)[0],
         }

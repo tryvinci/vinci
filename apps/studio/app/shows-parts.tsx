@@ -22,9 +22,10 @@ export function OlfOnly({ path, children }: { path: string; children: ReactNode 
 
 /**
  * Design: the character's Voice. An ElevenLabs voice from `GET /olf/voices` (a free call); with no
- * ElevenLabs the list is empty, because demo speech has one voice.
+ * ElevenLabs the list is empty, because demo speech has one voice. `children` (Clone from sample)
+ * show only beside a loaded list: with no key the connect text stands alone (COREPRODUC-789).
  */
-export function VoicePick({ value, onPick, testId }: { value: string; onPick: (id: string, name: string) => void; testId: string }) {
+export function VoicePick({ value, onPick, testId, children }: { value: string; onPick: (id: string, name: string) => void; testId: string; children?: ReactNode }) {
   const [voices, setVoices] = useState<{ id: string; name: string }[] | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -44,30 +45,33 @@ export function VoicePick({ value, onPick, testId }: { value: string; onPick: (i
   }
   const known = !value || !!voices?.some((row) => row.id === value);
   return (
-    <select
-      className="olf-input"
-      value={known ? value : "other"}
-      disabled={!voices}
-      onChange={(event) => {
-        const row = voices?.find((voice) => voice.id === event.target.value);
-        if (row) onPick(row.id, row.name);
-      }}
-      data-testid={testId}
-    >
-      <option value="" disabled>
-        {voices ? "Pick a voice" : "Loading voices…"}
-      </option>
-      {known ? null : (
-        <option value="other" disabled>
-          {value} (not in this account)
+    <>
+      <select
+        className="olf-input"
+        value={known ? value : "other"}
+        disabled={!voices}
+        onChange={(event) => {
+          const row = voices?.find((voice) => voice.id === event.target.value);
+          if (row) onPick(row.id, row.name);
+        }}
+        data-testid={testId}
+      >
+        <option value="" disabled>
+          {voices ? "Pick a voice" : "Loading voices…"}
         </option>
-      )}
-      {(voices || []).map((row) => (
-        <option key={row.id} value={row.id}>
-          {row.name}
-        </option>
-      ))}
-    </select>
+        {known ? null : (
+          <option value="other" disabled>
+            {value} (not in this account)
+          </option>
+        )}
+        {(voices || []).map((row) => (
+          <option key={row.id} value={row.id}>
+            {row.name}
+          </option>
+        ))}
+      </select>
+      {voices?.length ? children : null}
+    </>
   );
 }
 

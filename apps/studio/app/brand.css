@@ -47,7 +47,7 @@
 
 .empty-state { text-align: center; display: grid; gap: 10px; justify-items: center; max-width: 36rem; }
 .empty-state .eyebrow,
-.compose-offer .eyebrow { color: var(--mute); letter-spacing: 0.18em; }
+.compose-offer .eyebrow { color: var(--mute); letter-spacing: 0; }
 .empty-state h2,
 .compose-offer h2,
 .explore h2,
@@ -60,12 +60,11 @@
 .apps-empty h2,
 .effects-history-empty h2 {
   font-family: var(--font-display);
-  font-style: italic;
-  font-weight: 400;
-  letter-spacing: -0.03em;
+  font-weight: 600;
+  letter-spacing: -0.025em;
   color: var(--ink);
 }
-.empty-state h2 { margin: 0; font-size: 2.75rem; line-height: 1.05; }
+.empty-state h2 { margin: 0; font-size: 28px; line-height: 1.15; }
 .empty-state-copy { margin: 0; color: var(--dim); max-width: 28rem; line-height: 1.5; }
 .empty-state-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 4px; }
 .empty-state-hint { margin: 0; font-size: 12px; color: var(--mute); }
@@ -110,7 +109,7 @@
 .image-card-hover a:hover,
 .assets-hover button:hover,
 .assets-hover a:hover {
-  border-color: rgb(255 255 255 / 0.2);
+  border-color: rgb(var(--on) / 0.2);
   color: var(--ink);
 }
 .image-mention button:hover,
@@ -207,7 +206,7 @@
 .node:hover,
 .node.on,
 .first-node-card:hover {
-  border-color: rgb(255 255 255 / 0.18);
+  border-color: rgb(var(--on) / 0.18);
   box-shadow: var(--card-shadow);
 }
 .canvas-view .views button:not(.on):hover { color: var(--ink); }
@@ -220,7 +219,7 @@
 .effects-error,
 .apps-stage.is-error { color: var(--danger); }
 .apps-search:focus,
-.effects-overlay input:focus { outline-color: rgb(255 255 255 / 0.28); }
+.effects-overlay input:focus { outline-color: rgb(var(--on) / 0.28); }
 
 .rail button.on {
   background: var(--hover);
@@ -237,7 +236,7 @@
 }
 .rail button.rail-create.on,
 .rail button.rail-create:hover {
-  background: #1bb8b1;
+  background: var(--btn-hover);
   color: var(--btn-ink);
 }
 .command-list button.on,
@@ -335,7 +334,7 @@
 }
 .node.on {
   border-width: 1px;
-  border-color: rgb(255 255 255 / 0.22);
+  border-color: rgb(var(--on) / 0.22);
   box-shadow: var(--card-shadow);
 }
 .command-list button.on,
@@ -346,29 +345,23 @@
   color: var(--ink);
 }
 .run {
-  min-height: 42px;
-  padding: 12px 22px;
-  font-size: 15px;
+  min-height: 36px;
+  padding: 9px 16px;
+  border-radius: var(--r-control);
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
+/* Off is a neutral fill, not faded teal: 35% teal read as "loading", not "not ready". */
+.run[disabled],
+.run:disabled { opacity: 1; background: var(--btn-off); color: var(--btn-off-ink); }
 .node.run-running .thumb {
-  background-image: linear-gradient(100deg, var(--media) 0%, var(--raised) 42%, rgb(255 255 255 / 0.08) 50%, var(--raised) 58%, var(--media) 100%);
+  background-image: linear-gradient(100deg, var(--media) 0%, var(--raised) 42%, rgb(var(--on) / 0.08) 50%, var(--raised) 58%, var(--media) 100%);
   background-size: 200% 100%;
   animation: vinci-shimmer 1.4s ease infinite;
 }
 .node:not(.on):not(:hover):not(:focus-within) .node-ui { display: none; }
-.top h1:not(.sr-only) {
-  font-size: 13px;
-  font-weight: 500;
-  padding: 6px 12px;
-  border: 1px solid var(--glass-line);
-  border-radius: var(--pill);
-  background: var(--glass-fallback);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-}
-.insp, .video-panel, .rail { background: var(--glass-fallback); }
+.top h1:not(.sr-only) { font-size: 15px; font-weight: 600; letter-spacing: -0.015em; }
 .muted { font-size: 13px; line-height: 1.45; color: var(--dim); }
 input[type="file"]::file-selector-button,
 input[type="file"]::-webkit-file-upload-button {
@@ -382,26 +375,17 @@ input[type="file"]::-webkit-file-upload-button {
   cursor: pointer;
 }
 
+/* Docked surfaces are solid (flat glass, 2026-11): blur only on what floats over the work, which
+   is cheaper to paint and keeps the page calm. */
+.top { background: var(--bg); border-color: var(--line); box-shadow: none; }
+.rail { background: var(--rail); border-color: var(--line); box-shadow: none; }
+.video-panel, .insp, .assets-nav { background: var(--panel); border-color: var(--line); box-shadow: none; }
 /* Shared glass. Translucent fill only when backdrop-filter is supported. */
-.top,
-.rail,
-.video-panel,
-.insp {
-  border-color: var(--glass-line);
-  box-shadow: var(--glass-shadow);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-}
-.top { background: var(--glass-fallback); }
-.rail, .video-panel, .insp { background: var(--glass-fallback); }
 .space-switch,
 .access-pill,
 .dock-pop,
 .edge-btn,
 .node .node-ui,
-.assets-nav,
-.assets-toolbar,
-.assets-search,
 .assets-overlay-card,
 .assets-selection {
   background: var(--glass-fallback);
@@ -411,10 +395,6 @@ input[type="file"]::-webkit-file-upload-button {
   backdrop-filter: var(--glass-blur);
 }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .top,
-  .rail,
-  .video-panel,
-  .insp,
   .prompt-bar,
   .image-bar,
   .canvas-bar,
@@ -433,30 +413,23 @@ input[type="file"]::-webkit-file-upload-button {
   .dock-pop,
   .edge-btn,
   .node .node-ui,
-  .assets-nav,
-  .assets-toolbar,
-  .assets-search,
   .assets-overlay-card,
-  .assets-selection,
-  .top h1:not(.sr-only) {
+  .assets-selection {
     background: var(--glass);
   }
   .command-box,
-  .all-tools,
-  .video-panel,
-  .insp,
-  .assets-nav {
+  .all-tools {
     background: var(--glass-strong);
   }
 }
-/* A menu that opens from the rail cannot be glass. The rail blurs its own backdrop, so a blur
-   inside it sees only the rail, and the page showed through these menus sharp. They get the solid
+/* A menu that opens from the rail gets the solid fill: a blur inside a docked or glass surface sees
+   only that surface, and the page showed through these menus sharp. They get the solid
    fallback. On a narrow screen the rail is a drawer over the page: it is solid too (the page showed
    through it), and the flyout inside it is plain rows with no fill of its own. */
 .rail .avatar-menu { background: var(--glass-fallback); }
 /* The same holds for each menu that opens inside another glass surface: the Image and Video model
    pickers in their bars, the chip menus, a canvas node's pill menu, the dock and float menus. */
-:is(.top, .rail, .video-panel, .insp, .prompt-bar, .image-bar, .canvas-bar, .all-tools, .node-ui, .float-glass)
+:is(.prompt-bar, .image-bar, .canvas-bar, .all-tools, .node-ui, .float-glass)
   :is(.image-picker, .image-chip-menu, .model-combo-list, .dock-pop, .ctx-menu, .add-menu, .float-menu) {
   background: var(--glass-fallback);
 }
@@ -464,7 +437,7 @@ input[type="file"]::-webkit-file-upload-button {
   .rail-flyout { background: var(--glass-fallback); }
 }
 @media (max-width: 960px) {
-  .rail { background: var(--glass-fallback); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .rail { background: var(--rail); }
   .rail-flyout { background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 .space-switch {
@@ -590,3 +563,111 @@ input[type="file"]::-webkit-file-upload-button {
 .icon-btn:hover .dock-tip,
 .icon-btn:focus-visible .dock-tip { display: flex; }
 .icon-btn[aria-disabled="true"] { color: var(--mute); cursor: not-allowed; background: transparent; }
+
+/* ---------------------------------------------------------------------------------------------
+   Flat glass, "Graphite" (UI jam, 2026-11). Tokens in theme.css; these rules apply them by role.
+   --------------------------------------------------------------------------------------------- */
+
+/* Rail: fixed 72px, icon over a label, a 3px teal bar marks the page. It does not widen on hover.
+   Bug fixed (first occurrence 2026-11-15, UI scan): the hover-widen changed the shell grid from 56px
+   to 196px, so the whole page re-laid out and slid 140px on every pass of the pointer. */
+@media (min-width: 961px) {
+  .shell,
+  .shell:has(.rail:hover),
+  .shell:has(.rail button:focus-visible) { grid-template-columns: 72px 1fr; transition: none; }
+  .shell.with-insp,
+  .shell.with-insp:has(.rail:hover),
+  .shell.with-insp:has(.rail button:focus-visible) { grid-template-columns: 72px 1fr minmax(280px, 22vw); }
+  .rail,
+  .rail:hover,
+  .rail:has(button:focus-visible) { align-items: center; padding: 10px 0 12px; gap: 2px; }
+  .rail button:not(.flyout-row),
+  .rail:hover button:not(.flyout-row),
+  .rail:has(button:focus-visible) button:not(.flyout-row) {
+    position: relative; width: 60px; height: 52px; padding: 0; gap: 5px; border-radius: var(--r-card);
+    flex-direction: column; justify-content: center; color: var(--mute); overflow: visible;
+  }
+  .rail button .rail-label,
+  .rail:hover button .rail-label,
+  .rail button.rail-text .rail-label,
+  .rail:hover button.rail-text .rail-label {
+    max-width: 60px; opacity: 1; font-size: 11px; font-weight: 500; line-height: 1; text-overflow: ellipsis;
+  }
+  .rail .rail-mini,
+  .rail:hover .rail-mini { display: inline; }
+  .rail .rail-section,
+  .rail:hover .rail-section { visibility: hidden; height: 6px; margin: 4px 0; padding: 0; }
+  .rail .rail-entry,
+  .rail:hover .rail-entry { width: 60px; align-items: center; }
+  .rail .vinci-logo { place-items: center; padding: 0; }
+  .rail .vinci-logo-mark { display: block; }
+  .rail .vinci-logo-word { display: none; }
+}
+.rail button.on { background: var(--selected); color: var(--ink); }
+.rail button.on svg { color: var(--teal); }
+@media (min-width: 961px) {
+  .rail button.on:not(.flyout-row)::before {
+    content: ""; position: absolute; left: -6px; top: 16px; width: 3px; height: 20px; border-radius: 2px; background: var(--teal);
+  }
+}
+.rail button:hover:not(.rail-create):not(.on) { background: var(--hover); color: var(--ink); }
+
+/* Top bar: 52px, the page name as plain text. */
+.top { height: 52px; }
+
+/* Segmented controls: a quiet track, a raised thumb, ink text (teal is kept for action). */
+:is(.views, .space-switch, .video-tabs, .video-mode) {
+  gap: 2px; padding: 3px; border: 0; border-radius: var(--r-control); background: var(--btn-off); box-shadow: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+:is(.views, .space-switch, .video-tabs, .video-mode) button {
+  border-radius: 7px; padding: 6px 12px; font-size: 13px; color: var(--dim); box-shadow: none;
+}
+:is(.views, .space-switch, .video-tabs, .video-mode) button.on { background: var(--raised-2); color: var(--ink); box-shadow: var(--thumb-shadow); }
+/* The Video panel is 220px: tighter tabs keep "Motion control" on one line. */
+:is(.video-tabs, .video-mode) button { padding: 6px 4px; font-size: 12px; white-space: nowrap; }
+.cats button { border-radius: var(--r-chip); color: var(--dim); }
+.cats button.on { background: var(--raised-2); color: var(--ink); box-shadow: var(--thumb-shadow); }
+
+/* Controls by role: chips 8, buttons and fields 10. */
+.chip, .ghost { border-radius: var(--r-control); }
+.ghost { border-color: var(--line-2); }
+.image-chip { border-radius: var(--r-chip); background: var(--field); border-color: var(--line); padding: 7px 10px; font-size: 13px; }
+.image-chip.on { color: var(--ink); }
+.image-ref-add, .image-ref-chip { border-radius: var(--r-chip); }
+.assets-toolbar :is(input, select) { border-radius: var(--r-control); }
+:is(button, a, [role="button"]):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Prompt bar: one frame. The text field sits in the bar instead of a second box inside it. */
+.image-bar { border-radius: var(--r-prompt); padding: 10px; }
+.image-bar-prompt textarea { border: 0; background: transparent; box-shadow: none; padding: 9px 8px; font-size: 15px; }
+
+/* Media: 12px corners. Hover actions sit in a small glass bar, not a dark gradient wash. */
+.image-card-thumb, .asset-feed-thumb, .assets-thumb { border-radius: var(--r-card); }
+.image-card-hover { background: linear-gradient(180deg, transparent 60%, rgb(10 10 11 / 0.55)); }
+.image-card-hover button,
+.image-card-hover a,
+.assets-hover button,
+.assets-hover a {
+  border-radius: var(--r-chip); background: var(--glass); border-color: var(--glass-line);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+}
+.image-card-hover button:hover,
+.image-card-hover a:hover { border-color: var(--line-2); color: var(--ink); }
+.image-card:hover { transform: none; }
+
+/* Template grid: one 16:10 thumbnail, so every card's top and title line up.
+   Bug fixed (first occurrence 2026-11-15, UI scan): a fixed 156px height with art of mixed sizes
+   left card tops and titles up to 10px apart in one row. */
+.explore h2, .keys.connect h2 { font-size: 28px; line-height: 1.15; }
+.grid { align-items: start; gap: 20px 16px; }
+.card, .card:hover { transform: none; }
+.card img { height: auto; aspect-ratio: 16 / 10; border-radius: var(--r-card); transition: border-color 120ms ease; }
+.card:hover img { box-shadow: none; border-color: var(--teal); }
+.card strong { font-size: 14px; font-weight: 600; }
+
+/* Money is peach: estimated spend, model prices, tool and group costs. */
+[data-testid="spent"], .image-picker-price, .tool-cost, .group-cost, .olf-cost {
+  color: var(--money); font-variant-numeric: tabular-nums;
+}
+

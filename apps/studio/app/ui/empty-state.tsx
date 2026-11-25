@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-/** Centered empty offer: eyebrow, serif title, one line, actions. */
+/** Centered empty offer: eyebrow, title, one line, actions. */
 export function EmptyState({
   eyebrow,
   title,

@@ -365,6 +365,9 @@ want(money(3, "credits"), "3 credits");
 // A sign-in connector prices in the provider's own credits (COREPRODUC-614).
 want(money(4, "Higgsfield credits"), "4 Higgsfield credits");
 want(money(1, "Magnific credits"), "1 Magnific credit");
+// A big balance reads with a thousands separator (COREPRODUC-789: "9500" on Connect).
+want(money(9500, "ElevenLabs credits"), "9,500 ElevenLabs credits");
+want(money(1234.5, "credits"), "1,234.5 credits");
 """
     result = _run(script)
     assert result.returncode == 0, result.stderr or result.stdout

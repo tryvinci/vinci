@@ -194,7 +194,9 @@ def test_notices_list_self_hosted_fonts(tmp_path: Path, npm_notice_dir: Path) ->
     assert names and all(len(f["sha256"]) == 64 and f["license"] == "OFL-1.1" for f in fonts)
     notices = (out / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
     assert "## Fonts (Studio, SIL Open Font License 1.1)" in notices
-    assert notices.count("SIL OPEN FONT LICENSE Version 1.1") == 2
+    # One OFL text per font family (fonts/OFL-*.txt); Inter only since the flat-glass theme (2026-11).
+    ofl = len(list((ROOT / "apps/studio/app/fonts").glob("OFL-*.txt")))
+    assert ofl and notices.count("SIL OPEN FONT LICENSE Version 1.1") == ofl
 
 
 def _run_verify_notices(

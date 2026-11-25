@@ -276,7 +276,7 @@ test.describe("Shows (OLF movie engine)", () => {
 
     // Dialogue (the Video step): each line in its speaker's voice, as one audio take over the picture.
     await shot.getByTestId("shot-step-video").click();
-    await expect(shot.getByTestId("dialogue-plan")).toContainText("mock:wav:v1 · $0");
+    await expect(shot.getByTestId("dialogue-plan")).toContainText("Mock speech · $0"); // the model name, not its id (COREPRODUC-789)
     await shot.getByTestId("render-audio").click();
     await expect(shot.getByTestId("strip-take")).toHaveCount(1, { timeout: 60_000 });
     await expect(page.getByTestId("shows-notice")).toContainText("Rendered a1 for e02/s03/sh014");
@@ -446,6 +446,9 @@ test.describe("Shows (OLF movie engine)", () => {
     await page.screenshot({ path: path.join(shots, "shows_new_episode.png") });
 
     // Bible: Replace sheet keeps the file name (the character file does not change); + Form adds a look.
+    // Clone from sample shows only beside a loaded voice list (COREPRODUC-789): demo mode has none, so
+    // the test serves one; the clone itself still meets the demo's "connect ElevenLabs" refusal.
+    await page.route("**/vinci-api/olf/voices", (route) => route.fulfill({ json: { provider: "elevenlabs", voices: [{ id: "v_mira1", name: "Mira" }] } }));
     await page.getByTestId("shows-section-bible").click();
     const sheet = page.locator('[data-testid="shows-entry"] .sheet-view img').first();
     const before = await sheet.getAttribute("src");

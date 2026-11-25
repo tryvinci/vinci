@@ -29,7 +29,6 @@ import {
   frames,
   framingShort,
   levelLabel,
-  price,
   shortHash,
   shownKeyframe,
   spendText,
@@ -149,6 +148,7 @@ export function ShotView({
   const [confirm, setConfirm] = useState<RenderKind | null>(null);
   const [draws, setDraws] = useState(1);
   const [videoModel, setVideoModel] = useState(""); // "" is Auto (routing)
+  const [voiceModel, setVoiceModel] = useState(""); // the dialogue model; "" is Auto (COREPRODUC-789)
   const [media, setMedia] = useState<HTMLMediaElement | null>(null); // what the play bar drives
   const chosen = chosenKeyframe(show, id);
   const videos = takesOf(show, id, "video");
@@ -203,6 +203,8 @@ export function ShotView({
   const lines = (resolved.dialogue || []) as OlfData[];
   const spoken = takesOf(show, id, "audio");
   const choice = plans?.video.choices?.find((row) => row.id === videoModel);
+  const voiceChoice = plans?.audio?.choices?.find((row) => row.id === voiceModel);
+  const voiceRouted = plans?.audio?.plan?.[0]?.model;
   // A reference video with no routed model (hosted): picking a model in the menu clears it.
   const planError = plans?.keyframe.error || (choice ? "" : plans?.video.error);
   // A keyframe render draws `draws` variations, each at the keyframe price; a picked video model
@@ -215,6 +217,10 @@ export function ShotView({
       const other = steps.filter((row) => row.node !== "video");
       return isOwnChoice(choice) ? [...other, { node: "video", model: choice.id, amount: choice.amount, currency: choice.currency || "" }] : other;
     }
+    // A picked dialogue model speaks every line: its row is the price of all the lines (COREPRODUC-789).
+    if (kind === "audio" && voiceChoice) {
+      return isOwnChoice(voiceChoice) ? [{ node: "audio", model: voiceChoice.id, amount: voiceChoice.amount, currency: voiceChoice.currency || "" }] : [];
+    }
     return kind === "keyframe" ? steps.map((row) => ({ ...row, amount: row.amount * draws })) : steps;
   };
   const total = (kind: RenderKind) => {
@@ -222,14 +228,17 @@ export function ShotView({
       const other = (plans?.video.plan || []).filter((row) => row.node !== "video" && !(plans?.video.own || []).some((step) => step.node === row.node));
       return other.reduce((sum, row) => sum + row.amount, 0) + (isOwnChoice(choice) ? 0 : choice.amount);
     }
+    if (kind === "audio" && voiceChoice) return isOwnChoice(voiceChoice) ? 0 : voiceChoice.amount;
     return (plans?.[kind]?.total || 0) * (kind === "keyframe" ? draws : 1);
   };
   const unpriced = (kind: RenderKind) =>
-    kind === "video" && choice
+    kind === "audio" && voiceChoice
+      ? voiceChoice.unpriced ? [voiceChoice.id] : []
+      : kind === "video" && choice
       ? [...(plans?.video.unpriced || []).filter((id) => id !== videoModel && id !== videoModelRouted), ...(choice.unpriced ? [choice.id] : [])]
       : plans?.[kind]?.unpriced;
   const go = (kind: RenderKind, yes: boolean) =>
-    onRender(kind, yes, kind === "keyframe" ? draws : 1, kind === "video" && choice ? choice.id : undefined, total(kind));
+    onRender(kind, yes, kind === "keyframe" ? draws : 1, (kind === "video" ? choice : kind === "audio" ? voiceChoice : undefined)?.id, total(kind));
 
   const directions = DIRECTIONS[cam.move || ""];
   /** The shot camera's lens, move and render: in the stage's side column (the lab plays and records them),
@@ -626,14 +635,40 @@ export function ShotView({
                       </div>
                     ))}
                     {/* Each line in its speaker's voice (extensions.<provider> of the voice), as one audio take. */}
+                    {plans?.audio?.choices?.length ? (
+                      <Field label="Dialogue model">
+                        <select
+                          className="olf-input"
+                          value={voiceModel}
+                          disabled={locked}
+                          onChange={(event) => setVoiceModel(event.target.value)}
+                          aria-label="Dialogue model"
+                          data-testid="dialogue-model"
+                        >
+                          <option value="">{autoLabel(voiceRouted, plans.audio.choices)}</option>
+                          {plans.audio.choices.map((row) => (
+                            <option key={row.id} value={row.id}>
+                              {choiceLabel(row)}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                    ) : null}
                     {confirm === "audio" ? (
                       ask("audio")
                     ) : (
                       <div className="olf-row">{renderButton("audio", spoken.length ? "Re-render dialogue" : "Render dialogue", false)}</div>
                     )}
+                    {/* The model's name and its price on the person's key, not the raw id (COREPRODUC-789). */}
                     {plans?.audio?.plan?.length ? (
                       <span className="muted olf-small-text" data-testid="dialogue-plan">
-                        {plans.audio.plan[0].model} · {price(total("audio"))}
+                        {(voiceChoice || plans.audio.choices?.find((row) => row.id === voiceRouted))?.name || voiceRouted} · {costText(total("audio"), own("audio"))}
+                      </span>
+                    ) : null}
+                    {/* Why Render dialogue is off, e.g. no ElevenLabs key (COREPRODUC-789). */}
+                    {plans?.audio?.error ? (
+                      <span className="muted olf-small-text" data-testid="dialogue-error">
+                        {plans.audio.error}
                       </span>
                     ) : null}
                   </Field>
