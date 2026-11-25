@@ -140,6 +140,7 @@ test.describe("Production crawl fixes", () => {
       const t0 = Date.now() + 3_600_000; // newer than runs earlier tests made
       const prompt = `a brass key on oak ${library ? "L" : "R"}${t0}`;
       const ids: string[] = [];
+      const sent: number[] = []; // when each POST left the page
       const ended = new Set<string>();
       const gates: (() => void)[] = [];
       const open = Array.from({ length: 4 }, (_, i) => new Promise<void>((done) => (gates[i] = done)));
@@ -160,6 +161,7 @@ test.describe("Production crawl fixes", () => {
           const past = Array.from({ length: 20 }, (_, n) => ({ id: `hist-${n}`, state: "completed", inputs: { model_id: "mock:png:v1" }, outputs: [], created_at: new Date(t0).toISOString(), completed_at: new Date(t0 + 30_000).toISOString() }));
           return route.fulfill({ json: { ...body, runs: [...body.runs.filter(shown), ...past] } });
         }
+        sent.push(Date.now());
         await new Promise((done) => setTimeout(done, 1500));
         const body = (await (await route.fetch()).json()) as { id: string };
         ids.push(body.id);
@@ -184,11 +186,13 @@ test.describe("Production crawl fixes", () => {
       await page.getByTestId("image-generate").click();
       const cards = page.getByTestId("image-feed-pending");
       await expect(cards).toHaveCount(4);
-      await expect(cards.nth(3)).toContainText("Waiting to start…"); // its POST is not sent yet
-      if (library) await page.screenshot({ path: path.join(shots, "crawl_batch_waiting.png") });
-      await expect.poll(() => ids.length, { timeout: 10_000 }).toBe(4);
+      // The 4 POSTs go out together: no card waits for another's POST (2026-11-26 user report: Higgsfield).
+      await expect(page.getByText("Waiting to start…")).toHaveCount(0);
+      if (library) await page.screenshot({ path: path.join(shots, "crawl_batch_together.png") });
+      await expect.poll(() => ids.length, { timeout: 15_000 }).toBe(4);
+      expect(Math.max(...sent) - Math.min(...sent)).toBeLessThan(1_000); // one after another: 1.5 s or more apart
       const left = async (i: number) => Number((await cards.nth(i).getByTestId("image-feed-pending-progress").innerText()).match(/About (\d+)s left/)?.[1]);
-      expect(await left(3)).toBeGreaterThan(await left(0)); // card 1 started about 4.5 s before card 4
+      expect(Math.abs((await left(3)) - (await left(0)))).toBeLessThanOrEqual(1); // one clock start for all 4
       if (library) await page.screenshot({ path: path.join(shots, "crawl_batch_own_clocks.png") });
       gates[0]();
       await expect(cards).toHaveCount(3); // the first run ended: its card leaves, its picture shows
