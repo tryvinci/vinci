@@ -12,11 +12,15 @@ import base64
 import json
 import logging
 import re
+import threading
+import time
 import urllib.error
 import urllib.request
 import uuid
-from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import AsyncIterator, Callable, Iterator
+from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import wait as wait_futures
+from contextlib import AbstractContextManager, asynccontextmanager, contextmanager, nullcontext
 from typing import Any, Protocol
 from urllib.parse import urlparse
 
@@ -70,6 +74,9 @@ _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 _IMAGE_CAPS = {Capability.T2I, Capability.I2I, Capability.EDIT_MULTI}
 _VIDEO_CAPS = {Capability.T2V, Capability.I2V, Capability.R2V}  # r2v: a pin video render (#732)
 _SUBMIT_CAPS = _IMAGE_CAPS | _VIDEO_CAPS
+# How long an adapter reuses its tools/list answer: an estimate and its submit share it, and a
+# long-lived daemon adapter sees a removed or added tool within a minute (COREPRODUC-800).
+_TOOLS_TTL_S = 60.0
 
 
 class McpTransport(Protocol):
@@ -87,7 +94,17 @@ class CasPut(Protocol):
 
 
 class HttpMcpTransport:
-    """Streamable-HTTP MCP session. Sends the bearer the adapter used to drop."""
+    """Streamable-HTTP MCP client. Sends the bearer the adapter used to drop.
+
+    Each call opens its own MCP session (connect, ``initialize``, the call, close), except inside
+    ``session()``, where the calls of that thread share one.
+
+    Bug fixed 2026-11-26 (COREPRODUC-800; first seen in prod logs 2026-11-18, again 2026-11-25,
+    1 user report): a hosted Higgsfield or Magnific submit took 11-18 s. It opened 4 sessions
+    (tools/list in the estimate, tools/list in the submit, the price preview, the generate), and
+    the SDK listed the tools again inside each call session to check the result: 6 MCP calls.
+    The estimate and the submit now share one session and one tools/list: 1 session, 3 calls.
+    """
 
     def __init__(
         self,
@@ -99,6 +116,7 @@ class HttpMcpTransport:
         self.url = url
         self.timeout = timeout
         self._token_provider = token_provider
+        self._local = threading.local()  # .block: the session block of this thread, if any
 
     def bearer(self) -> str | None:
         if self._token_provider is None:
@@ -112,6 +130,12 @@ class HttpMcpTransport:
         host = (urlparse(self.url).hostname or "").lower()
         if host in _LOOPBACK_HOSTS:
             return self._jsonrpc(method, params)
+        block = getattr(self._local, "block", None)
+        if block is not None and self._live(block):
+            done: Future[Any] = Future()
+            block["loop"].call_soon_threadsafe(block["inbox"].put_nowait, (method, params, done))
+            block["calls"] += 1
+            return done.result(timeout=self.timeout + 5)
         try:
             asyncio.get_running_loop()
         except RuntimeError:
@@ -121,6 +145,88 @@ class HttpMcpTransport:
             return pool.submit(self._run_sdk, method, params).result()
         finally:
             pool.shutdown(wait=False, cancel_futures=True)
+
+    @contextmanager
+    def session(self) -> Iterator[None]:
+        """Keep one MCP session for the calls this thread makes in the block.
+
+        The session opens on the first remote call, so a block with no call (or a loopback URL,
+        one-shot JSON-RPC) opens none. A nested block changes nothing. When the session does not
+        open, or drops, each later call opens its own session, as before. The session runs on its
+        own event loop thread, so the block works with or without a running loop.
+        """
+        if getattr(self._local, "block", None) is not None:
+            yield
+            return
+        block: dict[str, Any] = {"calls": 0}
+        self._local.block = block
+        try:
+            yield
+        finally:
+            self._local.block = None
+            self._close(block)
+
+    def _live(self, block: dict[str, Any]) -> bool:
+        """Open the block's session on its first call; True while it is open."""
+        if "task" not in block:
+            host = (urlparse(self.url).hostname or "").lower()
+            started = block["started"] = time.monotonic()
+            loop = block["loop"] = asyncio.new_event_loop()
+            block["thread"] = threading.Thread(
+                target=loop.run_forever, name="mcp-session", daemon=True
+            )
+            block["thread"].start()
+            ready: Future[asyncio.Queue[Any]] = Future()
+            block["task"] = asyncio.run_coroutine_threadsafe(self._serve(ready), loop)
+            try:
+                block["inbox"] = ready.result(timeout=self.timeout)
+                log.info("mcp session open host=%s seconds=%.2f", host, time.monotonic() - started)
+            except Exception as exc:  # noqa: BLE001 — fall back to one session per call
+                log.warning("mcp session open failed host=%s type=%s", host, type(exc).__name__)
+                block["inbox"] = None
+                block["task"].cancel()
+        return block["inbox"] is not None and not block["task"].done()
+
+    def _close(self, block: dict[str, Any]) -> None:
+        """End the block's session and its loop thread, if a call opened them."""
+        if "task" not in block:
+            return
+        loop = block["loop"]
+        if block["inbox"] is not None:
+            loop.call_soon_threadsafe(block["inbox"].put_nowait, None)
+        wait_futures([block["task"]], timeout=10)
+        loop.call_soon_threadsafe(loop.stop)
+        block["thread"].join(timeout=10)
+        if not block["thread"].is_alive():
+            loop.close()
+        log.info(
+            "mcp session closed calls=%s seconds=%.2f",
+            block["calls"],
+            time.monotonic() - block["started"],
+        )
+
+    async def _serve(self, ready: Future[asyncio.Queue[Any]]) -> None:
+        """Hold one session in one task (anyio needs that) and run the calls ``call`` queues."""
+        inbox: asyncio.Queue[Any] = asyncio.Queue()
+        done: Future[Any] | None = None
+        try:
+            async with self._open() as session:
+                ready.set_result(inbox)
+                while (item := await inbox.get()) is not None:
+                    method, params, done = item
+                    try:
+                        answer = _dispatch(session, method, params)
+                        done.set_result(await asyncio.wait_for(answer, self.timeout))
+                    except Exception as exc:  # noqa: BLE001 — the caller raises it
+                        done.set_exception(exc)
+        except Exception as exc:  # noqa: BLE001 — open failed, or the session dropped
+            if not ready.done():
+                ready.set_exception(exc)
+            else:
+                log.warning("mcp session dropped type=%s", type(exc).__name__)
+        finally:  # a call in flight when the session ends fails now, not at its timeout
+            if done is not None and not done.done():
+                done.set_exception(ConnectionError("the MCP session closed during the call"))
 
     def _run_sdk(self, method: str, params: dict[str, Any]) -> Any:
         return asyncio.run(asyncio.wait_for(self._sdk_call(method, params), self.timeout))
@@ -147,7 +253,9 @@ class HttpMcpTransport:
             raise RuntimeError(str(body["error"]))
         return body.get("result")
 
-    async def _sdk_call(self, method: str, params: dict[str, Any]) -> Any:
+    @asynccontextmanager
+    async def _open(self) -> AsyncIterator[Any]:
+        """One initialized MCP session (redirects off, the bearer in the headers)."""
         import httpx
 
         from mcp import ClientSession
@@ -164,40 +272,44 @@ class HttpMcpTransport:
                 read, write = streams[0], streams[1]
                 async with ClientSession(read, write) as session:
                     await session.initialize()
-                    if method == "tools/list":
-                        listed = await session.list_tools()
-                        return {
-                            "tools": [
-                                {"name": tool.name, "description": tool.description or ""}
-                                for tool in listed.tools
-                            ]
-                        }
-                    if method == "tools/call":
-                        name = str(params.get("name") or "")
-                        arguments = params.get("arguments")
-                        payload = arguments if isinstance(arguments, dict) else {}
-                        result = await session.call_tool(name, payload)
-                        content: list[dict[str, str]] = []
-                        for block in result.content:
-                            text = getattr(block, "text", None)
-                            if isinstance(text, str):
-                                content.append({"type": "text", "text": text})
-                                continue
-                            data = getattr(block, "data", None)
-                            if isinstance(data, str) and data:
-                                mime = getattr(block, "mimeType", None) or "image/png"
-                                content.append(
-                                    {"type": "image", "data": data, "mimeType": str(mime)}
-                                )
-                        body: dict[str, Any] = {
-                            "content": content,
-                            "isError": bool(result.isError),
-                        }
-                        structured = getattr(result, "structuredContent", None)
-                        if isinstance(structured, dict):
-                            body["structuredContent"] = structured
-                        return body
-                    raise RuntimeError(f"unsupported mcp method {method}")
+                    yield session
+
+    async def _sdk_call(self, method: str, params: dict[str, Any]) -> Any:
+        async with self._open() as session:
+            return await _dispatch(session, method, params)
+
+
+async def _dispatch(session: Any, method: str, params: dict[str, Any]) -> Any:
+    """Run one ``tools/list`` or ``tools/call`` on an open session, as plain JSON."""
+    if method == "tools/list":
+        listed = await session.list_tools()
+        return {
+            "tools": [
+                {"name": tool.name, "description": tool.description or ""}
+                for tool in listed.tools
+            ]
+        }
+    if method == "tools/call":
+        name = str(params.get("name") or "")
+        arguments = params.get("arguments")
+        payload = arguments if isinstance(arguments, dict) else {}
+        result = await session.call_tool(name, payload)
+        content: list[dict[str, str]] = []
+        for block in result.content:
+            text = getattr(block, "text", None)
+            if isinstance(text, str):
+                content.append({"type": "text", "text": text})
+                continue
+            data = getattr(block, "data", None)
+            if isinstance(data, str) and data:
+                mime = getattr(block, "mimeType", None) or "image/png"
+                content.append({"type": "image", "data": data, "mimeType": str(mime)})
+        body: dict[str, Any] = {"content": content, "isError": bool(result.isError)}
+        structured = getattr(result, "structuredContent", None)
+        if isinstance(structured, dict):
+            body["structuredContent"] = structured
+        return body
+    raise RuntimeError(f"unsupported mcp method {method}")
 
 
 class McpProvider(Provider):
@@ -232,6 +344,7 @@ class McpProvider(Provider):
         self._connector = connector_for(provider_id)
         self._estimated: set[str] = set()
         self._jobs: dict[str, JobStatus] = {}
+        self._tools: tuple[float, set[str]] | None = None  # (monotonic time, tools/list names)
 
     def _secret(self) -> str | None:
         bearer = getattr(self._transport, "bearer", None)
@@ -241,21 +354,17 @@ class McpProvider(Provider):
                 return token
         return self._api_key
 
+    def session(self) -> AbstractContextManager[None]:
+        """One MCP session for the calls in the block, e.g. an estimate and its submit.
+
+        A transport without ``session()`` (a test fake) opens a session per call, as before.
+        """
+        keep = getattr(self._transport, "session", None)
+        return keep() if callable(keep) else nullcontext()
+
     def catalog(self) -> list[ModelSpec]:
         if self._connector is not None:
-            names: set[str] | None
-            try:
-                listed = self._transport.call("tools/list", {})
-                rows = listed.get("tools") if isinstance(listed, dict) else None
-                names = {
-                    str(row.get("name"))
-                    for row in rows or []
-                    if isinstance(row, dict) and row.get("name")
-                }
-            except Exception as exc:  # noqa: BLE001 — catalog falls back to the mapping
-                log.warning("mcp tools/list failed type=%s", type(exc).__name__)
-                names = None
-            return models_for(self._connector, names)
+            return models_for(self._connector, self._tool_names())
         if self._models:
             return list(self._models)
         result = self._transport.call(
@@ -264,6 +373,31 @@ class McpProvider(Provider):
         rows = _models_from_result(result)
         self._models = rows
         return list(rows)
+
+    def _tool_names(self) -> set[str] | None:
+        """The provider's tool names, reused for ``_TOOLS_TTL_S`` (COREPRODUC-800).
+
+        Returns:
+            The names, or None when tools/list failed (the catalog then uses the mapping). A
+            failure is not kept: the next call asks again. A tool removed within the TTL makes
+            the generate call fail with the provider's error.
+        """
+        if self._tools is not None and time.monotonic() - self._tools[0] < _TOOLS_TTL_S:
+            return self._tools[1]
+        try:
+            listed = self._transport.call("tools/list", {})
+            rows = listed.get("tools") if isinstance(listed, dict) else None
+            names = {
+                str(row.get("name"))
+                for row in rows or []
+                if isinstance(row, dict) and row.get("name")
+            }
+        except Exception as exc:  # noqa: BLE001 — catalog falls back to the mapping
+            log.warning("mcp tools/list failed type=%s", type(exc).__name__)
+            return None
+        self._tools = (time.monotonic(), names)
+        log.info("mcp tools/list provider=%s tools=%d", self._provider_id, len(names))
+        return names
 
     def capabilities(self) -> set[Capability]:
         caps: set[Capability] = set()
@@ -296,6 +430,10 @@ class McpProvider(Provider):
         return estimate
 
     def submit(self, req: JobRequest) -> ProviderJobRef:
+        with self.session():  # the uploads, the price preview and the generate share one session
+            return self._submit(req)
+
+    def _submit(self, req: JobRequest) -> ProviderJobRef:
         models = self.catalog()
         spec = _pick_model(models, req)
         key = req.idempotency_key or idempotency_key(spec.id, req.inputs)
