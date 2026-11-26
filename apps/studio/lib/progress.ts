@@ -1,7 +1,8 @@
 /**
  * The progress bar of a generation (COREPRODUC-659). Providers send no progress, so the bar is a
  * fake countdown: it fills to 90% over the model's average run time, then waits at 90% until the
- * run ends. The average comes from the user's own finished runs of that model, else a default by kind.
+ * run ends. The estimate is the median of the user's own finished runs of that model, else a default by
+ * kind and provider.
  */
 
 /** A run as `/runs` gives it: the fields the average needs. */
@@ -20,6 +21,16 @@ export type RunClock = { startedAt: number; seconds: number };
 export const CAP = 90; // the bar waits here until the run ends
 const RECENT = 20; // newest finished runs in the average
 const DEFAULT_SECONDS: Record<string, number> = { image: 20, video: 120, audio: 30, text: 15 };
+// Sign-in providers are slower (COREPRODUC-687, prod 2026-11-18): Magnific and Higgsfield images took
+// 38-79 s (Wavespeed 16-22 s) and Magnific kling-30 video 634 s. Their ids name them ("mcp_magnific:…").
+const SIGN_IN_SECONDS: Record<string, number> = { image: 60, video: 600 };
+const SIGN_IN = /(^|_)(magnific|higgsfield):/;
+
+/** Seconds a model with no history takes: by kind, longer on a sign-in provider. */
+export function defaultSeconds(modelId: string, kind = "image"): number {
+  const own = SIGN_IN.test(modelId) ? SIGN_IN_SECONDS[kind] : undefined;
+  return own ?? DEFAULT_SECONDS[kind] ?? DEFAULT_SECONDS.image!;
+}
 
 /** The model of a run: its `model_id` input, else the one model its nodes name. */
 export function runModel(run: TimedRun): string {
@@ -37,12 +48,18 @@ export function modelKind(capabilities: readonly string[] = []): string {
 }
 
 /**
- * Seconds a model's runs take: the mean of its newest finished runs, else the default for its kind.
+ * Seconds a model's runs take: the median of its newest finished runs, else `defaultSeconds`.
+ *
+ * Bug fixed (first seen in prod logs 2026-11-18, 1 user report 2026-11-26, COREPRODUC-687): the mean let
+ * one slow run (a 5.5 min Magnific card among 28-44 s ones) set the next bar to minutes.
  *
  * Args:
  *   runs: `/runs` rows, any order.
  *   modelId: The model about to run.
  *   kind: The model's kind, for the default.
+ *
+ * Returns:
+ *   Whole seconds, at least 1.
  */
 export function averageSeconds(runs: readonly TimedRun[], modelId: string, kind = "image"): number {
   const times = runs
@@ -51,9 +68,11 @@ export function averageSeconds(runs: readonly TimedRun[], modelId: string, kind 
     .filter(({ end, start }) => end - start >= 1000 && end - start <= 3_600_000) // a lost clock is no average
     .sort((a, b) => b.end - a.end)
     .slice(0, RECENT)
-    .map(({ end, start }) => (end - start) / 1000);
-  if (!times.length) return DEFAULT_SECONDS[kind] ?? DEFAULT_SECONDS.image!;
-  return Math.round(times.reduce((sum, t) => sum + t, 0) / times.length);
+    .map(({ end, start }) => (end - start) / 1000)
+    .sort((a, b) => a - b);
+  if (!times.length) return defaultSeconds(modelId, kind);
+  const mid = times.length >> 1;
+  return Math.round(times.length % 2 ? times[mid]! : (times[mid - 1]! + times[mid]!) / 2);
 }
 
 /** Percent done (0 to 90) and whole seconds left, `elapsedMs` into a run of `seconds`. */
