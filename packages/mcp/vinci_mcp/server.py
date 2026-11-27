@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any
 
 from vinci_core.redact import redact_mapping
@@ -25,7 +26,7 @@ INSTRUCTIONS = (
     "Price a run first with vinci.cost_estimate (USD). Start it with vinci.image_generate, "
     "vinci.video_generate or vinci.workflow_run. Then poll vinci.jobs_get with the run_id "
     "until the state is completed or failed. A run over max_cost or the person's budget "
-    "waits for their approval: the tool result gives the price and the approve command to "
+    "waits for their approval: the tool result gives the price and the Studio link to "
     "show them. You cannot approve spend yourself."
 )
 
@@ -302,17 +303,21 @@ def _default_skill(engine: Engine, model_id: Any) -> str:
 def _next_step(result: dict[str, Any]) -> str | None:
     """What the agent does next with a run that waits for approval; None for other results.
 
-    The agent cannot approve its own spend: only the person can, with the CLI (the Studio has no
-    approve button yet, COREPRODUC-786).
+    The agent cannot approve its own spend (no MCP tool approves): only the person can, with the
+    Approve button on the Studio's Cost report page (the link opens the run there, COREPRODUC-786)
+    or with the CLI.
     """
     if result.get("state") != "awaiting_approval":
         return None
     run_id, reason = result.get("id"), result.get("awaiting_reason") or "over the approval limit"
+    port = os.environ.get("VINCI_STUDIO_PORT", "4311")  # the TypeScript Studio (`vinci studio`)
     return (
         f"Nothing ran and nothing was spent: run {run_id} waits for the person's approval "
-        f"({reason}). Show them the price (estimate.total, USD). They approve it in a terminal "
-        f"with: vinci jobs approve {run_id}. Or, when the reason is max_cost and they agree to the "
-        "price, start the run again with a higher max_cost. Then poll vinci.jobs_get with run_id."
+        f"({reason}). Show them the price (estimate.total, USD) and this link, where they approve "
+        f"or cancel it: http://127.0.0.1:{port}/#cost/{run_id} . Without the Studio, they "
+        f"approve it in a terminal with: vinci jobs approve {run_id}. Or, when the reason is "
+        "max_cost and they agree to the price, start the run again with a higher max_cost. Then "
+        "poll vinci.jobs_get with run_id."
     )
 
 

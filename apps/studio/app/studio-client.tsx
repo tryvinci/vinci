@@ -40,7 +40,8 @@ import { nodeDurations, videoBlock, type VideoRefMode } from "../lib/video-page"
 import { type ComboModel } from "./model-combo";
 import { VinciLogo } from "./ui/logo";
 import { DockIcon, DOCK_ICON } from "./ui/icons";
-import { plainError, runProblem, type RunAction, type RunProblem } from "./ui/plain-text";
+import { approvalReason, plainError, runProblem, type RunAction, type RunProblem } from "./ui/plain-text";
+import { ApprovalList, AWAITING_EVENT } from "./approvals";
 import { availabilityRank, modelAvailability, rankModels } from "../lib/model-search";
 import {
   classifyModel,
@@ -390,6 +391,7 @@ type Run = {
   error?: unknown;
   workflow?: { nodes?: { id?: string; model_id?: string; capability?: string }[] };
   started_at?: string;
+  awaiting_reason?: string;
 };
 type Asset = { id: string; mime?: string; kind?: string; uri?: string; width?: number; height?: number };
 type PlanStep = { id: string; title: string; skill: string; blurb?: string; note?: string };
@@ -497,14 +499,20 @@ async function postRun(payload: object): Promise<Run> {
   });
 }
 
-/** Poll a run until it reaches a final state. */
+/**
+ * Poll a run until it reaches a final state. A run over a spend limit stops at `awaiting_approval`:
+ * the Studio opens it in Cost report with its Approve button, and its `error` says why (COREPRODUC-786).
+ */
 async function waitRun(first: Run): Promise<Run> {
   let run = first;
   while (run.state && RUN_GOING.has(run.state)) {
     await new Promise((done) => setTimeout(done, 2000));
     run = await api<Run>(`/runs/${encodeURIComponent(run.id)}`);
   }
-  return run;
+  if (run.state !== "awaiting_approval") return run;
+  console.info("[studio] run waits for approval", { run: run.id, reason: run.awaiting_reason });
+  window.dispatchEvent(new CustomEvent(AWAITING_EVENT, { detail: run.id }));
+  return { ...run, error: `This run waits for your approval: ${approvalReason(run)}. Approve or cancel it in Cost report.` };
 }
 
 /**
@@ -879,6 +887,7 @@ export function StudioClient() {
   const [findQ, setFindQ] = useState("pricing");
   const [findHits, setFindHits] = useState<{ uri?: string; transcript?: string }[]>([]);
   const [costBody, setCostBody] = useState("");
+  const [approvalRun, setApprovalRun] = useState(""); // the run `#cost/<run_id>` names
   const [tlStatus, setTlStatus] = useState("Graph outputs in order");
   const [tlMedia, setTlMedia] = useState<{ src: string; video: boolean } | null>(null);
   const [keyDraft, setKeyDraft] = useState<Record<string, string>>({});
@@ -4891,6 +4900,7 @@ export function StudioClient() {
     main = (
       <div className="keys">
         <h2>Cost report</h2>
+        <ApprovalList api={api} focus={approvalRun} onChange={() => void loadMedia().catch(() => undefined)} />
         <p className="muted">What you have spent, by provider.</p>
         <pre className="log">{costBody || "Loading…"}</pre>
       </div>
@@ -5007,6 +5017,16 @@ export function StudioClient() {
   useUrlPart("library", page === "library", libTab === LIBRARY_TABS[0] ? "" : libTab, (part) =>
     setLibTab((LIBRARY_TABS as string[]).includes(part) ? (part as LibraryTab) : LIBRARY_TABS[0]),
   );
+  // A run to approve is in the URL too: `#cost/<run_id>`, the link an agent gives (COREPRODUC-786).
+  useUrlPart("cost", page === "cost", approvalRun, setApprovalRun);
+  useEffect(() => {
+    const onAwaiting = (ev: Event) => {
+      setApprovalRun(String((ev as CustomEvent<string>).detail));
+      openPageRef.current("cost");
+    };
+    window.addEventListener(AWAITING_EVENT, onAwaiting);
+    return () => window.removeEventListener(AWAITING_EVENT, onAwaiting);
+  }, []);
   useUrlPart("canvas", page === "canvas", view === "timeline" ? "timeline" : "", (part) => setView(part === "timeline" ? "timeline" : "canvas"));
   useEffect(() => {
     const w = topWindow();

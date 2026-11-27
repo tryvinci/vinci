@@ -6,6 +6,7 @@ One install gives Claude Code the Vinci Studio tools and a skill on how to use t
 | --- | --- | --- |
 | MCP server `vinci` | `.mcp.json` | The hosted Studio at `https://app.tryvinci.com/mcp` (HTTP). Sign-in is OAuth on a Vinci sign-in page. There is no API key. |
 | Skill `vinci:studio` | `skills/studio/SKILL.md` | Price first, poll runs, chain start images, read refused calls, and write video prompts that move. |
+| Icon | `.claude-plugin/icon.png` | The Vinci mark (from `apps/vinci-docs/favicon.svg`), 1024 px square PNG. The plugin directory keeps the first icon it sees, so change it only before the first submission (COREPRODUC-782). |
 
 ## Install
 

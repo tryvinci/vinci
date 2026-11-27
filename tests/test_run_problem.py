@@ -26,3 +26,16 @@ eq(runProblem("").action, undefined, "a failed run with no reason: the generic t
 """
     result = run_ts(MODULE, NAMES, body)
     assert result.returncode == 0, result.stderr  # run_ts does not check: a thrown assertion fails here
+
+
+def test_a_run_that_waits_says_its_price_and_limit() -> None:
+    """A run over a spend limit shows the price and the limit in plain words (COREPRODUC-786)."""
+    body = """
+const eq = (a, b) => { if (a !== b) throw new Error(JSON.stringify(a)); };
+eq(approvalReason({ estimate: { total: 0.08 }, awaiting_reason: "estimate 0.08 exceeds --max-cost 0.01" }), "$0.080 is over your max cost of $0.010");
+eq(approvalReason({ estimate: { total: 0.5 }, awaiting_reason: "estimate 0.5 would exceed monthly cap 10" }), "$0.500 is over your monthly cap of $10.000");
+eq(approvalReason({ estimate: { total: 2 }, awaiting_reason: "estimate 2 exceeds require_approval_over 1" }), "$2.000 is over your approval limit of $1.000");
+eq(approvalReason({ estimate: { total: 0.08 }, awaiting_reason: "something new" }), "$0.080");
+"""
+    result = run_ts(MODULE, ["approvalReason"], body)
+    assert result.returncode == 0, result.stderr

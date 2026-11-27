@@ -709,6 +709,10 @@ label { display: block; font-size: 11px; color: var(--mute); margin: 0 0 4px; le
   box-shadow: var(--card-shadow);
 }
 .hit { padding: 14px 0; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
+/* A run that waits for approval (COREPRODUC-786); `on`: the run a `#cost/<run_id>` link names. */
+.approvals { margin: 8px 0 24px; }
+.approval.on { outline: 1px solid var(--accent, var(--ink)); outline-offset: 4px; border-radius: 4px; }
+.approval-actions { display: flex; gap: 8px; }
 .lib-page { padding: 28px 32px 48px; max-width: 56rem; }
 .lib-page label { display: block; margin-top: 14px; color: var(--dim); }
 .lib-page textarea { width: 100%; min-height: 88px; max-height: 180px; margin: 8px 0 0; }
