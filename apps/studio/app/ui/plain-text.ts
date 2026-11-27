@@ -1,3 +1,5 @@
+import { money } from "../../lib/model-capabilities";
+
 const LEAK = /vinci:\/\/|\bsha256\b|\breceipt\b|\bdaemon\b|\bCAS\b/i;
 
 const NETWORK = /^(Failed to fetch|NetworkError|Load failed|Network request failed)/i;
@@ -66,4 +68,27 @@ export function runProblem(err: unknown): RunProblem {
           ? "connect"
           : undefined;
   return action ? { text, action } : { text };
+}
+/** Why a run waits, from the runtime's `awaiting_reason` (`should_await_approval`), in plain words. */
+const LIMITS: [RegExp, string][] = [
+  [/exceeds --max-cost (-?[\d.]+)/, "your max cost"],
+  [/would exceed monthly cap (-?[\d.]+)/, "your monthly cap"],
+  [/exceeds require_approval_over (-?[\d.]+)/, "your approval limit"],
+];
+
+/**
+ * Why a run waits for the person's approval (COREPRODUC-786): "$0.080 is over your max cost of $0.010".
+ * Before, the Studio stopped at `awaiting_approval` with the generic "Something went wrong" text,
+ * and only the CLI could approve the run.
+ *
+ * Args:
+ *   run: A run in `awaiting_approval`: its `estimate.total` (USD) and `awaiting_reason`.
+ * Returns:
+ *   The price and the limit it is over (only the price for a reason it does not know).
+ */
+export function approvalReason(run: { estimate?: { total?: number }; awaiting_reason?: unknown }): string {
+  const reason = typeof run.awaiting_reason === "string" ? run.awaiting_reason : "";
+  const hit = LIMITS.map(([re, name]) => [reason.match(re), name] as const).find(([m]) => m);
+  const over = hit?.[0] ? ` is over ${hit[1]} of ${money(Number(hit[0][1]))}` : "";
+  return `${money(run.estimate?.total)}${over}`;
 }

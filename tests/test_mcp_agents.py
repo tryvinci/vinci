@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from vinci_daemon.app import create_app
+from vinci_mcp.server import TOOL_NAMES
 from vinci_runtime.engine import Engine
 
 
@@ -108,6 +109,8 @@ def test_awaiting_approval_says_the_next_step(client: TestClient) -> None:
     assert run["state"] == "awaiting_approval"
     hint = result["content"][1]["text"]
     assert f"vinci jobs approve {run['id']}" in hint and "max_cost" in hint
+    assert f":4311/#cost/{run['id']}" in hint  # the Studio's Approve button (COREPRODUC-786)
+    assert not any("approve" in name for name in TOOL_NAMES)  # an agent never approves its spend
 
 
 def test_cost_estimate_takes_hosted_args(client: TestClient) -> None:

@@ -270,6 +270,8 @@ def test_http_awaiting_approval_then_approve(
     done = approved.json()
     assert done["state"] == "completed"
     assert done["estimate"]["total"] == 0
+    again = client.post(f"/runs/{body['id']}/approve")  # a second tab (COREPRODUC-786)
+    assert again.status_code == 409 and "does not wait" in again.json()["detail"]
 
 
 def test_root_redirects_to_studio(client: TestClient) -> None:

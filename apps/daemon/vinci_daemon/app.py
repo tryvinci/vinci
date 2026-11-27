@@ -474,6 +474,10 @@ def create_app(engine: Engine | None = None, sheets_client: Any | None = None) -
                 return eng.approve_run(run_id)
             except KeyError as exc:
                 raise HTTPException(status_code=404, detail="run not found") from exc
+            except ValueError as exc:  # approved twice (two Studio tabs): 409, not a 500
+                raise HTTPException(
+                    status_code=409, detail="This run does not wait for approval now."
+                ) from exc
 
         return with_journal_ack(
             request,
